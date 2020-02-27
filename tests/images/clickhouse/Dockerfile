@@ -1,0 +1,74 @@
+FROM registry.yandex.net/ubuntu:bionic
+
+ENV TZ=Europe/Moscow
+
+ARG CLICKHOUSE_VERSION
+
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
+    apt-get update -qq && \
+    apt-get install -y \
+        apt-transport-https \
+        tzdata \
+        locales \
+        openssh-server \
+        supervisor \
+        sudo && \
+    echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen && \
+    locale-gen
+
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
+
+# setup ssh for debugging
+RUN echo "root:root" | chpasswd && \
+    sed -i -e '/PermitRootLogin/ s/.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    mkdir /var/run/sshd
+
+COPY images/clickhouse/clickhouse.gpg /tmp/
+
+RUN mkdir -p /etc/apt/sources.list.d && \
+    echo "deb https://repo.yandex.ru/clickhouse/deb/testing/ main/" | tee /etc/apt/sources.list.d/clickhouse-testing.list && \
+    echo "deb https://repo.yandex.ru/clickhouse/deb/prestable/ main/" | tee /etc/apt/sources.list.d/clickhouse-prestable.list && \
+    echo "deb https://repo.yandex.ru/clickhouse/deb/stable/ main/" | tee /etc/apt/sources.list.d/clickhouse-stable.list && \
+    echo "deb https://repo.yandex.ru/clickhouse/deb/lts/ main/" | tee /etc/apt/sources.list.d/clickhouse-lts.list && \
+    echo "deb http://dist.yandex.ru/mdb-bionic stable/\$(ARCH)/" | tee /etc/apt/sources.list.d/mdb-bionic-stable.list && \
+    apt-key add /tmp/clickhouse.gpg  && \
+    apt-get update -qq && \
+    apt-get upgrade -y && \
+    if [ "$CLICKHOUSE_VERSION" = "19.1.16" ]; then \
+        apt-get install -y \
+            clickhouse-common-static=$CLICKHOUSE_VERSION \
+            clickhouse-server-base=$CLICKHOUSE_VERSION \
+            clickhouse-server=$CLICKHOUSE_VERSION \
+            clickhouse-client=$CLICKHOUSE_VERSION \
+            ch-backup; \
+    else \
+        DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            clickhouse-common-static=$CLICKHOUSE_VERSION \
+            clickhouse-server=$CLICKHOUSE_VERSION \
+            clickhouse-client=$CLICKHOUSE_VERSION \
+            ch-backup; \
+    fi && \
+    rm -rf /var/lib/apt/lists/* /var/cache/debconf && \
+    apt-get clean
+
+COPY staging/tools/ /tmp/tools/
+RUN tar -x -f /tmp/tools/mdb-ch-tools.*.tar.gz -C /
+
+RUN rm -rf /etc/supervisor && \
+    ln --force -s /config/supervisor /etc/supervisor && \
+    ln -s /config/dbaas.conf /etc/dbaas.conf && \
+    mkdir -p /etc/yandex/ch-backup && \
+    ln -s /config/ch-backup.conf /etc/yandex/ch-backup/ch-backup.conf
+
+RUN openssl req -subj "/CN=localhost" -new -newkey rsa:2048 -days 365 -nodes -x509 \
+        -keyout /etc/clickhouse-server/server.key \
+        -out /etc/clickhouse-server/server.crt && \
+    mkdir -p /etc/clickhouse-server/conf.d && \
+    ln -s /config/clickhouse-server.xml /etc/clickhouse-server/conf.d/ && \
+    chown -R clickhouse:clickhouse /etc/clickhouse-server/ /usr/bin/clickhouse
+
+EXPOSE 8123 8443 9000 9440
+
+CMD ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]

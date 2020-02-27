@@ -1,0 +1,43 @@
+<yandex>
+    <logger>
+        <console>1</console>
+    </logger>
+    <listen_host>0.0.0.0</listen_host>
+    <https_port>8443</https_port>
+    <tcp_ssl_port>9440</tcp_ssl_port>
+    <openSSL>
+        <server>
+            <certificateFile>/etc/clickhouse-server/server.crt</certificateFile>
+            <privateKeyFile>/etc/clickhouse-server/server.key</privateKeyFile>
+            <dhParamsFile></dhParamsFile>
+            <verificationMode>none</verificationMode>
+            <loadDefaultCAFile>true</loadDefaultCAFile>
+            <cacheSessions>true</cacheSessions>
+            <disableProtocols>sslv2,sslv3</disableProtocols>
+            <preferServerCiphers>true</preferServerCiphers>
+        </server>
+    </openSSL>
+    <remote_servers>
+        <cluster>
+            <shard>
+                <internal_replication>true</internal_replication>
+{% for instance in conf.services.clickhouse.instances %}
+                <replica>
+                    <host>{{ instance }}</host>
+                    <port>9000</port>
+                </replica>
+{% endfor %}
+            </shard>
+        </cluster>
+    </remote_servers>
+    <zookeeper>
+         <node index="1">
+             <host>zookeeper01</host>
+             <port>2181</port>
+         </node>
+         <session_timeout_ms>3000</session_timeout_ms>
+    </zookeeper>
+    <macros>
+        <replica>{{ instance_name }}</replica>
+    </macros>
+</yandex>

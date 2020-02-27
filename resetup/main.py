@@ -66,9 +66,12 @@ class ClickhouseClient:
     ClickHouse client.
     """
 
-    def __init__(self, host):
+    def __init__(self, host, insecure=False):
         self._session = requests.Session()
-        self._session.verify = '/etc/clickhouse-server/ssl/allCAs.pem'
+        if insecure:
+            self._session.verify = False
+        else:
+            self._session.verify = '/etc/clickhouse-server/ssl/allCAs.pem'
         self._url = f'https://{host}:8443'
         self._timeout = 60
 
@@ -98,6 +101,13 @@ def parse_args():
     parser.add_argument('--tables',
                         default='',
                         help='Comma-separated list of tables to restore')
+    parser.add_argument('--service-manager',
+                        choices=['systemd', 'supervisord'],
+                        default='systemd')
+    parser.add_argument('--insecure',
+                        action='store_true',
+                        default=False,
+                        help='Disable certificate verification for ClickHouse requests.')
     parser.add_argument('-v',
                         '--verbose',
                         action='store_true',
@@ -243,12 +253,15 @@ def set_restore_flag():
     subprocess.check_call(cmd, shell=False)
 
 
-def restart_clickhouse():
+def restart_clickhouse(service_manager):
     """
     Restart local ClickHouse instance.
     """
     logging.debug('Restarting ClickHouse')
-    cmd = ['service', 'clickhouse-server', 'restart']
+    if service_manager == 'supervisord':
+        cmd = ['supervisorctl', 'restart', 'clickhouse-server']
+    else:
+        cmd = ['service', 'clickhouse-server', 'restart']
     subprocess.check_call(cmd, shell=False, timeout=5*60)
 
 
@@ -356,8 +369,8 @@ def main():
     else:
         raise RuntimeError('No source host available')
 
-    check_no_user_tables(ClickhouseClient(target_host))
-    ddl_metadata = get_ddl_metadata(ClickhouseClient(src_host), src_host, tables_to_restore)
+    check_no_user_tables(ClickhouseClient(target_host, args.insecure))
+    ddl_metadata = get_ddl_metadata(ClickhouseClient(src_host, args.insecure), src_host, tables_to_restore)
     if check_zookeeper_has_metadata(zk_hosts, cid, target_host, ddl_metadata):
         logging.debug('ZK has all required metadata. Dumping DDL and restore ClickHouse locally.')
         dump_metadata(ddl_metadata)
@@ -367,7 +380,7 @@ def main():
         clean_zookeeper_tables_metadata(zk_hosts, cid, shard_name, target_host)
         restore_schema(src_host)
 
-    restart_clickhouse()
+    restart_clickhouse(args.service_manager)
 
 
 if __name__ == '__main__':

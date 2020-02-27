@@ -2,9 +2,8 @@ OWNER(g:mdb)
 
 PY3_PROGRAM(ch-resetup)
 
-
 PY_SRCS(
-    main.py
+	MAIN main.py
 )
 
 PEERDIR(
