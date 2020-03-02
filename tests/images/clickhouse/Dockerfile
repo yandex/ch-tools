@@ -36,20 +36,11 @@ RUN mkdir -p /etc/apt/sources.list.d && \
     apt-key add /tmp/clickhouse.gpg  && \
     apt-get update -qq && \
     apt-get upgrade -y && \
-    if [ "$CLICKHOUSE_VERSION" = "19.1.16" ]; then \
-        apt-get install -y \
-            clickhouse-common-static=$CLICKHOUSE_VERSION \
-            clickhouse-server-base=$CLICKHOUSE_VERSION \
-            clickhouse-server=$CLICKHOUSE_VERSION \
-            clickhouse-client=$CLICKHOUSE_VERSION \
-            ch-backup; \
-    else \
-        DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            clickhouse-common-static=$CLICKHOUSE_VERSION \
-            clickhouse-server=$CLICKHOUSE_VERSION \
-            clickhouse-client=$CLICKHOUSE_VERSION \
-            ch-backup; \
-    fi && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        clickhouse-common-static=$CLICKHOUSE_VERSION \
+        clickhouse-server=$CLICKHOUSE_VERSION \
+        clickhouse-client=$CLICKHOUSE_VERSION \
+        ch-backup && \
     rm -rf /var/lib/apt/lists/* /var/cache/debconf && \
     apt-get clean
 
