@@ -23,7 +23,7 @@ staging/tools/:
 all: build lint test
 
 .PHONY: lint
-lint: build isort yapf flake8 pylint mypy
+lint: isort yapf flake8 pylint mypy
 
 .PHONY: isort
 isort: venv
