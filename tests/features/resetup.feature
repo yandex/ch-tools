@@ -16,7 +16,10 @@ Feature: ch-resetup tool
     CREATE TABLE test.table_01 ON CLUSTER 'cluster' (n Int32)
     ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n;
 
-    INSERT INTO test.table_01 (n) SELECT number FROM system.numbers LIMIT 10;
+    CREATE TABLE test.dtable_01 ON CLUSTER 'cluster' AS test.table_01
+    ENGINE = Distributed('cluster', 'test', 'table_01', n);
+
+    INSERT INTO test.dtable_01 (n) SELECT number FROM system.numbers LIMIT 10;
     """
     # Simulate resetup of ClickHouse host.
     And we have executed command on clickhouse01
