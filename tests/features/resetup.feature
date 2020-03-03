@@ -41,3 +41,17 @@ Feature: ch-resetup tool
     """
     Then clickhouse01 has the same schema as clickhouse02
     And clickhouse01 has the same data as clickhouse02
+
+  Scenario: Resetup fails if there are user data
+    Given we have executed queries on clickhouse01
+    """
+    CREATE DATABASE test ON CLUSTER 'cluster';
+
+    CREATE TABLE test.table_01 ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n;
+    """
+    When we try to execute command on clickhouse01
+    """
+    ch-resetup --insecure --service-manager supervisord
+    """
+    Then it fails
