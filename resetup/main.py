@@ -8,6 +8,7 @@ import pwd
 import re
 import socket
 import subprocess
+from time import sleep
 
 import requests
 import tenacity
@@ -381,6 +382,9 @@ def main():
         restore_schema(src_host)
 
     restart_clickhouse(args.service_manager)
+
+    # TODO: wait until data is copied from a replica
+    sleep(5)
 
 
 if __name__ == '__main__':
