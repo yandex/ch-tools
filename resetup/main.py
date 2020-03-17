@@ -31,7 +31,7 @@ GET_TABLES_SQL = """
     LEFT JOIN system.replicas r ON t.database = r.database
         AND t.name = r.table
         AND r.replica_name = '{replica_name}'
-    WHERE t.database NOT IN ('system', 'default')
+    WHERE t.database NOT IN ('system')
         AND (empty({tables}) OR has(cast({tables}, 'Array(String)'), t.name))
     ORDER BY metadata_modification_time
     FORMAT JSON
