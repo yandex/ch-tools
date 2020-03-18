@@ -38,6 +38,6 @@
          <session_timeout_ms>3000</session_timeout_ms>
     </zookeeper>
     <macros>
-        <replica>{{ instance_name }}</replica>
+        <replica>{{ instance_name }}.{{ conf.network_name }}</replica>
     </macros>
 </yandex>
