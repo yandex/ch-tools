@@ -37,11 +37,6 @@ GET_TABLES_SQL = """
     FORMAT JSON
 """
 
-SHOW_CREATE_DATABASE_SQL = """
-    SHOW CREATE DATABASE `{db_name}`
-    FORMAT JSON
-"""
-
 GET_USER_TABLES_SQL = """
     SELECT name
     FROM system.tables
@@ -146,9 +141,8 @@ def dump_metadata(metadata):
             fd.write(ddl)
         change_owner(path)
 
-    for db in metadata.values():
-        for tb in db['tables']:
-            dump_ddl(tb['ddl'], tb['metadata_path'])
+    for tb in metadata:
+        dump_ddl(tb['ddl'], tb['metadata_path'])
 
 
 def get_ddl_metadata(ch_client, src_host, tables_to_restore):
@@ -156,25 +150,16 @@ def get_ddl_metadata(ch_client, src_host, tables_to_restore):
     Fetch DDL metadata from source replica.
     """
 
-    def adjust_ddl(ddl):
-        return re.sub('^CREATE', 'ATTACH', ddl)
-
     logging.debug('Getting DDL metadata from CH host: %s', src_host)
 
     data = ch_client.query(
         GET_TABLES_SQL.format(tables=tables_to_restore, replica_name=src_host))
 
-    result = {}
+    result = []
     for table in data['data']:
-        db_name = table['database']
-        if db_name not in result:
-            db_ddl = ch_client.query(
-                SHOW_CREATE_DATABASE_SQL.format(db_name=db_name))
-            db_ddl = db_ddl['data'][0]['statement']
-            result[db_name] = {'ddl': adjust_ddl(db_ddl), 'tables': []}
-        result[db_name]['tables'].append({
+        result.append({
             'name': table['name'],
-            'ddl': adjust_ddl(table['create_table_query']),
+            'ddl': re.sub('^CREATE', 'ATTACH', table['create_table_query']),
             'zookeeper_path': table['zookeeper_path'],
             'metadata_path': table['metadata_path']
         })
@@ -203,17 +188,15 @@ def check_zookeeper_has_metadata(zk_hosts, cid, target_host, metadata):
                             command_retry=CLIENT_RETRIES,
                             timeout=1.0)
     zk_client.start()
-    for db in metadata.values():
-        for tb in db['tables']:
-            # interpret tables without zookeeper path as views or
-            # distributes tables
-            if not tb['zookeeper_path']:
-                continue
-            path = os.path.join('/clickhouse', cid) + os.path.join(
-                tb['zookeeper_path'], 'replicas', target_host)
-            if not zk_client.exists(path):
-                result = False
-                logging.debug('No metadata in ZK for table %s', tb['name'])
+    for tb in metadata:
+        # interpret tables without zookeeper path as views or
+        # distributes tables
+        if not tb['zookeeper_path']:
+            continue
+        path = os.path.join('/clickhouse', cid, tb['zookeeper_path'], 'replicas', target_host)
+        if not zk_client.exists(path):
+            result = False
+            logging.debug('No metadata in ZK for table %s', tb['name'])
     zk_client.stop()
     return result
 
@@ -222,6 +205,7 @@ def clean_zookeeper_tables_metadata(zk_hosts, cid, target_shard_name, target_hos
     """
     Recursively delete all ZK nodes belongs to target_host.
     """
+
     def rec_node_delete(zk_client, path, node):
         for subpath in zk_client.get_children(path):
             if subpath == node:
@@ -263,7 +247,7 @@ def restart_clickhouse(service_manager):
         cmd = ['supervisorctl', 'restart', 'clickhouse-server']
     else:
         cmd = ['service', 'clickhouse-server', 'restart']
-    subprocess.check_call(cmd, shell=False, timeout=5*60)
+    subprocess.check_call(cmd, shell=False, timeout=5 * 60)
 
 
 def get_ch_shard_hosts_and_zk_hosts(conf, target_host):
