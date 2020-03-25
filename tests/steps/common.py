@@ -1,6 +1,8 @@
 """
 Common steps.
 """
+import time
+
 import yaml
 from behave import given, then, when
 from hamcrest import assert_that, equal_to
@@ -43,3 +45,8 @@ def step_command_fail(context):
 @then('we get response')
 def step_get_response(context):
     assert_that(context.response, equal_to(context.text))
+
+
+@when('we sleep for {seconds:d} seconds')
+def step_sleep(_context, seconds):
+    time.sleep(seconds)

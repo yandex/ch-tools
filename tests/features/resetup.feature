@@ -14,7 +14,7 @@ Feature: ch-resetup tool
     CREATE DATABASE test ON CLUSTER 'cluster';
 
     CREATE TABLE test.table_01 ON CLUSTER 'cluster' (n Int32)
-    ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n;
+    ENGINE = ReplicatedMergeTree('/clickhouse/tables/table_01', '{replica}') PARTITION BY n ORDER BY n;
 
     CREATE TABLE test.dtable_01 ON CLUSTER 'cluster' AS test.table_01
     ENGINE = Distributed('cluster', 'test', 'table_01', n);
@@ -37,8 +37,9 @@ Feature: ch-resetup tool
     """
     And we execute command on clickhouse01
     """
-    ch-resetup --insecure --service-manager supervisord
+    ch-resetup --insecure --service-manager supervisord --zk-root '/'
     """
+    When we sleep for 10 seconds
     Then clickhouse01 has the same schema as clickhouse02
     And clickhouse01 has the same data as clickhouse02
 
@@ -73,8 +74,9 @@ Feature: ch-resetup tool
     """
     And we execute command on clickhouse01
     """
-    ch-resetup --insecure --service-manager supervisord
+    ch-resetup --insecure --service-manager supervisord --zk-root '/'
     """
+    When we sleep for 10 seconds
     Then clickhouse01 has the same schema as clickhouse02
     And clickhouse01 has the same data as clickhouse02
 

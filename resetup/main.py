@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
 import argparse
-import grp
 import json
 import logging
 import os
-import pwd
-import re
 import socket
 import subprocess
-from time import sleep
 
 import requests
 import tenacity
@@ -19,23 +15,6 @@ CLIENT_RETRIES = dict(max_tries=6,
                       backoff=2,
                       max_jitter=0.8,
                       max_delay=60)
-
-GET_TABLES_SQL = """
-    SELECT
-        t.database,
-        t.name,
-        t.metadata_path,
-        t.create_table_query,
-        r.zookeeper_path
-    FROM system.tables t
-    LEFT JOIN system.replicas r ON t.database = r.database
-        AND t.name = r.table
-        AND r.replica_name = '{replica_name}'
-    WHERE t.database NOT IN ('system')
-        AND (empty({tables}) OR has(cast({tables}, 'Array(String)'), t.name))
-    ORDER BY metadata_modification_time
-    FORMAT JSON
-"""
 
 GET_USER_TABLES_SQL = """
     SELECT name
@@ -109,6 +88,7 @@ def parse_args():
                         action='store_true',
                         default=False,
                         help='Verbose mode.')
+    parser.add_argument('--zk-root', default='/clickhouse', help='zk path to clean metadata')
 
     return parser.parse_args()
 
@@ -121,51 +101,6 @@ def get_dbaas_conf():
         return json.load(fd)
 
 
-def dump_metadata(metadata):
-    """
-    Dump DDL locally.
-    """
-
-    def change_owner(path):
-        uid = pwd.getpwnam('clickhouse').pw_uid
-        gid = grp.getgrnam('clickhouse').gr_gid
-        os.chown(path, uid, gid)
-
-    def dump_ddl(ddl, path):
-        logging.debug('Dumping metadata at path: %s', path)
-        db_dir = os.path.dirname(path)
-        if not os.path.exists(db_dir):
-            os.makedirs(db_dir)
-            change_owner(db_dir)
-        with open(path, 'w') as fd:
-            fd.write(ddl)
-        change_owner(path)
-
-    for tb in metadata:
-        dump_ddl(tb['ddl'], tb['metadata_path'])
-
-
-def get_ddl_metadata(ch_client, src_host, tables_to_restore):
-    """
-    Fetch DDL metadata from source replica.
-    """
-
-    logging.debug('Getting DDL metadata from CH host: %s', src_host)
-
-    data = ch_client.query(
-        GET_TABLES_SQL.format(tables=tables_to_restore, replica_name=src_host))
-
-    result = []
-    for table in data['data']:
-        result.append({
-            'name': table['name'],
-            'ddl': re.sub('^CREATE', 'ATTACH', table['create_table_query']),
-            'zookeeper_path': table['zookeeper_path'],
-            'metadata_path': table['metadata_path']
-        })
-    return result
-
-
 def check_no_user_tables(ch_client):
     """
     Check restoring replica doesn't have user tables.
@@ -176,32 +111,7 @@ def check_no_user_tables(ch_client):
         raise RuntimeError('Restoring replica should have no user tables')
 
 
-def check_zookeeper_has_metadata(zk_hosts, cid, target_host, metadata):
-    """
-    Check that there is all required metadata for target replica in Zookeeper.
-    """
-    result = True
-    logging.debug('Checking Zookeeper has required metadata for tables')
-
-    zk_client = KazooClient(hosts=','.join(zk_hosts),
-                            connection_retry=CLIENT_RETRIES,
-                            command_retry=CLIENT_RETRIES,
-                            timeout=1.0)
-    zk_client.start()
-    for tb in metadata:
-        # interpret tables without zookeeper path as views or
-        # distributes tables
-        if not tb['zookeeper_path']:
-            continue
-        path = os.path.join('/clickhouse', cid, tb['zookeeper_path'], 'replicas', target_host)
-        if not zk_client.exists(path):
-            result = False
-            logging.debug('No metadata in ZK for table %s', tb['name'])
-    zk_client.stop()
-    return result
-
-
-def clean_zookeeper_tables_metadata(zk_hosts, cid, target_shard_name, target_host):
+def clean_zookeeper_tables_metadata(zk_hosts, zk_root, target_host):
     """
     Recursively delete all ZK nodes belongs to target_host.
     """
@@ -214,40 +124,15 @@ def clean_zookeeper_tables_metadata(zk_hosts, cid, target_shard_name, target_hos
             else:
                 rec_node_delete(zk_client, os.path.join(path, subpath), node)
 
-    path = os.path.join('/clickhouse', cid, 'clickhouse', 'tables', target_shard_name)
-    logging.debug('Start cleaning ZK metadata from path: %s', path)
+    logging.debug('Cleaning ZK metadata and restore schema from backup')
+    logging.debug(f'Start cleaning ZK metadata from path: {zk_root}')
     client = KazooClient(hosts=','.join(zk_hosts),
                          connection_retry=CLIENT_RETRIES,
                          command_retry=CLIENT_RETRIES,
                          timeout=1.0)
     client.start()
-    client.ensure_path(path)
-    rec_node_delete(client, path, target_host)
+    rec_node_delete(client, zk_root, target_host)
     client.stop()
-
-
-def set_restore_flag():
-    """
-    Set ClickHouse restore flag. It's needed to run internal restoring process after ClickHouse restart.
-    """
-    logging.debug('Setting ClickHouse restore flag')
-    cmd = [
-        'sudo', '-u', 'clickhouse', 'touch',
-        '/var/lib/clickhouse/flags/force_restore_data'
-    ]
-    subprocess.check_call(cmd, shell=False)
-
-
-def restart_clickhouse(service_manager):
-    """
-    Restart local ClickHouse instance.
-    """
-    logging.debug('Restarting ClickHouse')
-    if service_manager == 'supervisord':
-        cmd = ['supervisorctl', 'restart', 'clickhouse-server']
-    else:
-        cmd = ['service', 'clickhouse-server', 'restart']
-    subprocess.check_call(cmd, shell=False, timeout=5 * 60)
 
 
 def get_ch_shard_hosts_and_zk_hosts(conf, target_host):
@@ -269,44 +154,12 @@ def get_ch_shard_hosts_and_zk_hosts(conf, target_host):
     return shard_name, ch_shard_hosts, zk_hosts
 
 
-def delete_backup(backup_id):
-    """
-    Delete given ClickHouse backup.
-    """
-    cmd = ['ch-backup', 'delete', backup_id]
-
-    run_ch_backup_command(cmd)
-
-
-def get_backup(src_host):
-    """
-    Create ClickHouse schema-only backup on src_host.
-    """
-    cmd = ['ch-backup', '--host', src_host, 'backup', '--force', '--schema-only']
-
-    backup_id = run_ch_backup_command(cmd).decode().strip()
-
-    return backup_id
-
-
 def restore_schema(src_host):
     """
     Make a schema backup on src_host and restore this schema locally.
     """
-    backup_id = get_backup(src_host)
 
-    cmd = ['ch-backup', 'restore', backup_id, '--schema-only']
-
-    try:
-        return run_ch_backup_command(cmd)
-    finally:
-        delete_backup(backup_id)
-
-
-def run_ch_backup_command(cmd):
-    """
-    ClickHouse backup command runner wrapper.
-    """
+    cmd = ['ch-backup', 'restore-schema', '--source-host', src_host, '--source-port', '8443']
     logging.debug(f'Running: {cmd}')
 
     # Workaround if locale is not set.
@@ -317,7 +170,8 @@ def run_ch_backup_command(cmd):
     try:
         output = subprocess.check_output(cmd, env=env, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as exc:
-        logging.exception(f'{cmd} failed: {exc.output} {exc.returncode}')
+        output = str(exc.output).replace('\\n', '\n    ')
+        logging.exception(f'{cmd} failed: {output} {exc.returncode}')
         raise
     else:
         return output
@@ -330,7 +184,6 @@ def main():
     if args.verbose:
         logging.basicConfig(level='DEBUG', format='%(message)s')
 
-    tables_to_restore = [t for t in args.tables.split(',') if t]
     target_host = args.host
     conf = get_dbaas_conf()
 
@@ -355,20 +208,8 @@ def main():
         raise RuntimeError('No source host available')
 
     check_no_user_tables(ClickhouseClient(target_host, args.insecure))
-    ddl_metadata = get_ddl_metadata(ClickhouseClient(src_host, args.insecure), src_host, tables_to_restore)
-    if check_zookeeper_has_metadata(zk_hosts, cid, target_host, ddl_metadata):
-        logging.debug('ZK has all required metadata. Dumping DDL and restore ClickHouse locally.')
-        dump_metadata(ddl_metadata)
-        set_restore_flag()
-    else:
-        logging.debug('Cleaning ZK metadata and restore schema from backup')
-        clean_zookeeper_tables_metadata(zk_hosts, cid, shard_name, target_host)
-        restore_schema(src_host)
-
-    restart_clickhouse(args.service_manager)
-
-    # TODO: wait until data is copied from a replica
-    sleep(5)
+    clean_zookeeper_tables_metadata(zk_hosts, args.zk_root, target_host)
+    restore_schema(src_host)
 
 
 if __name__ == '__main__':
