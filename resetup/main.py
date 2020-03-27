@@ -41,13 +41,10 @@ class ClickhouseClient:
     ClickHouse client.
     """
 
-    def __init__(self, host, insecure=False):
+    def __init__(self, host, port, insecure=False):
         self._session = requests.Session()
-        if insecure:
-            self._session.verify = False
-        else:
-            self._session.verify = '/etc/clickhouse-server/ssl/allCAs.pem'
-        self._url = f'https://{host}:8443'
+        self._session.verify = False if insecure else '/etc/clickhouse-server/ssl/allCAs.pem'
+        self._url = f'https://{host}:{port}'
         self._timeout = 60
 
     @retry(requests.exceptions.ConnectionError)
@@ -73,6 +70,7 @@ def parse_args():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', default=socket.getfqdn(), help='')
+    parser.add_argument('--port', default=8443, help='Port for connection to local ClickHouse')
     parser.add_argument('--tables',
                         default='',
                         help='Comma-separated list of tables to restore')
@@ -154,12 +152,15 @@ def get_ch_shard_hosts_and_zk_hosts(conf, target_host):
     return shard_name, ch_shard_hosts, zk_hosts
 
 
-def restore_schema(src_host):
+def restore_schema(src_host, target_port, insecure):
     """
-    Make a schema backup on src_host and restore this schema locally.
+    Restore schema from another host via ch-backup tool.
     """
 
-    cmd = ['ch-backup', 'restore-schema', '--source-host', src_host, '--source-port', '8443']
+    cmd = ['ch-backup', '--port', str(target_port), '--protocol', 'https']
+    if insecure:
+        cmd.append('--insecure')
+    cmd += ['restore-schema', '--source-host', src_host, '--exclude-dbs', 'system']
     logging.debug(f'Running: {cmd}')
 
     # Workaround if locale is not set.
@@ -207,9 +208,9 @@ def main():
     else:
         raise RuntimeError('No source host available')
 
-    check_no_user_tables(ClickhouseClient(target_host, args.insecure))
+    check_no_user_tables(ClickhouseClient(target_host, args.port, args.insecure))
     clean_zookeeper_tables_metadata(zk_hosts, args.zk_root, target_host)
-    restore_schema(src_host)
+    restore_schema(src_host, args.port, args.insecure)
 
 
 if __name__ == '__main__':
