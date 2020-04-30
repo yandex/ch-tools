@@ -37,11 +37,14 @@ class ClickhouseClient:
         """
         self._query('POST', query=query)
 
-    def get_response(self, query: str) -> str:
+    def get_response(self, query: str) -> Tuple[int, str]:
         """
         Execute arbitrary query and return result
         """
-        return str(self._query('POST', query=query))
+        try:
+            return 200, str(self._query('POST', query=query))
+        except HTTPError as e:
+            return e.response.status_code, e.response.text
 
     def get_version(self) -> str:
         """

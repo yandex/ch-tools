@@ -21,7 +21,7 @@ def step_wait_for_clickhouse_alive(context, node):
 @when('we execute query on {node:w}')
 def step_clickhouse_query(context, node):
     ch_client = ClickhouseClient(context, node)
-    context.response = ch_client.get_response(context.text)
+    context.ret_code, context.response = ch_client.get_response(context.text)
 
 
 @given('we have executed queries on {node:w}')
@@ -36,6 +36,11 @@ def step_clickhouse_queries(context, node):
     ch_client = ClickhouseClient(context, node)
     for query in queries:
         ch_client.execute(query)
+
+
+@then('we get reponse code {code:d}')
+def step_clickhouse_reponse(context, code):
+    assert_that(code, equal_to(context.ret_code))
 
 
 @then('{node1:w} has the same schema as {node2:w}')

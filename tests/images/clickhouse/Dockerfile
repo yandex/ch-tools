@@ -60,6 +60,8 @@ RUN openssl req -subj "/CN=localhost" -new -newkey rsa:2048 -days 365 -nodes -x5
     ln -s /config/clickhouse-server.xml /etc/clickhouse-server/conf.d/ && \
     chown -R clickhouse:clickhouse /etc/clickhouse-server/ /usr/bin/clickhouse
 
+COPY images/clickhouse/config/users.xml /etc/clickhouse-server/users.xml
+
 EXPOSE 8123 8443 9000 9440
 
 CMD ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]
