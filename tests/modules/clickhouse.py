@@ -29,7 +29,7 @@ class ClickhouseClient:
         """
         Ping ClickHouse server.
         """
-        self._query('GET', url='ping')
+        self._query('GET', url='ping', params={})
 
     def execute(self, query: str) -> None:
         """
@@ -118,7 +118,12 @@ class ClickhouseClient:
             """
         return self._query('GET', query)['data']
 
-    def _query(self, method: str, query: str = None, url: str = None, data: Union[bytes, str] = None) -> Any:
+    def _query(self,
+               method: str,
+               query: str = None,
+               url: str = None,
+               params: dict = None,
+               data: Union[bytes, str] = None) -> Any:
         if url:
             url = urljoin(self._url, url)
         else:
@@ -127,7 +132,11 @@ class ClickhouseClient:
         if isinstance(data, str):
             data = data.encode()
 
-        params = {}
+        if params is None:
+            params = {
+                'wait_end_of_query': 1,
+            }
+
         if query:
             params['query'] = query
 

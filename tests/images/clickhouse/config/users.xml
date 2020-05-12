@@ -3,15 +3,13 @@
     <profiles>
         <default>
             <distributed_ddl_task_timeout>5</distributed_ddl_task_timeout>
-            <max_memory_usage>10000000000</max_memory_usage>
-            <use_uncompressed_cache>0</use_uncompressed_cache>
         </default>
     </profiles>
 
     <users>
         <default>
             <password></password>
-            <networks incl="networks" replace="replace">
+            <networks>
                 <ip>::/0</ip>
             </networks>
             <profile>default</profile>
@@ -20,7 +18,6 @@
     </users>
 
     <quotas>
-        <default>
-        </default>
+        <default/>
     </quotas>
 </yandex>
