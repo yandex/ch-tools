@@ -65,18 +65,18 @@ Feature: ch-resetup tool
     """
     Then it fails
 
-  Scenario: Resetup ClickHouse host with not empty DDL queue
+  Scenario: Resetup ClickHouse host with custom port settings and not empty DDL queue
     Given we have executed query on clickhouse02
     """
     CREATE DATABASE test2 ON CLUSTER 'cluster';
     """
-    Then we get reponse code 500
-    Given we have executed query on clickhouse02
+    And we get reponse code 500
+    And we have executed query on clickhouse02
     """
     CREATE TABLE test2.table_02 ON CLUSTER 'cluster' (n Int32)
     ENGINE = ReplicatedMergeTree('/clickhouse/tables/table_02', '{replica}') PARTITION BY n ORDER BY n;
     """
-    Then we get reponse code 500
+    And we get reponse code 500
     When we execute command on clickhouse01
     """
     echo "
@@ -91,7 +91,7 @@ Feature: ch-resetup tool
 
     </yandex>" > /etc/clickhouse-server/config.d/custom.xml
     """
-    When we execute command on clickhouse01
+    And we execute command on clickhouse01
     """
     supervisorctl start clickhouse-server
     """
@@ -99,7 +99,7 @@ Feature: ch-resetup tool
     """
     ch-resetup --insecure --service-manager supervisord --zk-root '/' --port 29443
     """
-    When we sleep for 10 seconds
+    And we sleep for 10 seconds
     And we execute command on clickhouse01
     """
     rm /etc/clickhouse-server/config.d/custom.xml
