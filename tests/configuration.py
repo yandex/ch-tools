@@ -43,6 +43,12 @@ def create():
                 'http': 9000,
             },
         },
+        'http_mock': {
+            'instances': ['http_mock01'],
+            'expose': {
+                'tcp': 8080,
+            },
+        },
     }
 
     return {
