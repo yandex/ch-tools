@@ -88,7 +88,6 @@ Feature: ch-resetup tool
           <distributed_ddl>
               <path>/clickhouse/task_queue/fake_ddl</path>
           </distributed_ddl>
-
     </yandex>" > /etc/clickhouse-server/config.d/custom.xml
     """
     And we execute command on clickhouse01

@@ -3,6 +3,7 @@ Common steps.
 """
 import time
 
+import requests
 import yaml
 from behave import given, then, when
 from hamcrest import assert_that, equal_to
@@ -25,7 +26,7 @@ def step_try_command(context, node):
     container = docker.get_container(context, node)
     context.command = context.text.strip()
     result = container.exec_run(['bash', '-c', context.command], user='root')
-    context.response = result.output.decode()
+    context.response = result.output.decode().strip()
     context.exit_code = result.exit_code
 
 
@@ -50,3 +51,14 @@ def step_get_response(context):
 @when('we sleep for {seconds:d} seconds')
 def step_sleep(_context, seconds):
     time.sleep(seconds)
+
+
+@given('a working http server')
+def working_http(context):
+    """
+    Ensure that http server is ready to accept incoming requests.
+    """
+    container = docker.get_container(context, 'http_mock01')
+    host, port = docker.get_exposed_port(container, 8080)
+    response = requests.get(f'http://{host}:{port}/')
+    assert response.text == 'OK', f'expected "OK", got "{response.text}"'

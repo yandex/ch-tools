@@ -9,7 +9,8 @@
     "build": {
          "bin": {
             "targets": [
-                "cloud/mdb/clickhouse/tools/resetup"
+                "cloud/mdb/clickhouse/tools/resetup",
+                "cloud/mdb/clickhouse/tools/s3_credentials"
             ]
         }
     },
@@ -31,6 +32,25 @@
             "destination": {
                 "path": "/usr/bin/ch-resetup",
                 "target": "/opt/yandex/mdb-ch-tools/bin/ch-resetup"
+            }
+        },
+        {
+            "source": {
+                "type": "BUILD_OUTPUT",
+                "build_key": "bin",
+                "path": "cloud/mdb/clickhouse/tools/s3_credentials/ch-s3-credentials"
+            },
+            "destination": {
+                "path": "/opt/yandex/mdb-ch-tools/bin/ch-s3-credentials"
+            }
+        },
+        {
+            "source": {
+                "type": "SYMLINK"
+            },
+            "destination": {
+                "path": "/usr/bin/ch-s3-credentials",
+                "target": "/opt/yandex/mdb-ch-tools/bin/ch-s3-credentials"
             }
         }
     ]
