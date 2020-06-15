@@ -7,7 +7,6 @@ PY_SRCS(
 )
 
 PEERDIR(
-    contrib/python/kazoo
     contrib/python/requests
     contrib/python/tenacity
 )
