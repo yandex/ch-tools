@@ -8,7 +8,6 @@ import subprocess
 
 import requests
 import tenacity
-from kazoo.client import KazooClient
 
 CLIENT_RETRIES = dict(max_tries=6,
                       delay=0.1,
@@ -109,47 +108,20 @@ def check_no_user_tables(ch_client):
         raise RuntimeError('Restoring replica should have no user tables')
 
 
-def clean_zookeeper_tables_metadata(zk_hosts, zk_root, target_host):
-    """
-    Recursively delete all ZK nodes belongs to target_host.
-    """
-
-    def rec_node_delete(zk_client, path, node):
-        for subpath in zk_client.get_children(path):
-            if subpath == node:
-                logging.debug('Deleting ZK path: %s', os.path.join(path, subpath))
-                zk_client.delete(os.path.join(path, subpath), recursive=True)
-            else:
-                rec_node_delete(zk_client, os.path.join(path, subpath), node)
-
-    logging.debug('Cleaning ZK metadata and restore schema from backup')
-    logging.debug(f'Start cleaning ZK metadata from path: {zk_root}')
-    client = KazooClient(hosts=','.join(zk_hosts),
-                         connection_retry=CLIENT_RETRIES,
-                         command_retry=CLIENT_RETRIES,
-                         timeout=1.0)
-    client.start()
-    rec_node_delete(client, zk_root, target_host)
-    client.stop()
-
-
-def get_ch_shard_hosts_and_zk_hosts(conf, target_host):
+def get_ch_shard_hosts(conf, target_host):
     """
     Get shard of target host, all hosts belong to this shard and Zookeeper hosts.
     """
-    zk_hosts = []
     ch_shard_hosts = []
     shard_name = None
     for subcid, sub_conf in conf['cluster']['subclusters'].items():
-        if 'zk' in sub_conf['roles']:
-            zk_hosts.extend(sub_conf['hosts'])
         if 'clickhouse_cluster' in sub_conf['roles']:
             for shard_id, sh_conf in sub_conf['shards'].items():
                 if target_host in sh_conf['hosts']:
                     ch_shard_hosts.extend(sh_conf['hosts'])
                     shard_name = sh_conf['name']
                     break
-    return shard_name, ch_shard_hosts, zk_hosts
+    return shard_name, ch_shard_hosts
 
 
 def restore_schema(src_host, target_port, insecure):
@@ -189,15 +161,12 @@ def main():
     conf = get_dbaas_conf()
 
     cid = conf['cluster_id']
-    shard_name, ch_shard_hosts, zk_hosts = get_ch_shard_hosts_and_zk_hosts(conf, target_host)
-    if not zk_hosts:
-        raise RuntimeError('Zookeeper hosts are not found')
+    shard_name, ch_shard_hosts = get_ch_shard_hosts(conf, target_host)
     if not ch_shard_hosts:
         raise RuntimeError('Target host is not found among ClickHouse shards')
 
     logging.debug('Cluster id: %s', cid)
     logging.debug('Recovering host: %s', target_host)
-    logging.debug('Zookeeper hosts: %s', zk_hosts)
     logging.debug('ClickHouse shard hosts: %s', ch_shard_hosts)
 
     # Select a host to take metadata from
@@ -209,7 +178,6 @@ def main():
         raise RuntimeError('No source host available')
 
     check_no_user_tables(ClickhouseClient(target_host, args.port, args.insecure))
-    clean_zookeeper_tables_metadata(zk_hosts, args.zk_root, target_host)
     restore_schema(src_host, args.port, args.insecure)
 
 
