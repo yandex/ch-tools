@@ -41,8 +41,11 @@ RUN mkdir -p /etc/apt/sources.list.d && \
         clickhouse-server=$CLICKHOUSE_VERSION \
         clickhouse-client=$CLICKHOUSE_VERSION \
         ch-backup && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y clickhouse-geodb && \
     rm -rf /var/lib/apt/lists/* /var/cache/debconf && \
     apt-get clean
+
+RUN mkdir /var/log/monrun
 
 COPY staging/tools/ /tmp/tools/
 RUN tar -x -f /tmp/tools/mdb-ch-tools.*.tar.gz -C /
@@ -55,6 +58,7 @@ RUN rm -rf /etc/supervisor && \
 
 RUN openssl req -subj "/CN=localhost" -new -newkey rsa:2048 -days 365 -nodes -x509 \
         -keyout /etc/clickhouse-server/server.key \
+        -addext "subjectAltName=DNS:clickhouse01,DNS:clickhouse02" \
         -out /etc/clickhouse-server/server.crt && \
     mkdir -p /etc/clickhouse-server/conf.d && \
     ln -s /config/clickhouse-server.xml /etc/clickhouse-server/conf.d/ && \
