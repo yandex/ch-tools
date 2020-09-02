@@ -42,7 +42,7 @@ def get_tables_with_replication_delay():
     Get tables with absolute_delay > 0.
     """
     query = 'SELECT database, table, zookeeper_path FROM system.replicas WHERE absolute_delay > 0'
-    return ClickhouseClient().execute(query, False)
+    return ClickhouseClient().execute(query, compact=False)
 
 
 def filter_out_single_replica_tables(tables):

@@ -14,6 +14,8 @@ PY_SRCS(
     ch_geobase.py
     ch_resetup_state.py
     ch_ro_replica.py
+    ch_log_errors.py
+    ch_ping.py
 )
 
 PEERDIR(

@@ -156,3 +156,94 @@ Feature: ch-monitorung tool
 #    """
 #    0;OK
 #    """
+
+  Scenario: Check Log errors
+    When we sleep for 30 seconds
+    And we execute command on clickhouse01
+    """
+    ch-monitoring log-errors -n 20
+    """
+    Then we get response
+    """
+    0;OK, 0 errors for last 20 seconds
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT 1;
+    """
+    And we sleep for 5 seconds
+    And we execute command on clickhouse01
+    """
+    ch-monitoring log-errors -n 20
+    """
+    Then we get response
+    """
+    0;OK, 0 errors for last 20 seconds
+    """
+    When we execute query on clickhouse01
+    """
+    FOOBAR INCORRECT REQUEST;
+    """
+    And we sleep for 5 seconds
+    And we execute command on clickhouse01
+    """
+    ch-monitoring log-errors -n 20
+    """
+    Then we get response
+    """
+    0;OK, 2 errors for last 20 seconds
+    """
+    When we execute query on clickhouse01
+    """
+    FOOBAR INCORRECT REQUEST;
+    """
+    And we execute query on clickhouse01
+    """
+    FOOBAR INCORRECT REQUEST;
+    """
+    And we execute query on clickhouse01
+    """
+    FOOBAR INCORRECT REQUEST;
+    """
+    And we execute query on clickhouse01
+    """
+    FOOBAR INCORRECT REQUEST;
+    """
+    And we sleep for 5 seconds
+    And we execute command on clickhouse01
+    """
+    ch-monitoring log-errors -n 20
+    """
+    Then we get response
+    """
+    1;10 errors for last 20 seconds
+    """
+    When we sleep for 30 seconds
+    And we execute command on clickhouse01
+    """
+    ch-monitoring log-errors -n 20
+    """
+    Then we get response
+    """
+    0;OK, 0 errors for last 20 seconds
+    """
+
+
+  Scenario: Check Ping
+    When we execute command on clickhouse01
+    """
+    ch-monitoring ping
+    """
+    Then we get response
+    """
+    0;OK
+    """
+    When we execute command on clickhouse01
+    """
+    supervisorctl stop clickhouse-server
+    ch-monitoring ping
+    """
+    Then we get response contains
+    """
+    2;ClickHouse is dead
+    """
