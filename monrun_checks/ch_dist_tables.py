@@ -21,7 +21,7 @@ def dist_tables_command(crit, warn):
     issues = []
 
     query = 'SELECT database, name FROM system.tables WHERE engine = \'Distributed\''
-    distributed_tables = ch_client.execute(query, False)
+    distributed_tables = ch_client.execute(query, compact=False)
     for table in distributed_tables:
         tss = get_chunk_timestamps(table)
         if tss['broken']:

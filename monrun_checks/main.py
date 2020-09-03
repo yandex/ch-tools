@@ -10,6 +10,8 @@ from cloud.mdb.clickhouse.tools.monrun_checks.ch_dist_tables import dist_tables_
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_resetup_state import resetup_state_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_ro_replica import ro_replica_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_geobase import geobase_command
+from cloud.mdb.clickhouse.tools.monrun_checks.ch_log_errors import log_errors_command
+from cloud.mdb.clickhouse.tools.monrun_checks.ch_ping import ping_command
 
 LOG_FILE = '/var/log/monrun/clickhouse-monitoring.log'
 
@@ -58,6 +60,8 @@ cli.add_command(dist_tables_command)
 cli.add_command(resetup_state_command)
 cli.add_command(ro_replica_command)
 cli.add_command(geobase_command)
+cli.add_command(log_errors_command)
+cli.add_command(ping_command)
 
 
 def main():

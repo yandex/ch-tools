@@ -36,7 +36,7 @@ def get_metrics():
     """
     query = 'SELECT database, table, future_parts, parts_to_check, queue_size,' \
             ' inserts_in_queue, merges_in_queue FROM system.replicas'
-    return ClickhouseClient().execute(query, False)
+    return ClickhouseClient().execute(query, compact=False)
 
 
 def check_metrics(metrics, crit, warn, config):

@@ -42,6 +42,7 @@ RUN mkdir -p /etc/apt/sources.list.d && \
         clickhouse-client=$CLICKHOUSE_VERSION \
         ch-backup && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y clickhouse-geodb && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y yandex-timetail && \
     rm -rf /var/lib/apt/lists/* /var/cache/debconf && \
     apt-get clean
 
