@@ -11,7 +11,7 @@ from cloud.mdb.clickhouse.tools.monrun_checks.result import Result
 
 @click.command('resetup-state')
 @click.option('-p', '--port', 'port', type=int, help='ClickHouse HTTP(S) port to use.')
-@click.option('-s', '--ssl', 'ssl', help='Use HTTPS rather than HTTP.')
+@click.option('-s', '--ssl', 'ssl', is_flag=True, help='Use HTTPS rather than HTTP.')
 @click.option('--ca_bundle', 'ca_bundle', help='Path to CA bundle to use.')
 def resetup_state_command(port, ssl, ca_bundle):
     """

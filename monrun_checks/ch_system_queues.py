@@ -27,7 +27,7 @@ def get_config(conf):
     Return config.
     """
     with open(conf, 'r') as f:
-        return yaml.load(f)
+        return yaml.safe_load(f)
 
 
 def get_metrics():

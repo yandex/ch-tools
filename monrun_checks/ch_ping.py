@@ -8,6 +8,9 @@ from cloud.mdb.clickhouse.tools.monrun_checks.result import Result
 @click.command('ping')
 @click.option('-n', '--number', 'number', type=int, default=10, help='The max number of retries.')
 def ping_command(number):
+    """
+    Ping all available clickhouse ports.
+    """
     ch_client = ClickhouseClient()
 
     error = 'Unexpected error'
