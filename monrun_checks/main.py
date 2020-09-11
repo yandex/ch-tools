@@ -35,7 +35,7 @@ class MonrunChecks(click.Group):
                 status.set_code(code)
             except Exception as exc:
                 status.append(repr(exc))
-                status.set_code(2)
+                status.set_code(1)
 
             status.report()
 
