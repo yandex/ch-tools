@@ -228,6 +228,17 @@ Feature: ch-monitorung tool
     0;OK, 0 errors for last 20 seconds
     """
 
+  Scenario: Check Log errors with timetail stderr output
+    When we execute command on clickhouse01
+    """
+    echo 2000.01.01 00:00:00 test line > /tmp/test.log
+    for j in {1..2000}; do echo junk line >> /tmp/test.log; done
+    ch-monitoring log-errors -n 20 -f /tmp/test.log
+    """
+    Then we get response
+    """
+    0;OK, 0 errors for last 20 seconds
+    """
 
   Scenario: Check Ping
     When we execute command on clickhouse01
