@@ -106,6 +106,11 @@ class ClickhouseClient:
             return bool(self.port_settings)  # Has any port
         return port in self.port_settings
 
+    def get_port(self, port):
+        if port in self.port_settings:
+            return self.port_settings[port]
+        return 0
+
     def __get_settings(self):
         result = {}
         try:
