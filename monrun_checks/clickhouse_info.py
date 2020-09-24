@@ -1,6 +1,6 @@
 import functools
 
-from cloud.mdb.clickhouse.tools.monrun_checks.clickhouse_client import ClickhouseClient
+from cloud.mdb.clickhouse.tools.monrun_checks.clickhouse_client import ClickhouseClient, ClickhousePort
 
 
 class ClickhouseInfo(object):
@@ -11,12 +11,16 @@ class ClickhouseInfo(object):
         """
         Count different clickhouse versions in cluster.
         """
+        ch_client = ClickhouseClient()
+        #  I belive that all hosts in cluster have the same port set, so check current for security port
+        remoteCommand = 'remoteSecure' if ch_client.check_port(ClickhousePort.tcps) else 'remote'
         replicas = cls.get_replicas()
         query = '''
-            SELECT uniq(version()) FROM remote('{replicas}', system.one)
+            SELECT uniq(version()) FROM {remoteCommand}('{replicas}', system.one)
             '''.format(
+                remoteCommand=remoteCommand,
                 replicas=','.join(replicas))
-        return int(ClickhouseClient().execute(query)[0][0])
+        return int(ch_client.execute(query)[0][0])
 
     @classmethod
     @functools.lru_cache(maxsize=1)
