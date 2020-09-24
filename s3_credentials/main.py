@@ -8,6 +8,7 @@ import json
 import requests
 import time
 import random
+from datetime import timedelta
 from os.path import getmtime
 from xml.dom import minidom
 
@@ -62,19 +63,28 @@ def _update_config(args):
         file.write(doc.toprettyxml(indent=4 * ' ', encoding='utf-8'))
 
 
+def _delta_to_hours(delta: timedelta):
+    return f'{(delta.total_seconds() / 3600):.2f}'
+
+
 def _check_config(args):
     try:
         mtime = getmtime('/etc/clickhouse-server/config.d/s3_credentials.xml')
         if args.present:
-            if time.time() - mtime > 3600:
-                print('1; S3 default config older than 1 hour')
+            delta = timedelta(seconds=time.time() - mtime)
+            if delta > timedelta(hours=12):
+                print(f'2; S3 token expired {_delta_to_hours(delta - timedelta(hours=12))} hours ago')
+            elif delta > timedelta(hours=4):
+                print(f'2; S3 token expire in {_delta_to_hours(timedelta(hours=12) - delta)} hours')
+            elif delta > timedelta(hours=2):
+                print(f'1; S3 token expire in {_delta_to_hours(timedelta(hours=12) - delta)} hours')
             else:
                 print('0; OK')
         else:
             print('2; S3 default config present, but shouldn\'t')
     except FileNotFoundError:
         if args.present:
-            print('1; S3 default config not present')
+            print('2; S3 default config not present')
         else:
             print('0; OK')
 
