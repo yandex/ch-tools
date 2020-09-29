@@ -122,7 +122,7 @@ class ClickhouseClient:
             self.port_settings = result
             if not result:
                 self.__die(2, 'Can\'t find any port in clickhouse-server config')
-            node = root.find('./openSSL/server/certificateFile')
+            node = root.find('./openSSL/server/caConfig')
             if node is not None:
                 self.cert_path = node.text
 
