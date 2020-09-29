@@ -7,8 +7,8 @@
     <tcp_ssl_port>9440</tcp_ssl_port>
     <openSSL>
         <server>
-            <certificateFile>/etc/clickhouse-server/server.crt</certificateFile>
-            <privateKeyFile>/etc/clickhouse-server/server.key</privateKeyFile>
+            <certificateFile>/etc/clickhouse-server/ssl/server.crt</certificateFile>
+            <privateKeyFile>/etc/clickhouse-server/ssl/server.key</privateKeyFile>
             <dhParamsFile></dhParamsFile>
             <verificationMode>none</verificationMode>
             <loadDefaultCAFile>true</loadDefaultCAFile>
