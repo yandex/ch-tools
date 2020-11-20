@@ -46,6 +46,8 @@ RUN mkdir -p /etc/apt/sources.list.d && \
     rm -rf /var/lib/apt/lists/* /var/cache/debconf && \
     apt-get clean
 
+RUN mkdir /etc/clickhouse-server/config.d || true
+RUN chown clickhouse:clickhouse /etc/clickhouse-server/config.d
 RUN mkdir /var/log/monrun
 
 COPY staging/tools/ /tmp/tools/
