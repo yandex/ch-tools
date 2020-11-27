@@ -9,19 +9,22 @@ import requests
 import time
 import random
 from datetime import timedelta
-from os.path import getmtime
+from os.path import exists, getmtime
 from xml.dom import minidom
+
+CONFIG_PATH = '/etc/clickhouse-server/config.d/s3_credentials.xml'
 
 
 def _parse_args():
     parser = argparse.ArgumentParser()
     actions = parser.add_subparsers()
 
+    parser.add_argument('-m', '--metadata-address', type=str, default='169.254.169.254',
+                        help='compute metadata api address')
+
     update = actions.add_parser('update', help='update ch default s3 credentials config')
     update.set_defaults(func=_update_config)
     update.add_argument('-e', '--endpoint', type=str, help='S3 endpoint')
-    update.add_argument('-m', '--metadata-address', type=str, default='169.254.169.254',
-                        help='compute metadata api address')
     update.add_argument('-s', '--random-sleep', action='store_true', default=False,
                         help='whether need a random sleep')
 
@@ -33,9 +36,13 @@ def _parse_args():
     return parser.parse_args()
 
 
+def _request_token(endpoint):
+    return requests.get(f'http://{endpoint}/computeMetadata/v1/instance/service-accounts/default/token',
+                        headers={'Metadata-Flavor': 'Google'})
+
+
 def _get_token(endpoint):
-    response = requests.get(f'http://{endpoint}/computeMetadata/v1/instance/service-accounts/default/token',
-                            headers={'Metadata-Flavor': 'Google'})
+    response = _request_token(endpoint)
     if response.status_code != 200:
         exit(1)
     data = json.loads(response.content)
@@ -68,25 +75,40 @@ def _delta_to_hours(delta: timedelta):
 
 
 def _check_config(args):
-    try:
-        mtime = getmtime('/etc/clickhouse-server/config.d/s3_credentials.xml')
-        if args.present:
-            delta = timedelta(seconds=time.time() - mtime)
-            if delta > timedelta(hours=12):
-                print(f'2; S3 token expired {_delta_to_hours(delta - timedelta(hours=12))} hours ago')
-            elif delta > timedelta(hours=4):
-                print(f'2; S3 token expire in {_delta_to_hours(timedelta(hours=12) - delta)} hours')
-            elif delta > timedelta(hours=2):
-                print(f'1; S3 token expire in {_delta_to_hours(timedelta(hours=12) - delta)} hours')
-            else:
-                print('0; OK')
+    if not args.present:
+        if exists(CONFIG_PATH):
+            result(2, 'S3 default config present, but shouldn\'t')
         else:
-            print('2; S3 default config present, but shouldn\'t')
-    except FileNotFoundError:
-        if args.present:
-            print('2; S3 default config not present')
+            result(0, 'OK')
+
+    if exists(CONFIG_PATH):
+        delta = timedelta(seconds=time.time() - getmtime(CONFIG_PATH))
+        if delta < timedelta(hours=2):
+            result(0, 'OK')
+        elif delta < timedelta(hours=4):
+            result(1, f'S3 token expire in {_delta_to_hours(timedelta(hours=12) - delta)} hours')
+
+        if delta < timedelta(hours=12):
+            msg = f'S3 token expire in {_delta_to_hours(timedelta(hours=12) - delta)} hours'
         else:
-            print('0; OK')
+            msg = f'S3 token expired {_delta_to_hours(delta - timedelta(hours=12))} hours ago'
+    else:
+        msg = 'S3 default config not present'
+
+    code = _request_token(args.metadata_address).status_code
+    if code == 404:
+        if 'default' in requests.get(f'http://{args.metadata_address}/computeMetadata/v1/instance/?recursive=true',
+                                     headers={'Metadata-Flavor': 'Google'}).json().get('serviceAccounts', {}):
+            result(1, 'service account deleted')
+        else:
+            result(2, 'service account not linked')
+
+    result(2, msg + F', iam code {code}')
+
+
+def result(code, msg):
+    print(f'{code}; {msg}')
+    exit(0)
 
 
 def main():

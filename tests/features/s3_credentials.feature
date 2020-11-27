@@ -19,7 +19,7 @@ Feature: ch_s3_credentials tool
     """
     When we execute command on clickhouse01
     """
-    ch-s3-credentials update --endpoint=storage.com --metadata-address=http_mock01:8080
+    ch-s3-credentials --metadata-address=http_mock01:8080 update --endpoint=storage.com
     """
     And we execute command on clickhouse01
     """
