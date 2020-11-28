@@ -30,7 +30,7 @@ def ping_command(number, crit, warn):
                 fails[ClickhousePort.tcp] += 1
                 has_fails = True
         except Exception as e:
-            logging.debug(f'Error on http tcp', exc_info=e)
+            logging.debug('Error on http tcp', exc_info=e)
             fails[ClickhousePort.tcp] += 1
             has_fails = True
 
@@ -40,7 +40,7 @@ def ping_command(number, crit, warn):
                     fails[ClickhousePort.tcps] += 1
                     has_fails = True
         except Exception as e:
-            logging.debug(f'Error on tcps port', exc_info=e)
+            logging.debug('Error on tcps port', exc_info=e)
             fails[ClickhousePort.tcps] += 1
             has_fails = True
 
@@ -50,7 +50,7 @@ def ping_command(number, crit, warn):
                     fails[ClickhousePort.http] += 1
                     has_fails = True
         except Exception as e:
-            logging.debug(f'Error on http port', exc_info=e)
+            logging.debug('Error on http port', exc_info=e)
             fails[ClickhousePort.http] += 1
             has_fails = True
 
@@ -60,7 +60,7 @@ def ping_command(number, crit, warn):
                     fails[ClickhousePort.https] += 1
                     has_fails = True
         except Exception as e:
-            logging.debug(f'Error on https port', exc_info=e)
+            logging.debug('Error on https port', exc_info=e)
             fails[ClickhousePort.https] += 1
             has_fails = True
 

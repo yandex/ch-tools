@@ -5,8 +5,8 @@ import re
 from cloud.mdb.clickhouse.tools.monrun_checks.result import Result
 
 
-default_regex = '([0-9]{4}\.[0-9]{2}\.[0-9]{2}\ [0-9]{2}\:[0-9]{2}\:[0-9]{2})'
-default_exclude = 'e\.displayText\(\) = No message received'
+default_regex = r'([0-9]{4}\.[0-9]{2}\.[0-9]{2}\ [0-9]{2}\:[0-9]{2}\:[0-9]{2})'
+default_exclude = r'e\.displayText\(\) = No message received'
 
 
 def validate_regex(ctx, param, value):

@@ -2,7 +2,7 @@ import logging
 from functools import wraps
 import click
 
-from cloud.mdb.clickhouse.tools.monrun_checks.result import Result, Status
+from cloud.mdb.clickhouse.tools.monrun_checks.result import Status
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_replication_lag import replication_lag_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_system_queues import system_queues_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_core_dumps import core_dumps_command
