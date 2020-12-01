@@ -4,7 +4,6 @@ import subprocess
 import json
 import xml.etree.ElementTree as xml
 from enum import Enum
-from collections import OrderedDict
 
 
 class ClickhousePort(Enum):

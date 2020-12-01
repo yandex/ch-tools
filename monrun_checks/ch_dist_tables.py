@@ -1,6 +1,5 @@
 import click
 import pathlib
-import sys
 import time
 from urllib.parse import quote
 
