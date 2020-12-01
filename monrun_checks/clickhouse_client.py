@@ -55,7 +55,7 @@ class ClickhouseClient:
         response.raise_for_status()
         if query:
             return response.json()['data']
-        return response.text.strip()  # ping without wuery
+        return response.text.strip()  # ping without query
 
     def __execute_tcp(self, query, port=ClickhousePort.tcps):
         # Private method, we are sure that port is tcps or tcp and presents in config
