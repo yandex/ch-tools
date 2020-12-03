@@ -6,9 +6,10 @@ from cloud.mdb.clickhouse.tools.monrun_checks.result import Result
 
 
 @click.command('replication-lag')
-@click.option('-c', '--critical', 'crit', type=int, default=600, help='Critical threshold.')
+@click.option('-a', '--absolutely-critical', 'abscrit', type=int, default=3600, help='Critical threshold for lag without errors.')
+@click.option('-c', '--critical', 'crit', type=int, default=600, help='Critical threshold for lag with errors.')
 @click.option('-w', '--warning', 'warn', type=int, default=300, help='Warning threshold.')
-def replication_lag_command(crit, warn):
+def replication_lag_command(abscrit, crit, warn):
     """
     Check for replication lag between replicas.
     """
@@ -22,7 +23,7 @@ def replication_lag_command(crit, warn):
     if versions_count > 1:
         msg += ', ClickHouse versions on replicas mismatch'
 
-    if lag_with_errors < crit or versions_count > 1:
+    if (lag_with_errors < crit and lag < abscrit) or versions_count > 1:
         return Result(code=1, message=msg)
 
     return Result(code=2, message=msg)
