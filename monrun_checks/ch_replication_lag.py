@@ -41,8 +41,6 @@ def get_replication_lag():
         key = '{database}.{table}'.format(database=t['database'], table=t['table'])
         chart[key] = {}
         chart[key]['delay'] = int(t['absolute_delay'])
-        chart[key]['multi_replicas'] = False
-        chart[key]['errors'] = 0
     tables = filter_out_single_replica_tables(tables)
     for t in tables:
         key = '{database}.{table}'.format(database=t['database'], table=t['table'])
@@ -57,13 +55,13 @@ def get_replication_lag():
     lag_with_errors = 0
     max_execution = 0
     for t in chart:
-        if chart[t]['multi_replicas']:
-            delay = chart[t]['delay']
+        if chart[t].get('multi_replicas', False):
+            delay = chart[t].get('delay', 0)
             if delay > lag:
                 lag = delay
-            if delay > lag_with_errors and chart[t]['errors'] > 0:
+            if delay > lag_with_errors and chart[t].get('errors', 0) > 0:
                 lag_with_errors = delay
-            execution = chart[t]['max_execution']
+            execution = chart[t].get('max_execution', 0)
             if execution > max_execution:
                 max_execution = execution
 
