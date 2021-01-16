@@ -24,6 +24,14 @@ class MonrunChecks(click.Group):
         @wraps(cmd_callback)
         @click.pass_context
         def callback_wrapper(ctx, *args, **kwargs):
+            logging.basicConfig(
+                filename=LOG_FILE,
+                level=logging.DEBUG,
+                format=f'%(asctime)s %(process)-5d [%(levelname)s] {cmd.name}: %(message)s')
+            logging.getLogger('urllib3.connectionpool').setLevel(logging.CRITICAL)
+
+            logging.debug('Start executing')
+
             status = Status()
             try:
                 result = ctx.invoke(cmd_callback, *args, **kwargs)
@@ -37,20 +45,22 @@ class MonrunChecks(click.Group):
                 status.append(repr(exc))
                 status.set_code(1)
 
+            log_message = f'Completed with {status.code};{status.message}'
+            log_level = {0: logging.DEBUG, 1: logging.WARNING}.get(status.code, logging.ERROR)
+            logging.log(log_level, log_message)
+
             status.report()
 
         cmd.callback = callback_wrapper
         super().add_command(cmd, name=name)
 
 
-@click.group(cls=MonrunChecks)
-@click.option('--debug', is_flag=True, help='Enable debug output.')
-def cli(debug):
-    loglevel = 'DEBUG' if debug else 'CRITICAL'
-    logging.basicConfig(
-        filename=LOG_FILE,
-        level=loglevel,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+@click.group(cls=MonrunChecks, context_settings={
+    'help_option_names': ['-h', '--help'],
+    'terminal_width': 120,
+})
+def cli():
+    pass
 
 
 cli.add_command(replication_lag_command)
