@@ -1,6 +1,8 @@
-from collections import namedtuple
-
-Result = namedtuple('Result', 'code, message')
+class Result:
+    def __init__(self, code=0, message='Ok', verbose=''):
+        self.code = code
+        self.message = message
+        self.verbose = verbose
 
 
 class Status:
@@ -9,6 +11,7 @@ class Status:
     def __init__(self):
         self.code = 0
         self.text = []
+        self.verbose = []
 
     @property
     def message(self):
@@ -30,6 +33,15 @@ class Status:
         """Accumulate the status text."""
         self.text.append(new_text)
 
+    def add_verbose(self, new_text):
+        """Add detail info."""
+        self.verbose.append(new_text)
+
     def report(self):
         """Output formatted status message."""
         print(f'{self.code};{self.message}')
+        if self.verbose:
+            for v in self.verbose:
+                if v:
+                    print('\n')
+                    print(v)

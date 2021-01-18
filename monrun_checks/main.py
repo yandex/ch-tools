@@ -37,6 +37,8 @@ class MonrunChecks(click.Group):
                 result = ctx.invoke(cmd_callback, *args, **kwargs)
                 status.append(result.message)
                 status.set_code(result.code)
+                if result.verbose:
+                    status.add_verbose(result.verbose)
             except UserWarning as exc:
                 code, message = exc.args
                 status.append(message)
