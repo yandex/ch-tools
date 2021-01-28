@@ -23,20 +23,35 @@ def replication_lag_command(xcrit, crit, warn, verbose):
 
     if verbose >= 1:
         verbtab = []
-        headers = ['Table', 'Lag', 'Errors', 'Max execution']
+
+        headers = ['Table', 'Lag [s]', 'Tasks', 'Max task execution [s]', 'Non-retrayable errors', 'Has user fault errors']
         for t in chart:
             if chart[t].get('multi_replicas', False):
-                tabletab = [t, chart[t].get('delay', 0), chart[t].get('errors', 0), chart[t].get('max_execution', 0)]
+                tabletab = [t, chart[t].get('delay', 0), chart[t].get('tasks', 0), chart[t].get('max_execution', 0), chart[t].get('errors', 0), chart[t].get('user_fault', False)]
+                verbtab.append(tabletab)
                 if verbose >= 2:
-                    exceptions = ''
+                    exceptions_retrayable = ''
+                    exceptions_non_retrayable = ''
+                    exceptions_ignored = ''
                     for exception in chart[t].get('exceptions', []):
                         if exception:
-                            exceptions += '\t' + exception + '\n'
-                    msg_verbose_2 = msg_verbose_2 + t + ':\n  Exceptions:\n' + exceptions
-                    max_execution_part = chart[t].get('max_execution_part', '')
+                            if is_userfault_exception(exception):
+                                exceptions_ignored += '\t' + exception[5:] + '\n'
+                            elif exception.startswith('<pr> '):
+                                exceptions_retrayable += '\t' + exception[5:] + '\n'
+                            else:
+                                exceptions_non_retrayable += '\t' + exception[5:] + '\n'
+                    max_execution_part = chart[t].get('max_execution_part', '') if chart[t].get('max_execution', 0) else 0
+                    if exceptions_retrayable or exceptions_non_retrayable or exceptions_ignored or max_execution_part:
+                        msg_verbose_2 = msg_verbose_2 + t + ':\n'
+                    if exceptions_non_retrayable:
+                        msg_verbose_2 = msg_verbose_2 + '  Non-retrayable errors:\n' + exceptions_non_retrayable
+                    if exceptions_retrayable:
+                        msg_verbose_2 = msg_verbose_2 + '  Retrayable errors:\n' + exceptions_retrayable
+                    if exceptions_ignored:
+                        msg_verbose_2 = msg_verbose_2 + '  User fault errors:\n' + exceptions_ignored
                     if max_execution_part:
-                        msg_verbose_2 = msg_verbose_2 + '  Max execution part: ' + max_execution_part
-                verbtab.append(tabletab)
+                        msg_verbose_2 = msg_verbose_2 + '  Result part of task with max execution time: ' + max_execution_part + '\n'
         msg_verbose = tabulate(verbtab, headers=headers)
         if verbose >= 2:
             msg_verbose = msg_verbose + msg_verbose_2
@@ -44,7 +59,7 @@ def replication_lag_command(xcrit, crit, warn, verbose):
     if lag < warn:
         return Result(code=0, message='OK', verbose=msg_verbose)
 
-    msg = 'Max {0} seconds, with errors {1} seconds, max execution {2} seconds'.format(lag, lag_with_errors, max_execution)
+    msg = 'Max {0} seconds, with errors {1} seconds, max task execution {2} seconds'.format(lag, lag_with_errors, max_execution)
 
     versions_count = ClickhouseInfo.get_versions_count()
     if versions_count > 1:
@@ -74,6 +89,7 @@ def get_replication_lag():
     tables = count_errors(tables, -1)
     for t in tables:
         key = '{database}.{table}'.format(database=t['database'], table=t['table'])
+        chart[key]['tasks'] = int(t['tasks'])
         chart[key]['errors'] = int(t['errors'])
         chart[key]['max_execution'] = int(t['max_execution'])
         chart[key]['max_execution_part'] = t['max_execution_part']
@@ -144,9 +160,10 @@ def count_errors(tables, exceptions_limit):
         SELECT
             database,
             table,
+            count() as tasks,
             countIf(last_exception != '' AND postpone_reason = '') as errors,
             max(IF(is_currently_executing, dateDiff('second', last_attempt_time, now()), 0)) as max_execution,
-            groupUniqArray{limit}(last_exception) as exceptions,
+            groupUniqArray{limit}(IF(last_exception != '', concat(IF(postpone_reason = '', '     ', '<pr> '), last_exception), '')) as exceptions,
             argMax(new_part_name, IF(is_currently_executing, dateDiff('second', last_attempt_time, now()), 0)) as max_execution_part
         FROM system.replication_queue
         WHERE (database, table) IN ({tables})
