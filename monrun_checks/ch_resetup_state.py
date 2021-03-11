@@ -23,21 +23,21 @@ def resetup_state_command(port, ssl, ca_bundle):
 
     host = socket.gethostname()
     if request(host, port, ssl, ca_bundle):
-        return Result(2, 'ClickHouse listening on ports reserved for resetup')
+        return Result(2, 'ClickHouse is listening on ports reserved for resetup')
 
     if os.path.isfile('/etc/clickhouse-server/config.d/resetup_config.xml'):
-        return Result(2, 'Detected resetup config, but resetup is not running')
+        return Result(2, 'Detected resetup config, but ch-backup is not running')
 
     return Result(0, 'OK')
 
 
 def check_resetup_runnning():
     """
-    Check for currently running ch-resetup
+    Check for currently running `ch-backup restore-schema`
     """
     for proc in psutil.process_iter():
-        if '/usr/bin/ch-resetup' in proc.name().lower():
-            die(0, 'resetup running')
+        if {'/usr/bin/ch-backup', 'restore-schema'}.issubset(proc.cmdline()):
+            die(0, 'resetup is running')
 
 
 def check_resetup_required():
