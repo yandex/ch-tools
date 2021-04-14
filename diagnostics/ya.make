@@ -1,6 +1,6 @@
 OWNER(g:mdb)
 
-PY3_PROGRAM(ch-resetup)
+PY3_PROGRAM(ch-diagnostics)
 
 PY_SRCS(
 	MAIN main.py
@@ -8,6 +8,8 @@ PY_SRCS(
 
 PEERDIR(
     cloud/mdb/clickhouse/tools/common
+
+    contrib/python/humanfriendly
 )
 
 END()
