@@ -48,6 +48,10 @@ class DbaasConfig:
         return self._config['shard_hosts']
 
     @property
+    def replicas(self):
+        return [host for host in self.shard_hosts if host != self.fqdn]
+
+    @property
     def fqdn(self):
         return self._config['fqdn']
 
