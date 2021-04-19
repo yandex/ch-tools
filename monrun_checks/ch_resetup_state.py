@@ -18,7 +18,8 @@ def resetup_state_command(port, ssl, ca_bundle):
     Check state of resetup process.
     """
 
-    check_resetup_runnning()
+    check_repsync_running()
+    check_resetup_running()
     check_resetup_required()
 
     host = socket.gethostname()
@@ -31,13 +32,22 @@ def resetup_state_command(port, ssl, ca_bundle):
     return Result(0, 'OK')
 
 
-def check_resetup_runnning():
+def check_resetup_running():
     """
     Check for currently running `ch-backup restore-schema`
     """
     for proc in psutil.process_iter():
         if {'/usr/bin/ch-backup', 'restore-schema'}.issubset(proc.cmdline()):
             die(0, 'resetup is running')
+
+
+def check_repsync_running():
+    """
+    Check for currently running ch_wait_replication_sync.py script
+    """
+    for proc in psutil.process_iter():
+        if {'/usr/local/yandex/ch_wait_replication_sync.py'}.issubset(proc.cmdline()):
+            die(0, 'resetup is running (wait for replication sync)')
 
 
 def check_resetup_required():
