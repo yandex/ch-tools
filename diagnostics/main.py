@@ -1,6 +1,6 @@
 import json
 import sys
-from collections import OrderedDict
+import subprocess
 from datetime import datetime
 
 from requests.exceptions import RequestException
@@ -176,7 +176,6 @@ SELECT_MUTATIONS = r'''SELECT
 FROM system.mutations
 WHERE NOT is_done
 ORDER BY create_time DESC
-LIMIT 10
 '''
 
 SELECT_MUTATIONS_DEPRECATED = r'''SELECT
@@ -222,6 +221,46 @@ FROM system.stack_trace
 '''
 
 
+class DiagnosticsData:
+    def __init__(self):
+        self._sections = [{'section': None, 'data': {}}]
+
+    def add_string(self, name, value, section=None):
+        self._section(section)[name] = {
+            'type': 'string',
+            'value': value,
+        }
+
+    def add_url(self, name, value, section=None):
+        self._section(section)[name] = {
+            'type': 'url',
+            'value': value,
+        }
+
+    def add_query(self, name, query, result, section=None):
+        self._section(section)[name] = {
+            'type': 'query',
+            'query': query,
+            'result': result,
+        }
+
+    def add_command(self, name, command, result, section=None):
+        self._section(section)[name] = {
+            'type': 'command',
+            'command': command,
+            'result': result,
+        }
+
+    def dump(self, stream):
+        json.dump(self._sections, stream, indent=2, ensure_ascii=False)
+
+    def _section(self, name=None):
+        if self._sections[-1]['section'] != name:
+            self._sections.append({'section': name, 'data': {}})
+
+        return self._sections[-1]['data']
+
+
 def main():
     timestamp = datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')
     client = ClickhouseClient(user='mdb_admin')
@@ -229,41 +268,103 @@ def main():
     ch_config = ClickhouseConfig.load()
     version = client.query(SELECT_VERSION)
 
-    result = OrderedDict()
-    result['host'] = dbaas_config.fqdn
-    result['version'] = version
-    result['cluster_id'] = dbaas_config.cluster_id
-    result['cluster_name'] = dbaas_config.cluster_name
-    result['shard_count'] = dbaas_config.shard_count
-    result['host_count'] = dbaas_config.host_count
-    result['virtualization'] = dbaas_config.vtype
-    result['cluster_name'] = dbaas_config.cluster_name
-    result['resource_preset'] = format_resource_preset(dbaas_config)
-    result['storage'] = format_storage(dbaas_config, ch_config)
-    result['timestamp'] = timestamp
+    data = DiagnosticsData()
+    data.add_string('Cluster ID', dbaas_config.cluster_id)
+    data.add_string('Cluster name', dbaas_config.cluster_name)
+    data.add_string('Version', version)
+    data.add_string('Host', dbaas_config.fqdn)
+    data.add_string('Replicas', ','.join(dbaas_config.replicas))
+    data.add_string('Shard count', dbaas_config.shard_count)
+    data.add_string('Host count', dbaas_config.host_count)
+    data.add_string('Virtualization', dbaas_config.vtype)
+    data.add_string('Resource preset', format_resource_preset(dbaas_config))
+    data.add_string('Storage', format_storage(dbaas_config, ch_config))
+    data.add_string('Timestamp', timestamp)
     if version_ge(version, '21.3'):
-        result['uptime'] = client.query(SELECT_UPTIME)
+        uptime = client.query(SELECT_UPTIME)
     else:
-        result['uptime'] = client.query(SELECT_UPTIME_DEPRECATED)
-    result['charts_url'] = format_charts_url(dbaas_config)
-    result['database_engines'] = execute(client, SELECT_DATABASE_ENGINES, format='PrettyCompactNoEscapes')
-    result['databases'] = execute(client, SELECT_DATABASES, format='PrettyCompactNoEscapes')
-    result['table_engines'] = execute(client, SELECT_TABLE_ENGINES, format='PrettyCompactNoEscapes')
-    result['dictionaries'] = execute(client, SELECT_DICTIONARIES, format='PrettyCompactNoEscapes')
-    result['replicas'] = dbaas_config.shard_hosts
-    result['replicated_tables'] = execute(client, SELECT_REPLICAS, format='PrettyCompactNoEscapes')
-    result['replication_queue'] = execute(client, SELECT_REPLICATION_QUEUE, format='Vertical')
-    result['parts_per_table'] = execute(client, SELECT_PARTS_PER_TABLE, format='PrettyCompactNoEscapes')
-    if version_ge(version, '20.3'):
-        result['merges'] = execute(client, SELECT_MERGES, format='Vertical')
-        result['mutations'] = execute(client, SELECT_MUTATIONS, format='Vertical')
-    else:
-        result['merges'] = execute(client, SELECT_MERGES_DEPRECATED, format='Vertical')
-        result['mutations'] = execute(client, SELECT_MUTATIONS_DEPRECATED, format='Vertical')
-    result['processes'] = execute(client, SELECT_PROCESSES, format='Vertical')
-    result['stack_traces'] = execute(client, SELECT_STACK_TRACES, format='Vertical')
+        uptime = client.query(SELECT_UPTIME_DEPRECATED)
+    data.add_string('Uptime', uptime)
 
-    json.dump(result, sys.stdout, indent=2, ensure_ascii=False)
+    add_chart_urls(data, dbaas_config)
+
+    data.add_query(
+        name='Database engines',
+        query=SELECT_DATABASE_ENGINES,
+        result=execute_query(client, SELECT_DATABASE_ENGINES, format='PrettyCompactNoEscapes'),
+        section='Schema')
+    data.add_query(
+        name='Databases (top 10 by size)',
+        query=SELECT_DATABASES,
+        result=execute_query(client, SELECT_DATABASES, format='PrettyCompactNoEscapes'),
+        section='Schema')
+    data.add_query(
+        name='Table engines',
+        query=SELECT_DATABASE_ENGINES,
+        result=execute_query(client, SELECT_DATABASE_ENGINES, format='PrettyCompactNoEscapes'),
+        section='Schema')
+    data.add_query(
+        name='Dictionaries',
+        query=SELECT_DICTIONARIES,
+        result=execute_query(client, SELECT_DICTIONARIES, format='PrettyCompactNoEscapes'),
+        section='Schema')
+
+    data.add_query(
+        name='Replicated tables (top 10 by absolute delay)',
+        query=SELECT_REPLICAS,
+        result=execute_query(client, SELECT_REPLICAS, format='PrettyCompactNoEscapes'),
+        section='Replication')
+    data.add_query(
+        name='Replication queue (top 10 oldest tasks)',
+        query=SELECT_REPLICATION_QUEUE,
+        result=execute_query(client, SELECT_REPLICATION_QUEUE, format='Vertical'),
+        section='Replication')
+
+    data.add_query(
+        name='Top 10 tables by max parts per partition',
+        query=SELECT_PARTS_PER_TABLE,
+        result=execute_query(client, SELECT_PARTS_PER_TABLE, format='PrettyCompactNoEscapes'),
+        section='Merges and mutations')
+    if version_ge(version, '20.3'):
+        data.add_query(
+            name='Merges in progress',
+            query=SELECT_MERGES,
+            result=execute_query(client, SELECT_MERGES, format='Vertical'),
+            section='Merges and mutations')
+        data.add_query(
+            name='Mutations in progress',
+            query=SELECT_MUTATIONS,
+            result=execute_query(client, SELECT_MUTATIONS, format='Vertical'),
+            section='Merges and mutations')
+    else:
+        data.add_query(
+            name='Merges in progress',
+            query=SELECT_MERGES_DEPRECATED,
+            result=execute_query(client, SELECT_MERGES_DEPRECATED, format='Vertical'),
+            section='Merges and mutations')
+        data.add_query(
+            name='Mutations in progress',
+            query=SELECT_MUTATIONS_DEPRECATED,
+            result=execute_query(client, SELECT_MUTATIONS_DEPRECATED, format='Vertical'),
+            section='Merges and mutations')
+
+    data.add_query(
+        name='Process list',
+        query=SELECT_PROCESSES,
+        result=execute_query(client, SELECT_PROCESSES, format='Vertical'))
+
+    data.add_query(
+        name='Stack traces',
+        query=SELECT_STACK_TRACES,
+        result=execute_query(client, SELECT_STACK_TRACES, format='Vertical'))
+
+    lsof_command = 'lsof -p $(pidof clickhouse-server)'
+    data.add_command(
+        name='lsof',
+        command=lsof_command,
+        result=execute_command(lsof_command))
+
+    data.dump(sys.stdout)
 
 
 def format_resource_preset(dbaas_config):
@@ -290,24 +391,42 @@ def format_storage(dbaas_config, ch_config):
     return storage
 
 
-def format_charts_url(dbaas_config):
+def add_chart_urls(data, dbaas_config):
     cluster_id = dbaas_config.cluster_id
+    host = dbaas_config.fqdn
     if dbaas_config.vtype == 'porto':
-        return f'https://solomon.yandex-team.ru/?project=internal-mdb&service=mdb&dashboard=mdb-prod-cluster-clickhouse&cid={cluster_id}'
+        solomon_url = 'https://solomon.yandex-team.ru'
+        cluster_dashboard = f'{solomon_url}/?project=internal-mdb&service=mdb&dashboard=mdb-prod-cluster-clickhouse&cid={cluster_id}'
+        host_dashboard = f'{solomon_url}/?project=internal-mdb&cluster=internal-mdb_dom0&service=dom0&host=by_cid_container&dc=by_cid_container' \
+                         f'&dashboard=internal-mdb-porto-instance&l.container={host}&l.cid={cluster_id}'
     else:
-        return f'https://solomon.cloud.yandex-team.ru/?project=yandexcloud&service=yandexcloud_dbaas&dashboard=mdb-prod-cluster-clickhouse&cid={cluster_id}'
+        solomon_url = 'https://solomon.cloud.yandex-team.ru'
+        cluster_dashboard = f'{solomon_url}/?project=yandexcloud&service=yandexcloud_dbaas&dashboard=mdb-prod-cluster-clickhouse&cid={cluster_id}'
+        host_dashboard = f'{solomon_url}/?project=yandexcloud&service=yandexcloud_dbaas&dashboard=cloud-mdb-instance-system' \
+                         f'&cluster=mdb_{cluster_id}&host={host}'
+    data.add_url('Cluster dashboard', cluster_dashboard, section='Charts')
+    data.add_url('Host dashboard', host_dashboard, section='Charts')
 
 
-def execute(client, query, format=None):
+def execute_query(client, query, format=None):
     try:
-        result = client.query(query, format=format)
+        return client.query(query, format=format)
     except RequestException as e:
-        result = repr(e) if e.response is None else e.response.text
+        return repr(e) if e.response is None else e.response.text
 
-    return OrderedDict((
-        ('query', query),
-        ('result', result),
-    ))
+
+def execute_command(command, input=None):
+    proc = subprocess.Popen(command, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    if isinstance(input, str):
+        input = input.encode()
+
+    stdout, stderr = proc.communicate(input=input)
+
+    if proc.returncode:
+        return f'failed with exit code {proc.returncode}\n{stderr.decode()}'
+
+    return stdout.decode()
 
 
 def version_ge(version1, version2):
