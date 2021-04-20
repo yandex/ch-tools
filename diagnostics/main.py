@@ -297,15 +297,256 @@ FROM system.detached_parts
 SELECT_PROCESSES = r'''SELECT
     elapsed,
     query_id,
-    query,
+    normalizeQuery(query) AS normalized_query,
     is_cancelled,
-    concat(toString(read_rows), ' rows / ', formatReadableSize(read_bytes)) "read",
-    concat(toString(written_rows), ' rows / ', formatReadableSize(written_bytes)) "written",
-    formatReadableSize(memory_usage) "memory usage",
+    concat(toString(read_rows), ' rows / ', formatReadableSize(read_bytes)) AS read,
+    concat(toString(written_rows), ' rows / ', formatReadableSize(written_bytes)) AS written,
+    formatReadableSize(memory_usage) AS "memory usage",
     user,
-    multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) "client"
+    multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
+    thread_ids,
+    ProfileEvents.Names,
+    ProfileEvents.Values,
+    Settings.Names,
+    Settings.Values
 FROM system.processes
 ORDER BY elapsed DESC
+'''
+
+SELECT_PROCESSES_DEPRECATED = r'''SELECT
+    elapsed,
+    query_id,
+    query,
+    is_cancelled,
+    concat(toString(read_rows), ' rows / ', formatReadableSize(read_bytes)) AS read,
+    concat(toString(written_rows), ' rows / ', formatReadableSize(written_bytes)) AS written,
+    formatReadableSize(memory_usage) AS "memory usage",
+    user,
+    multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
+    ProfileEvents.Names,
+    ProfileEvents.Values,
+    Settings.Names,
+    Settings.Values
+FROM system.processes
+ORDER BY elapsed DESC
+'''
+
+SELECT_TOP_QUERIES_BY_DURATION = r'''SELECT
+    type,
+    query_start_time,
+    query_duration_ms,
+    query_id,
+    query_kind,
+    is_initial_query,
+    normalizeQuery(query) AS normalized_query,
+    concat(toString(read_rows), ' rows / ', formatReadableSize(read_bytes)) AS read,
+    concat(toString(written_rows), ' rows / ', formatReadableSize(written_bytes)) AS written,
+    concat(toString(result_rows), ' rows / ', formatReadableSize(result_bytes)) AS result,
+    formatReadableSize(memory_usage) AS "memory usage",
+    exception,
+    '\n' || stack_trace AS stack_trace,
+    user,
+    initial_user,
+    multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
+    client_hostname,
+    databases,
+    tables,
+    columns,
+    used_aggregate_functions,
+    used_aggregate_function_combinators,
+    used_database_engines,
+    used_data_type_families,
+    used_dictionaries,
+    used_formats,
+    used_functions,
+    used_storages,
+    used_table_functions,
+    thread_ids,
+    ProfileEvents.Names,
+    ProfileEvents.Values,
+    Settings.Names,
+    Settings.Values
+FROM system.query_log
+WHERE type != 'QueryStart'
+  AND event_date >= today() - 1
+  AND event_time >= now() - INTERVAL 1 DAY
+ORDER BY query_duration_ms DESC
+LIMIT 10
+'''
+
+SELECT_TOP_QUERIES_BY_DURATION_DEPRECATED = r'''SELECT
+    type,
+    query_start_time,
+    query_duration_ms,
+    query_id,
+    is_initial_query,
+    query,
+    concat(toString(read_rows), ' rows / ', formatReadableSize(read_bytes)) AS read,
+    concat(toString(written_rows), ' rows / ', formatReadableSize(written_bytes)) AS written,
+    concat(toString(result_rows), ' rows / ', formatReadableSize(result_bytes)) AS result,
+    formatReadableSize(memory_usage) AS "memory usage",
+    exception,
+    '\n' || stack_trace AS stack_trace,
+    user,
+    initial_user,
+    multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
+    client_hostname,
+    ProfileEvents.Names,
+    ProfileEvents.Values,
+    Settings.Names,
+    Settings.Values
+FROM system.query_log
+WHERE type != 'QueryStart'
+  AND event_date >= today() - 1
+  AND event_time >= now() - INTERVAL 1 DAY
+ORDER BY query_duration_ms DESC
+LIMIT 10
+'''
+
+SELECT_TOP_QUERIES_BY_MEMORY_USAGE = r'''SELECT
+    type,
+    query_start_time,
+    query_duration_ms,
+    query_id,
+    query_kind,
+    is_initial_query,
+    normalizeQuery(query) AS normalized_query,
+    concat(toString(read_rows), ' rows / ', formatReadableSize(read_bytes)) AS read,
+    concat(toString(written_rows), ' rows / ', formatReadableSize(written_bytes)) AS written,
+    concat(toString(result_rows), ' rows / ', formatReadableSize(result_bytes)) AS result,
+    formatReadableSize(memory_usage) AS "memory usage",
+    exception,
+    '\n' || stack_trace AS stack_trace,
+    user,
+    initial_user,
+    multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
+    client_hostname,
+    databases,
+    tables,
+    columns,
+    used_aggregate_functions,
+    used_aggregate_function_combinators,
+    used_database_engines,
+    used_data_type_families,
+    used_dictionaries,
+    used_formats,
+    used_functions,
+    used_storages,
+    used_table_functions,
+    thread_ids,
+    ProfileEvents.Names,
+    ProfileEvents.Values,
+    Settings.Names,
+    Settings.Values
+FROM system.query_log
+WHERE type != 'QueryStart'
+  AND event_date >= today() - 1
+  AND event_time >= now() - INTERVAL 1 DAY
+ORDER BY memory_usage DESC
+LIMIT 10
+'''
+
+SELECT_TOP_QUERIES_BY_MEMORY_USAGE_DEPRECATED = r'''SELECT
+    type,
+    query_start_time,
+    query_duration_ms,
+    query_id,
+    is_initial_query,
+    query,
+    concat(toString(read_rows), ' rows / ', formatReadableSize(read_bytes)) AS read,
+    concat(toString(written_rows), ' rows / ', formatReadableSize(written_bytes)) AS written,
+    concat(toString(result_rows), ' rows / ', formatReadableSize(result_bytes)) AS result,
+    formatReadableSize(memory_usage) AS "memory usage",
+    exception,
+    '\n' || stack_trace AS stack_trace,
+    user,
+    initial_user,
+    multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
+    client_hostname,
+    ProfileEvents.Names,
+    ProfileEvents.Values,
+    Settings.Names,
+    Settings.Values
+FROM system.query_log
+WHERE type != 'QueryStart'
+  AND event_date >= today() - 1
+  AND event_time >= now() - INTERVAL 1 DAY
+ORDER BY memory_usage DESC
+LIMIT 10
+'''
+
+SELECT_FAILED_QUERIES = r'''SELECT
+    type,
+    query_start_time,
+    query_duration_ms,
+    query_id,
+    query_kind,
+    is_initial_query,
+    normalizeQuery(query) AS normalized_query,
+    concat(toString(read_rows), ' rows / ', formatReadableSize(read_bytes)) AS read,
+    concat(toString(written_rows), ' rows / ', formatReadableSize(written_bytes)) AS written,
+    concat(toString(result_rows), ' rows / ', formatReadableSize(result_bytes)) AS result,
+    formatReadableSize(memory_usage) AS "memory usage",
+    exception,
+    '\n' || stack_trace AS stack_trace,
+    user,
+    initial_user,
+    multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
+    client_hostname,
+    databases,
+    tables,
+    columns,
+    used_aggregate_functions,
+    used_aggregate_function_combinators,
+    used_database_engines,
+    used_data_type_families,
+    used_dictionaries,
+    used_formats,
+    used_functions,
+    used_storages,
+    used_table_functions,
+    thread_ids,
+    ProfileEvents.Names,
+    ProfileEvents.Values,
+    Settings.Names,
+    Settings.Values
+FROM system.query_log
+WHERE type != 'QueryStart'
+  AND event_date >= today() - 1
+  AND event_time >= now() - INTERVAL 1 DAY
+  AND exception != ''
+ORDER BY query_start_time DESC
+LIMIT 10
+'''
+
+SELECT_FAILED_QUERIES_DEPRECATED = r'''SELECT
+    type,
+    query_start_time,
+    query_duration_ms,
+    query_id,
+    is_initial_query,
+    query,
+    concat(toString(read_rows), ' rows / ', formatReadableSize(read_bytes)) AS read,
+    concat(toString(written_rows), ' rows / ', formatReadableSize(written_bytes)) AS written,
+    concat(toString(result_rows), ' rows / ', formatReadableSize(result_bytes)) AS result,
+    formatReadableSize(memory_usage) AS "memory usage",
+    exception,
+    '\n' || stack_trace AS stack_trace,
+    user,
+    initial_user,
+    multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
+    client_hostname,
+    ProfileEvents.Names,
+    ProfileEvents.Values,
+    Settings.Names,
+    Settings.Values
+FROM system.query_log
+WHERE type != 'QueryStart'
+  AND event_date >= today() - 1
+  AND event_time >= now() - INTERVAL 1 DAY
+  AND exception != ''
+ORDER BY query_start_time DESC
+LIMIT 10
 '''
 
 SELECT_STACK_TRACES = r'''SELECT
@@ -490,10 +731,48 @@ def main():
         query=SELECT_DETACHED_DATA_PARTS,
         result=execute_query(client, SELECT_DETACHED_DATA_PARTS, format='PrettyCompactNoEscapes'))
 
-    data.add_query(
-        name='Process list',
-        query=SELECT_PROCESSES,
-        result=execute_query(client, SELECT_PROCESSES, format='Vertical'))
+    if version_ge(version, '21.3'):
+        data.add_query(
+            name='Queries in progress (process list)',
+            query=SELECT_PROCESSES,
+            result=execute_query(client, SELECT_PROCESSES, format='Vertical'),
+            section='Queries')
+        data.add_query(
+            name='Top 10 queries by duration',
+            query=SELECT_TOP_QUERIES_BY_DURATION,
+            result=execute_query(client, SELECT_TOP_QUERIES_BY_DURATION, format='Vertical'),
+            section='Queries')
+        data.add_query(
+            name='Top 10 queries by memory usage',
+            query=SELECT_TOP_QUERIES_BY_MEMORY_USAGE,
+            result=execute_query(client, SELECT_TOP_QUERIES_BY_MEMORY_USAGE, format='Vertical'),
+            section='Queries')
+        data.add_query(
+            name='Last 10 failed queries',
+            query=SELECT_FAILED_QUERIES,
+            result=execute_query(client, SELECT_FAILED_QUERIES, format='Vertical'),
+            section='Queries')
+    else:
+        data.add_query(
+            name='Queries in progress (process list)',
+            query=SELECT_PROCESSES_DEPRECATED,
+            result=execute_query(client, SELECT_PROCESSES_DEPRECATED, format='Vertical'),
+            section='Queries')
+        data.add_query(
+            name='Top 10 queries by duration',
+            query=SELECT_TOP_QUERIES_BY_DURATION_DEPRECATED,
+            result=execute_query(client, SELECT_TOP_QUERIES_BY_DURATION_DEPRECATED, format='Vertical'),
+            section='Queries')
+        data.add_query(
+            name='Top 10 queries by memory usage',
+            query=SELECT_TOP_QUERIES_BY_MEMORY_USAGE_DEPRECATED,
+            result=execute_query(client, SELECT_TOP_QUERIES_BY_MEMORY_USAGE_DEPRECATED, format='Vertical'),
+            section='Queries')
+        data.add_query(
+            name='Last 10 failed queries',
+            query=SELECT_FAILED_QUERIES_DEPRECATED,
+            result=execute_query(client, SELECT_FAILED_QUERIES_DEPRECATED, format='Vertical'),
+            section='Queries')
 
     data.add_query(
         name='Stack traces',
