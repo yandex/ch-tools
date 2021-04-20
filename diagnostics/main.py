@@ -1,6 +1,6 @@
 import json
-import sys
 import subprocess
+import sys
 from datetime import datetime
 
 from requests.exceptions import RequestException
@@ -12,6 +12,8 @@ from humanfriendly import format_size
 SELECT_VERSION = 'SELECT version()'
 
 SELECT_UPTIME = r'''SELECT formatReadableTimeDelta(uptime())'''
+
+SELECT_SYSTEM_TABLES = "SELECT name FROM system.tables WHERE database = 'system'"
 
 SELECT_UPTIME_DEPRECATED = r'''SELECT
     toString(floor(uptime()/3600/24)) || ' days ' ||
@@ -67,6 +69,10 @@ GROUP BY source, type, status
 ORDER BY status DESC, source
 '''
 
+SELECT_ACCESS = "SHOW ACCESS"
+
+SELECT_QUOTA_USAGE = "SHOW QUOTA"
+
 SELECT_REPLICAS = r'''SELECT
     database,
     table,
@@ -102,6 +108,25 @@ SELECT_REPLICATION_QUEUE = r'''SELECT
 FROM system.replication_queue
 ORDER BY create_time DESC
 LIMIT 10
+'''
+
+SELECT_REPLICATED_FETCHES = r'''SELECT
+    database,
+    table,
+    round(elapsed, 1) "elapsed",
+    round(100 * progress, 1) "progress",
+    partition_id,
+    result_part_name,
+    result_part_path,
+    total_size_bytes_compressed,
+    bytes_read_compressed,
+    source_replica_path,
+    source_replica_hostname,
+    source_replica_port,
+    interserver_scheme,
+    to_detached,
+    thread_id
+FROM system.replicated_fetches
 '''
 
 SELECT_PARTS_PER_TABLE = r'''SELECT
@@ -256,6 +281,19 @@ WHERE modification_time > now() - INTERVAL 3 MINUTE
 ORDER BY modification_time DESC
 '''
 
+SELECT_DETACHED_DATA_PARTS = r'''SELECT
+    database,
+    table,
+    partition_id,
+    name,
+    disk,
+    reason,
+    min_block_number,
+    max_block_number,
+    level
+FROM system.detached_parts
+'''
+
 SELECT_PROCESSES = r'''SELECT
     elapsed,
     query_id,
@@ -279,6 +317,16 @@ SELECT_STACK_TRACES = r'''SELECT
            arrayMap(x -> demangle(addressToSymbol(x)), trace)),
        '\n') AS trace
 FROM system.stack_trace
+'''
+
+SELECT_CRASH_LOG = r'''SELECT
+    event_time,
+    signal,
+    thread_id,
+    query_id,
+    '\n' || arrayStringConcat(trace_full, '\n') AS trace,
+    version
+FROM system.crash_log
 '''
 
 
@@ -334,6 +382,7 @@ def main():
     dbaas_config = DbaasConfig.load()
     ch_config = ClickhouseConfig.load()
     version = client.query(SELECT_VERSION)
+    system_tables = [row[0] for row in client.query(SELECT_SYSTEM_TABLES, format='JSONCompact')['data']]
 
     data = DiagnosticsData()
     data.add_string('Cluster ID', dbaas_config.cluster_id)
@@ -355,7 +404,18 @@ def main():
 
     add_chart_urls(data, dbaas_config)
 
-    data.add_xml_document('ClickHouse config', ch_config.dump())
+    data.add_xml_document('ClickHouse configuration', ch_config.dump())
+
+    if version_ge(version, '20.8'):
+        data.add_query(
+            name='Access configuration',
+            query=SELECT_ACCESS,
+            result=execute_query(client, SELECT_ACCESS, format='TSVRaw'))
+
+        data.add_query(
+            name='Quotas',
+            query=SELECT_QUOTA_USAGE,
+            result=execute_query(client, SELECT_QUOTA_USAGE, format='Vertical'))
 
     data.add_query(
         name='Database engines',
@@ -388,6 +448,12 @@ def main():
         query=SELECT_REPLICATION_QUEUE,
         result=execute_query(client, SELECT_REPLICATION_QUEUE, format='Vertical'),
         section='Replication')
+    if version_ge(version, '21.3'):
+        data.add_query(
+            name='Replicated fetches',
+            query=SELECT_REPLICATED_FETCHES,
+            result=execute_query(client, SELECT_REPLICATED_FETCHES, format='Vertical'),
+            section='Replication')
 
     data.add_query(
         name='Top 10 tables by max parts per partition',
@@ -419,6 +485,10 @@ def main():
             name='Recent data parts (modification time within last 3 minutes)',
             query=SELECT_RECENT_DATA_PARTS_DEPRECATED,
             result=execute_query(client, SELECT_RECENT_DATA_PARTS_DEPRECATED, format='Vertical'))
+    data.add_query(
+        name='Detached data parts',
+        query=SELECT_DETACHED_DATA_PARTS,
+        result=execute_query(client, SELECT_DETACHED_DATA_PARTS, format='PrettyCompactNoEscapes'))
 
     data.add_query(
         name='Process list',
@@ -429,6 +499,12 @@ def main():
         name='Stack traces',
         query=SELECT_STACK_TRACES,
         result=execute_query(client, SELECT_STACK_TRACES, format='Vertical'))
+
+    if 'crash_log' in system_tables:
+        data.add_query(
+            name='Crash log',
+            query=SELECT_CRASH_LOG,
+            result=execute_query(client, SELECT_CRASH_LOG, format='Vertical'))
 
     monrun_command = r'monrun | sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2})?)?[mGK]//g"'
     data.add_command(
