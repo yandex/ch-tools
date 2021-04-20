@@ -192,7 +192,68 @@ SELECT_MUTATIONS_DEPRECATED = r'''SELECT
 FROM system.mutations
 WHERE NOT is_done
 ORDER BY create_time DESC
-LIMIT 10
+'''
+
+SELECT_RECENT_DATA_PARTS = r'''SELECT
+    database,
+    table,
+    engine,
+    partition_id,
+    name,
+    part_type,
+    active,
+    level,
+    disk_name,
+    path,
+    marks,
+    rows,
+    bytes_on_disk,
+    data_compressed_bytes,
+    data_uncompressed_bytes,
+    marks_bytes,
+    modification_time,
+    remove_time,
+    refcount,
+    is_frozen,
+    min_date,
+    max_date,
+    min_time,
+    max_time,
+    min_block_number,
+    max_block_number
+FROM system.parts
+WHERE modification_time > now() - INTERVAL 3 MINUTE
+ORDER BY modification_time DESC
+'''
+
+SELECT_RECENT_DATA_PARTS_DEPRECATED = r'''SELECT
+    database,
+    table,
+    engine,
+    partition_id,
+    name,
+    active,
+    level,
+    path,
+    marks,
+    rows,
+    bytes_on_disk,
+    data_compressed_bytes,
+    data_uncompressed_bytes,
+    marks_bytes,
+    modification_time,
+    remove_time,
+    refcount,
+    is_frozen,
+    min_date,
+    max_date,
+    min_time,
+    max_time,
+    min_block_number,
+    max_block_number
+FROM system.parts
+WHERE modification_time > now() - INTERVAL 3 MINUTE
+ORDER BY modification_time DESC
 '''
 
 SELECT_PROCESSES = r'''SELECT
@@ -323,30 +384,33 @@ def main():
     data.add_query(
         name='Top 10 tables by max parts per partition',
         query=SELECT_PARTS_PER_TABLE,
-        result=execute_query(client, SELECT_PARTS_PER_TABLE, format='PrettyCompactNoEscapes'),
-        section='Merges and mutations')
+        result=execute_query(client, SELECT_PARTS_PER_TABLE, format='PrettyCompactNoEscapes'))
     if version_ge(version, '20.3'):
         data.add_query(
             name='Merges in progress',
             query=SELECT_MERGES,
-            result=execute_query(client, SELECT_MERGES, format='Vertical'),
-            section='Merges and mutations')
+            result=execute_query(client, SELECT_MERGES, format='Vertical'))
         data.add_query(
             name='Mutations in progress',
             query=SELECT_MUTATIONS,
-            result=execute_query(client, SELECT_MUTATIONS, format='Vertical'),
-            section='Merges and mutations')
+            result=execute_query(client, SELECT_MUTATIONS, format='Vertical'))
+        data.add_query(
+            name='Recent data parts (modification time within last 3 minutes)',
+            query=SELECT_RECENT_DATA_PARTS,
+            result=execute_query(client, SELECT_RECENT_DATA_PARTS, format='Vertical'))
     else:
         data.add_query(
             name='Merges in progress',
             query=SELECT_MERGES_DEPRECATED,
-            result=execute_query(client, SELECT_MERGES_DEPRECATED, format='Vertical'),
-            section='Merges and mutations')
+            result=execute_query(client, SELECT_MERGES_DEPRECATED, format='Vertical'))
         data.add_query(
             name='Mutations in progress',
             query=SELECT_MUTATIONS_DEPRECATED,
-            result=execute_query(client, SELECT_MUTATIONS_DEPRECATED, format='Vertical'),
-            section='Merges and mutations')
+            result=execute_query(client, SELECT_MUTATIONS_DEPRECATED, format='Vertical'))
+        data.add_query(
+            name='Recent data parts (modification time within last 3 minutes)',
+            query=SELECT_RECENT_DATA_PARTS_DEPRECATED,
+            result=execute_query(client, SELECT_RECENT_DATA_PARTS_DEPRECATED, format='Vertical'))
 
     data.add_query(
         name='Process list',
@@ -357,6 +421,12 @@ def main():
         name='Stack traces',
         query=SELECT_STACK_TRACES,
         result=execute_query(client, SELECT_STACK_TRACES, format='Vertical'))
+
+    monrun_command = r'monrun | sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2})?)?[mGK]//g"'
+    data.add_command(
+        name='monrun',
+        command=monrun_command,
+        result=execute_command(monrun_command))
 
     lsof_command = 'lsof -p $(pidof clickhouse-server)'
     data.add_command(
