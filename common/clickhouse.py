@@ -1,7 +1,10 @@
 import logging
 import socket
+from typing import MutableMapping
 
 import requests
+from copy import deepcopy
+
 import tenacity
 import xmltodict
 
@@ -57,21 +60,34 @@ class ClickhouseClient:
 
 class ClickhouseConfig:
 
-    def __init__(self, server_config, users_config):
-        self._server_config = server_config
-        self._users_config = users_config
+    def __init__(self, config):
+        self._config = config
 
     def has_disk(self, name):
-        storage_configuration = self._server_config['yandex'].get('storage_configuration', {})
+        storage_configuration = self._config['yandex'].get('storage_configuration', {})
         return name in storage_configuration.get('disks', {})
+
+    def dump(self, mask_secrets=True):
+        config = deepcopy(self._config)
+        if mask_secrets:
+            _mask_secrets(config)
+
+        return xmltodict.unparse(config, pretty=True)
 
     @staticmethod
     def load():
-        return ClickhouseConfig(
-            _load_config('/var/lib/clickhouse/preprocessed_configs/config.xml'),
-            _load_config('/var/lib/clickhouse/preprocessed_configs/users.xml'))
+        return ClickhouseConfig(_load_config('/var/lib/clickhouse/preprocessed_configs/config.xml'))
 
 
 def _load_config(config_path):
     with open(config_path, 'r') as file:
         return xmltodict.parse(file.read())
+
+
+def _mask_secrets(config):
+    if isinstance(config, MutableMapping):
+        for key, value in list(config.items()):
+            if isinstance(value, MutableMapping):
+                _mask_secrets(config[key])
+            elif key in ('password', 'secret_access_key'):
+                config[key] = '*****'

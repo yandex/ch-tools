@@ -298,6 +298,12 @@ class DiagnosticsData:
             'value': value,
         }
 
+    def add_xml_document(self, name, document, section=None):
+        self._section(section)[name] = {
+            'type': 'xml',
+            'value': document,
+        }
+
     def add_query(self, name, query, result, section=None):
         self._section(section)[name] = {
             'type': 'query',
@@ -348,6 +354,8 @@ def main():
     data.add_string('Uptime', uptime)
 
     add_chart_urls(data, dbaas_config)
+
+    data.add_xml_document('ClickHouse config', ch_config.dump())
 
     data.add_query(
         name='Database engines',
