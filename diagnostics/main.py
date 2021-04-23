@@ -1,7 +1,7 @@
 import json
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 
 from requests.exceptions import RequestException
 
@@ -827,16 +827,17 @@ def format_storage(dbaas_config, ch_config):
 def add_chart_urls(data, dbaas_config):
     cluster_id = dbaas_config.cluster_id
     host = dbaas_config.fqdn
+    end_time = datetime.strftime(datetime.now(timezone.utc), '%Y-%m-%dT%H:%M:%S.000Z')
     if dbaas_config.vtype == 'porto':
         solomon_url = 'https://solomon.yandex-team.ru'
-        cluster_dashboard = f'{solomon_url}/?project=internal-mdb&service=mdb&dashboard=mdb-prod-cluster-clickhouse&cid={cluster_id}'
+        cluster_dashboard = f'{solomon_url}/?project=internal-mdb&service=mdb&dashboard=mdb-prod-cluster-clickhouse&cid={cluster_id}&e={end_time}'
         host_dashboard = f'{solomon_url}/?project=internal-mdb&cluster=internal-mdb_dom0&service=dom0&host=by_cid_container&dc=by_cid_container' \
-                         f'&dashboard=internal-mdb-porto-instance&l.container={host}&l.cid={cluster_id}'
+                         f'&dashboard=internal-mdb-porto-instance&l.container={host}&l.cid={cluster_id}&e={end_time}'
     else:
         solomon_url = 'https://solomon.cloud.yandex-team.ru'
-        cluster_dashboard = f'{solomon_url}/?project=yandexcloud&service=yandexcloud_dbaas&dashboard=mdb-prod-cluster-clickhouse&cid={cluster_id}'
+        cluster_dashboard = f'{solomon_url}/?project=yandexcloud&service=yandexcloud_dbaas&dashboard=mdb-prod-cluster-clickhouse&cid={cluster_id}&e={end_time}'
         host_dashboard = f'{solomon_url}/?project=yandexcloud&service=yandexcloud_dbaas&dashboard=cloud-mdb-instance-system' \
-                         f'&cluster=mdb_{cluster_id}&host={host}'
+                         f'&cluster=mdb_{cluster_id}&host={host}&e={end_time}'
     data.add_url('Cluster dashboard', cluster_dashboard, section='Charts')
     data.add_url('Host dashboard', host_dashboard, section='Charts')
 
