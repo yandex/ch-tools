@@ -10,6 +10,7 @@ PEERDIR(
     cloud/mdb/clickhouse/tools/common
 
     contrib/python/humanfriendly
+    contrib/python/PyYAML
 )
 
 END()

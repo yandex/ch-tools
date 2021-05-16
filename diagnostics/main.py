@@ -1,8 +1,11 @@
+import argparse
 import json
 import subprocess
 import sys
 from datetime import datetime, timezone
 
+import gzip
+import yaml
 from requests.exceptions import RequestException
 
 from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseClient, ClickhouseConfig
@@ -607,8 +610,17 @@ class DiagnosticsData:
             'result': result,
         }
 
-    def dump(self, stream):
-        json.dump(self._sections, stream, indent=2, ensure_ascii=False)
+    def dump(self, format):
+        if format.startswith('json'):
+            result = json.dumps(self._sections, indent=2, ensure_ascii=False)
+        else:
+            result = yaml.dump(self._sections, default_flow_style=False, allow_unicode=True)
+
+        if format.endswith('.gz'):
+            compressor = gzip.GzipFile(mode='wb', fileobj=sys.stdout.buffer)
+            compressor.write(result.encode())
+        else:
+            print(result)
 
     def _section(self, name=None):
         if self._sections[-1]['section'] != name:
@@ -618,6 +630,8 @@ class DiagnosticsData:
 
 
 def main():
+    args = parse_args()
+
     timestamp = datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')
     client = ClickhouseClient(user='mdb_admin')
     dbaas_config = DbaasConfig.load()
@@ -797,7 +811,18 @@ def main():
         command=lsof_command,
         result=execute_command(lsof_command))
 
-    data.dump(sys.stdout)
+    data.dump(args.format)
+
+
+def parse_args():
+    """
+    Parse command-line arguments.
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--format',
+                        default='json',
+                        choices=['json', 'yaml', 'json.gz', 'yaml.gz'])
+    return parser.parse_args()
 
 
 def format_resource_preset(dbaas_config):
