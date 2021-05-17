@@ -106,8 +106,8 @@ SELECT_REPLICATION_QUEUE = r'''SELECT
     last_exception,
     concat('time: ', toString(last_postpone_time), ', number: ', toString(num_postponed), ', reason: ', postpone_reason) postpone
 FROM system.replication_queue
-ORDER BY create_time DESC
-LIMIT 10
+ORDER BY create_time ASC
+LIMIT 20
 '''
 
 SELECT_REPLICATED_FETCHES = r'''SELECT
@@ -685,7 +685,7 @@ def main():
         result=execute_query(client, SELECT_REPLICAS, format='PrettyCompactNoEscapes'),
         section='Replication')
     data.add_query(
-        name='Replication queue (top 10 oldest tasks)',
+        name='Replication queue (top 20 oldest tasks)',
         query=SELECT_REPLICATION_QUEUE,
         result=execute_query(client, SELECT_REPLICATION_QUEUE, format='Vertical'),
         section='Replication')
