@@ -10,13 +10,15 @@ from cloud.mdb.clickhouse.tools.monrun_checks.result import Result
 @click.option('-x', '--exec-critical', 'xcrit', type=int, default=3600, help='Critical threshold for one task execution.')
 @click.option('-c', '--critical', 'crit', type=int, default=600, help='Critical threshold for lag with errors.')
 @click.option('-w', '--warning', 'warn', type=int, default=300, help='Warning threshold.')
+@click.option('-M', '--merges-critical', 'mcrit', type=click.FloatRange(0.0, 100.0), default=90.0, help='Critical threshold in percent of max_replicated_merges_in_queue.')
+@click.option('-m', '--merges-warning', 'mwarn', type=click.FloatRange(0.0, 100.0), default=50.0, help='Warning threshold in percent of max_replicated_merges_in_queue.')
 @click.option('-v', '--verbose', 'verbose', type=int, count=True, default=0, help='Show details about lag.')
-def replication_lag_command(xcrit, crit, warn, verbose):
+def replication_lag_command(xcrit, crit, warn, mwarn, mcrit, verbose):
     """
     Check for replication lag between replicas.
     Should be: lag >= lag_with_errors, lag >= max_execution
     """
-    lag, lag_with_errors, max_execution, chart = get_replication_lag()
+    lag, lag_with_errors, max_execution, max_merges, chart = get_replication_lag()
 
     msg_verbose = ''
     msg_verbose_2 = '\n\n'
@@ -24,10 +26,11 @@ def replication_lag_command(xcrit, crit, warn, verbose):
     if verbose >= 1:
         verbtab = []
 
-        headers = ['Table', 'Lag [s]', 'Tasks', 'Max task execution [s]', 'Non-retrayable errors', 'Has user fault errors']
+        headers = ['Table', 'Lag [s]', 'Tasks', 'Max task execution [s]', 'Non-retrayable errors', 'Has user fault errors', 'Merges with 1000+ tries']
         for t in chart:
             if chart[t].get('multi_replicas', False):
-                tabletab = [t, chart[t].get('delay', 0), chart[t].get('tasks', 0), chart[t].get('max_execution', 0), chart[t].get('errors', 0), chart[t].get('user_fault', False)]
+                tabletab = [t, chart[t].get('delay', 0), chart[t].get('tasks', 0), chart[t].get('max_execution', 0), chart[t].get('errors', 0),
+                            chart[t].get('user_fault', False), chart[t].get('retried_merges', 0)]
                 verbtab.append(tabletab)
                 if verbose >= 2:
                     exceptions_retrayable = ''
@@ -56,16 +59,23 @@ def replication_lag_command(xcrit, crit, warn, verbose):
         if verbose >= 2:
             msg_verbose = msg_verbose + msg_verbose_2
 
-    if lag < warn:
+    max_replicated_merges_in_queue_warn = 1
+    max_replicated_merges_in_queue_crit = 1
+    if max_merges > 0:
+        max_replicated_merges_in_queue = get_max_replicated_merges_in_queue()
+        max_replicated_merges_in_queue_warn = int(max_replicated_merges_in_queue * mwarn / 100.0)
+        max_replicated_merges_in_queue_crit = int(max_replicated_merges_in_queue * mcrit / 100.0)
+
+    if lag < warn and max_merges < max_replicated_merges_in_queue_warn:
         return Result(code=0, message='OK', verbose=msg_verbose)
 
-    msg = 'Max {0} seconds, with errors {1} seconds, max task execution {2} seconds'.format(lag, lag_with_errors, max_execution)
+    msg = 'Max {0} seconds, with errors {1} seconds, max task execution {2} seconds, max merges in queue {3}'.format(lag, lag_with_errors, max_execution, max_merges)
 
     versions_count = ClickhouseInfo.get_versions_count()
     if versions_count > 1:
         msg += ', ClickHouse versions on replicas mismatch'
 
-    if (lag_with_errors < crit and max_execution < xcrit) or versions_count > 1:
+    if (lag_with_errors < crit and max_execution < xcrit and max_merges < max_replicated_merges_in_queue_crit) or versions_count > 1:
         return Result(code=1, message=msg, verbose=msg_verbose)
 
     return Result(code=2, message=msg, verbose=msg_verbose)
@@ -87,6 +97,8 @@ def get_replication_lag():
         key = '{database}.{table}'.format(database=t['database'], table=t['table'])
         chart[key]['multi_replicas'] = True
     tables = count_errors(tables, -1)
+
+    max_merges = 0
     for t in tables:
         key = '{database}.{table}'.format(database=t['database'], table=t['table'])
         chart[key]['tasks'] = int(t['tasks'])
@@ -94,6 +106,8 @@ def get_replication_lag():
         chart[key]['max_execution'] = int(t['max_execution'])
         chart[key]['max_execution_part'] = t['max_execution_part']
         chart[key]['exceptions'] = t['exceptions']
+        chart[key]['retried_merges'] = int(t['retried_merges'])
+        max_merges = max(int(t['retried_merges']), max_merges)
         for exception in t['exceptions']:
             if is_userfault_exception(exception):
                 chart[key]['userfault'] = True
@@ -113,7 +127,7 @@ def get_replication_lag():
             if execution > max_execution:
                 max_execution = execution
 
-    return lag, lag_with_errors, max_execution, chart
+    return lag, lag_with_errors, max_execution, max_merges, chart
 
 
 def get_tables_with_replication_delay():
@@ -164,7 +178,8 @@ def count_errors(tables, exceptions_limit):
             countIf(last_exception != '' AND postpone_reason = '') as errors,
             max(IF(is_currently_executing, dateDiff('second', last_attempt_time, now()), 0)) as max_execution,
             groupUniqArray{limit}(IF(last_exception != '', concat(IF(postpone_reason = '', '     ', '<pr> '), last_exception), '')) as exceptions,
-            argMax(new_part_name, IF(is_currently_executing, dateDiff('second', last_attempt_time, now()), 0)) as max_execution_part
+            argMax(new_part_name, IF(is_currently_executing, dateDiff('second', last_attempt_time, now()), 0)) as max_execution_part,
+            countIf(type = 'MERGE_PARTS' and num_tries >= 1000) as retried_merges
         FROM system.replication_queue
         WHERE (database, table) IN ({tables})
         GROUP BY database,table
@@ -188,3 +203,16 @@ def is_userfault_exception(exception):
         return True
 
     return False
+
+
+def get_max_replicated_merges_in_queue():
+    """
+    Get max_replicated_merges_in_queue value
+    """
+    query = '''
+        SELECT value FROM system.merge_tree_settings WHERE name='max_replicated_merges_in_queue'
+    '''
+    res = ClickhouseClient().execute(query, True)
+    if not res:
+        return 16  # 16 is default value for 'max_replicated_merges_in_queue' in ClickHouse
+    return int(res[0][0])
