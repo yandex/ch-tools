@@ -7,7 +7,7 @@
         "homepage": "https://wiki.yandex-team.ru/MDB/"
     },
     "build": {
-         "bin": {
+        "bin": {
             "targets": [
                 "cloud/mdb/clickhouse/tools/diagnostics",
                 "cloud/mdb/clickhouse/tools/monrun_checks",
@@ -100,6 +100,19 @@
             },
             "destination": {
                 "path": "/etc/logrotate.d/clickhouse-monitoring"
+            }
+        },
+        {
+            "source": {
+                "type": "DIRECTORY"
+            },
+            "destination": {
+                "path": "/var/log/clickhouse-monitoring",
+                "attributes": {
+                    "mode": {
+                        "value": 775
+                    }
+                }
             }
         }
     ]
