@@ -92,6 +92,15 @@
                 "path": "/usr/bin/ch-diagnostics",
                 "target": "/opt/yandex/mdb-ch-tools/bin/ch-diagnostics"
             }
+        },
+        {
+            "source": {
+                "type": "ARCADIA",
+                "path": "cloud/mdb/clickhouse/tools/monrun_checks/clickhouse-monitoring.logrotate"
+            },
+            "destination": {
+                "path": "/etc/logrotate.d/clickhouse-monitoring"
+            }
         }
     ]
 }

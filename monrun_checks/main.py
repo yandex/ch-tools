@@ -13,7 +13,7 @@ from cloud.mdb.clickhouse.tools.monrun_checks.ch_geobase import geobase_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_log_errors import log_errors_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_ping import ping_command
 
-LOG_FILE = '/var/log/monrun/clickhouse-monitoring.log'
+LOG_FILE = '/var/log/clickhouse-monitoring.log'
 
 
 class MonrunChecks(click.Group):
