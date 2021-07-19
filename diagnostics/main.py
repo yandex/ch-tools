@@ -685,7 +685,7 @@ def main():
     data.add_query(
         name='Table engines',
         query=SELECT_DATABASE_ENGINES,
-        result=execute_query(client, SELECT_DATABASE_ENGINES, format='PrettyCompactNoEscapes'),
+        result=execute_query(client, SELECT_TABLE_ENGINES, format='PrettyCompactNoEscapes'),
         section='Schema')
     data.add_query(
         name='Dictionaries',
