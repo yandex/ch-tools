@@ -1,6 +1,8 @@
 import json
 
 import sqlparse
+
+from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseConfig
 from jinja2 import Environment
 from kazoo.client import KazooClient
 
@@ -29,8 +31,7 @@ def zk_client(ctx, host, port, zkcli_identity):
     """
     Create and return KazooClient.
     """
-    config = get_config(ctx)
-    zk_config = config['yandex']['zookeeper']
+    zk_config = get_config(ctx).zookeeper
     connect_str = ','.join(f'{host if host else node["host"]}:{port if port else node["port"]}' for node in zk_config['node'])
     if 'root' in zk_config:
         connect_str += zk_config['root']
@@ -48,22 +49,17 @@ def zk_client(ctx, host, port, zkcli_identity):
 
 def get_config(ctx):
     if 'config' not in ctx.obj:
-        ctx.obj['config'] = ctx.obj['chcli'].config()
+        ctx.obj['config'] = ClickhouseConfig.load()
 
     return ctx.obj['config']
 
 
 def get_macros(ctx):
-    """
-    Get ClickHouse macros.
-    """
-    config = get_config(ctx)
-    macros = config['yandex'].get('macros', {})
-    return {key: value for key, value in macros.items() if key != '@optional'}
+    return get_config(ctx).macros
 
 
 def get_cluster_name(ctx):
-    return get_macros(ctx)['cluster']
+    return get_config(ctx).cluster_name
 
 
 def _render_query(query, vars):

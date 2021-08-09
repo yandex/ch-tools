@@ -1,6 +1,6 @@
 from click import Choice, argument, group, option, pass_context
 
-from . import execute_query, get_cluster_name
+from cloud.mdb.clickhouse.tools.chadmin.cli import execute_query, get_cluster_name
 
 
 @group('query-log')

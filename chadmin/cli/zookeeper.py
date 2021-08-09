@@ -1,14 +1,15 @@
 import os
 from pprint import pprint
 
-from click import argument, group, pass_context, option
+from click import argument, group, option, pass_context
 
-from . import get_macros, zk_client
+from cloud.mdb.clickhouse.tools.chadmin.cli import get_macros, zk_client
 
 zk_client_args = {}
 
+
 @group('zookeeper')
-@option('--port', help='ZooKeeper port.', type=int)
+@option('--port', help='ZooKeeper port.', type=int, default=2181)
 @option('--host', help='ZooKeeper host.', type=str)
 @option('--zkcli_identity', help='Identity for zookeeper cli shell. In a format login:password. '
                                  'Example: clickhouse:X7ui1dXIXXXXXXXXXXXXXXXXXXXXXXXX', type=str)
@@ -43,6 +44,7 @@ def get_command(ctx, path):
 
     Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
     """
+
     def command(zk, path):
         path = format_path(ctx, path)
         result = zk.get(path)
@@ -59,6 +61,7 @@ def list_command(ctx, path):
 
     Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
     """
+
     def command(zk, path):
         path = format_path(ctx, path)
         result = zk.get_children(path)
@@ -92,6 +95,7 @@ def delete_command(ctx, path):
 
     Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
     """
+
     def command(zk, path):
         path = format_path(ctx, path)
         zk.delete(path, recursive=True)
@@ -107,6 +111,7 @@ def create_command(ctx, paths):
 
     Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
     """
+
     def command(zk, paths):
         for path in paths:
             path = format_path(ctx, path)

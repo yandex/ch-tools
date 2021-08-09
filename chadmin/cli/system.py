@@ -1,5 +1,5 @@
-from click import argument, group, option, pass_context
-from . import execute_query
+from click import argument, group, pass_context
+from cloud.mdb.clickhouse.tools.chadmin.cli import execute_query
 
 
 @group('system')

@@ -1,6 +1,6 @@
 from click import Choice, group, option, pass_context
 
-from . import execute_query
+from cloud.mdb.clickhouse.tools.chadmin.cli import execute_query
 
 
 @group('part-log')

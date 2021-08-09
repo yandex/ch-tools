@@ -1,6 +1,6 @@
 from click import command, pass_context
 
-from . import execute_query
+from cloud.mdb.clickhouse.tools.chadmin.cli import execute_query
 
 
 @command('events')

@@ -1,5 +1,5 @@
 from click import group, option, pass_context
-from . import execute_query
+from cloud.mdb.clickhouse.tools.chadmin.cli import execute_query
 
 
 @group('replication-queue')
