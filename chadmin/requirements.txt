@@ -1,0 +1,15 @@
+PyYAML
+Pygments>=2.4
+backoff
+click>=7.0
+humanfriendly
+jinja2
+jmespath
+kazoo
+requests
+sqlparse
+tabulate
+tenacity
+termcolor
+xmltodict
+psycopg2-binary
