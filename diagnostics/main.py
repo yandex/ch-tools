@@ -633,7 +633,7 @@ def main():
     args = parse_args()
 
     timestamp = datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')
-    client = ClickhouseClient(user='mdb_admin')
+    client = ClickhouseClient()
     dbaas_config = DbaasConfig.load()
     ch_config = ClickhouseConfig.load()
     version = client.query(SELECT_VERSION)

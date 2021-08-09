@@ -15,8 +15,7 @@ def retry(exception_types, max_attempts=5, max_interval=5):
     """
     return tenacity.retry(
         retry=tenacity.retry_if_exception_type(exception_types),
-        wait=tenacity.wait_random_exponential(multiplier=0.5,
-                                              max=max_interval),
+        wait=tenacity.wait_random_exponential(multiplier=0.5, max=max_interval),
         stop=tenacity.stop_after_attempt(max_attempts),
         reraise=True)
 
@@ -26,7 +25,7 @@ class ClickhouseClient:
     ClickHouse client.
     """
 
-    def __init__(self, *, host=socket.getfqdn(), port=8443, user=None, insecure=False):
+    def __init__(self, *, host=socket.getfqdn(), port=8443, user='mdb_admin', insecure=False):
         self._session = requests.Session()
         self._session.verify = False if insecure else '/etc/clickhouse-server/ssl/allCAs.pem'
         if user:
@@ -62,6 +61,25 @@ class ClickhouseConfig:
 
     def __init__(self, config):
         self._config = config
+
+    @property
+    def macros(self):
+        """
+        ClickHouse macros.
+        """
+        macros = self._config['yandex'].get('macros', {})
+        return {key: value for key, value in macros.items() if not key.startswith('@')}
+
+    @property
+    def cluster_name(self):
+        return self.macros['cluster']
+
+    @property
+    def zookeeper(self):
+        """
+        ZooKeeper configuration.
+        """
+        return self._config['yandex'].get('zookeeper', {})
 
     def has_disk(self, name):
         storage_configuration = self._config['yandex'].get('storage_configuration', {})
