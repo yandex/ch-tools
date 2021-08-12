@@ -13,4 +13,4 @@ def system_group():
 @pass_context
 def restart_replica_command(ctx, database, table):
     query = f"""SYSTEM RESTART REPLICA `{database}`.`{table}`"""
-    execute_query(ctx, query, format='Vertical')
+    execute_query(ctx, query, format=None)
