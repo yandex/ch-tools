@@ -7,8 +7,8 @@ from jinja2 import Environment
 from kazoo.client import KazooClient
 
 
-def execute_query(ctx, query, echo=None, dry_run=None, format=None, **kwargs):
-    if format is None:
+def execute_query(ctx, query, echo=None, dry_run=None, format='default', **kwargs):
+    if format == 'default':
         format = 'PrettyCompact'
 
     rendered_query = _render_query(query, kwargs)
