@@ -1,5 +1,3 @@
-import json
-
 import sqlparse
 
 from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseConfig
