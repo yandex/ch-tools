@@ -19,12 +19,7 @@ def execute_query(ctx, query, echo=None, dry_run=None, format='default', **kwarg
     if dry_run:
         return
 
-    response = ctx.obj['chcli'].query(rendered_query, format=format)
-
-    if format in ('JSON', 'JSONCompact', 'JSONEachRow'):
-        return json.loads(response)
-
-    return response
+    return ctx.obj['chcli'].query(rendered_query, format=format)
 
 
 def zk_client(ctx, host, port, zkcli_identity):
