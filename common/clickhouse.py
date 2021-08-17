@@ -107,5 +107,5 @@ def _mask_secrets(config):
         for key, value in list(config.items()):
             if isinstance(value, MutableMapping):
                 _mask_secrets(config[key])
-            elif key in ('password', 'secret_access_key', 'header'):
+            elif key in ('password', 'secret_access_key', 'header', 'identity'):
                 config[key] = '*****'
