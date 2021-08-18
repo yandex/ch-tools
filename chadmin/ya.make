@@ -27,6 +27,7 @@ PY_SRCS(
 )
 
 PEERDIR(
+    cloud/mdb/cli/common
     cloud/mdb/clickhouse/tools/common
 
     contrib/python/click
