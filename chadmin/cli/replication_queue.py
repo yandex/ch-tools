@@ -1,4 +1,4 @@
-from click import group, option, pass_context
+from click import Choice, group, option, pass_context
 from cloud.mdb.clickhouse.tools.chadmin.cli import execute_query
 
 
@@ -8,11 +8,14 @@ def replication_queue_group():
 
 
 @replication_queue_group.command('list')
-@option('--failed', is_flag=True)
+@option('--failed', is_flag=True,
+        help='Output only failed replication queue tasks (tasks with non-empty exception).')
+@option('--type', type=Choice(['GET_PART', 'MERGE_PARTS']),
+        help='Filter replication queue tasks to output by the specified type.')
 @option('-v', '--verbose', is_flag=True)
 @option('-l', '--limit')
 @pass_context
-def list_replication_queue_command(ctx, failed, verbose, limit):
+def list_replication_queue_command(ctx, failed, type, verbose, limit):
     query = """
     SELECT
         database,
@@ -39,6 +42,9 @@ def list_replication_queue_command(ctx, failed, verbose, limit):
     {% if failed %}
       AND last_exception != ''
     {% endif %}
+    {% if type %}
+      AND type = '{{ type }}'
+    {% endif %}
     ORDER BY table, position
     {% if limit is not none %}
     LIMIT {{ limit }}
@@ -47,6 +53,7 @@ def list_replication_queue_command(ctx, failed, verbose, limit):
     print(execute_query(ctx,
                         query,
                         failed=failed,
+                        type=type,
                         verbose=verbose,
                         limit=limit,
                         format='Vertical'))
