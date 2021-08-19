@@ -32,10 +32,8 @@ PEERDIR(
 
     contrib/python/click
     contrib/python/humanfriendly
-    contrib/python/Jinja2
     contrib/python/kazoo
     contrib/python/PyYAML
-    contrib/python/sqlparse
 )
 
 END()
