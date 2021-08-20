@@ -1,10 +1,10 @@
 import argparse
+import gzip
 import json
 import subprocess
 import sys
 from datetime import datetime, timezone
 
-import gzip
 import yaml
 from requests.exceptions import RequestException
 
@@ -300,7 +300,11 @@ FROM system.detached_parts
 SELECT_PROCESSES = r'''SELECT
     elapsed,
     query_id,
+    {% if normalize_queries -%}
     normalizeQuery(query) AS normalized_query,
+    {% else -%}
+    query,
+    {% endif -%}
     is_cancelled,
     concat(toString(read_rows), ' rows / ', formatReadableSize(read_bytes)) AS read,
     concat(toString(written_rows), ' rows / ', formatReadableSize(written_bytes)) AS written,
@@ -341,7 +345,11 @@ SELECT_TOP_QUERIES_BY_DURATION = r'''SELECT
     query_id,
     query_kind,
     is_initial_query,
+    {% if normalize_queries -%}
     normalizeQuery(query) AS normalized_query,
+    {% else -%}
+    query,
+    {% endif -%}
     concat(toString(read_rows), ' rows / ', formatReadableSize(read_bytes)) AS read,
     concat(toString(written_rows), ' rows / ', formatReadableSize(written_bytes)) AS written,
     concat(toString(result_rows), ' rows / ', formatReadableSize(result_bytes)) AS result,
@@ -413,7 +421,11 @@ SELECT_TOP_QUERIES_BY_MEMORY_USAGE = r'''SELECT
     query_id,
     query_kind,
     is_initial_query,
+    {% if normalize_queries -%}
     normalizeQuery(query) AS normalized_query,
+    {% else -%}
+    query,
+    {% endif -%}
     concat(toString(read_rows), ' rows / ', formatReadableSize(read_bytes)) AS read,
     concat(toString(written_rows), ' rows / ', formatReadableSize(written_bytes)) AS written,
     concat(toString(result_rows), ' rows / ', formatReadableSize(result_bytes)) AS result,
@@ -485,7 +497,11 @@ SELECT_FAILED_QUERIES = r'''SELECT
     query_id,
     query_kind,
     is_initial_query,
+    {% if normalize_queries -%}
     normalizeQuery(query) AS normalized_query,
+    {% else -%}
+    query,
+    {% endif -%}
     concat(toString(read_rows), ' rows / ', formatReadableSize(read_bytes)) AS read,
     concat(toString(written_rows), ' rows / ', formatReadableSize(written_bytes)) AS written,
     concat(toString(result_rows), ' rows / ', formatReadableSize(result_bytes)) AS result,
@@ -575,7 +591,8 @@ FROM system.crash_log
 
 
 class DiagnosticsData:
-    def __init__(self):
+    def __init__(self, args):
+        self.args = args
         self._sections = [{'section': None, 'data': {}}]
 
     def add_string(self, name, value, section=None):
@@ -639,179 +656,152 @@ def main():
     version = client.query(SELECT_VERSION)
     system_tables = [row[0] for row in client.query(SELECT_SYSTEM_TABLES, format='JSONCompact')['data']]
 
-    data = DiagnosticsData()
-    data.add_string('Cluster ID', dbaas_config.cluster_id)
-    data.add_string('Cluster name', dbaas_config.cluster_name)
-    data.add_string('Version', version)
-    data.add_string('Host', dbaas_config.fqdn)
-    data.add_string('Replicas', ','.join(dbaas_config.replicas))
-    data.add_string('Shard count', dbaas_config.shard_count)
-    data.add_string('Host count', dbaas_config.host_count)
-    data.add_string('Virtualization', dbaas_config.vtype)
-    data.add_string('Resource preset', format_resource_preset(dbaas_config))
-    data.add_string('Storage', format_storage(dbaas_config, ch_config))
-    data.add_string('Timestamp', timestamp)
+    diagnostics = DiagnosticsData(args)
+    diagnostics.add_string('Cluster ID', dbaas_config.cluster_id)
+    diagnostics.add_string('Cluster name', dbaas_config.cluster_name)
+    diagnostics.add_string('Version', version)
+    diagnostics.add_string('Host', dbaas_config.fqdn)
+    diagnostics.add_string('Replicas', ','.join(dbaas_config.replicas))
+    diagnostics.add_string('Shard count', dbaas_config.shard_count)
+    diagnostics.add_string('Host count', dbaas_config.host_count)
+    diagnostics.add_string('Virtualization', dbaas_config.vtype)
+    diagnostics.add_string('Resource preset', format_resource_preset(dbaas_config))
+    diagnostics.add_string('Storage', format_storage(dbaas_config, ch_config))
+    diagnostics.add_string('Timestamp', timestamp)
     if version_ge(version, '21.3'):
         uptime = client.query(SELECT_UPTIME)
     else:
         uptime = client.query(SELECT_UPTIME_DEPRECATED)
-    data.add_string('Uptime', uptime)
+    diagnostics.add_string('Uptime', uptime)
 
-    add_chart_urls(data, dbaas_config)
+    add_chart_urls(diagnostics, dbaas_config)
 
-    data.add_xml_document('ClickHouse configuration', ch_config.dump())
+    diagnostics.add_xml_document('ClickHouse configuration', ch_config.dump())
 
     if version_ge(version, '20.8'):
-        data.add_query(
-            name='Access configuration',
-            query=SELECT_ACCESS,
-            result=execute_query(client, SELECT_ACCESS, format='TSVRaw'))
+        add_query(diagnostics, 'Access configuration',
+                  client=client,
+                  query=SELECT_ACCESS,
+                  format='TSVRaw')
+        add_query(diagnostics, 'Quotas',
+                  client=client,
+                  query=SELECT_QUOTA_USAGE,
+                  format='Vertical')
 
-        data.add_query(
-            name='Quotas',
-            query=SELECT_QUOTA_USAGE,
-            result=execute_query(client, SELECT_QUOTA_USAGE, format='Vertical'))
+    add_query(diagnostics, 'Database engines',
+              client=client,
+              query=SELECT_DATABASE_ENGINES,
+              format='PrettyCompactNoEscapes',
+              section='Schema')
+    add_query(diagnostics, 'Databases (top 10 by size)',
+              client=client,
+              query=SELECT_DATABASES,
+              format='PrettyCompactNoEscapes',
+              section='Schema')
+    add_query(diagnostics, 'Table engines',
+              client=client,
+              query=SELECT_DATABASE_ENGINES,
+              format='PrettyCompactNoEscapes',
+              section='Schema')
+    add_query(diagnostics, 'Dictionaries',
+              client=client,
+              query=SELECT_DICTIONARIES,
+              format='PrettyCompactNoEscapes',
+              section='Schema')
 
-    data.add_query(
-        name='Database engines',
-        query=SELECT_DATABASE_ENGINES,
-        result=execute_query(client, SELECT_DATABASE_ENGINES, format='PrettyCompactNoEscapes'),
-        section='Schema')
-    data.add_query(
-        name='Databases (top 10 by size)',
-        query=SELECT_DATABASES,
-        result=execute_query(client, SELECT_DATABASES, format='PrettyCompactNoEscapes'),
-        section='Schema')
-    data.add_query(
-        name='Table engines',
-        query=SELECT_DATABASE_ENGINES,
-        result=execute_query(client, SELECT_TABLE_ENGINES, format='PrettyCompactNoEscapes'),
-        section='Schema')
-    data.add_query(
-        name='Dictionaries',
-        query=SELECT_DICTIONARIES,
-        result=execute_query(client, SELECT_DICTIONARIES, format='PrettyCompactNoEscapes'),
-        section='Schema')
-
-    data.add_query(
-        name='Replicated tables (top 10 by absolute delay)',
-        query=SELECT_REPLICAS,
-        result=execute_query(client, SELECT_REPLICAS, format='PrettyCompactNoEscapes'),
-        section='Replication')
-    data.add_query(
-        name='Replication queue (top 20 oldest tasks)',
-        query=SELECT_REPLICATION_QUEUE,
-        result=execute_query(client, SELECT_REPLICATION_QUEUE, format='Vertical'),
-        section='Replication')
+    add_query(diagnostics, 'Replicated tables (top 10 by absolute delay)',
+              client=client,
+              query=SELECT_REPLICAS,
+              format='PrettyCompactNoEscapes',
+              section='Replication')
+    add_query(diagnostics, 'Replication queue (top 20 oldest tasks)',
+              client=client,
+              query=SELECT_REPLICATION_QUEUE,
+              format='Vertical',
+              section='Replication')
     if version_ge(version, '21.3'):
-        data.add_query(
-            name='Replicated fetches',
-            query=SELECT_REPLICATED_FETCHES,
-            result=execute_query(client, SELECT_REPLICATED_FETCHES, format='Vertical'),
-            section='Replication')
+        add_query(diagnostics, 'Replicated fetches',
+                  client=client,
+                  query=SELECT_REPLICATED_FETCHES,
+                  format='Vertical',
+                  section='Replication')
 
-    data.add_query(
-        name='Top 10 tables by max parts per partition',
-        query=SELECT_PARTS_PER_TABLE,
-        result=execute_query(client, SELECT_PARTS_PER_TABLE, format='PrettyCompactNoEscapes'))
+    add_query(diagnostics, 'Top 10 tables by max parts per partition',
+              client=client,
+              query=SELECT_PARTS_PER_TABLE,
+              format='PrettyCompactNoEscapes')
     if version_ge(version, '20.3'):
-        data.add_query(
-            name='Merges in progress',
-            query=SELECT_MERGES,
-            result=execute_query(client, SELECT_MERGES, format='Vertical'))
-        data.add_query(
-            name='Mutations in progress',
-            query=SELECT_MUTATIONS,
-            result=execute_query(client, SELECT_MUTATIONS, format='Vertical'))
-        data.add_query(
-            name='Recent data parts (modification time within last 3 minutes)',
-            query=SELECT_RECENT_DATA_PARTS,
-            result=execute_query(client, SELECT_RECENT_DATA_PARTS, format='Vertical'))
+        select_merges = SELECT_MERGES
+        select_mutations = SELECT_MUTATIONS
+        select_recent_data_parts = SELECT_RECENT_DATA_PARTS
     else:
-        data.add_query(
-            name='Merges in progress',
-            query=SELECT_MERGES_DEPRECATED,
-            result=execute_query(client, SELECT_MERGES_DEPRECATED, format='Vertical'))
-        data.add_query(
-            name='Mutations in progress',
-            query=SELECT_MUTATIONS_DEPRECATED,
-            result=execute_query(client, SELECT_MUTATIONS_DEPRECATED, format='Vertical'))
-        data.add_query(
-            name='Recent data parts (modification time within last 3 minutes)',
-            query=SELECT_RECENT_DATA_PARTS_DEPRECATED,
-            result=execute_query(client, SELECT_RECENT_DATA_PARTS_DEPRECATED, format='Vertical'))
-    data.add_query(
-        name='Detached data parts',
-        query=SELECT_DETACHED_DATA_PARTS,
-        result=execute_query(client, SELECT_DETACHED_DATA_PARTS, format='PrettyCompactNoEscapes'))
+        select_merges = SELECT_MERGES_DEPRECATED
+        select_mutations = SELECT_MUTATIONS_DEPRECATED
+        select_recent_data_parts = SELECT_RECENT_DATA_PARTS_DEPRECATED
+    add_query(diagnostics, 'Merges in progress',
+              client=client,
+              query=select_merges,
+              format='Vertical')
+    add_query(diagnostics, 'Mutations in progress',
+              client=client,
+              query=select_mutations,
+              format='Vertical')
+    add_query(diagnostics, 'Recent data parts (modification time within last 3 minutes)',
+              client=client,
+              query=select_recent_data_parts,
+              format='Vertical')
+    add_query(diagnostics, 'Detached data parts',
+              client=client,
+              query=SELECT_DETACHED_DATA_PARTS,
+              format='PrettyCompactNoEscapes')
 
     if version_ge(version, '21.3'):
-        data.add_query(
-            name='Queries in progress (process list)',
-            query=SELECT_PROCESSES,
-            result=execute_query(client, SELECT_PROCESSES, format='Vertical'),
-            section='Queries')
-        data.add_query(
-            name='Top 10 queries by duration',
-            query=SELECT_TOP_QUERIES_BY_DURATION,
-            result=execute_query(client, SELECT_TOP_QUERIES_BY_DURATION, format='Vertical'),
-            section='Queries')
-        data.add_query(
-            name='Top 10 queries by memory usage',
-            query=SELECT_TOP_QUERIES_BY_MEMORY_USAGE,
-            result=execute_query(client, SELECT_TOP_QUERIES_BY_MEMORY_USAGE, format='Vertical'),
-            section='Queries')
-        data.add_query(
-            name='Last 10 failed queries',
-            query=SELECT_FAILED_QUERIES,
-            result=execute_query(client, SELECT_FAILED_QUERIES, format='Vertical'),
-            section='Queries')
+        select_processes = SELECT_PROCESSES
+        select_top_queries_by_duration = SELECT_TOP_QUERIES_BY_DURATION
+        select_top_queries_by_memory_usage = SELECT_TOP_QUERIES_BY_MEMORY_USAGE
+        select_failed_queries = SELECT_FAILED_QUERIES
     else:
-        data.add_query(
-            name='Queries in progress (process list)',
-            query=SELECT_PROCESSES_DEPRECATED,
-            result=execute_query(client, SELECT_PROCESSES_DEPRECATED, format='Vertical'),
-            section='Queries')
-        data.add_query(
-            name='Top 10 queries by duration',
-            query=SELECT_TOP_QUERIES_BY_DURATION_DEPRECATED,
-            result=execute_query(client, SELECT_TOP_QUERIES_BY_DURATION_DEPRECATED, format='Vertical'),
-            section='Queries')
-        data.add_query(
-            name='Top 10 queries by memory usage',
-            query=SELECT_TOP_QUERIES_BY_MEMORY_USAGE_DEPRECATED,
-            result=execute_query(client, SELECT_TOP_QUERIES_BY_MEMORY_USAGE_DEPRECATED, format='Vertical'),
-            section='Queries')
-        data.add_query(
-            name='Last 10 failed queries',
-            query=SELECT_FAILED_QUERIES_DEPRECATED,
-            result=execute_query(client, SELECT_FAILED_QUERIES_DEPRECATED, format='Vertical'),
-            section='Queries')
+        select_processes = SELECT_PROCESSES_DEPRECATED
+        select_top_queries_by_duration = SELECT_TOP_QUERIES_BY_DURATION_DEPRECATED
+        select_top_queries_by_memory_usage = SELECT_TOP_QUERIES_BY_MEMORY_USAGE_DEPRECATED
+        select_failed_queries = SELECT_FAILED_QUERIES_DEPRECATED
+    add_query(diagnostics, 'Queries in progress (process list)',
+              client=client,
+              query=select_processes,
+              format='Vertical',
+              section='Queries')
+    add_query(diagnostics, 'Top 10 queries by duration',
+              client=client,
+              query=select_top_queries_by_duration,
+              format='Vertical',
+              section='Queries')
+    add_query(diagnostics, 'Top 10 queries by memory usage',
+              client=client,
+              query=select_top_queries_by_memory_usage,
+              format='Vertical',
+              section='Queries')
+    add_query(diagnostics, 'Last 10 failed queries',
+              client=client,
+              query=select_failed_queries,
+              format='Vertical',
+              section='Queries')
 
-    data.add_query(
-        name='Stack traces',
-        query=SELECT_STACK_TRACES,
-        result=execute_query(client, SELECT_STACK_TRACES, format='Vertical'))
+    add_query(diagnostics, 'Stack traces',
+              client=client,
+              query=SELECT_STACK_TRACES,
+              format='Vertical')
 
     if 'crash_log' in system_tables:
-        data.add_query(
-            name='Crash log',
-            query=SELECT_CRASH_LOG,
-            result=execute_query(client, SELECT_CRASH_LOG, format='Vertical'))
+        add_query(diagnostics, 'Crash log',
+                  client=client,
+                  query=SELECT_CRASH_LOG,
+                  format='Vertical')
 
-    monrun_command = r'monrun | sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2})?)?[mGK]//g"'
-    data.add_command(
-        name='monrun',
-        command=monrun_command,
-        result=execute_command(monrun_command))
+    add_command(diagnostics, 'monrun', r'monrun | sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2})?)?[mGK]//g"')
 
-    lsof_command = 'lsof -p $(pidof clickhouse-server)'
-    data.add_command(
-        name='lsof',
-        command=lsof_command,
-        result=execute_command(lsof_command))
+    add_command(diagnostics, 'lsof', 'lsof -p $(pidof clickhouse-server)')
 
-    data.dump(args.format)
+    diagnostics.dump(args.format)
 
 
 def parse_args():
@@ -820,8 +810,11 @@ def parse_args():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('--format',
-                        default='json',
-                        choices=['json', 'yaml', 'json.gz', 'yaml.gz'])
+                        choices=['json', 'yaml', 'json.gz', 'yaml.gz'],
+                        default='json')
+    parser.add_argument('--normalize-queries',
+                        action='store_true',
+                        default=False)
     return parser.parse_args()
 
 
@@ -849,7 +842,7 @@ def format_storage(dbaas_config, ch_config):
     return storage
 
 
-def add_chart_urls(data, dbaas_config):
+def add_chart_urls(diagnostics, dbaas_config):
     cluster_id = dbaas_config.cluster_id
     host = dbaas_config.fqdn
     end_time = datetime.strftime(datetime.now(timezone.utc), '%Y-%m-%dT%H:%M:%S.000Z')
@@ -863,8 +856,20 @@ def add_chart_urls(data, dbaas_config):
         cluster_dashboard = f'{solomon_url}/?project=yandexcloud&service=yandexcloud_dbaas&dashboard=mdb-prod-cluster-clickhouse&cid={cluster_id}&e={end_time}'
         host_dashboard = f'{solomon_url}/?project=yandexcloud&service=yandexcloud_dbaas&dashboard=cloud-mdb-instance-system' \
                          f'&cluster=mdb_{cluster_id}&host={host}&e={end_time}'
-    data.add_url('Cluster dashboard', cluster_dashboard, section='Charts')
-    data.add_url('Host dashboard', host_dashboard, section='Charts')
+    diagnostics.add_url('Cluster dashboard', cluster_dashboard, section='Charts')
+    diagnostics.add_url('Host dashboard', host_dashboard, section='Charts')
+
+
+def add_query(diagnostics, name, client, query, format, section=None):
+    query_args = {
+        'normalize_queries': diagnostics.args.normalize_queries,
+    }
+    query = client.render_query(query, **query_args)
+    diagnostics.add_query(
+        name=name,
+        query=query,
+        result=execute_query(client, query, format=format),
+        section=section)
 
 
 def execute_query(client, query, format=None):
@@ -872,6 +877,13 @@ def execute_query(client, query, format=None):
         return client.query(query, format=format)
     except RequestException as e:
         return repr(e) if e.response is None else e.response.text
+
+
+def add_command(diagnostics, name, command):
+    diagnostics.add_command(
+        name=name,
+        command=command,
+        result=execute_command(command))
 
 
 def execute_command(command, input=None):

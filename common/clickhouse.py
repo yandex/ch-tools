@@ -5,6 +5,10 @@ from typing import MutableMapping
 import requests
 from copy import deepcopy
 
+import sqlparse
+
+from jinja2 import Environment
+
 import tenacity
 import xmltodict
 
@@ -34,12 +38,21 @@ class ClickhouseClient:
         self._timeout = 60
 
     @retry(requests.exceptions.ConnectionError)
-    def query(self, query, format=None, post_data=None):
+    def query(self, query, query_args=None, format=None, post_data=None, echo=False, dry_run=False):
         """
         Execute query.
         """
+        if query_args:
+            query = self.render_query(query, **query_args)
+
         if format:
             query += f' FORMAT {format}'
+
+        if echo:
+            print(sqlparse.format(query, reindent=True), '\n')
+
+        if dry_run:
+            return None
 
         logging.debug('Executing query: %s', query)
         response = self._session.post(self._url,
@@ -55,6 +68,16 @@ class ClickhouseClient:
             return response.json()
 
         return response.text.strip()
+
+    @staticmethod
+    def render_query(query, **kwargs):
+        env = Environment()
+
+        env.globals['format_str_match'] = _format_str_match
+        env.globals['format_str_imatch'] = _format_str_imatch
+
+        template = env.from_string(query)
+        return template.render(kwargs)
 
 
 class ClickhouseConfig:
@@ -109,3 +132,20 @@ def _mask_secrets(config):
                 _mask_secrets(config[key])
             elif key in ('password', 'secret_access_key', 'header', 'identity'):
                 config[key] = '*****'
+
+
+def _format_str_match(value):
+    if value is None:
+        return None
+
+    if value.find(',') < 0:
+        return "LIKE '{0}'".format(value)
+
+    return "IN ({0})".format(','.join("'{0}'".format(item.strip()) for item in value.split(',')))
+
+
+def _format_str_imatch(value):
+    if value is None:
+        return None
+
+    return _format_str_match(value.lower())

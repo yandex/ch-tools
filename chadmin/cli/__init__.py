@@ -1,23 +1,12 @@
-import sqlparse
-
 from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseConfig
-from jinja2 import Environment
 from kazoo.client import KazooClient
 
 
-def execute_query(ctx, query, echo=None, dry_run=None, format='default', **kwargs):
+def execute_query(ctx, query, echo=False, dry_run=False, format='default', **kwargs):
     if format == 'default':
         format = 'PrettyCompact'
 
-    rendered_query = _render_query(query, kwargs)
-
-    if echo:
-        print(sqlparse.format(rendered_query, reindent=True), '\n')
-
-    if dry_run:
-        return
-
-    return ctx.obj['chcli'].query(rendered_query, format=format)
+    return ctx.obj['chcli'].query(query, query_args=kwargs, format=format, echo=echo, dry_run=dry_run)
 
 
 def zk_client(ctx, host, port, zkcli_identity):
@@ -53,30 +42,3 @@ def get_macros(ctx):
 
 def get_cluster_name(ctx):
     return get_config(ctx).cluster_name
-
-
-def _render_query(query, vars):
-    env = Environment()
-
-    env.globals['format_str_match'] = _format_str_match
-    env.globals['format_str_imatch'] = _format_str_imatch
-
-    template = env.from_string(query)
-    return template.render(vars)
-
-
-def _format_str_match(value):
-    if value is None:
-        return None
-
-    if value.find(',') < 0:
-        return "LIKE '{0}'".format(value)
-
-    return "IN ({0})".format(','.join("'{0}'".format(item.strip()) for item in value.split(',')))
-
-
-def _format_str_imatch(value):
-    if value is None:
-        return None
-
-    return _format_str_match(value.lower())
