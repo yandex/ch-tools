@@ -7,6 +7,7 @@ from copy import deepcopy
 
 import sqlparse
 
+from cloud.mdb.clickhouse.tools.common.utils import version_ge
 from jinja2 import Environment
 
 import tenacity
@@ -36,6 +37,14 @@ class ClickhouseClient:
             self._session.headers['X-ClickHouse-User'] = user
         self._url = f'https://{host}:{port}'
         self._timeout = 60
+        self._ch_version = None
+
+    @property
+    def clickhouse_version(self):
+        if self._ch_version is None:
+            self._ch_version = self.query('SELECT version()')
+
+        return self._ch_version
 
     @retry(requests.exceptions.ConnectionError)
     def query(self, query, query_args=None, format=None, post_data=None, echo=False, dry_run=False):
@@ -69,10 +78,10 @@ class ClickhouseClient:
 
         return response.text.strip()
 
-    @staticmethod
-    def render_query(query, **kwargs):
+    def render_query(self, query, **kwargs):
         env = Environment()
 
+        env.globals['version_ge'] = lambda version: version_ge(self.clickhouse_version, version)
         env.globals['format_str_match'] = _format_str_match
         env.globals['format_str_imatch'] = _format_str_imatch
 

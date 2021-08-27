@@ -10,18 +10,20 @@ from requests.exceptions import RequestException
 
 from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseClient, ClickhouseConfig
 from cloud.mdb.clickhouse.tools.common.dbaas import DbaasConfig
+from cloud.mdb.clickhouse.tools.common.utils import version_ge
 from humanfriendly import format_size
 
-SELECT_VERSION = 'SELECT version()'
-
-SELECT_UPTIME = r'''SELECT formatReadableTimeDelta(uptime())'''
+SELECT_UPTIME = r'''
+{% if version_ge('21.3') -%}
+SELECT formatReadableTimeDelta(uptime())
+{% else -%}
+SELECT
+    toString(floor(uptime() / 3600 / 24)) || ' days ' ||
+    toString(floor(uptime() % (24 * 3600) / 3600, 1)) || ' hours'
+{% endif -%}
+'''
 
 SELECT_SYSTEM_TABLES = "SELECT name FROM system.tables WHERE database = 'system'"
-
-SELECT_UPTIME_DEPRECATED = r'''SELECT
-    toString(floor(uptime()/3600/24)) || ' days ' ||
-    toString(floor(uptime() % (24 * 3600) / 3600, 1)) || ' hours'
-'''
 
 SELECT_DATABASE_ENGINES = r'''SELECT
     engine,
@@ -161,31 +163,21 @@ SELECT_MERGES = r'''SELECT
     round(100 * progress, 1) "progress",
     is_mutation,
     partition_id,
+{% if version_ge('20.3') -%}
     result_part_path,
     source_part_paths,
+{% endif -%}
     num_parts,
     formatReadableSize(total_size_bytes_compressed) "total_size_compressed",
     formatReadableSize(bytes_read_uncompressed) "read_uncompressed",
     formatReadableSize(bytes_written_uncompressed) "written_uncompressed",
     columns_written,
+{% if version_ge('20.3') -%}
     formatReadableSize(memory_usage) "memory_usage",
     thread_id
-FROM system.merges
-'''
-
-SELECT_MERGES_DEPRECATED = r'''SELECT
-    database,
-    table,
-    round(elapsed, 1) "elapsed",
-    round(100 * progress, 1) "progress",
-    is_mutation,
-    partition_id,
-    num_parts,
-    formatReadableSize(total_size_bytes_compressed) "total_size_compressed",
-    formatReadableSize(bytes_read_uncompressed) "read_uncompressed",
-    formatReadableSize(bytes_written_uncompressed) "written_uncompressed",
-    columns_written,
+{% else -%}
     formatReadableSize(memory_usage) "memory_usage"
+{% endif -%}
 FROM system.merges
 '''
 
@@ -195,23 +187,9 @@ SELECT_MUTATIONS = r'''SELECT
     mutation_id,
     command,
     create_time,
+{% if version_ge('20.3') -%}
     parts_to_do_names,
-    parts_to_do,
-    is_done,
-    latest_failed_part,
-    latest_fail_time,
-    latest_fail_reason
-FROM system.mutations
-WHERE NOT is_done
-ORDER BY create_time DESC
-'''
-
-SELECT_MUTATIONS_DEPRECATED = r'''SELECT
-    database,
-    table,
-    mutation_id,
-    command,
-    create_time,
+{% endif -%}
     parts_to_do,
     is_done,
     latest_failed_part,
@@ -228,40 +206,14 @@ SELECT_RECENT_DATA_PARTS = r'''SELECT
     engine,
     partition_id,
     name,
+{% if version_ge('20.3') -%}
     part_type,
+{% endif -%}
     active,
     level,
+{% if version_ge('20.3') -%}
     disk_name,
-    path,
-    marks,
-    rows,
-    bytes_on_disk,
-    data_compressed_bytes,
-    data_uncompressed_bytes,
-    marks_bytes,
-    modification_time,
-    remove_time,
-    refcount,
-    is_frozen,
-    min_date,
-    max_date,
-    min_time,
-    max_time,
-    min_block_number,
-    max_block_number
-FROM system.parts
-WHERE modification_time > now() - INTERVAL 3 MINUTE
-ORDER BY modification_time DESC
-'''
-
-SELECT_RECENT_DATA_PARTS_DEPRECATED = r'''SELECT
-    database,
-    table,
-    engine,
-    partition_id,
-    name,
-    active,
-    level,
+{% endif -%}
     path,
     marks,
     rows,
@@ -311,29 +263,18 @@ SELECT_PROCESSES = r'''SELECT
     formatReadableSize(memory_usage) AS "memory usage",
     user,
     multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
+    {% if version_ge('21.3') -%}
     thread_ids,
+    {% endif -%}
+    {% if version_ge('21.8') -%}
+    ProfileEvents,
+    Settings
+    {% else -%}
     ProfileEvents.Names,
     ProfileEvents.Values,
     Settings.Names,
     Settings.Values
-FROM system.processes
-ORDER BY elapsed DESC
-'''
-
-SELECT_PROCESSES_DEPRECATED = r'''SELECT
-    elapsed,
-    query_id,
-    query,
-    is_cancelled,
-    concat(toString(read_rows), ' rows / ', formatReadableSize(read_bytes)) AS read,
-    concat(toString(written_rows), ' rows / ', formatReadableSize(written_bytes)) AS written,
-    formatReadableSize(memory_usage) AS "memory usage",
-    user,
-    multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
-    ProfileEvents.Names,
-    ProfileEvents.Values,
-    Settings.Names,
-    Settings.Values
+    {% endif -%}
 FROM system.processes
 ORDER BY elapsed DESC
 '''
@@ -360,6 +301,7 @@ SELECT_TOP_QUERIES_BY_DURATION = r'''SELECT
     initial_user,
     multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
     client_hostname,
+    {% if version_ge('21.3') -%}
     databases,
     tables,
     columns,
@@ -373,39 +315,16 @@ SELECT_TOP_QUERIES_BY_DURATION = r'''SELECT
     used_storages,
     used_table_functions,
     thread_ids,
+    {% endif -%}
+    {% if version_ge('21.8') -%}
+    ProfileEvents,
+    Settings
+    {% else -%}
     ProfileEvents.Names,
     ProfileEvents.Values,
     Settings.Names,
     Settings.Values
-FROM system.query_log
-WHERE type != 'QueryStart'
-  AND event_date >= today() - 1
-  AND event_time >= now() - INTERVAL 1 DAY
-ORDER BY query_duration_ms DESC
-LIMIT 10
-'''
-
-SELECT_TOP_QUERIES_BY_DURATION_DEPRECATED = r'''SELECT
-    type,
-    query_start_time,
-    query_duration_ms,
-    query_id,
-    is_initial_query,
-    query,
-    concat(toString(read_rows), ' rows / ', formatReadableSize(read_bytes)) AS read,
-    concat(toString(written_rows), ' rows / ', formatReadableSize(written_bytes)) AS written,
-    concat(toString(result_rows), ' rows / ', formatReadableSize(result_bytes)) AS result,
-    formatReadableSize(memory_usage) AS "memory usage",
-    exception,
-    '\n' || stack_trace AS stack_trace,
-    user,
-    initial_user,
-    multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
-    client_hostname,
-    ProfileEvents.Names,
-    ProfileEvents.Values,
-    Settings.Names,
-    Settings.Values
+    {% endif -%}
 FROM system.query_log
 WHERE type != 'QueryStart'
   AND event_date >= today() - 1
@@ -436,6 +355,7 @@ SELECT_TOP_QUERIES_BY_MEMORY_USAGE = r'''SELECT
     initial_user,
     multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
     client_hostname,
+    {% if version_ge('21.3') -%}
     databases,
     tables,
     columns,
@@ -449,39 +369,16 @@ SELECT_TOP_QUERIES_BY_MEMORY_USAGE = r'''SELECT
     used_storages,
     used_table_functions,
     thread_ids,
+    {% endif -%}
+    {% if version_ge('21.8') -%}
+    ProfileEvents,
+    Settings
+    {% else -%}
     ProfileEvents.Names,
     ProfileEvents.Values,
     Settings.Names,
     Settings.Values
-FROM system.query_log
-WHERE type != 'QueryStart'
-  AND event_date >= today() - 1
-  AND event_time >= now() - INTERVAL 1 DAY
-ORDER BY memory_usage DESC
-LIMIT 10
-'''
-
-SELECT_TOP_QUERIES_BY_MEMORY_USAGE_DEPRECATED = r'''SELECT
-    type,
-    query_start_time,
-    query_duration_ms,
-    query_id,
-    is_initial_query,
-    query,
-    concat(toString(read_rows), ' rows / ', formatReadableSize(read_bytes)) AS read,
-    concat(toString(written_rows), ' rows / ', formatReadableSize(written_bytes)) AS written,
-    concat(toString(result_rows), ' rows / ', formatReadableSize(result_bytes)) AS result,
-    formatReadableSize(memory_usage) AS "memory usage",
-    exception,
-    '\n' || stack_trace AS stack_trace,
-    user,
-    initial_user,
-    multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
-    client_hostname,
-    ProfileEvents.Names,
-    ProfileEvents.Values,
-    Settings.Names,
-    Settings.Values
+    {% endif -%}
 FROM system.query_log
 WHERE type != 'QueryStart'
   AND event_date >= today() - 1
@@ -512,6 +409,7 @@ SELECT_FAILED_QUERIES = r'''SELECT
     initial_user,
     multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
     client_hostname,
+    {% if version_ge('21.3') -%}
     databases,
     tables,
     columns,
@@ -525,40 +423,16 @@ SELECT_FAILED_QUERIES = r'''SELECT
     used_storages,
     used_table_functions,
     thread_ids,
+    {% endif -%}
+    {% if version_ge('21.8') -%}
+    ProfileEvents,
+    Settings
+    {% else -%}
     ProfileEvents.Names,
     ProfileEvents.Values,
     Settings.Names,
     Settings.Values
-FROM system.query_log
-WHERE type != 'QueryStart'
-  AND event_date >= today() - 1
-  AND event_time >= now() - INTERVAL 1 DAY
-  AND exception != ''
-ORDER BY query_start_time DESC
-LIMIT 10
-'''
-
-SELECT_FAILED_QUERIES_DEPRECATED = r'''SELECT
-    type,
-    query_start_time,
-    query_duration_ms,
-    query_id,
-    is_initial_query,
-    query,
-    concat(toString(read_rows), ' rows / ', formatReadableSize(read_bytes)) AS read,
-    concat(toString(written_rows), ' rows / ', formatReadableSize(written_bytes)) AS written,
-    concat(toString(result_rows), ' rows / ', formatReadableSize(result_bytes)) AS result,
-    formatReadableSize(memory_usage) AS "memory usage",
-    exception,
-    '\n' || stack_trace AS stack_trace,
-    user,
-    initial_user,
-    multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
-    client_hostname,
-    ProfileEvents.Names,
-    ProfileEvents.Values,
-    Settings.Names,
-    Settings.Values
+    {% endif -%}
 FROM system.query_log
 WHERE type != 'QueryStart'
   AND event_date >= today() - 1
@@ -653,8 +527,8 @@ def main():
     client = ClickhouseClient()
     dbaas_config = DbaasConfig.load()
     ch_config = ClickhouseConfig.load()
-    version = client.query(SELECT_VERSION)
-    system_tables = [row[0] for row in client.query(SELECT_SYSTEM_TABLES, format='JSONCompact')['data']]
+    version = client.clickhouse_version
+    system_tables = [row[0] for row in execute_query(client, SELECT_SYSTEM_TABLES, format='JSONCompact')['data']]
 
     diagnostics = DiagnosticsData(args)
     diagnostics.add_string('Cluster ID', dbaas_config.cluster_id)
@@ -668,11 +542,7 @@ def main():
     diagnostics.add_string('Resource preset', format_resource_preset(dbaas_config))
     diagnostics.add_string('Storage', format_storage(dbaas_config, ch_config))
     diagnostics.add_string('Timestamp', timestamp)
-    if version_ge(version, '21.3'):
-        uptime = client.query(SELECT_UPTIME)
-    else:
-        uptime = client.query(SELECT_UPTIME_DEPRECATED)
-    diagnostics.add_string('Uptime', uptime)
+    diagnostics.add_string('Uptime', execute_query(client, SELECT_UPTIME))
 
     add_chart_urls(diagnostics, dbaas_config)
 
@@ -700,7 +570,7 @@ def main():
               section='Schema')
     add_query(diagnostics, 'Table engines',
               client=client,
-              query=SELECT_DATABASE_ENGINES,
+              query=SELECT_TABLE_ENGINES,
               format='PrettyCompactNoEscapes',
               section='Schema')
     add_query(diagnostics, 'Dictionaries',
@@ -730,59 +600,41 @@ def main():
               client=client,
               query=SELECT_PARTS_PER_TABLE,
               format='PrettyCompactNoEscapes')
-    if version_ge(version, '20.3'):
-        select_merges = SELECT_MERGES
-        select_mutations = SELECT_MUTATIONS
-        select_recent_data_parts = SELECT_RECENT_DATA_PARTS
-    else:
-        select_merges = SELECT_MERGES_DEPRECATED
-        select_mutations = SELECT_MUTATIONS_DEPRECATED
-        select_recent_data_parts = SELECT_RECENT_DATA_PARTS_DEPRECATED
     add_query(diagnostics, 'Merges in progress',
               client=client,
-              query=select_merges,
+              query=SELECT_MERGES,
               format='Vertical')
     add_query(diagnostics, 'Mutations in progress',
               client=client,
-              query=select_mutations,
+              query=SELECT_MUTATIONS,
               format='Vertical')
     add_query(diagnostics, 'Recent data parts (modification time within last 3 minutes)',
               client=client,
-              query=select_recent_data_parts,
+              query=SELECT_RECENT_DATA_PARTS,
               format='Vertical')
     add_query(diagnostics, 'Detached data parts',
               client=client,
               query=SELECT_DETACHED_DATA_PARTS,
               format='PrettyCompactNoEscapes')
 
-    if version_ge(version, '21.3'):
-        select_processes = SELECT_PROCESSES
-        select_top_queries_by_duration = SELECT_TOP_QUERIES_BY_DURATION
-        select_top_queries_by_memory_usage = SELECT_TOP_QUERIES_BY_MEMORY_USAGE
-        select_failed_queries = SELECT_FAILED_QUERIES
-    else:
-        select_processes = SELECT_PROCESSES_DEPRECATED
-        select_top_queries_by_duration = SELECT_TOP_QUERIES_BY_DURATION_DEPRECATED
-        select_top_queries_by_memory_usage = SELECT_TOP_QUERIES_BY_MEMORY_USAGE_DEPRECATED
-        select_failed_queries = SELECT_FAILED_QUERIES_DEPRECATED
     add_query(diagnostics, 'Queries in progress (process list)',
               client=client,
-              query=select_processes,
+              query=SELECT_PROCESSES,
               format='Vertical',
               section='Queries')
     add_query(diagnostics, 'Top 10 queries by duration',
               client=client,
-              query=select_top_queries_by_duration,
+              query=SELECT_TOP_QUERIES_BY_DURATION,
               format='Vertical',
               section='Queries')
     add_query(diagnostics, 'Top 10 queries by memory usage',
               client=client,
-              query=select_top_queries_by_memory_usage,
+              query=SELECT_TOP_QUERIES_BY_MEMORY_USAGE,
               format='Vertical',
               section='Queries')
     add_query(diagnostics, 'Last 10 failed queries',
               client=client,
-              query=select_failed_queries,
+              query=SELECT_FAILED_QUERIES,
               format='Vertical',
               section='Queries')
 
@@ -868,11 +720,14 @@ def add_query(diagnostics, name, client, query, format, section=None):
     diagnostics.add_query(
         name=name,
         query=query,
-        result=execute_query(client, query, format=format),
+        result=execute_query(client, query, render_query=False, format=format),
         section=section)
 
 
-def execute_query(client, query, format=None):
+def execute_query(client, query, render_query=True, format=None):
+    if render_query:
+        query = client.render_query(query)
+
     try:
         return client.query(query, format=format)
     except RequestException as e:
@@ -898,14 +753,6 @@ def execute_command(command, input=None):
         return f'failed with exit code {proc.returncode}\n{stderr.decode()}'
 
     return stdout.decode()
-
-
-def version_ge(version1, version2):
-    return parse_version(version1) > parse_version(version2)
-
-
-def parse_version(version):
-    return [int(x) for x in version.strip().split('.')]
 
 
 if __name__ == '__main__':

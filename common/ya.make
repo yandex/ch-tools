@@ -5,6 +5,7 @@ PY3_LIBRARY(ch-tools-common)
 PY_SRCS(
     clickhouse.py
     dbaas.py
+    utils.py
 )
 
 PEERDIR(
