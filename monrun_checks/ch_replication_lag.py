@@ -142,7 +142,6 @@ def filter_out_single_replica_tables(tables):
     if not tables:
         return tables
 
-    replicas = ClickhouseInfo.get_replicas()
     query = '''
         SELECT
             database,
@@ -151,13 +150,8 @@ def filter_out_single_replica_tables(tables):
         FROM system.replicas
         WHERE (database, table) IN ({tables})
         AND total_replicas > 1
-        AND zookeeper_path in (SELECT zookeeper_path
-                                FROM remote('{replicas}', system.replicas)
-                                GROUP BY zookeeper_path
-                                HAVING count() > 1)
         '''.format(
-        tables=','.join("('{0}', '{1}')".format(t['database'], t['table']) for t in tables),
-        replicas=','.join(replicas))
+        tables=','.join("('{0}', '{1}')".format(t['database'], t['table']) for t in tables))
     return ClickhouseClient().execute(query, False)
 
 
