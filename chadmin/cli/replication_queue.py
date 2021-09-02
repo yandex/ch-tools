@@ -10,12 +10,14 @@ def replication_queue_group():
 @replication_queue_group.command('list')
 @option('--failed', is_flag=True,
         help='Output only failed replication queue tasks (tasks with non-empty exception).')
+@option('--executing', is_flag=True,
+        help='Output only executing replication queue tasks.')
 @option('--type', type=Choice(['GET_PART', 'MERGE_PARTS']),
         help='Filter replication queue tasks to output by the specified type.')
 @option('-v', '--verbose', is_flag=True)
 @option('-l', '--limit')
 @pass_context
-def list_replication_queue_command(ctx, failed, type, verbose, limit):
+def list_replication_queue_command(ctx, failed, executing, type, verbose, limit):
     query = """
     SELECT
         database,
@@ -42,6 +44,9 @@ def list_replication_queue_command(ctx, failed, type, verbose, limit):
     {% if failed %}
       AND last_exception != ''
     {% endif %}
+    {% if executing %}
+      AND is_currently_executing
+    {% endif %}
     {% if type %}
       AND type = '{{ type }}'
     {% endif %}
@@ -53,6 +58,7 @@ def list_replication_queue_command(ctx, failed, type, verbose, limit):
     print(execute_query(ctx,
                         query,
                         failed=failed,
+                        executing=executing,
                         type=type,
                         verbose=verbose,
                         limit=limit,
