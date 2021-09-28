@@ -1,6 +1,6 @@
 from click import Choice, argument, group, option, pass_context
 
-from cloud.mdb.clickhouse.tools.chadmin.cli import execute_query
+from cloud.mdb.clickhouse.tools.chadmin.cli import execute_query, get_cluster_name
 
 
 @group('process')
@@ -21,15 +21,18 @@ def get_process_command(ctx, query_id):
 @option('-U', '--exclude-user')
 @option('--query')
 @option('-v', '--verbose', is_flag=True)
+@option('--cluster', '--on-cluster', 'on_cluster', is_flag=True,
+        help='Get records from all hosts in the cluster.')
 @option('--order-by', type=Choice(['elapsed', 'memory_usage']), default='elapsed')
 @option('-l', '--limit')
 @pass_context
-def list_processes_command(ctx, user, exclude_user, query, verbose, order_by, limit):
+def list_processes_command(ctx, user, exclude_user, query, verbose, on_cluster, order_by, limit):
     print(
         get_processes(ctx,
                       user=user,
                       exclude_user=exclude_user,
                       query_pattern=query,
+                      on_cluster=on_cluster,
                       limit=limit,
                       order_by=order_by,
                       verbose=verbose))
@@ -98,13 +101,18 @@ def get_processes(ctx,
                   exclude_user=None,
                   query_id=None,
                   query_pattern=None,
+                  on_cluster=None,
                   limit=None,
                   order_by='elsapsed',
                   verbose=False):
+    cluster = get_cluster_name(ctx) if on_cluster else None
     query_str = """
         SELECT
-             elapsed,
+        {% if cluster %}
+             hostName() "host",
+        {% endif %}
              query_id,
+             elapsed,
              query,
              is_cancelled,
              concat(toString(read_rows), ' rows / ', formatReadableSize(read_bytes)) "read",
@@ -125,7 +133,11 @@ def get_processes(ctx,
              Settings.Names,
              Settings.Values
         {% endif %}
+        {% if cluster %}
+        FROM clusterAllReplicas({{ cluster }}, system.processes)
+        {% else %}
         FROM system.processes
+        {% endif %}
         WHERE 1
         {% if user %}
           AND user = '{{ user }}'
@@ -152,6 +164,7 @@ def get_processes(ctx,
                          exclude_user=exclude_user,
                          query_id=query_id,
                          query_pattern=query_pattern,
+                         cluster=cluster,
                          limit=limit,
                          verbose=verbose,
                          order_by=order_by,
