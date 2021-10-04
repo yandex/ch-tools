@@ -1,5 +1,8 @@
+from collections import defaultdict
+
 from click import Choice, group, option, pass_context
-from cloud.mdb.clickhouse.tools.chadmin.cli import execute_query
+from cloud.mdb.clickhouse.tools.chadmin.cli import execute_query, get_cluster_name
+from cloud.mdb.clickhouse.tools.chadmin.internal.zookeeper import delete_zk_node
 
 
 @group('replication-queue')
@@ -8,18 +11,67 @@ def replication_queue_group():
 
 
 @replication_queue_group.command('list')
-@option('--failed', is_flag=True,
-        help='Output only failed replication queue tasks (tasks with non-empty exception).')
-@option('--executing', is_flag=True,
-        help='Output only executing replication queue tasks.')
-@option('--type', type=Choice(['GET_PART', 'MERGE_PARTS']),
-        help='Filter replication queue tasks to output by the specified type.')
+@option('--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Get records from all hosts in the cluster.')
+@option('--failed', is_flag=True, help='Output only failed replication queue tasks (tasks with non-empty exception).')
+@option('--executing', is_flag=True, help='Output only executing replication queue tasks.')
+@option(
+    '--type',
+    type=Choice(['GET_PART', 'MERGE_PARTS', 'MUTATE_PART']),
+    help='Filter replication queue tasks to output by the specified type.',
+)
+@option('--database', help='Filter replication queue tasks to output by the specified database.')
+@option('--table', help='Filter replication queue tasks to output by the specified table.')
 @option('-v', '--verbose', is_flag=True)
 @option('-l', '--limit')
 @pass_context
-def list_replication_queue_command(ctx, failed, executing, type, verbose, limit):
+def list_replication_queue_command(ctx, **kwargs):
+    print(get_replication_queue_tasks(ctx, **kwargs, format='Vertical'))
+
+
+@replication_queue_group.command('delete')
+@option(
+    '--type',
+    type=Choice(['GET_PART', 'MERGE_PARTS', 'MUTATE_PART']),
+    help='Filter replication queue tasks to delete by the specified type.',
+)
+@option('--failed', is_flag=True)
+@option('--database', help='Filter replication queue tasks to delete by the specified database.')
+@option('--table', help='Filter replication queue tasks to delete by the specified table.')
+@pass_context
+def delete_command(ctx, **kwargs):
+    tasks = get_replication_queue_tasks(ctx, **kwargs, verbose=True, format='JSON')['data']
+    for table, tasks in group_tasks_by_table(tasks).items():
+        database, table = table
+
+        for task in tasks:
+            zk_path = task['zk_path']
+            print(f'Deleting task from ZooKeeper: {zk_path}')
+            delete_zk_node(ctx, zk_path)
+
+        print(f'Restarting table `{database}`.`{table}`')
+        query = f"""SYSTEM RESTART REPLICA `{database}`.`{table}`"""
+        execute_query(ctx, query, timeout=300, echo=True, format=None)
+
+
+def get_replication_queue_tasks(
+    ctx,
+    *,
+    on_cluster=None,
+    failed=None,
+    executing=None,
+    type=None,
+    database=None,
+    table=None,
+    verbose=None,
+    limit=None,
+    format=None,
+):
+    cluster = get_cluster_name(ctx) if on_cluster else None
     query = """
     SELECT
+    {% if cluster %}
+        hostName() "host",
+    {% endif %}
         database,
         table,
         position,
@@ -36,11 +88,21 @@ def list_replication_queue_command(ctx, failed, executing, type, verbose, limit)
         last_attempt_time attempt_time,
         last_exception exception,
         concat('time: ', toString(last_postpone_time), ', number: ', toString(num_postponed), ', reason: ', postpone_reason) postpone
+    {% if cluster %}
+    FROM clusterAllReplicas({{ cluster }}, system.replication_queue)
+    {% else %}
     FROM system.replication_queue
+    {% endif %}
     {% if verbose %}
     JOIN system.replicas USING (database, table)
     {% endif %}
     WHERE 1
+    {% if database %}
+      AND database = '{{ database }}'
+    {% endif %}
+    {% if table %}
+      AND table = '{{ table }}'
+    {% endif %}
     {% if failed %}
       AND last_exception != ''
     {% endif %}
@@ -55,11 +117,23 @@ def list_replication_queue_command(ctx, failed, executing, type, verbose, limit)
     LIMIT {{ limit }}
     {% endif %}
     """
-    print(execute_query(ctx,
-                        query,
-                        failed=failed,
-                        executing=executing,
-                        type=type,
-                        verbose=verbose,
-                        limit=limit,
-                        format='Vertical'))
+    return execute_query(
+        ctx,
+        query,
+        cluster=cluster,
+        database=database,
+        table=table,
+        failed=failed,
+        executing=executing,
+        type=type,
+        verbose=verbose,
+        limit=limit,
+        format=format,
+    )
+
+
+def group_tasks_by_table(tasks):
+    result = defaultdict(list)
+    for task in tasks:
+        result[(task['database'], task['table'])].append(task)
+    return result
