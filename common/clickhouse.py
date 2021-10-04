@@ -47,7 +47,7 @@ class ClickhouseClient:
         return self._ch_version
 
     @retry(requests.exceptions.ConnectionError)
-    def query(self, query, query_args=None, format=None, post_data=None, echo=False, dry_run=False):
+    def query(self, query, query_args=None, format=None, post_data=None, timeout=None, echo=False, dry_run=False):
         """
         Execute query.
         """
@@ -56,6 +56,9 @@ class ClickhouseClient:
 
         if format:
             query += f' FORMAT {format}'
+
+        if timeout is None:
+            timeout = self._timeout
 
         if echo:
             print(sqlparse.format(query, reindent=True), '\n')
@@ -69,7 +72,7 @@ class ClickhouseClient:
                                           'query': query,
                                       },
                                       json=post_data,
-                                      timeout=self._timeout)
+                                      timeout=timeout)
 
         response.raise_for_status()
 

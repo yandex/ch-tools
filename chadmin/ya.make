@@ -24,6 +24,7 @@ PY_SRCS(
     cli/tables.py
     cli/thread_log.py
     cli/zookeeper.py
+    internal/zookeeper.py
 )
 
 PEERDIR(
