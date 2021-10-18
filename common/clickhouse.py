@@ -30,7 +30,7 @@ class ClickhouseClient:
     ClickHouse client.
     """
 
-    def __init__(self, *, host=socket.getfqdn(), port=8443, user='mdb_admin', insecure=False):
+    def __init__(self, *, host=socket.getfqdn(), port=8443, user='_admin', insecure=False):
         self._session = requests.Session()
         self._session.verify = False if insecure else '/etc/clickhouse-server/ssl/allCAs.pem'
         if user:

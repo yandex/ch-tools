@@ -48,7 +48,7 @@ class ClickhouseClient:
                 'query': query,
             } if query else {},
             headers={
-                'X-ClickHouse-User': 'mdb_monitor',
+                'X-ClickHouse-User': '_monitor',
             },
             timeout=10,
             verify=self.cert_path if port == ClickhousePort.https else None)
@@ -63,7 +63,7 @@ class ClickhouseClient:
             'clickhouse-client',
             '--host', self.host,
             '--port', self.port_settings[port],
-            '--user', 'mdb_monitor',
+            '--user', '_monitor',
         ]
         if port == ClickhousePort.tcps:
             cmd.append('--secure')
