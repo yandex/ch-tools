@@ -22,8 +22,8 @@ def get_database_command(ctx, database, active_parts):
 @option('--exclude-database')
 @option('--active-parts', is_flag=True, help='Account only active data parts.')
 @pass_context
-def list_databases_command(ctx, database, exclude_database, active_parts):
-    print(get_databases(ctx, database=database, exclude_database=exclude_database, active_parts=active_parts))
+def list_databases_command(ctx, **kwargs):
+    print(get_databases(ctx, **kwargs, format='PrettyCompact'))
 
 
 @database_group.command('delete')
