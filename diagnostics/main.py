@@ -461,6 +461,7 @@ SELECT_CRASH_LOG = r'''SELECT
     '\n' || arrayStringConcat(trace_full, '\n') AS trace,
     version
 FROM system.crash_log
+ORDER BY event_time DESC
 '''
 
 
