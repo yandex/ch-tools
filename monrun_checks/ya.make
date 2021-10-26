@@ -6,9 +6,6 @@ ALL_PY_SRCS(RECURSIVE NAMESPACE cloud.mdb.clickhouse.tools.monrun_checks)
 
 PY_MAIN(cloud.mdb.clickhouse.tools.monrun_checks.main:main)
 
-TEST_SRCS(
-
-)
 
 PEERDIR(
     contrib/python/click
