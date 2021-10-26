@@ -22,7 +22,11 @@ class Status:
             message = 'OK'
 
         # strip underscores and newlines.
-        return message.replace('_', ' ').replace('\n', '')
+        message = message.replace('_', ' ').replace('\n', '')
+        # this is for prometheus labels, see thread:
+        # https://groups.google.com/g/prometheus-users/c/kWxGNfd4dlE/m/veNLgMCLAgAJ
+        message = message.replace('"', '\'')
+        return message
 
     def set_code(self, new_code):
         """Set the code if it is greater than the current."""

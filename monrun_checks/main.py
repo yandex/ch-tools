@@ -12,12 +12,12 @@ from cloud.mdb.clickhouse.tools.monrun_checks.ch_ro_replica import ro_replica_co
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_geobase import geobase_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_log_errors import log_errors_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_ping import ping_command
+from .exceptions import translate_to_status
 
 LOG_FILE = '/var/log/clickhouse-monitoring/clickhouse-monitoring.log'
 
 
 class MonrunChecks(click.Group):
-
     def add_command(self, cmd, name=None):
         cmd_callback = cmd.callback
 
@@ -27,7 +27,8 @@ class MonrunChecks(click.Group):
             logging.basicConfig(
                 filename=LOG_FILE,
                 level=logging.DEBUG,
-                format=f'%(asctime)s %(process)-5d [%(levelname)s] {cmd.name}: %(message)s')
+                format=f'%(asctime)s %(process)-5d [%(levelname)s] {cmd.name}: %(message)s',
+            )
             logging.getLogger('urllib3.connectionpool').setLevel(logging.CRITICAL)
 
             logging.debug('Start executing')
@@ -39,13 +40,9 @@ class MonrunChecks(click.Group):
                 status.set_code(result.code)
                 if result.verbose:
                     status.add_verbose(result.verbose)
-            except UserWarning as exc:
-                code, message = exc.args
-                status.append(message)
-                status.set_code(code)
             except Exception as exc:
-                status.append(repr(exc))
-                status.set_code(1)
+                logging.exception('Got error %s', repr(exc))
+                status = translate_to_status(exc, status)
 
             log_message = f'Completed with {status.code};{status.message}'
             log_level = {0: logging.DEBUG, 1: logging.WARNING}.get(status.code, logging.ERROR)
@@ -57,10 +54,13 @@ class MonrunChecks(click.Group):
         super().add_command(cmd, name=name)
 
 
-@click.group(cls=MonrunChecks, context_settings={
-    'help_option_names': ['-h', '--help'],
-    'terminal_width': 120,
-})
+@click.group(
+    cls=MonrunChecks,
+    context_settings={
+        'help_option_names': ['-h', '--help'],
+        'terminal_width': 120,
+    },
+)
 def cli():
     pass
 

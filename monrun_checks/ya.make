@@ -2,21 +2,10 @@ OWNER(g:mdb)
 
 PY3_PROGRAM(ch-monitoring)
 
-PY_SRCS(
-    MAIN main.py
-    result.py
-    clickhouse_client.py
-    clickhouse_info.py
-    ch_replication_lag.py
-    ch_system_queues.py
-    ch_core_dumps.py
-    ch_dist_tables.py
-    ch_geobase.py
-    ch_resetup_state.py
-    ch_ro_replica.py
-    ch_log_errors.py
-    ch_ping.py
-)
+ALL_PY_SRCS(RECURSIVE NAMESPACE cloud.mdb.clickhouse.tools.monrun_checks)
+
+PY_MAIN(cloud.mdb.clickhouse.tools.monrun_checks.main:main)
+
 
 PEERDIR(
     contrib/python/click
