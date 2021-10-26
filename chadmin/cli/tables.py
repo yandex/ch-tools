@@ -23,11 +23,14 @@ def get_table_command(ctx, database, table, active_parts):
 @option('-t', '--table')
 @option('--exclude-table')
 @option('--engine')
+@option('--format', default='PrettyCompact')
 @option('--active-parts', is_flag=True, help='Account only active data parts.')
 @option('-v', '--verbose', is_flag=True)
 @pass_context
-def list_tables_command(ctx, database, table, exclude_table, engine, active_parts, verbose):
-    format = 'Vertical' if verbose else 'PrettyCompact'
+def list_tables_command(ctx, database, table, exclude_table, engine, active_parts, verbose, format):
+    if format and verbose:
+        raise Exception('You can not pass both format and verbose flag')
+    format = 'Vertical' if verbose else format
     print(
         get_tables(ctx,
                    database=database,
