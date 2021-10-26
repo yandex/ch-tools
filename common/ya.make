@@ -6,6 +6,7 @@ PY_SRCS(
     clickhouse.py
     dbaas.py
     utils.py
+    backup.py
 )
 
 PEERDIR(

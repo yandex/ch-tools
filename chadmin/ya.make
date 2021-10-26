@@ -10,6 +10,7 @@ PY_SRCS(
     cli/dictionaries.py
     cli/events.py
     cli/functions.py
+    cli/chs3_backup.py
     cli/macros.py
     cli/metrics.py
     cli/mutations.py
