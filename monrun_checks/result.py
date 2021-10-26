@@ -25,7 +25,7 @@ class Status:
         message = message.replace('_', ' ').replace('\n', '')
         # this is for prometheus labels, see thread:
         # https://groups.google.com/g/prometheus-users/c/kWxGNfd4dlE/m/veNLgMCLAgAJ
-        message = message.replace('"', '')
+        message = message.replace('"', '\'')
         return message
 
     def set_code(self, new_code):
