@@ -22,7 +22,7 @@ def partition_group():
 @pass_context
 def list_partitions_command(ctx, **kwargs):
     """List partitions."""
-    print(get_partitions(ctx, **kwargs))
+    print(get_partitions(ctx, format='PrettyCompact', **kwargs))
 
 
 @partition_group.command(name='attach')
