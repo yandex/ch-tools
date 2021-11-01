@@ -613,10 +613,15 @@ def main():
               client=client,
               query=SELECT_RECENT_DATA_PARTS,
               format='Vertical')
-    add_query(diagnostics, 'Detached data parts',
+
+    add_query(diagnostics, 'system.detached_parts',
               client=client,
               query=SELECT_DETACHED_DATA_PARTS,
-              format='PrettyCompactNoEscapes')
+              format='PrettyCompactNoEscapes',
+              section='Detached data')
+    add_command(diagnostics, 'Disk space usage',
+                command='du -sh -L -c /var/lib/clickhouse/data/*/*/detached/* | sort -rsh',
+                section='Detached data')
 
     add_query(diagnostics, 'Queries in progress (process list)',
               client=client,
@@ -735,11 +740,12 @@ def execute_query(client, query, render_query=True, format=None):
         return repr(e) if e.response is None else e.response.text
 
 
-def add_command(diagnostics, name, command):
+def add_command(diagnostics, name, command, section=None):
     diagnostics.add_command(
         name=name,
         command=command,
-        result=execute_command(command))
+        result=execute_command(command),
+        section=section)
 
 
 def execute_command(command, input=None):
