@@ -4,6 +4,7 @@ import logging
 from click import Choice, group, option, pass_context
 
 from cloud.mdb.clickhouse.tools.chadmin.cli.async_metrics import list_async_metrics_command
+from cloud.mdb.clickhouse.tools.chadmin.cli.crash_log import crash_log_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.databases import database_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.system import system_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.dictionaries import list_dictionaries_command
@@ -48,6 +49,7 @@ cli.add_command(mutation_group)
 cli.add_command(query_log_group)
 cli.add_command(thread_log_group)
 cli.add_command(part_log_group)
+cli.add_command(crash_log_group)
 cli.add_command(process_group)
 cli.add_command(replication_queue_group)
 cli.add_command(list_settings_command)
