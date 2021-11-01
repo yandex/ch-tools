@@ -115,12 +115,10 @@ def create_network(context: ContextT) -> None:
     # Do not create new network if there is an another net with the same name.
     if DOCKER_API.networks.list(names=f'^{net_name}$'):
         return
-    ip_subnet_pool = docker.types.IPAMConfig(
-        pool_configs=[
-            docker.types.IPAMPool(subnet=_generate_ipv4_subnet()),
-            # docker.types.IPAMPool(subnet=_generate_ipv6_subnet()),
-        ]
-    )
+    ip_subnet_pool = docker.types.IPAMConfig(pool_configs=[
+        docker.types.IPAMPool(subnet=_generate_ipv4_subnet()),
+        # docker.types.IPAMPool(subnet=_generate_ipv6_subnet()),
+    ])
     net_opts = {
         'com.docker.network.bridge.enable_ip_masquerade': 'true',
         'com.docker.network.bridge.enable_icc': 'true',
