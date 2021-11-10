@@ -24,21 +24,25 @@ def list_backups(ctx, orphaned):
 
 
 def get_tables_dict(ctx):
-    tables_output = get_tables(ctx, database=None, format='JSON')
+    tables_output = get_tables(ctx, database=None, format='JSON', engine='%MergeTree%')
     tables_output_dict = tables_output
-    return [{'database': item['database'], 'table': item['table']} for item in tables_output_dict['data']]
+    return [{
+        'database': item['database'],
+        'table': item['table']
+    } for item in tables_output_dict['data']]
 
 
 def clear_empty_backup(orphaned_chs3_backup):
     backup_directory = os.path.join(backups_directory, orphaned_chs3_backup)
     backup_contents = os.listdir(backup_directory)
     clear_empty_directories_recursively(backup_directory)
-    if len(os.listdir(backup_directory)) == 1 and 'revision.txt' in backup_contents:
+    if len(os.listdir(
+            backup_directory)) == 1 and 'revision.txt' in backup_contents:
         os.remove(os.path.join(backup_directory, 'revision.txt'))
         os.rmdir(backup_directory)
 
 
-FREEZE_TABLE_SQL = strip_query("""
+UNFREEZE_TABLE_SQL = strip_query("""
     ALTER TABLE `{db_name}`.`{table_name}`
     UNFREEZE WITH NAME '{backup_name}'
 """)
@@ -48,8 +52,10 @@ def cleanup(ctx, orphaned_chs3_backups: [str], tables: [str], dry_run=True):
     for orphaned_chs3_backup in orphaned_chs3_backups:
         print(f'Removing backup: {orphaned_chs3_backup}')
         for table in tables:
-            query = FREEZE_TABLE_SQL.format(
-                db_name=table['database'], table_name=table['table'], backup_name=orphaned_chs3_backup)
+            query = UNFREEZE_TABLE_SQL.format(
+                db_name=table['database'],
+                table_name=table['table'],
+                backup_name=orphaned_chs3_backup)
             print(query)
             execute_query(ctx, query, dry_run=dry_run)
             if not dry_run:
