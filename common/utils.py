@@ -26,9 +26,12 @@ def strip_query(query_text: str) -> str:
 
 
 def clear_empty_directories_recursively(directory):
-    directory = Path(directory)
-    for item in directory.iterdir():
-        if item.is_dir():
-            clear_empty_directories_recursively(item)
-    if len(os.listdir(directory)) == 0:
-        directory.rmdir()
+    try:
+        directory = Path(directory)
+        for item in directory.iterdir():
+            if item.is_dir():
+                clear_empty_directories_recursively(item)
+        if len(os.listdir(directory)) == 0:
+            directory.rmdir()
+    except FileNotFoundError:
+        print(f'Tried to remove directory {directory}, but the error arised. Maybe it was already removed.')

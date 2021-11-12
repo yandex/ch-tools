@@ -1,4 +1,5 @@
 import os
+import requests
 from click import group, option, pass_context
 
 from cloud.mdb.clickhouse.tools.common.utils import strip_query, clear_empty_directories_recursively
@@ -34,12 +35,16 @@ def get_tables_dict(ctx):
 
 def clear_empty_backup(orphaned_chs3_backup):
     backup_directory = os.path.join(backups_directory, orphaned_chs3_backup)
-    backup_contents = os.listdir(backup_directory)
-    clear_empty_directories_recursively(backup_directory)
-    if len(os.listdir(
-            backup_directory)) == 1 and 'revision.txt' in backup_contents:
-        os.remove(os.path.join(backup_directory, 'revision.txt'))
-        os.rmdir(backup_directory)
+    try:
+        backup_contents = os.listdir(backup_directory)
+        clear_empty_directories_recursively(backup_directory)
+        if len(os.listdir(
+                backup_directory)) == 1 and 'revision.txt' in backup_contents:
+            os.remove(os.path.join(backup_directory, 'revision.txt'))
+            os.rmdir(backup_directory)
+    except FileNotFoundError:
+        print(f"Cannot remove backup directory {backup_directory} as it doesn`t exist. "
+              f"Maybe it was already removed.")
 
 
 UNFREEZE_TABLE_SQL = strip_query("""
@@ -57,9 +62,12 @@ def cleanup(ctx, orphaned_chs3_backups: [str], tables: [str], dry_run=True):
                 table_name=table['table'],
                 backup_name=orphaned_chs3_backup)
             print(query)
-            execute_query(ctx, query, dry_run=dry_run)
-            if not dry_run:
-                clear_empty_backup(orphaned_chs3_backup)
+            try:
+                execute_query(ctx, query, dry_run=dry_run)
+            except requests.exceptions.HTTPError:
+                print(f"Can't unfreeze table {table} in backup {orphaned_chs3_backup}. Maybe it was deleted.")
+        if not dry_run:
+            clear_empty_backup(orphaned_chs3_backup)
 
 
 @chs3_backup_group.command('cleanup')
