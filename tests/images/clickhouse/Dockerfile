@@ -77,3 +77,5 @@ COPY images/clickhouse/config/users.xml /etc/clickhouse-server/users.xml
 EXPOSE 8123 8443 9000 9440
 
 CMD ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]
+
+RUN groupadd monitor && useradd -g monitor -G monitor,clickhouse monitor

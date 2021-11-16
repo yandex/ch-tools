@@ -1,6 +1,10 @@
 import logging
 from functools import wraps
 import click
+import getpass
+import sys
+import os
+import pwd
 
 from cloud.mdb.clickhouse.tools.monrun_checks.result import Status
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_replication_lag import replication_lag_command
@@ -15,6 +19,7 @@ from cloud.mdb.clickhouse.tools.monrun_checks.ch_ping import ping_command
 from .exceptions import translate_to_status
 
 LOG_FILE = '/var/log/clickhouse-monitoring/clickhouse-monitoring.log'
+DEFAULT_USER = 'monitor'
 
 
 class MonrunChecks(click.Group):
@@ -61,7 +66,10 @@ class MonrunChecks(click.Group):
         'terminal_width': 120,
     },
 )
-def cli():
+@click.option('--no-user-check', 'no_user_check', is_flag=True, default=False, help="Do not check current user.")
+def cli(no_user_check):
+    if not no_user_check:
+        check_current_user()
     pass
 
 
@@ -78,3 +86,25 @@ cli.add_command(ping_command)
 
 def main():
     cli()
+
+
+def check_current_user():
+    user = getpass.getuser()
+    if user != DEFAULT_USER:
+        if os.geteuid() != 0:
+            print(f'Wrong current user: {user}', file=sys.stderr)
+            sys.exit(1)
+        else:
+            try:
+                pw = pwd.getpwnam(DEFAULT_USER)
+                if os.path.isfile(LOG_FILE):
+                    os.chown(LOG_FILE, pw.pw_uid, pw.pw_gid)
+                groups = os.getgrouplist(DEFAULT_USER, pw.pw_gid)
+                os.setgroups(groups)
+                os.setgid(pw.pw_gid)
+                os.setegid(pw.pw_gid)
+                os.setuid(pw.pw_uid)
+                os.seteuid(pw.pw_uid)
+            except Exception as exc:
+                print(repr(exc), file=sys.stderr)
+                sys.exit(1)
