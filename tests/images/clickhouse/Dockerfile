@@ -78,4 +78,12 @@ EXPOSE 8123 8443 9000 9440
 
 CMD ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]
 
-RUN groupadd monitor && useradd -g monitor -G monitor,clickhouse monitor
+RUN groupadd monitor && useradd -g monitor -G monitor,clickhouse monitor && \
+    chown monitor:monitor -R /var/log/clickhouse-monitoring && \
+    chmod 755 /var/lib/clickhouse && \
+    chmod 777 /etc && \
+    chmod 755 /etc/clickhouse-server && \
+    chmod 750 /etc/clickhouse-server/ssl && \
+    chmod 640 /etc/clickhouse-server/ssl/server.crt && \
+    chmod 640 /etc/clickhouse-server/ssl/allCAs.pem
+
