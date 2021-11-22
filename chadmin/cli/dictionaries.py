@@ -8,7 +8,7 @@ from cloud.mdb.clickhouse.tools.chadmin.cli import execute_query
 @pass_context
 def list_dictionaries_command(ctx, verbose):
     if not verbose:
-        fields = 'name'
+        fields = 'name, status, type, source'
         format = 'PrettyCompact'
     else:
         fields = '*'
