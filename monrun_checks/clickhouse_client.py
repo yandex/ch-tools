@@ -5,6 +5,8 @@ import json
 import xml.etree.ElementTree as xml
 from enum import Enum
 
+from cloud.mdb.clickhouse.tools.monrun_checks.exceptions import die
+
 
 class ClickhousePort(Enum):
     https = 4
@@ -69,7 +71,7 @@ class ClickhouseClient:
             cmd.append('--secure')
 
         if not query:
-            self.__die(1, "Can't send empty query in tcp(s) port")
+            die(1, "Can't send empty query in tcp(s) port")
 
         proc = subprocess.Popen(
             cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -87,7 +89,7 @@ class ClickhouseClient:
                 if self.check_port(port):
                     break
             if port == ClickhousePort.auto:
-                self.__die(2, 'Can\'t find any port in clickhouse-server config')
+                die(2, 'Can\'t find any port in clickhouse-server config')
         if query:
             format = 'JSON'
             if compact:
@@ -120,18 +122,15 @@ class ClickhouseClient:
                     result[ClickhousePortHelper.get(setting)] = node.text
             self.port_settings = result
             if not result:
-                self.__die(2, 'Can\'t find any port in clickhouse-server config')
+                die(2, 'Can\'t find any port in clickhouse-server config')
             node = root.find('./openSSL/server/caConfig')
             if node is not None:
                 self.cert_path = node.text
 
         except FileNotFoundError as e:
-            self.__die(2, f'clickhouse-server config not found: {e.filename}')
+            die(2, f'clickhouse-server config not found: {e.filename}')
 
         except Exception as e:
-            self.__die(2, f'Failed to parse clickhouse-server config: {e}')
+            die(2, f'Failed to parse clickhouse-server config: {e}')
 
         return result
-
-    def __die(self, status, message):
-        raise UserWarning(status, message)

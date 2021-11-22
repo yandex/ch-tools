@@ -3,7 +3,7 @@ import requests
 from click import group, option, pass_context
 
 from cloud.mdb.clickhouse.tools.common.utils import strip_query, clear_empty_directories_recursively
-from cloud.mdb.clickhouse.tools.common.backup import get_orphaned_chs3_backups, get_chs3_backups, backups_directory
+from cloud.mdb.clickhouse.tools.common.backup import get_orphaned_chs3_backups, get_chs3_backups, CHS3_BACKUPS_DIRECTORY
 
 from cloud.mdb.clickhouse.tools.chadmin.cli import execute_query
 from cloud.mdb.clickhouse.tools.chadmin.cli.tables import get_tables
@@ -34,7 +34,7 @@ def get_tables_dict(ctx):
 
 
 def clear_empty_backup(orphaned_chs3_backup):
-    backup_directory = os.path.join(backups_directory, orphaned_chs3_backup)
+    backup_directory = os.path.join(CHS3_BACKUPS_DIRECTORY, orphaned_chs3_backup)
     try:
         backup_contents = os.listdir(backup_directory)
         clear_empty_directories_recursively(backup_directory)

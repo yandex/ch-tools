@@ -6,6 +6,7 @@ import requests
 import subprocess
 import psutil
 
+from cloud.mdb.clickhouse.tools.monrun_checks.exceptions import die
 from cloud.mdb.clickhouse.tools.monrun_checks.result import Result
 
 
@@ -82,7 +83,3 @@ def request(host, port, ssl, ca_bundle, query=None):
         return r.status_code == 200 and r.text.strip() == 'Ok.'
     except Exception:
         die(0, 'OK')
-
-
-def die(status, message):
-    raise UserWarning(status, message)

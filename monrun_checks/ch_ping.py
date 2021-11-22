@@ -12,7 +12,7 @@ from cloud.mdb.clickhouse.tools.monrun_checks.result import Result
 @click.option('-w', '--warning', 'warn', type=int, default=2, help='Warning threshold.')
 def ping_command(number, crit, warn):
     """
-    Ping all available clickhouse ports.
+    Ping all available ClickHouse ports.
     """
     ch_client = ClickhouseClient()
 

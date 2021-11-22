@@ -16,6 +16,7 @@ from cloud.mdb.clickhouse.tools.monrun_checks.ch_ro_replica import ro_replica_co
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_geobase import geobase_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_log_errors import log_errors_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_ping import ping_command
+from .ch_backup import backup_command
 from .exceptions import translate_to_status
 
 LOG_FILE = '/var/log/clickhouse-monitoring/clickhouse-monitoring.log'
@@ -41,12 +42,14 @@ class MonrunChecks(click.Group):
             status = Status()
             try:
                 result = ctx.invoke(cmd_callback, *args, **kwargs)
-                status.append(result.message)
-                status.set_code(result.code)
-                if result.verbose:
-                    status.add_verbose(result.verbose)
+                if result:
+                    status.append(result.message)
+                    status.set_code(result.code)
+                    if result.verbose:
+                        status.add_verbose(result.verbose)
             except Exception as exc:
-                logging.exception('Got error %s', repr(exc))
+                if not isinstance(exc, UserWarning):
+                    logging.exception('Got error %s', repr(exc))
                 status = translate_to_status(exc, status)
 
             log_message = f'Completed with {status.code};{status.message}'
@@ -82,6 +85,7 @@ cli.add_command(ro_replica_command)
 cli.add_command(geobase_command)
 cli.add_command(log_errors_command)
 cli.add_command(ping_command)
+cli.add_command(backup_command)
 
 
 def main():
