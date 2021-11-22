@@ -40,3 +40,7 @@ def translate_to_status(exc: Exception, status: Status) -> Status:
     if exc.__class__ in EXC_MAP:
         handler = EXC_MAP[exc.__class__]  # type: ignore
     return handler(exc, status)
+
+
+def die(status_code: int, message: str) -> None:
+    raise UserWarning(status_code, message)

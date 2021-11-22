@@ -1,7 +1,32 @@
 import subprocess
 import os
+from datetime import timedelta
 
-backups_directory = '/var/lib/clickhouse/disks/object_storage/shadow/'
+import yaml
+
+CHS3_BACKUPS_DIRECTORY = '/var/lib/clickhouse/disks/object_storage/shadow/'
+
+
+class BackupConfig:
+    """
+    Configuration of ch-backup tool.
+    """
+
+    def __init__(self, config):
+        self._config = config
+
+    @property
+    def deduplication_age_limit(self):
+        return timedelta(**self._config['backup']['deduplication_age_limit'])
+
+    @property
+    def retain_count(self):
+        return self._config['backup']['retain_count']
+
+    @staticmethod
+    def load():
+        with open('/etc/yandex/ch-backup/ch-backup.conf', 'r') as file:
+            return BackupConfig(yaml.safe_load(file))
 
 
 def get_backups() -> [str]:
@@ -16,8 +41,8 @@ def get_backups() -> [str]:
 
 
 def get_chs3_backups() -> [str]:
-    if os.path.exists(backups_directory):
-        return os.listdir(backups_directory)
+    if os.path.exists(CHS3_BACKUPS_DIRECTORY):
+        return os.listdir(CHS3_BACKUPS_DIRECTORY)
     else:
         return []
 

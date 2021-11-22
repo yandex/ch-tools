@@ -8,6 +8,8 @@ PY_MAIN(cloud.mdb.clickhouse.tools.monrun_checks.main:main)
 
 
 PEERDIR(
+    cloud/mdb/clickhouse/tools/common
+
     contrib/python/click
     contrib/python/requests
     contrib/python/PyYAML
