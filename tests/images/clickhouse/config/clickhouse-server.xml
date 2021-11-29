@@ -37,6 +37,34 @@
          </node>
          <session_timeout_ms>3000</session_timeout_ms>
     </zookeeper>
+    <storage_configuration>
+        <disks>
+            <default />
+            <object_storage>
+                <type>s3</type>
+                <endpoint>{{ conf.s3.endpoint }}/root/data/</endpoint>
+                <access_key_id>{{ conf.s3.access_key_id }}</access_key_id>
+                <secret_access_key>{{ conf.s3.access_secret_key }}</secret_access_key>
+                <send_metadata>true</send_metadata>
+            </object_storage>
+        </disks>
+        <policies>
+            <default>
+                <volumes>
+                    <default>
+                        <disk>default</disk>
+                    </default>
+                </volumes>
+            </default>
+            <object_storage>
+                <volumes>
+                    <object_storage>
+                        <disk>object_storage</disk>
+                    </object_storage>
+                </volumes>
+            </object_storage>
+        </policies>
+    </storage_configuration>
     <macros>
         <replica>{{ instance_name }}.{{ conf.network_name }}</replica>
     </macros>

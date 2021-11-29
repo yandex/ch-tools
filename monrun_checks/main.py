@@ -16,6 +16,7 @@ from cloud.mdb.clickhouse.tools.monrun_checks.ch_ro_replica import ro_replica_co
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_geobase import geobase_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_log_errors import log_errors_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_ping import ping_command
+from cloud.mdb.clickhouse.tools.monrun_checks.ch_s3_backup_orphaned import orphaned_backups_command
 from .ch_backup import backup_command
 from .exceptions import translate_to_status
 
@@ -86,6 +87,7 @@ cli.add_command(geobase_command)
 cli.add_command(log_errors_command)
 cli.add_command(ping_command)
 cli.add_command(backup_command)
+cli.add_command(orphaned_backups_command)
 
 
 def main():

@@ -2,6 +2,7 @@ Feature: ch-monitorung tool
 
   Background:
     Given default configuration
+    And a working s3
     And a working zookeeper
     And a working clickhouse on clickhouse01
     And a working clickhouse on clickhouse02
@@ -17,6 +18,9 @@ Feature: ch-monitorung tool
     ENGINE = Distributed('cluster', 'test', 'table_01', n);
 
     INSERT INTO test.dtable_01 (n) SELECT number FROM system.numbers LIMIT 10;
+
+    CREATE TABLE test.test_unfreeze (id int, name String) ENGINE=MergeTree() ORDER BY id SETTINGS storage_policy='object_storage';
+    INSERT INTO test.test_unfreeze VALUES(5, 'hello');
     """
 
   Scenario: Check Readonly replica
@@ -258,3 +262,26 @@ Feature: ch-monitorung tool
     """
     2;ClickHouse is dead
     """
+
+  @require_version_21.3
+  Scenario: Check Orphaned Backups
+     When we execute command on clickhouse01
+     """
+     ch-monitoring orphaned-backups
+     """
+     Then we get response
+     """
+     0;OK
+     """
+     When we execute query on clickhouse01
+     """
+     ALTER TABLE test.test_unfreeze FREEZE;
+     """
+     And we execute command on clickhouse01
+     """
+     ch-monitoring orphaned-backups
+     """
+     Then we get response contains
+     """
+     1;There are 1 orphaned S3 backups
+     """

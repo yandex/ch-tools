@@ -15,6 +15,7 @@ PEERDIR(
     contrib/python/PyYAML
     contrib/python/psutil
     contrib/python/tabulate
+    cloud/mdb/clickhouse/tools/common
 )
 
 END()
