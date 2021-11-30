@@ -1,0 +1,1 @@
+monitor ALL=NOPASSWD: /usr/bin/ch-backup list *

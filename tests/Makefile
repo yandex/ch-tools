@@ -2,7 +2,7 @@ VERSION=1.0
 SESSION_FILE=.session_conf.sav
 
 export PYTHONIOENCODING?=utf8
-export CLICKHOUSE_VERSION?=19.17.9.60
+export CLICKHOUSE_VERSION?=21.11.4.14
 
 ENV=env -i \
     PATH=venv/bin:$$PATH \

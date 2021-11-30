@@ -31,7 +31,7 @@ class BackupConfig:
 
 def get_backups() -> [str]:
     result = []
-    ch_backup_process = ['ch-backup', 'list', '-a']
+    ch_backup_process = ['sudo', 'ch-backup', 'list', '-a']
     output = subprocess.run(ch_backup_process, stdout=subprocess.PIPE, universal_newlines=True)
     for index, line in enumerate(output.stdout.split('\n')):
         line = line.strip()

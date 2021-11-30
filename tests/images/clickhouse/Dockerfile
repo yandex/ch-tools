@@ -73,6 +73,7 @@ RUN mkdir -p /etc/clickhouse-server/ssl && \
     chown -R clickhouse:clickhouse /etc/clickhouse-server/ /usr/bin/clickhouse
 
 COPY images/clickhouse/config/users.xml /etc/clickhouse-server/users.xml
+COPY images/clickhouse/config/monitor-ch-backup /etc/sudoers.d/monitor-ch-backup
 
 EXPOSE 8123 8443 9000 9440
 
