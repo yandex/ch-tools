@@ -15,18 +15,14 @@ def query_log_group():
 @option('--max-date')
 @option('--min-time')
 @option('--max-time')
+@option('--cluster', '--on-cluster', 'on_cluster', is_flag=True,
+        help='Search for log record on all hosts of the cluster.')
 @pass_context
-def get_query_command(ctx, query_id, date, min_date, max_date, min_time, max_time):
+def get_query_command(ctx, query_id, date, min_date, max_date, **kwargs):
     min_date = min_date or date
     max_date = max_date or date
-    print(
-        get_queries(ctx,
-                    query_id=query_id,
-                    min_date=min_date,
-                    max_date=max_date,
-                    min_time=min_time,
-                    max_time=max_time,
-                    verbose=True))
+    result = get_queries(ctx, query_id=query_id, min_date=min_date, max_date=max_date, verbose=True, **kwargs)
+    print(result)
 
 
 @query_log_group.command('list')
