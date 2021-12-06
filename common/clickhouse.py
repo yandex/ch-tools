@@ -1,4 +1,5 @@
 import logging
+import re
 import socket
 from typing import MutableMapping
 
@@ -23,6 +24,16 @@ def retry(exception_types, max_attempts=5, max_interval=5):
         wait=tenacity.wait_random_exponential(multiplier=0.5, max=max_interval),
         stop=tenacity.stop_after_attempt(max_attempts),
         reraise=True)
+
+
+class ClickhouseError(Exception):
+    """
+    ClickHouse interaction error.
+    """
+    def __init__(self, query, response):
+        self.query = re.sub(r'\s*\n\s*', ' ', query.strip())
+        self.response = response
+        super().__init__(f'{self.response.text.strip()}\n\nQuery: {self.query}')
 
 
 class ClickhouseClient:
@@ -67,19 +78,22 @@ class ClickhouseClient:
             return None
 
         logging.debug('Executing query: %s', query)
-        response = self._session.post(self._url,
-                                      params={
-                                          'query': query,
-                                      },
-                                      json=post_data,
-                                      timeout=timeout)
+        try:
+            response = self._session.post(self._url,
+                                          params={
+                                              'query': query,
+                                          },
+                                          json=post_data,
+                                          timeout=timeout)
 
-        response.raise_for_status()
+            response.raise_for_status()
 
-        if format in ('JSON', 'JSONCompact'):
-            return response.json()
+            if format in ('JSON', 'JSONCompact'):
+                return response.json()
 
-        return response.text.strip()
+            return response.text.strip()
+        except requests.exceptions.HTTPError as e:
+            raise ClickhouseError(query, e.response) from None
 
     def render_query(self, query, **kwargs):
         env = Environment()
