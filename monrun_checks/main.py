@@ -74,7 +74,6 @@ class MonrunChecks(click.Group):
 def cli(no_user_check):
     if not no_user_check:
         check_current_user()
-    pass
 
 
 cli.add_command(replication_lag_command)
