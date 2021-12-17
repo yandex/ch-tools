@@ -3,6 +3,7 @@ import gzip
 import json
 import subprocess
 import sys
+import io
 from datetime import datetime, timezone
 
 import yaml
@@ -466,8 +467,9 @@ ORDER BY event_time DESC
 
 
 class DiagnosticsData:
-    def __init__(self, args):
+    def __init__(self, args, host):
         self.args = args
+        self.host = host
         self._sections = [{'section': None, 'data': {}}]
 
     def add_string(self, name, value, section=None):
@@ -504,9 +506,11 @@ class DiagnosticsData:
 
     def dump(self, format):
         if format.startswith('json'):
-            result = json.dumps(self._sections, indent=2, ensure_ascii=False)
+            result = self._dump_json()
+        elif format.startswith('yaml'):
+            result = self._dump_yaml()
         else:
-            result = yaml.dump(self._sections, default_flow_style=False, allow_unicode=True)
+            result = self._dump_wiki()
 
         if format.endswith('.gz'):
             compressor = gzip.GzipFile(mode='wb', fileobj=sys.stdout.buffer)
@@ -520,6 +524,115 @@ class DiagnosticsData:
 
         return self._sections[-1]['data']
 
+    def _dump_json(self):
+        """
+        Dump diagnostic data in JSON format.
+        """
+        return json.dumps(self._sections, indent=2, ensure_ascii=False)
+
+    def _dump_yaml(self):
+        """
+        Dump diagnostic data in YAML format.
+        """
+        return yaml.dump(self._sections, default_flow_style=False, allow_unicode=True)
+
+    def _dump_wiki(self):
+        """
+        Dump diagnostic data in Yandex wiki format.
+        """
+        def _write_title(buffer, value):
+            buffer.write(f'===+ {value}\n')
+
+        def _write_subtitle(buffer, value):
+            buffer.write(f'====+ {value}\n')
+
+        def _write_string_item(buffer, name, item):
+            value = item['value']
+            if value != '':
+                value = f'**{value}**'
+            buffer.write(f'{name}: {value}\n')
+
+        def _write_url_item(buffer, name, item):
+            value = item['value']
+            buffer.write(f'**{name}**\n{value}\n')
+
+        def _write_xml_item(buffer, section_name, name, item):
+            if section_name:
+                buffer.write(f'=====+ {name}\n')
+            else:
+                _write_subtitle(buffer, name)
+
+            _write_result(buffer, item['value'], format='XML')
+
+        def _write_query_item(buffer, section_name, name, item):
+            if section_name:
+                buffer.write(f'=====+ {name}\n')
+            else:
+                _write_subtitle(buffer, name)
+
+            _write_query(buffer, item['query'])
+            _write_result(buffer, item['result'])
+
+        def _write_command_item(buffer, section_name, name, item):
+            if section_name:
+                buffer.write(f'=====+ {name}\n')
+            else:
+                _write_subtitle(buffer, name)
+
+            _write_command(buffer, item['command'])
+            _write_result(buffer, item['result'])
+
+        def _write_unknown_item(buffer, section_name, name, item):
+            if section_name:
+                buffer.write(f'**{name}**\n')
+            else:
+                _write_subtitle(buffer, name)
+
+            json.dump(item, buffer, indent=2)
+
+        def _write_query(buffer, query):
+            buffer.write('<{ query\n')
+            buffer.write('%%(SQL)\n')
+            buffer.write(query)
+            buffer.write('\n%%\n')
+            buffer.write('}>\n\n')
+
+        def _write_command(buffer, command):
+            buffer.write('<{ command\n')
+            buffer.write('%%\n')
+            buffer.write(command)
+            buffer.write('\n%%\n')
+            buffer.write('}>\n\n')
+
+        def _write_result(buffer, result, format=None):
+            buffer.write(f'%%({format})\n' if format else '%%\n')
+            buffer.write(result)
+            buffer.write('\n%%\n')
+
+        buffer = io.StringIO()
+
+        _write_title(buffer, f'Diagnostics data for host {self.host}')
+        for section in self._sections:
+            section_name = section['section']
+            if section_name:
+                _write_subtitle(buffer, section_name)
+
+            for name, item in section['data'].items():
+                if item['type'] == 'string':
+                    _write_string_item(buffer, name, item)
+                elif item['type'] == 'url':
+                    _write_url_item(buffer, name, item)
+                elif item['type'] == 'query':
+                    _write_query_item(buffer, section_name, name, item)
+                elif item['type'] == 'command':
+                    _write_command_item(buffer, section_name, name, item)
+                elif item['type'] == 'xml':
+                    _write_xml_item(buffer, section_name, name, item)
+                else:
+                    _write_unknown_item(buffer, section_name, name, item)
+
+        return buffer.getvalue()
+
 
 def main():
     args = parse_args()
@@ -531,7 +644,7 @@ def main():
     version = client.clickhouse_version
     system_tables = [row[0] for row in execute_query(client, SELECT_SYSTEM_TABLES, format='JSONCompact')['data']]
 
-    diagnostics = DiagnosticsData(args)
+    diagnostics = DiagnosticsData(args, dbaas_config.fqdn)
     diagnostics.add_string('Cluster ID', dbaas_config.cluster_id)
     diagnostics.add_string('Cluster name', dbaas_config.cluster_name)
     diagnostics.add_string('Version', version)
@@ -541,11 +654,13 @@ def main():
     diagnostics.add_string('Host count', dbaas_config.host_count)
     diagnostics.add_string('Virtualization', dbaas_config.vtype)
     diagnostics.add_string('Resource preset', format_resource_preset(dbaas_config))
-    diagnostics.add_string('Storage', format_storage(dbaas_config, ch_config))
+    if args.full:
+        diagnostics.add_string('Storage', format_storage(dbaas_config, ch_config))
     diagnostics.add_string('Timestamp', timestamp)
     diagnostics.add_string('Uptime', execute_query(client, SELECT_UPTIME))
 
-    add_chart_urls(diagnostics, dbaas_config)
+    if args.full:
+        add_chart_urls(diagnostics, dbaas_config)
 
     diagnostics.add_xml_document('ClickHouse configuration', ch_config.dump())
 
@@ -655,7 +770,8 @@ def main():
                   query=SELECT_CRASH_LOG,
                   format='Vertical')
 
-    add_command(diagnostics, 'monrun', r'monrun | sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2})?)?[mGK]//g"')
+    if args.full:
+        add_command(diagnostics, 'monrun', r'monrun | sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2})?)?[mGK]//g"')
 
     add_command(diagnostics, 'lsof', 'lsof -p $(pidof clickhouse-server)')
 
@@ -668,9 +784,12 @@ def parse_args():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('--format',
-                        choices=['json', 'yaml', 'json.gz', 'yaml.gz'],
-                        default='json')
+                        choices=['json', 'yaml', 'json.gz', 'yaml.gz', 'wiki', 'wiki.gz'],
+                        default='wiki')
     parser.add_argument('--normalize-queries',
+                        action='store_true',
+                        default=False)
+    parser.add_argument('--full',
                         action='store_true',
                         default=False)
     return parser.parse_args()
