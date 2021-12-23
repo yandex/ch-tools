@@ -5,6 +5,7 @@ Check ClickHouse backups: its state, age and count.
 import json
 import subprocess
 from datetime import datetime, timedelta, timezone
+from os.path import exists
 
 import click
 
@@ -12,6 +13,8 @@ from cloud.mdb.clickhouse.tools.common.backup import BackupConfig
 from cloud.mdb.clickhouse.tools.monrun_checks.exceptions import die
 
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S %z'
+RESTORE_CONTEXT_PATH = '/tmp/ch_backup_restore_state.json'
+FAILED_PARTS_THRESHOLD = 10
 
 
 @click.command('backup')
@@ -19,6 +22,7 @@ def backup_command():
     """
     Check ClickHouse backups: its state, age and count.
     """
+    check_restored_parts()
     backup_config = BackupConfig.load()
     backups = get_backups()
 
@@ -99,6 +103,25 @@ def check_backup_count(config: BackupConfig, backups: list) -> None:
     count = len(backups)
     if count > max_count:
         die(1, f'Too many backups exist: {count} > {max_count}')
+
+
+def check_restored_parts() -> None:
+    """
+    Check count of failed parts on restore
+    """
+    if exists(RESTORE_CONTEXT_PATH):
+        with open(RESTORE_CONTEXT_PATH, 'r') as f:
+            context = json.load(f)
+            failed = sum(
+                sum(len(table) for table in tables.values())
+                for tables in context.get('failed', {}).get('failed_parts', {}).values()
+            )
+            restored = sum(sum(len(table) for table in tables.values()) for tables in context['databases'].values())
+            if failed == 0:
+                return
+            failed_percent = int((failed / (failed + restored)) * 100)
+            die(1 if failed_percent < FAILED_PARTS_THRESHOLD else 2,
+                f'Some parts restore failed: {failed}({failed_percent}%)')
 
 
 def get_backups():

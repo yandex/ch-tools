@@ -148,7 +148,7 @@
                 "path": "/var/log/clickhouse-monitoring",
                 "attributes": {
                     "mode": {
-                        "value": 775
+                        "value": "775"
                     }
                 }
             }

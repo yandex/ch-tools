@@ -1,4 +1,4 @@
-Feature: ch-monitorung tool
+Feature: ch-monitoring tool
 
   Background:
     Given default configuration
@@ -265,23 +265,87 @@ Feature: ch-monitorung tool
 
   @require_version_21.3
   Scenario: Check Orphaned Backups
-     When we execute command on clickhouse01
+    When we execute command on clickhouse01
      """
      ch-monitoring orphaned-backups
      """
-     Then we get response
+    Then we get response
      """
      0;OK
      """
-     When we execute query on clickhouse01
+    When we execute query on clickhouse01
      """
      ALTER TABLE test.test_unfreeze FREEZE;
      """
-     And we execute command on clickhouse01
+    And we execute command on clickhouse01
      """
      ch-monitoring orphaned-backups
      """
-     Then we get response contains
+    Then we get response contains
      """
      1;There are 1 orphaned S3 backups
      """
+
+  Scenario: Check restore errors
+    When we execute command on clickhouse01
+    """
+    echo '{
+      "failed":{
+        "failed_parts":{
+          "db1": {
+            "tbl1": {
+              "failed1":"exception1"
+            }
+          }
+        }
+      },
+      "databases": {
+        "db1": {
+          "tbl1": ["part1", "part2", "part3", "part4", "part5"]
+        },
+        "db2": {
+          "tbl2": ["part1", "part2", "part3", "part4", "part5"]
+        }
+      }
+    }' > /tmp/ch_backup_restore_state.json
+    """
+    When we execute command on clickhouse01
+    """
+    ch-monitoring backup
+    """
+    Then we get response
+    """
+    1;Some parts restore failed: 1(9%)
+    """
+    When we execute command on clickhouse01
+    """
+    echo '{
+      "failed":{
+        "failed_parts":{
+          "db1": {
+            "tbl1": {
+              "failed1":"exception1"
+            }
+          },
+          "db2": {
+            "tbl2": {
+              "failed2":"exception2"
+            }
+          }
+        }
+      },
+      "databases": {
+        "db2": {
+          "tbl2": ["part1"]
+        }
+      }
+    }' > /tmp/ch_backup_restore_state.json
+    """
+    When we execute command on clickhouse01
+    """
+    ch-monitoring backup
+    """
+    Then we get response
+    """
+    2;Some parts restore failed: 2(66%)
+    """
