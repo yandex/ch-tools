@@ -18,10 +18,10 @@ class ClickhousePort(Enum):
 
 class ClickhousePortHelper:
     _map = {
-        'https_port' : ClickhousePort.https,
+        'https_port': ClickhousePort.https,
         'http_port': ClickhousePort.http,
-        'tcp_port_secure' : ClickhousePort.tcps,
-        'tcp_port' : ClickhousePort.tcp,
+        'tcp_port_secure': ClickhousePort.tcps,
+        'tcp_port': ClickhousePort.tcp,
     }
 
     @classmethod
@@ -48,12 +48,15 @@ class ClickhouseClient:
             f'{schema}://{self.host}:{self.port_settings[port]}',
             params={
                 'query': query,
-            } if query else {},
+            }
+            if query
+            else {},
             headers={
                 'X-ClickHouse-User': '_monitor',
             },
             timeout=10,
-            verify=self.cert_path if port == ClickhousePort.https else None)
+            verify=self.cert_path if port == ClickhousePort.https else None,
+        )
         response.raise_for_status()
         if query:
             return response.json()['data']
@@ -63,9 +66,12 @@ class ClickhouseClient:
         # Private method, we are sure that port is tcps or tcp and presents in config
         cmd = [
             'clickhouse-client',
-            '--host', self.host,
-            '--port', self.port_settings[port],
-            '--user', '_monitor',
+            '--host',
+            self.host,
+            '--port',
+            self.port_settings[port],
+            '--user',
+            '_monitor',
         ]
         if port == ClickhousePort.tcps:
             cmd.append('--secure')
@@ -73,8 +79,7 @@ class ClickhouseClient:
         if not query:
             die(1, "Can't send empty query in tcp(s) port")
 
-        proc = subprocess.Popen(
-            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = proc.communicate(input=query.encode())
 
         if proc.returncode:
@@ -116,7 +121,7 @@ class ClickhouseClient:
         result = {}
         try:
             root = xml.parse('/var/lib/clickhouse/preprocessed_configs/config.xml')
-            for setting in (ClickhousePortHelper.list()):
+            for setting in ClickhousePortHelper.list():
                 node = root.find(setting)
                 if node is not None:
                     result[ClickhousePortHelper.get(setting)] = node.text

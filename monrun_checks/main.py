@@ -9,6 +9,7 @@ import pwd
 from cloud.mdb.clickhouse.tools.monrun_checks.result import Status
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_replication_lag import replication_lag_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_system_queues import system_queues_command
+from cloud.mdb.clickhouse.tools.monrun_checks.ch_tls import tls_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_core_dumps import core_dumps_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_dist_tables import dist_tables_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_resetup_state import resetup_state_command
@@ -17,6 +18,7 @@ from cloud.mdb.clickhouse.tools.monrun_checks.ch_geobase import geobase_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_log_errors import log_errors_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_ping import ping_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_s3_backup_orphaned import orphaned_backups_command
+from cloud.mdb.clickhouse.tools.monrun_checks.status import status_command
 from .ch_backup import backup_command
 from .exceptions import translate_to_status
 
@@ -57,6 +59,8 @@ class MonrunChecks(click.Group):
             log_level = {0: logging.DEBUG, 1: logging.WARNING}.get(status.code, logging.ERROR)
             logging.log(log_level, log_message)
 
+            if ctx.obj and ctx.obj.get('status_mode', False):
+                return status
             status.report()
 
         cmd.callback = callback_wrapper
@@ -76,17 +80,25 @@ def cli(no_user_check):
         check_current_user()
 
 
-cli.add_command(replication_lag_command)
-cli.add_command(system_queues_command)
-cli.add_command(core_dumps_command)
-cli.add_command(dist_tables_command)
-cli.add_command(resetup_state_command)
-cli.add_command(ro_replica_command)
-cli.add_command(geobase_command)
-cli.add_command(log_errors_command)
-cli.add_command(ping_command)
-cli.add_command(backup_command)
-cli.add_command(orphaned_backups_command)
+CLI_COMMANDS = [
+    replication_lag_command,
+    system_queues_command,
+    core_dumps_command,
+    dist_tables_command,
+    resetup_state_command,
+    ro_replica_command,
+    geobase_command,
+    log_errors_command,
+    ping_command,
+    backup_command,
+    orphaned_backups_command,
+    tls_command,
+]
+
+cli.add_command(status_command(CLI_COMMANDS))
+
+for command in CLI_COMMANDS:
+    cli.add_command(command)
 
 
 def main():

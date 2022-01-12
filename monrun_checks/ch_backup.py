@@ -120,8 +120,10 @@ def check_restored_parts() -> None:
             if failed == 0:
                 return
             failed_percent = int((failed / (failed + restored)) * 100)
-            die(1 if failed_percent < FAILED_PARTS_THRESHOLD else 2,
-                f'Some parts restore failed: {failed}({failed_percent}%)')
+            die(
+                1 if failed_percent < FAILED_PARTS_THRESHOLD else 2,
+                f'Some parts restore failed: {failed}({failed_percent}%)',
+            )
 
 
 def get_backups():
@@ -151,8 +153,7 @@ def run(command, data=None):
     """
     Run the command and return its output.
     """
-    proc = subprocess.Popen(command, shell=True, stdin=subprocess.PIPE,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc = subprocess.Popen(command, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     encoded_data = data.encode() if data else None
 

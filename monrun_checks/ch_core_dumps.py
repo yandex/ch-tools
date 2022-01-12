@@ -8,7 +8,14 @@ from cloud.mdb.clickhouse.tools.monrun_checks.result import Result
 
 @click.command('core-dumps')
 @click.option('-t', '--core-directory', 'core_directory', default='/var/cores/', help='Core dump directory.')
-@click.option('-n', '--crit-interval-seconds', 'crit_seconds', type=int, default=60*10, help='Time interval to check in seconds.')
+@click.option(
+    '-n',
+    '--crit-interval-seconds',
+    'crit_seconds',
+    type=int,
+    default=60 * 10,
+    help='Time interval to check in seconds.',
+)
 def core_dumps_command(core_directory, crit_seconds):
     """
     Check for core dumps.

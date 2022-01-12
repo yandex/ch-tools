@@ -14,6 +14,7 @@ PEERDIR(
     contrib/python/requests
     contrib/python/PyYAML
     contrib/python/psutil
+    contrib/python/pyOpenSSL
     contrib/python/tabulate
     cloud/mdb/clickhouse/tools/common
 )

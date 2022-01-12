@@ -4,7 +4,6 @@ from cloud.mdb.clickhouse.tools.monrun_checks.clickhouse_client import Clickhous
 
 
 class ClickhouseInfo(object):
-
     @classmethod
     @functools.lru_cache(maxsize=1)
     def get_versions_count(cls):
@@ -18,8 +17,8 @@ class ClickhouseInfo(object):
         query = '''
             SELECT uniq(version()) FROM {remoteCommand}('{replicas}', system.one)
             '''.format(
-                remoteCommand=remoteCommand,
-                replicas=','.join(replicas))
+            remoteCommand=remoteCommand, replicas=','.join(replicas)
+        )
         return int(ch_client.execute(query)[0][0])
 
     @classmethod
@@ -35,7 +34,9 @@ class ClickhouseInfo(object):
             WHERE cluster = '{cluster}'
             AND shard_num = (SELECT shard_num FROM system.clusters
                             WHERE host_name = hostName() AND cluster = '{cluster}')
-            '''.format(cluster=cluster)
+            '''.format(
+            cluster=cluster
+        )
         return [row[0] for row in ClickhouseClient().execute(query)]
 
     @classmethod

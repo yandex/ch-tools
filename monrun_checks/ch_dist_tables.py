@@ -24,10 +24,7 @@ def dist_tables_command(crit, warn):
     for table in distributed_tables:
         tss = get_chunk_timestamps(table)
         if tss['broken']:
-            issues.append('{db}.{name}: {cnt} broken chunks'.format(
-                db=table['database'],
-                name=table['name'],
-                cnt=len(tss['broken'])))
+            issues.append(f'{table["database"]}.{table["name"]}: {len(tss["broken"])} broken chunks')
             status = max(1, status)
 
         oldest_ts, oldest_fn = tss['root'] and tss['root'][0] or (None, None)
@@ -42,11 +39,7 @@ def dist_tables_command(crit, warn):
         else:
             status = 2
 
-        issues.append('{db}.{name}: {fn} ({timespan})'.format(
-            db=table['database'],
-            name=table['name'],
-            fn=oldest_fn,
-            timespan=int(timespan)))
+        issues.append(f'{table["database"],}.{table["name"]}: {oldest_fn} ({int(timespan)})')
 
     message = ', '.join(issues)
     return Result(status, message or 'OK')
@@ -63,8 +56,7 @@ def get_chunk_timestamps(table):
         'root': '*/*',
     }
     return {
-        subdir: sorted(
-            [(f.stat().st_atime, f.name) for f in path.glob(pattern) if f.is_file()])
+        subdir: sorted([(f.stat().st_atime, f.name) for f in path.glob(pattern) if f.is_file()])
         for subdir, pattern in patterns.items()
     }
 

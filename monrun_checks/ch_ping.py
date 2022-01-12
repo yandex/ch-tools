@@ -16,10 +16,7 @@ def ping_command(number, crit, warn):
     """
     ch_client = ClickhouseClient()
 
-    fails = {ClickhousePort.tcp:   0,
-             ClickhousePort.tcps:  0,
-             ClickhousePort.http:  0,
-             ClickhousePort.https: 0}
+    fails = {ClickhousePort.tcp: 0, ClickhousePort.tcps: 0, ClickhousePort.http: 0, ClickhousePort.https: 0}
 
     has_fails = False
 
@@ -45,7 +42,10 @@ def ping_command(number, crit, warn):
 
         try:
             if ch_client.check_port(ClickhousePort.http):
-                if ch_client.ping(ClickhousePort.http) != 'Ok.' or ch_client.execute('SELECT 1', port=ClickhousePort.http)[0][0] != 1:
+                if (
+                    ch_client.ping(ClickhousePort.http) != 'Ok.'
+                    or ch_client.execute('SELECT 1', port=ClickhousePort.http)[0][0] != 1
+                ):
                     fails[ClickhousePort.http] += 1
                     has_fails = True
         except Exception as e:
@@ -55,7 +55,10 @@ def ping_command(number, crit, warn):
 
         try:
             if ch_client.check_port(ClickhousePort.https):
-                if ch_client.ping(ClickhousePort.https) != 'Ok.' or ch_client.execute('SELECT 1', port=ClickhousePort.https)[0][0] != 1:
+                if (
+                    ch_client.ping(ClickhousePort.https) != 'Ok.'
+                    or ch_client.execute('SELECT 1', port=ClickhousePort.https)[0][0] != 1
+                ):
                     fails[ClickhousePort.https] += 1
                     has_fails = True
         except Exception as e:

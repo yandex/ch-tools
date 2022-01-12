@@ -35,14 +35,19 @@ def validate_exclude(ctx, param, value):
 @click.option('-n', '--watch-seconds', 'watch_seconds', type=int, default=600, help='Watch seconds.')
 @click.option('-r', '--regex', 'regex', default=default_regex, callback=validate_regex, help='Regular expresson.')
 @click.option('-e', '--exclude', 'exclude', default=default_exclude, callback=validate_exclude, help='Excluded error.')
-@click.option('-f', '--logfile', 'logfile', default='/var/log/clickhouse-server/clickhouse-server.err.log', help='Log file path.')
+@click.option(
+    '-f', '--logfile', 'logfile', default='/var/log/clickhouse-server/clickhouse-server.err.log', help='Log file path.'
+)
 def log_errors_command(crit, warn, watch_seconds, regex, exclude, logfile):
     """
     Check errors in clickhouse log.
     """
 
-    tail = subprocess.Popen(['timetail', '-n', f'{watch_seconds}', '-r', f'{regex}', f'{logfile}'],
-                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    tail = subprocess.Popen(
+        ['timetail', '-n', f'{watch_seconds}', '-r', f'{regex}', f'{logfile}'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
 
     errors = 0
 
