@@ -10,6 +10,9 @@ def stack_trace_command(ctx):
     """
     query_str = r"""
         SELECT
+            thread_name,
+            min(thread_id) AS min_thread_id,
+            count() AS threads,
             '\n' || arrayStringConcat(
                arrayMap(
                    x,
@@ -18,5 +21,7 @@ def stack_trace_command(ctx):
                    arrayMap(x -> demangle(addressToSymbol(x)), trace)),
                '\n') AS trace
         FROM system.stack_trace
+        GROUP BY thread_name, trace
+        ORDER BY min_thread_id
     """
     print(execute_query(ctx, query_str, format='Vertical'))
