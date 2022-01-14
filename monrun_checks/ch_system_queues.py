@@ -34,8 +34,10 @@ def get_metrics():
     """
     Select and return metrics form system.replicas.
     """
-    query = 'SELECT database, table, future_parts, parts_to_check, queue_size,' \
-            ' inserts_in_queue, merges_in_queue FROM system.replicas'
+    query = (
+        'SELECT database, table, future_parts, parts_to_check, queue_size,'
+        ' inserts_in_queue, merges_in_queue FROM system.replicas'
+    )
     return ClickhouseClient().execute(query, compact=False)
 
 

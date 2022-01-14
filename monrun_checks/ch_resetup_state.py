@@ -79,7 +79,8 @@ def request(host, port, ssl, ca_bundle, query=None):
                 'X-ClickHouse-User': 'mdb_monitor',
             },
             timeout=1,
-            verify=verify)
+            verify=verify,
+        )
         return r.status_code == 200 and r.text.strip() == 'Ok.'
     except Exception:
         die(0, 'OK')

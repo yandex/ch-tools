@@ -8,11 +8,27 @@ from cloud.mdb.clickhouse.tools.monrun_checks.result import Result
 
 
 @click.command('replication-lag')
-@click.option('-x', '--exec-critical', 'xcrit', type=int, default=3600, help='Critical threshold for one task execution.')
+@click.option(
+    '-x', '--exec-critical', 'xcrit', type=int, default=3600, help='Critical threshold for one task execution.'
+)
 @click.option('-c', '--critical', 'crit', type=int, default=600, help='Critical threshold for lag with errors.')
 @click.option('-w', '--warning', 'warn', type=int, default=300, help='Warning threshold.')
-@click.option('-M', '--merges-critical', 'mcrit', type=click.FloatRange(0.0, 100.0), default=90.0, help='Critical threshold in percent of max_replicated_merges_in_queue.')
-@click.option('-m', '--merges-warning', 'mwarn', type=click.FloatRange(0.0, 100.0), default=50.0, help='Warning threshold in percent of max_replicated_merges_in_queue.')
+@click.option(
+    '-M',
+    '--merges-critical',
+    'mcrit',
+    type=click.FloatRange(0.0, 100.0),
+    default=90.0,
+    help='Critical threshold in percent of max_replicated_merges_in_queue.',
+)
+@click.option(
+    '-m',
+    '--merges-warning',
+    'mwarn',
+    type=click.FloatRange(0.0, 100.0),
+    default=50.0,
+    help='Warning threshold in percent of max_replicated_merges_in_queue.',
+)
 @click.option('-v', '--verbose', 'verbose', type=int, count=True, default=0, help='Show details about lag.')
 def replication_lag_command(xcrit, crit, warn, mwarn, mcrit, verbose):
     """
@@ -27,11 +43,26 @@ def replication_lag_command(xcrit, crit, warn, mwarn, mcrit, verbose):
     if verbose >= 1:
         verbtab = []
 
-        headers = ['Table', 'Lag [s]', 'Tasks', 'Max task execution [s]', 'Non-retrayable errors', 'Has user fault errors', 'Merges with 1000+ tries']
+        headers = [
+            'Table',
+            'Lag [s]',
+            'Tasks',
+            'Max task execution [s]',
+            'Non-retrayable errors',
+            'Has user fault errors',
+            'Merges with 1000+ tries',
+        ]
         for t in chart:
             if chart[t].get('multi_replicas', False):
-                tabletab = [t, chart[t].get('delay', 0), chart[t].get('tasks', 0), chart[t].get('max_execution', 0), chart[t].get('errors', 0),
-                            chart[t].get('user_fault', False), chart[t].get('retried_merges', 0)]
+                tabletab = [
+                    t,
+                    chart[t].get('delay', 0),
+                    chart[t].get('tasks', 0),
+                    chart[t].get('max_execution', 0),
+                    chart[t].get('errors', 0),
+                    chart[t].get('user_fault', False),
+                    chart[t].get('retried_merges', 0),
+                ]
                 verbtab.append(tabletab)
                 if verbose >= 2:
                     exceptions_retrayable = ''
@@ -45,7 +76,9 @@ def replication_lag_command(xcrit, crit, warn, mwarn, mcrit, verbose):
                                 exceptions_retrayable += '\t' + exception[5:] + '\n'
                             else:
                                 exceptions_non_retrayable += '\t' + exception[5:] + '\n'
-                    max_execution_part = chart[t].get('max_execution_part', '') if chart[t].get('max_execution', 0) else 0
+                    max_execution_part = (
+                        chart[t].get('max_execution_part', '') if chart[t].get('max_execution', 0) else 0
+                    )
                     if exceptions_retrayable or exceptions_non_retrayable or exceptions_ignored or max_execution_part:
                         msg_verbose_2 = msg_verbose_2 + t + ':\n'
                     if exceptions_non_retrayable:
@@ -55,7 +88,12 @@ def replication_lag_command(xcrit, crit, warn, mwarn, mcrit, verbose):
                     if exceptions_ignored:
                         msg_verbose_2 = msg_verbose_2 + '  User fault errors:\n' + exceptions_ignored
                     if max_execution_part:
-                        msg_verbose_2 = msg_verbose_2 + '  Result part of task with max execution time: ' + max_execution_part + '\n'
+                        msg_verbose_2 = (
+                            msg_verbose_2
+                            + '  Result part of task with max execution time: '
+                            + max_execution_part
+                            + '\n'
+                        )
         msg_verbose = tabulate(verbtab, headers=headers)
         if verbose >= 2:
             msg_verbose = msg_verbose + msg_verbose_2
@@ -70,7 +108,9 @@ def replication_lag_command(xcrit, crit, warn, mwarn, mcrit, verbose):
     if lag < warn and max_merges < max_replicated_merges_in_queue_warn:
         return Result(code=0, message='OK', verbose=msg_verbose)
 
-    msg = 'Max {0} seconds, with errors {1} seconds, max task execution {2} seconds, max merges in queue {3}'.format(lag, lag_with_errors, max_execution, max_merges)
+    msg = 'Max {0} seconds, with errors {1} seconds, max task execution {2} seconds, max merges in queue {3}'.format(
+        lag, lag_with_errors, max_execution, max_merges
+    )
 
     try:
         replica_versions_mismatch = ClickhouseInfo.get_versions_count() > 1
@@ -158,7 +198,8 @@ def filter_out_single_replica_tables(tables):
         WHERE (database, table) IN ({tables})
         AND total_replicas > 1
         '''.format(
-        tables=','.join("('{0}', '{1}')".format(t['database'], t['table']) for t in tables))
+        tables=','.join("('{0}', '{1}')".format(t['database'], t['table']) for t in tables)
+    )
     return ClickhouseClient().execute(query, False)
 
 
@@ -185,8 +226,8 @@ def count_errors(tables, exceptions_limit):
         WHERE (database, table) IN ({tables})
         GROUP BY database,table
         '''.format(
-        tables=','.join("('{0}', '{1}')".format(t['database'], t['table']) for t in tables),
-        limit=limit)
+        tables=','.join("('{0}', '{1}')".format(t['database'], t['table']) for t in tables), limit=limit
+    )
     return ClickhouseClient().execute(query, False)
 
 
