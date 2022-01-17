@@ -146,6 +146,23 @@ class ClickhouseConfig:
         return ClickhouseConfig(_load_config('/var/lib/clickhouse/preprocessed_configs/config.xml'))
 
 
+class ClickhouseUsersConfig:
+
+    def __init__(self, config):
+        self._config = config
+
+    def dump(self, mask_secrets=True):
+        config = deepcopy(self._config)
+        if mask_secrets:
+            _mask_secrets(config)
+
+        return xmltodict.unparse(config, pretty=True)
+
+    @staticmethod
+    def load():
+        return ClickhouseConfig(_load_config('/var/lib/clickhouse/preprocessed_configs/users.xml'))
+
+
 def _load_config(config_path):
     with open(config_path, 'r') as file:
         return xmltodict.parse(file.read())
