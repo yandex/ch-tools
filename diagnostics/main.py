@@ -444,7 +444,9 @@ LIMIT 10
 '''
 
 SELECT_STACK_TRACES = r'''SELECT
+    {% if version_ge('21.8') -%}
     thread_name,
+    {% endif -%}
     min(thread_id) AS min_thread_id,
     count() AS threads,
     '\n' || arrayStringConcat(
@@ -455,7 +457,11 @@ SELECT_STACK_TRACES = r'''SELECT
            arrayMap(x -> demangle(addressToSymbol(x)), trace)),
        '\n') AS trace
 FROM system.stack_trace
-GROUP BY thread_name, trace
+GROUP BY
+    {% if version_ge('21.8') -%}
+    thread_name,
+    {% endif -%}
+    trace
 ORDER BY min_thread_id
 '''
 
