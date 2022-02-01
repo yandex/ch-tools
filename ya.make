@@ -6,4 +6,5 @@ RECURSE(
     monrun_checks
     resetup
     s3_credentials
+    zero_copy_schema_converter
 )

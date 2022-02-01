@@ -13,7 +13,8 @@
                 "cloud/mdb/clickhouse/tools/diagnostics",
                 "cloud/mdb/clickhouse/tools/monrun_checks",
                 "cloud/mdb/clickhouse/tools/resetup",
-                "cloud/mdb/clickhouse/tools/s3_credentials"
+                "cloud/mdb/clickhouse/tools/s3_credentials",
+                "cloud/mdb/clickhouse/tools/zero_copy_schema_converter"
             ]
         }
     },
@@ -129,6 +130,25 @@
             "destination": {
                 "path": "/usr/bin/ch-diagnostics",
                 "target": "/opt/yandex/mdb-ch-tools/bin/ch-diagnostics"
+            }
+        },
+        {
+            "source": {
+                "type": "BUILD_OUTPUT",
+                "build_key": "bin",
+                "path": "cloud/mdb/clickhouse/tools/zero_copy_schema_converter"
+            },
+            "destination": {
+                "path": "/opt/yandex/mdb-ch-tools/bin/zero_copy_schema_converter"
+            }
+        },
+        {
+            "source": {
+                "type": "SYMLINK"
+            },
+            "destination": {
+                "path": "/usr/bin/zero_copy_schema_converter",
+                "target": "/opt/yandex/mdb-ch-tools/bin/zero_copy_schema_converter"
             }
         },
         {
