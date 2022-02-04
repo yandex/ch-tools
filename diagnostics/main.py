@@ -164,19 +164,15 @@ SELECT_MERGES = r'''SELECT
     round(100 * progress, 1) "progress",
     is_mutation,
     partition_id,
-{% if version_ge('20.3') -%}
     result_part_path,
     source_part_paths,
-{% endif -%}
     num_parts,
     formatReadableSize(total_size_bytes_compressed) "total_size_compressed",
     formatReadableSize(bytes_read_uncompressed) "read_uncompressed",
     formatReadableSize(bytes_written_uncompressed) "written_uncompressed",
     columns_written,
-{% if version_ge('20.3') -%}
     formatReadableSize(memory_usage) "memory_usage",
     thread_id
-{% else -%}
     formatReadableSize(memory_usage) "memory_usage"
 {% endif -%}
 FROM system.merges
@@ -188,9 +184,7 @@ SELECT_MUTATIONS = r'''SELECT
     mutation_id,
     command,
     create_time,
-{% if version_ge('20.3') -%}
     parts_to_do_names,
-{% endif -%}
     parts_to_do,
     is_done,
     latest_failed_part,
@@ -207,14 +201,10 @@ SELECT_RECENT_DATA_PARTS = r'''SELECT
     engine,
     partition_id,
     name,
-{% if version_ge('20.3') -%}
     part_type,
-{% endif -%}
     active,
     level,
-{% if version_ge('20.3') -%}
     disk_name,
-{% endif -%}
     path,
     marks,
     rows,
