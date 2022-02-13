@@ -3,13 +3,13 @@ Check ClickHouse backups: its state, age and count.
 """
 
 import json
-import subprocess
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from os.path import exists
 
 import click
 
-from cloud.mdb.clickhouse.tools.common.backup import BackupConfig
+from cloud.mdb.clickhouse.tools.common.backup import BackupConfig, get_backups
+from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseClient
 from cloud.mdb.clickhouse.tools.monrun_checks.exceptions import die
 
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S %z'
@@ -22,13 +22,14 @@ def backup_command():
     """
     Check ClickHouse backups: its state, age and count.
     """
-    check_restored_parts()
+    ch_client = ClickhouseClient()
     backup_config = BackupConfig.load()
     backups = get_backups()
 
+    check_restored_parts()
     check_valid_backups_exist(backups)
     check_last_backup_not_failed(backups)
-    check_backup_age(backups)
+    check_backup_age(ch_client, backups)
     check_backup_count(backup_config, backups)
 
 
@@ -68,12 +69,12 @@ def check_last_backup_not_failed(backups):
     die(status, message)
 
 
-def check_backup_age(backups, age_threshold=1):
+def check_backup_age(ch_client, backups, age_threshold=1):
     """
     Check that the last backup is not too old.
     """
     # To avoid false warnings the check is skipped if ClickHouse uptime is less then age threshold.
-    if clickhouse_uptime().days < age_threshold:
+    if ch_client.get_uptime().days < age_threshold:
         return
 
     checking_backup = None
@@ -126,40 +127,9 @@ def check_restored_parts() -> None:
             )
 
 
-def get_backups():
-    """
-    Get ClickHouse backups.
-    """
-    return json.loads(run('sudo ch-backup list -a -v --format json'))
-
-
 def get_backup_age(backup):
     """
     Calculate and return age of ClickHouse backup.
     """
     backup_time = datetime.strptime(backup['start_time'], DATE_FORMAT)
     return datetime.now(timezone.utc) - backup_time
-
-
-def clickhouse_uptime():
-    """
-    Get uptime of ClickHouse server.
-    """
-    seconds = int(run('clickhouse-client --readonly 1 -q "SELECT uptime()"'))
-    return timedelta(seconds=seconds)
-
-
-def run(command, data=None):
-    """
-    Run the command and return its output.
-    """
-    proc = subprocess.Popen(command, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-    encoded_data = data.encode() if data else None
-
-    stdout, stderr = proc.communicate(input=encoded_data)
-
-    if proc.returncode:
-        raise RuntimeError(f'Command "{command}" failed with code {proc.returncode}')
-
-    return stdout.decode()

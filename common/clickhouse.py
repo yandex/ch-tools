@@ -1,6 +1,7 @@
 import logging
 import re
 import socket
+from datetime import timedelta
 from typing import MutableMapping
 
 import requests
@@ -50,12 +51,21 @@ class ClickhouseClient:
         self._timeout = 60
         self._ch_version = None
 
-    @property
-    def clickhouse_version(self):
+    def get_clickhouse_version(self):
+        """
+        Get ClickHouse server version.
+        """
         if self._ch_version is None:
             self._ch_version = self.query('SELECT version()')
 
         return self._ch_version
+
+    def get_uptime(self):
+        """
+        Get uptime of ClickHouse server.
+        """
+        seconds = int(self.query('SELECT uptime()'))
+        return timedelta(seconds=seconds)
 
     @retry(requests.exceptions.ConnectionError)
     def query(self, query, query_args=None, format=None, post_data=None, timeout=None, echo=False, dry_run=False):

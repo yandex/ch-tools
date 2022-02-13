@@ -643,7 +643,7 @@ def main():
     dbaas_config = DbaasConfig.load()
     ch_config = ClickhouseConfig.load()
     ch_users_config = ClickhouseUsersConfig.load()
-    version = client.clickhouse_version
+    version = client.get_clickhouse_version()
     system_tables = [row[0] for row in execute_query(client, SELECT_SYSTEM_TABLES, format='JSONCompact')['data']]
 
     diagnostics = DiagnosticsData(args, dbaas_config.fqdn)
