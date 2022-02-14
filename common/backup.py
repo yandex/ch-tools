@@ -1,3 +1,4 @@
+import json
 import subprocess
 import os
 from datetime import timedelta
@@ -29,15 +30,11 @@ class BackupConfig:
             return BackupConfig(yaml.safe_load(file))
 
 
-def get_backups() -> [str]:
-    result = []
-    ch_backup_process = ['sudo', 'ch-backup', 'list', '-a']
-    output = subprocess.run(ch_backup_process, stdout=subprocess.PIPE, universal_newlines=True)
-    for index, line in enumerate(output.stdout.split('\n')):
-        line = line.strip()
-        if line:
-            result.append(line)
-    return result
+def get_backups():
+    """
+    Get ClickHouse backups.
+    """
+    return json.loads(run('sudo ch-backup list -a -v --format json'))
 
 
 def get_chs3_backups() -> [str]:
@@ -50,4 +47,20 @@ def get_chs3_backups() -> [str]:
 def get_orphaned_chs3_backups() -> [str]:
     backups = get_backups()
     chs3_backups = get_chs3_backups()
-    return list(set(chs3_backups) - set(backups))
+    return list(set(chs3_backups) - set(backup['name'] for backup in backups))
+
+
+def run(command, data=None):
+    """
+    Run the command and return its output.
+    """
+    proc = subprocess.Popen(command, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    encoded_data = data.encode() if data else None
+
+    stdout, stderr = proc.communicate(input=encoded_data)
+
+    if proc.returncode:
+        raise RuntimeError(f'Command "{command}" failed with code {proc.returncode}')
+
+    return stdout.decode()
