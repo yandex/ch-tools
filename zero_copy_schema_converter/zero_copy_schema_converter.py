@@ -35,7 +35,7 @@ zc_nodes = ['zero_copy_s3', 'zero_copy_hdfs']
 def convert_node(client, args, path, zc_node):
     base_path = f'{path}/{zc_node}/shared'
     parts = client.get_children(base_path)
-    table_id_path = f'{path}/table_id'
+    table_id_path = f'{path}/table_shared_id'
     table_id = ''
     if client.exists(table_id_path):
         table_id = client.get(table_id_path)[0].decode('UTF-8')
