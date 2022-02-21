@@ -1,5 +1,6 @@
 import re
 import os
+import subprocess
 from pathlib import Path
 
 
@@ -35,3 +36,21 @@ def clear_empty_directories_recursively(directory):
             directory.rmdir()
     except FileNotFoundError:
         print(f'Tried to remove directory {directory}, but the error arised. Maybe it was already removed.')
+
+
+def execute(command):
+    """
+    Execute the specified command, check return code and return its output on success.
+    """
+    proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    stdout, stderr = proc.communicate()
+
+    if proc.returncode:
+        msg = '"{0}" failed with code {1}'.format(command, proc.returncode)
+        if stderr:
+            msg = '{0}: {1}'.format(msg, stderr.decode())
+
+        raise RuntimeError(msg)
+
+    return stdout.decode()

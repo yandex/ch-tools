@@ -22,6 +22,7 @@ from cloud.mdb.clickhouse.tools.chadmin.cli.settings import list_settings_comman
 from cloud.mdb.clickhouse.tools.chadmin.cli.stack_trace import stack_trace_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.tables import table_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.thread_log import thread_log_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.wait_started import wait_started_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.zookeeper import zookeeper_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.chs3_backup import chs3_backup_group
 from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseClient
@@ -63,6 +64,7 @@ cli.add_command(zookeeper_group)
 cli.add_command(stack_trace_command)
 cli.add_command(system_group)
 cli.add_command(chs3_backup_group)
+cli.add_command(wait_started_command)
 
 
 def main():
