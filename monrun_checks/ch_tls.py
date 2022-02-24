@@ -14,8 +14,8 @@ CERTIFICATE_PATH = '/etc/clickhouse-server/ssl/server.crt'
 
 
 @click.command('tls')
-@click.option('-c', '--critical', 'crit', type=int, default=30, help='Critical threshold.')
-@click.option('-w', '--warning', 'warn', type=int, default=40, help='Warning threshold.')
+@click.option('-c', '--critical', 'crit', type=int, default=10, help='Critical threshold.')
+@click.option('-w', '--warning', 'warn', type=int, default=30, help='Warning threshold.')
 @click.option(
     '-p',
     '--ports',
