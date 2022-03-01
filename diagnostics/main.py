@@ -173,8 +173,6 @@ SELECT_MERGES = r'''SELECT
     columns_written,
     formatReadableSize(memory_usage) "memory_usage",
     thread_id
-    formatReadableSize(memory_usage) "memory_usage"
-{% endif -%}
 FROM system.merges
 '''
 
