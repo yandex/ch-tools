@@ -108,7 +108,7 @@ class ClickhouseClient:
     def render_query(self, query, **kwargs):
         env = Environment()
 
-        env.globals['version_ge'] = lambda version: version_ge(self.clickhouse_version, version)
+        env.globals['version_ge'] = lambda version: version_ge(self.get_clickhouse_version(), version)
         env.globals['format_str_match'] = _format_str_match
         env.globals['format_str_imatch'] = _format_str_imatch
 
