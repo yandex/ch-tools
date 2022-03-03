@@ -25,18 +25,11 @@ RUN echo "root:root" | chpasswd && \
     sed -i -e '/PermitRootLogin/ s/.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
     mkdir /var/run/sshd
 
-COPY images/clickhouse/clickhouse.gpg /tmp/
-
 RUN mkdir -p /etc/apt/sources.list.d && \
-    echo "deb https://repo.yandex.ru/clickhouse/deb/testing/ main/" | tee /etc/apt/sources.list.d/clickhouse-testing.list && \
-    echo "deb https://repo.yandex.ru/clickhouse/deb/prestable/ main/" | tee /etc/apt/sources.list.d/clickhouse-prestable.list && \
-    echo "deb https://repo.yandex.ru/clickhouse/deb/stable/ main/" | tee /etc/apt/sources.list.d/clickhouse-stable.list && \
-    echo "deb https://repo.yandex.ru/clickhouse/deb/lts/ main/" | tee /etc/apt/sources.list.d/clickhouse-lts.list && \
     echo "deb http://dist.yandex.ru/mdb-bionic-secure testing/all/"     | tee /etc/apt/sources.list.d/mdb-bionic-secure-testing.list && \
     echo "deb http://dist.yandex.ru/mdb-bionic-secure testing/\$(ARCH)/" | tee -a /etc/apt/sources.list.d/mdb-bionic-secure-testing.list && \
     echo "deb http://dist.yandex.ru/mdb-bionic-secure stable/all/"      | tee /etc/apt/sources.list.d/mdb-bionic-secure-stable.list && \
     echo "deb http://dist.yandex.ru/mdb-bionic-secure stable/\$(ARCH)/"  | tee -a /etc/apt/sources.list.d/mdb-bionic-secure-stable.list && \
-    apt-key add /tmp/clickhouse.gpg  && \
     apt-get update -qq && \
     apt-get upgrade -y && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
@@ -87,4 +80,3 @@ RUN groupadd monitor && useradd -g monitor -G monitor,clickhouse monitor && \
     chmod 750 /etc/clickhouse-server/ssl && \
     chmod 640 /etc/clickhouse-server/ssl/server.crt && \
     chmod 640 /etc/clickhouse-server/ssl/allCAs.pem
-
