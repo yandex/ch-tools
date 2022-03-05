@@ -1,18 +1,23 @@
-FROM minio/mc:RELEASE.2022-01-07T06-01-38Z
+FROM ch-tools-tests-base
 
-FROM minio/minio:RELEASE.2022-01-08T03-11-54Z
+COPY ./bin/minio /usr/bin/minio
+COPY ./bin/mc /usr/bin/mc
+RUN chmod +x /usr/bin/minio /usr/bin/mc
 
-COPY --from=0 /usr/bin/mc /usr/bin/mc
+ADD config /config/
+
+COPY ./config/minio.supervisor.conf /etc/supervisor/conf.d/minio.conf
+COPY ./config/mc.json /root/.mc/config.json
+
+RUN mkdir -m 750 -p /etc/nginx/ssl && chown root:www-data /etc/nginx/ssl
+RUN ln -s /config/cert.pem /etc/nginx/ssl/cert.pem
+RUN ln -s /config/key.pem /etc/nginx/ssl/key.pem
 
 ENV MINIO_ACCESS_KEY {{ conf.s3.access_key_id }}
 ENV MINIO_SECRET_KEY {{ conf.s3.access_secret_key }}
 
-RUN mkdir -p /export/root
-
-ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
-
-HEALTHCHECK --interval=30s --timeout=5s CMD /usr/bin/healthcheck.sh
+VOLUME ["/export"]
 
 EXPOSE 9000
 
-CMD ["server", "/export"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]

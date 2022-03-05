@@ -1,4 +1,4 @@
-FROM python:3
+FROM ch-tools-tests-base
 
 RUN pip install flask
 ENV FLASK_APP /service.py
