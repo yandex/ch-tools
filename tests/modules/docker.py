@@ -5,7 +5,6 @@ Docker interface.
 import io
 import os
 import random
-import subprocess
 import tarfile
 from distutils import dir_util
 from typing import Sequence, Tuple
@@ -97,28 +96,10 @@ def prepare_images(context: ContextT) -> None:
     """
     Prepare images.
     """
-    for props in context.get('base_images', {}).values():
-        try:
-            DOCKER_API.images.build(network_mode="bridge", **props)
-        except docker.errors.BuildError as err:
-            raise RuntimeError('container {0} build failed: {1}'.format(str(props), err))
-
     images_dir = context.conf['images_dir']
     staging_dir = context.conf['staging_dir']
 
     for service_name, service in context.conf['services'].items():
-        for cmd in service.get('prebuild_cmd', []):
-            try:
-                proc = subprocess.run([cmd], shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                if proc.stdout:
-                    print('Command stdout: ', str(proc.stdout, errors='replace', encoding='utf-8'))
-                if proc.stderr:
-                    print('Command stderr: ', str(proc.stderr, errors='replace', encoding='utf-8'))
-            except subprocess.CalledProcessError as err:
-                raise RuntimeError('prebuild command {cmd} failed: {err}\n'
-                                   'stdout: {stdout}\n'
-                                   'stderr: {stderr}'.format(cmd=cmd, err=err, stdout=err.stdout, stderr=err.stderr))
-
         for instance_name in service['instances']:
             dir_util.copy_tree(f'{images_dir}/{service_name}', f'{staging_dir}/images/{instance_name}', update=True)
 

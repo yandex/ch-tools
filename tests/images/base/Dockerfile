@@ -33,9 +33,11 @@ RUN cp --force --recursive --verbose \
     nginx-full=1.8.1-1.yandex.16 \
     nginx-common=1.8.1-1.yandex.16
 
+RUN mkdir -p /opt/yandex /config
+
 # This config directory is never mounted, and thus should be copied.
 COPY ./config/supervisor /etc/supervisor
-
+RUN pip3 install --upgrade pip==9.0.3
 # Almost all mocks have custom nginx conf.
 RUN ln -s /config/nginx.conf /etc/nginx/nginx.conf
 

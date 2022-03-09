@@ -7,10 +7,14 @@ import random
 import shlex
 import subprocess
 
+import docker
+
 import yaml
 
 from . import utils
 from .typing import ContextT
+
+DOCKER_API = docker.from_env()
 
 
 @utils.env_stage('create', fail=True)
@@ -18,6 +22,25 @@ def build_images(context: ContextT) -> None:
     """
     Build docker images.
     """
+    for image, props in context.conf['base_images'].items():
+        try:
+            DOCKER_API.images.build(network_mode="bridge", **props)
+        except Exception as err:
+            raise RuntimeError('container {0} build failed: {1}'.format(str(props), err))
+
+    for service_name, service in context.conf['services'].items():
+        for cmd in service.get('prebuild_cmd', []):
+            try:
+                proc = subprocess.run([cmd], shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                if proc.stdout:
+                    print('Command stdout: ', str(proc.stdout, errors='replace', encoding='utf-8'))
+                if proc.stderr:
+                    print('Command stderr: ', str(proc.stderr, errors='replace', encoding='utf-8'))
+            except subprocess.CalledProcessError as err:
+                raise RuntimeError('prebuild command {cmd} failed: {err}\n'
+                                   'stdout: {stdout}\n'
+                                   'stderr: {stderr}'.format(cmd=cmd, err=err, stdout=err.stdout, stderr=err.stderr))
+
     _call_compose(context.conf, 'build')
 
 

@@ -43,16 +43,16 @@ def create():
                 'http': 9000,
             },
             'prebuild_cmd': [
-                'mkdir -p staging/images/minio/bin',
+                'mkdir -p images/minio/bin',
                 '/usr/bin/s3cmd -c /etc/s3cmd.cfg get --skip-existing '
                 's3://dbaas-infra-test-cache/minio.RELEASE.2021-01-16T02-19-44Z.gz '
-                'staging/images/minio/bin/minio.gz',
-                'gunzip -f staging/images/minio/bin/minio.gz',
+                'bin/minio.gz',
+                'gunzip -f bin/minio.gz',
                 '/usr/bin/s3cmd -c /etc/s3cmd.cfg get --skip-existing '
                 's3://dbaas-infra-test-cache/mc.RELEASE.2021-01-16T02-45-34Z.gz '
-                'staging/images/minio/bin/mc.gz',
-                'gunzip -f staging/images/minio/bin/mc.gz',
-            ]
+                'bin/mc.gz',
+                'gunzip -f bin/mc.gz',
+            ],
         },
         'http_mock': {
             'instances': ['http_mock01'],
@@ -79,8 +79,8 @@ def create():
         'base_images': {
             'ch-tools-tests-base': {
                 'tag': 'ch-tools-tests-base',
-                'path': 'staging/images/base',
-            }
+                'path': 'images/base',
+            },
         },
         'dbaas_conf': _dbaas_conf(services, network_name),
     }

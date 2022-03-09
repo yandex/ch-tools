@@ -8,9 +8,9 @@ RUN apt-get update -qq && apt-get install -y \
         zookeeper-bin=${ZK_VERSION} \
         libzookeeper-java=${ZK_VERSION}
 
-RUN ln -s /config/zookeeper.conf /etc/supervisor/conf.d/zookeeper.conf
-RUN ln -s /config/start_zk.sh /opt/yandex/start_zk.sh
-RUN ln --force -s /config/zoo.cfg /etc/zookeeper/conf/zoo.cfg
-RUN ln --force -s /config/log4j.properties /etc/zookeeper/conf/log4j.properties
+COPY images/zookeeper/config/zookeeper.conf /etc/supervisor/conf.d/zookeeper.conf
+COPY images/zookeeper/config/start_zk.sh /opt/yandex/start_zk.sh
+COPY images/zookeeper/config/zoo.cfg /etc/zookeeper/conf/zoo.cfg
+COPY images/zookeeper/config/log4j.properties /etc/zookeeper/conf/log4j.properties
 
 EXPOSE 2181 2281
