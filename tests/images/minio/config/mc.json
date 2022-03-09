@@ -1,0 +1,12 @@
+{
+  "version": "10",
+  "aliases": {
+    "local": {
+      "url": "http://localhost:9000",
+      "accessKey": "{{conf.s3.access_key_id}}",
+      "secretKey": "{{conf.s3.access_secret_key}}",
+      "api": "S3v4",
+      "path": "auto"
+    }
+  }
+}

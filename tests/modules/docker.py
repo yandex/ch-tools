@@ -98,6 +98,7 @@ def prepare_images(context: ContextT) -> None:
     """
     images_dir = context.conf['images_dir']
     staging_dir = context.conf['staging_dir']
+
     for service_name, service in context.conf['services'].items():
         for instance_name in service['instances']:
             dir_util.copy_tree(f'{images_dir}/{service_name}', f'{staging_dir}/images/{instance_name}', update=True)

@@ -1,6 +1,9 @@
-FROM python:3
+FROM ch-tools-tests-base
 
-RUN pip install flask
+RUN pip3 install flask
 ENV FLASK_APP /service.py
 COPY images/http_mock/service.py /
-CMD ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=8080"]
+
+EXPOSE 8080
+
+CMD ["python3", "-m", "flask", "run", "--host=0.0.0.0", "--port=8080"]
