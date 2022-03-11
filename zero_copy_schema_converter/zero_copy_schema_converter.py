@@ -22,6 +22,8 @@ def parse_args():
     parser.add_argument('--dryrun', default=False, action='store_true', help='Do not perform any actions')
     parser.add_argument('--cleanup', default=False, action='store_true', help='Clean old nodes')
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help='Verbose mode')
+    parser.add_argument('--retries', default=3, type=int, help='Connection retries')
+    parser.add_argument('--timeout', default=1, type=int, help='Connection timeout (s)')
 
     return parser.parse_args()
 
@@ -105,9 +107,9 @@ def scan(client, args):
 
 
 def get_client(args):
-    client = KazooClient(connection_retry=3,
-                         command_retry=3,
-                         timeout=1,
+    client = KazooClient(connection_retry=args.retries,
+                         command_retry=args.retries,
+                         timeout=args.timeout,
                          hosts=args.hosts,
                          use_ssl=args.secure,
                          certfile=args.cert,
