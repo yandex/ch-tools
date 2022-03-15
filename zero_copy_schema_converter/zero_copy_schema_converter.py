@@ -3,7 +3,7 @@ import argparse
 import socket
 import uuid
 from kazoo.client import KazooClient
-from kazoo.exceptions import ConnectionLoss, ConnectionClosedError
+from kazoo.exceptions import ConnectionLoss, ConnectionClosedError, NotEmptyError
 from queue import Queue
 from threading import Thread
 
@@ -24,6 +24,7 @@ def parse_args():
     parser.add_argument('-z', '--zcroot', default='clickhouse/zero_copy', help='ZooKeeper node for new zero-copy data')
     parser.add_argument('--dryrun', default=False, action='store_true', help='Do not perform any actions')
     parser.add_argument('--cleanup', default=False, action='store_true', help='Clean old nodes')
+    parser.add_argument('--no-create', default=False, action='store_true', help='Do not crete new nodes')
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help='Verbose mode')
     parser.add_argument('--retries', default=3, type=int, help='Connection retries')
     parser.add_argument('--timeout', default=10, type=int, help='Connection timeout (s)')
@@ -85,14 +86,15 @@ def convert_part(client, args, part_path, new_part_path):
             for replica in replicas:
                 replica_path = f'{uniq_path}/{replica}'
                 new_path = f'{new_part_path}/{uniq_id}/{replica}'
-                if not client.exists(new_path):
-                    if args.verbose:
-                        print(f'Make node "{new_path}"')
-                    if not args.dryrun:
-                        client.ensure_path(f'{new_part_path}/{uniq_id}')
-                        client.create(new_path, value=b'lock')
-                elif args.debug:
-                    print(f'Path {new_path} already exists')
+                if not args.no_create:
+                    if not client.exists(new_path):
+                        if args.verbose:
+                            print(f'Make node "{new_path}"')
+                        if not args.dryrun:
+                            client.ensure_path(f'{new_part_path}/{uniq_id}')
+                            client.create(new_path, value=b'lock')
+                    elif args.debug:
+                        print(f'Path {new_path} already exists')
                 if args.cleanup:
                     if args.verbose:
                         print(f'Remove node "{replica_path}"')
@@ -146,8 +148,14 @@ def convert_node(queue, client, args, path, zc_node):
         new_part_path = f'{args.root}/{args.zcroot}/{zc_node}/{table_id}/{part}'
         queue.put((part_path, new_part_path))
     if args.cleanup and not args.dryrun:
-        client.delete(base_path)
-        client.delete(f'{path}/{zc_node}')
+        try:
+            client.delete(base_path)
+            client.delete(f'{path}/{zc_node}')
+        except NotEmptyError:
+            # When other replicas still in compatibility mode they can create subnodes
+            # Node will be deleted later from that replica
+            if args.debug:
+                print(f'Other replica create subnode in "{path}/{zc_node}", skip delete')
 
 
 def convert_table(queue, client, args, path, nodes):
