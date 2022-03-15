@@ -93,40 +93,40 @@ def get_statistics_command(ctx, user, exclude_user, query_pattern, error, date, 
             formatReadableSize(avg(memory_usage)) "memory usage (avg)"
         FROM system.query_log
         WHERE type != 1
-        {% if min_date %}
+        {% if min_date -%}
           AND event_date >= toDate('{{ min_date }}')
-        {% elif min_time %}
+        {% elif min_time -%}
           AND event_date >= toDate('{{ min_time }}')
-        {% endif %}
-        {% if max_date %}
+        {% endif -%}
+        {% if max_date -%}
           AND event_date <= toDate('{{ max_date }}')
-        {% elif max_time %}
+        {% elif max_time -%}
           AND event_date <= toDate('{{ max_time }}')
-        {% endif %}
-        {% if not min_date and not max_date and not min_time and not max_time %}
+        {% endif -%}
+        {% if not min_date and not max_date and not min_time and not max_time -%}
           AND event_date = today()
-        {% endif %}
-        {% if min_time %}
+        {% endif -%}
+        {% if min_time -%}
           AND event_time >= toDateTime('{{ min_time }}')
-        {% endif %}
-        {% if max_time %}
+        {% endif -%}
+        {% if max_time -%}
           AND query_start_time <= toDateTime('{{ max_time }}')
-        {% endif %}
-        {% if user %}
+        {% endif -%}
+        {% if user -%}
           AND user = '{{ user }}'
-        {% endif %}
-        {% if exclude_user %}
+        {% endif -%}
+        {% if exclude_user -%}
           AND user != '{{ exclude_user }}'
-        {% endif %}
-        {% if query_pattern %}
+        {% endif -%}
+        {% if query_pattern -%}
           AND lower(query) LIKE lower('{{ query_pattern }}')
-        {% endif %}
-        {% if failed %}
+        {% endif -%}
+        {% if failed -%}
           AND exception != ''
-        {% endif %}
-        {% if error %}
+        {% endif -%}
+        {% if error -%}
           AND lower(exception) LIKE lower('{{ error }}')
-        {% endif %}
+        {% endif -%}
     """
     print(
         execute_query(ctx,
@@ -154,11 +154,11 @@ def get_query_settings_command(ctx, query_id, on_cluster):
         SELECT
              Settings.Names "name",
              Settings.Values "value"
-        {% if cluster %}
+        {% if cluster -%}
         FROM clusterAllReplicas({{ cluster }}, system.query_log)
-        {% else %}
+        {% else -%}
         FROM system.query_log
-        {% endif %}
+        {% endif -%}
         ARRAY JOIN Settings
         WHERE type != 1
           AND query_id = '{{ query_id }}'
@@ -177,11 +177,11 @@ def get_query_metrics_command(ctx, query_id, on_cluster):
         SELECT
              ProfileEvents.Names "name",
              ProfileEvents.Values "value"
-        {% if cluster %}
+        {% if cluster -%}
         FROM clusterAllReplicas({{ cluster }}, system.query_log)
-        {% else %}
+        {% else -%}
         FROM system.query_log
-        {% endif %}
+        {% endif -%}
         ARRAY JOIN ProfileEvents
         WHERE type != 1
           AND query_id = '{{ query_id }}'
@@ -211,9 +211,9 @@ def get_queries(ctx,
     cluster = get_cluster_name(ctx) if on_cluster else None
     query_str = """
         SELECT
-        {% if cluster %}
+             {% if cluster -%}
              hostName() "host",
-        {% endif %}
+             {% endif -%}
              query_start_time,
              query_duration_ms,
              query_id,
@@ -231,67 +231,67 @@ def get_queries(ctx,
                             toString(client_version_minor), '.',
                             toString(client_version_patch))) "client",
              client_hostname,
-        {% if not verbose %}
+             {% if not verbose -%}
              exception
-        {% else %}
+             {%- else %}
              address,
              exception,
              stack_trace
-        {% endif %}
-        {% if cluster %}
+             {%- endif %}
+        {% if cluster -%}
         FROM clusterAllReplicas({{ cluster }}, system.query_log)
-        {% else %}
+        {% else -%}
         FROM system.query_log
-        {% endif %}
+        {% endif -%}
         WHERE type != 1
-        {% if min_date %}
+        {% if min_date -%}
           AND event_date >= toDate('{{ min_date }}')
-        {% elif min_time %}
+        {% elif min_time -%}
           AND event_date >= toDate('{{ min_time }}')
-        {% endif %}
-        {% if max_date %}
+        {% endif -%}
+        {% if max_date -%}
           AND event_date <= toDate('{{ max_date }}')
-        {% elif max_time %}
+        {% elif max_time -%}
           AND event_date <= toDate('{{ max_time }}')
-        {% endif %}
-        {% if min_time %}
+        {% endif -%}
+        {% if min_time -%}
           AND event_time >= toDateTime('{{ min_time }}')
-        {% endif %}
-        {% if max_time %}
+        {% endif -%}
+        {% if max_time -%}
           AND query_start_time <= toDateTime('{{ max_time }}')
-        {% endif %}
-        {% if user %}
+        {% endif -%}
+        {% if user -%}
           AND user = '{{ user }}'
-        {% endif %}
-        {% if exclude_user %}
+        {% endif -%}
+        {% if exclude_user -%}
           AND user != '{{ exclude_user }}'
-        {% endif %}
-        {% if query_id %}
+        {% endif -%}
+        {% if query_id -%}
           AND query_id = '{{ query_id }}'
-        {% endif %}
-        {% if query_pattern %}
+        {% endif -%}
+        {% if query_pattern -%}
           AND lower(query) LIKE lower('{{ query_pattern }}')
-        {% endif %}
-        {% if exclude_query_pattern %}
+        {% endif -%}
+        {% if exclude_query_pattern -%}
           AND lower(query) NOT LIKE lower('{{ exclude_query_pattern }}')
-        {% endif %}
-        {% if failed %}
+        {% endif -%}
+        {% if failed -%}
           AND exception != ''
-        {% endif %}
-        {% if completed %}
+        {% endif -%}
+        {% if completed -%}
           AND exception = ''
-        {% endif %}
-        {% if is_initial_query is true %}
+        {% endif -%}
+        {% if is_initial_query is true -%}
           AND is_initial_query = 1
-        {% elif is_initial_query is false %}
+        {% elif is_initial_query is false -%}
           AND is_initial_query = 0
-        {% endif %}
-        {% if error %}
+        {% endif -%}
+        {% if error -%}
           AND lower(exception) LIKE lower('{{ error }}')
-        {% endif %}
-        {% if not query_id %}
+        {% endif -%}
+        {% if not query_id -%}
         ORDER BY {{ order_by }} DESC
-        {% endif %}
+        {% endif -%}
         LIMIT {{ limit }}
         """
     return execute_query(ctx,
@@ -322,11 +322,11 @@ def get_query_settings(ctx, query_id, on_cluster=False):
         SELECT
              Settings.Names "name",
              Settings.Values "value"
-        {% if cluster %}
+        {% if cluster -%}
         FROM clusterAllReplicas({{ cluster }}, system.query_log)
-        {% else %}
+        {% else -%}
         FROM system.query_log
-        {% endif %}
+        {% endif -%}
         ARRAY JOIN Settings
         WHERE type != 1
           AND query_id = '{{ query_id }}'
@@ -340,11 +340,11 @@ def get_query_metrics(ctx, query_id, on_cluster=False):
         SELECT
              ProfileEvents.Names "name",
              ProfileEvents.Values "value"
-        {% if cluster %}
+        {% if cluster -%}
         FROM clusterAllReplicas({{ cluster }}, system.query_log)
-        {% else %}
+        {% else -%}
         FROM system.query_log
-        {% endif %}
+        {% endif -%}
         ARRAY JOIN ProfileEvents
         WHERE type != 1
           AND query_id = '{{ query_id }}'
