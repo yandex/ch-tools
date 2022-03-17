@@ -6,6 +6,7 @@ from click import Choice, group, option, pass_context
 from cloud.mdb.clickhouse.tools.chadmin.cli.async_metrics import list_async_metrics_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.crash_log import crash_log_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.databases import database_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.parts import part_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.system import system_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.dictionaries import list_dictionaries_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.events import list_events_command
@@ -46,6 +47,7 @@ def cli(ctx, format, debug):
 cli.add_command(database_group)
 cli.add_command(table_group)
 cli.add_command(partition_group)
+cli.add_command(part_group)
 cli.add_command(mutation_group)
 cli.add_command(query_log_group)
 cli.add_command(thread_log_group)
