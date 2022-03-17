@@ -5,14 +5,20 @@ def clickhouse_client(ctx):
     return ctx.obj['chcli']
 
 
-def execute_query(ctx, query, echo=False, dry_run=False, format='default', **kwargs):
+def execute_query(ctx, query, timeout=None, echo=False, dry_run=False, format='default', **kwargs):
     """
     Execute ClickHouse query.
     """
     if format == 'default':
         format = 'PrettyCompact'
 
-    return clickhouse_client(ctx).query(query, query_args=kwargs, format=format, echo=echo, dry_run=dry_run)
+    return clickhouse_client(ctx).query(
+        query=query,
+        query_args=kwargs,
+        timeout=timeout,
+        format=format,
+        echo=echo,
+        dry_run=dry_run)
 
 
 def get_config(ctx):

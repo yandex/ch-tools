@@ -13,6 +13,7 @@ def mutation_group():
 @option('--last', is_flag=True)
 @pass_context
 def get_mutation(ctx, mutation, last):
+    """Get mutation."""
     if bool(mutation) == bool(last):
         ctx.fail('Mutation must be specified.')
 
@@ -38,6 +39,7 @@ def get_mutation(ctx, mutation, last):
         help='Get mutations from all hosts in the cluster.')
 @pass_context
 def list_mutations(ctx, is_done, command_pattern, on_cluster):
+    """List mutations."""
     cluster = get_cluster_name(ctx) if on_cluster else None
     query = """
         SELECT
@@ -77,3 +79,14 @@ def list_mutations(ctx, is_done, command_pattern, on_cluster):
         cluster=cluster,
         format='Vertical')
     print(response)
+
+
+@mutation_group.command(name='kill')
+@pass_context
+def kill_mutation(ctx):
+    """Kill one or several mutations."""
+    query = """
+        KILL MUTATION
+        WHERE NOT is_done
+        """
+    print(execute_query(ctx, query, format='PrettyCompact'))
