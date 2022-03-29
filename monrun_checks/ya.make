@@ -16,6 +16,7 @@ PEERDIR(
     contrib/python/psutil
     contrib/python/pyOpenSSL
     contrib/python/tabulate
+    contrib/python/kazoo
     cloud/mdb/clickhouse/tools/common
 )
 

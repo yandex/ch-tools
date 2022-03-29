@@ -151,6 +151,9 @@ class ClickhouseConfig:
 
         return xmltodict.unparse(config, pretty=True)
 
+    def keeper_port(self):
+        return self._config.get('clickhouse', self._config.get('yandex', {})).get('keeper_server', {}).get('tcp_port')
+
     @staticmethod
     def load():
         return ClickhouseConfig(_load_config('/var/lib/clickhouse/preprocessed_configs/config.xml'))

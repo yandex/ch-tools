@@ -1,7 +1,7 @@
 """
 Variables that influence testing behavior are defined here.
 """
-
+import os
 import random
 
 from modules.utils import generate_random_string
@@ -14,6 +14,12 @@ def create():
     network_suffix = random.randint(0, 4096)
     network_name = f'test_net_{network_suffix}'
 
+    version_parts = os.getenv("CLICKHOUSE_VERSION", "0.0").split('.')
+    assert len(version_parts) >= 2, "Invalid version string"
+    maj_ver, min_ver = int(version_parts[0]), int(version_parts[1])
+    keeper_supported = maj_ver > 21 or (maj_ver == 21 and min_ver >= 8)
+    keeper_port = 2183
+
     services: dict = {
         'clickhouse': {
             'instances': ['clickhouse01', 'clickhouse02'],
@@ -21,6 +27,7 @@ def create():
                 'http': 8123,
                 'clickhouse': 9000,
                 'ssh': 22,
+                'keeper': keeper_port,
             },
             'depends_on': ['zookeeper'],
             'args': {
@@ -29,6 +36,10 @@ def create():
             'db': {
                 'user': 'reader',
                 'password': 'reader_password',
+            },
+            'keeper': {
+                'enabled': keeper_supported,
+                'port': keeper_port,
             },
         },
         'zookeeper': {

@@ -349,3 +349,27 @@ Feature: ch-monitoring tool
     """
     2;Some parts restore failed: 2(66%)
     """
+
+  @require_version_21.8
+  Scenario: Check CH Keeper alive
+    Given a working keeper on clickhouse01
+    When we execute command on clickhouse01
+     """
+     ch-monitoring keeper
+     """
+    Then we get response
+     """
+     0;OK
+     """
+    When we execute command on clickhouse01
+    """
+    supervisorctl stop clickhouse-server
+    """
+    When we execute command on clickhouse01
+    """"
+    ch-monitoring keeper
+    """
+    Then we get response contains
+    """
+    2;KazooTimeoutError('Connection time-out')
+    """
