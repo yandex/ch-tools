@@ -26,6 +26,26 @@ def step_wait_for_zookeeper_alive(context):
         client.stop()
 
 
+@given('a working keeper on {node:w}')
+@retry(wait=wait_fixed(0.5), stop=stop_after_attempt(360))
+def step_wait_for_keeper_alive(context, node):
+    """
+    Wait until clickhouse keeper is ready to accept incoming requests.
+    """
+    zk_container = get_container(context, node)
+    host, port = get_exposed_port(zk_container, context.conf['services']['clickhouse']['keeper']['port'])
+
+    client = KazooClient(f'{host}:{port}')
+    try:
+        client.start()
+        client.get('/')
+    except Exception:
+        client.stop()
+        raise
+    finally:
+        client.stop()
+
+
 @given('we have removed ZK metadata for {node:w}')
 def clean_zk_tables_metadata_for_host(context, node):
     """
