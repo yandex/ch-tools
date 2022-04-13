@@ -19,15 +19,16 @@ def get_table_command(ctx, database, table, active_parts):
 
 
 @table_group.command('list')
-@option('--database')
-@option('-t', '--table')
-@option('--exclude-table')
-@option('--engine')
+@option('--database', help='Filter tables to output by the specified database.')
+@option('-t', '--table', help='Output only the specified table.')
+@option('--exclude-table', help='Do not output the specified table.')
+@option('--engine', help='Filter tables to output by the specified engine.')
 @option('--format', default='PrettyCompact')
 @option('--active-parts', is_flag=True, help='Account only active data parts.')
 @option('-v', '--verbose', is_flag=True)
+@option('-l', '--limit', type=int, default=1000, help='Limit the max number of objects in the output.')
 @pass_context
-def list_tables_command(ctx, database, table, exclude_table, engine, active_parts, verbose, format):
+def list_tables_command(ctx, database, table, exclude_table, engine, active_parts, verbose, format, limit):
     if format and verbose:
         raise Exception('You can not pass both format and verbose flag')
     format = 'Vertical' if verbose else format
@@ -39,6 +40,7 @@ def list_tables_command(ctx, database, table, exclude_table, engine, active_part
                    engine=engine,
                    active_parts=active_parts,
                    verbose=verbose,
+                   limit=limit,
                    format=format))
 
 
@@ -81,6 +83,7 @@ def delete_tables_command(ctx, dry_run, all, database, table, exclude_table, clu
             {% if cluster %}
             ON CLUSTER '{{ cluster }}'
             {% endif %}
+            NO DELAY
             """
         execute_query(ctx,
                       query,
@@ -114,6 +117,7 @@ def get_tables(ctx,
                engine=None,
                active_parts=None,
                verbose=None,
+               limit=None,
                format=None):
     query = """
         SELECT
@@ -168,6 +172,9 @@ def get_tables(ctx,
           AND engine {{ format_str_match(engine) }}
         {% endif %}
         ORDER BY database, table
+        {% if limit is not none %}
+        LIMIT {{ limit }}
+        {% endif %}
         """
     return execute_query(ctx,
                          query,
@@ -177,4 +184,5 @@ def get_tables(ctx,
                          engine=engine,
                          active_parts=active_parts,
                          verbose=verbose,
+                         limit=limit,
                          format=format)
