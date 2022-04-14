@@ -19,6 +19,7 @@ from cloud.mdb.clickhouse.tools.chadmin.cli.partitions import partition_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.process import process_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.query_log import query_log_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.replication_queue import replication_queue_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.restore_replica import restore_replica_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.settings import list_settings_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.stack_trace import stack_trace_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.tables import table_group
@@ -55,6 +56,7 @@ cli.add_command(part_log_group)
 cli.add_command(crash_log_group)
 cli.add_command(process_group)
 cli.add_command(replication_queue_group)
+cli.add_command(restore_replica_command)
 cli.add_command(list_settings_command)
 cli.add_command(list_functions_command)
 cli.add_command(list_macros_command)
