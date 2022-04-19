@@ -10,7 +10,7 @@ def restore_replica_command(ctx, on_cluster):
     query = """
          SELECT database, name
          FROM system.tables
-         WHERE engine LIKE '%Replicated%'
+         WHERE database NOT IN ('system') AND engine LIKE '%Replicated%'
     """
     tables = execute_query(ctx, query, format='JSON')['data']
     for table in tables:
