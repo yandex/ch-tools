@@ -12,8 +12,9 @@ def query_log_group():
 
 @query_log_group.command('get')
 @argument('query_id')
-@option('--cluster', '--on-cluster', 'on_cluster', is_flag=True,
-        help='Search for log record on all hosts of the cluster.')
+@option(
+    '--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Search for log record on all hosts of the cluster.'
+)
 @pass_context
 def get_query_command(ctx, **kwargs):
     print(get_queries(ctx, **kwargs, verbose=True))
@@ -39,12 +40,12 @@ def get_query_command(ctx, **kwargs):
 @option('--completed', is_flag=True)
 @option('--is-initial-query', '--initial', 'is_initial_query', type=bool)
 @option('-v', '--verbose', is_flag=True)
-@option('--cluster', '--on-cluster', 'on_cluster', is_flag=True,
-        help='Get log records from all hosts in the cluster.')
-@option('--order-by',
-        type=Choice(
-            ['query_start_time', 'query_duration_ms', 'memory_usage', 'read_rows', 'written_rows', 'result_rows']),
-        default='query_start_time')
+@option('--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Get log records from all hosts in the cluster.')
+@option(
+    '--order-by',
+    type=Choice(['query_start_time', 'query_duration_ms', 'memory_usage', 'read_rows', 'written_rows', 'result_rows']),
+    default='query_start_time',
+)
 @option('-l', '--limit', default=10)
 @pass_context
 def list_queries_command(ctx, date, min_date, max_date, min_time, max_time, time, **kwargs):
@@ -71,8 +72,9 @@ def list_queries_command(ctx, date, min_date, max_date, min_time, max_time, time
 @option('--time')
 @option('--failed', is_flag=True)
 @pass_context
-def get_statistics_command(ctx, user, exclude_user, query_pattern, error, date, min_date, max_date, min_time, max_time,
-                           time, failed):
+def get_statistics_command(
+    ctx, user, exclude_user, query_pattern, error, date, min_date, max_date, min_time, max_time, time, failed
+):
     min_date = min_date or date
     max_date = max_date or date
     min_time = min_time or time
@@ -129,24 +131,28 @@ def get_statistics_command(ctx, user, exclude_user, query_pattern, error, date, 
         {% endif -%}
     """
     print(
-        execute_query(ctx,
-                      query_str,
-                      user=user,
-                      exclude_user=exclude_user,
-                      query_pattern=query_pattern,
-                      error=error,
-                      min_date=min_date,
-                      max_date=max_date,
-                      min_time=min_time,
-                      max_time=max_time,
-                      failed=failed,
-                      format='Vertical'))
+        execute_query(
+            ctx,
+            query_str,
+            user=user,
+            exclude_user=exclude_user,
+            query_pattern=query_pattern,
+            error=error,
+            min_date=min_date,
+            max_date=max_date,
+            min_time=min_time,
+            max_time=max_time,
+            failed=failed,
+            format='Vertical',
+        )
+    )
 
 
 @query_log_group.command('get-settings')
 @argument('query_id')
-@option('--cluster', '--on-cluster', 'on_cluster', is_flag=True,
-        help='Search for log record on all hosts of the cluster.')
+@option(
+    '--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Search for log record on all hosts of the cluster.'
+)
 @pass_context
 def get_query_settings_command(ctx, query_id, on_cluster):
     cluster = get_cluster_name(ctx) if on_cluster else None
@@ -168,8 +174,9 @@ def get_query_settings_command(ctx, query_id, on_cluster):
 
 @query_log_group.command('get-metrics')
 @argument('query_id')
-@option('--cluster', '--on-cluster', 'on_cluster', is_flag=True,
-        help='Search for log record on all hosts of the cluster.')
+@option(
+    '--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Search for log record on all hosts of the cluster.'
+)
 @pass_context
 def get_query_metrics_command(ctx, query_id, on_cluster):
     cluster = get_cluster_name(ctx) if on_cluster else None
@@ -190,24 +197,26 @@ def get_query_metrics_command(ctx, query_id, on_cluster):
     print(execute_query(ctx, query_str, query_id=query_id, cluster=cluster))
 
 
-def get_queries(ctx,
-                user=None,
-                exclude_user=None,
-                query_id=None,
-                query_pattern=None,
-                exclude_query_pattern=None,
-                error=None,
-                min_date=None,
-                max_date=None,
-                min_time=None,
-                max_time=None,
-                failed=None,
-                completed=None,
-                is_initial_query=None,
-                on_cluster=False,
-                limit=10,
-                order_by='query_start_time',
-                verbose=False):
+def get_queries(
+    ctx,
+    user=None,
+    exclude_user=None,
+    query_id=None,
+    query_pattern=None,
+    exclude_query_pattern=None,
+    error=None,
+    min_date=None,
+    max_date=None,
+    min_time=None,
+    max_time=None,
+    failed=None,
+    completed=None,
+    is_initial_query=None,
+    on_cluster=False,
+    limit=10,
+    order_by='query_start_time',
+    verbose=False,
+):
     cluster = get_cluster_name(ctx) if on_cluster else None
     query_str = """
         SELECT
@@ -294,26 +303,28 @@ def get_queries(ctx,
         {% endif -%}
         LIMIT {{ limit }}
         """
-    return execute_query(ctx,
-                         query_str,
-                         user=user,
-                         exclude_user=exclude_user,
-                         query_id=query_id,
-                         query_pattern=query_pattern,
-                         exclude_query_pattern=exclude_query_pattern,
-                         error=error,
-                         min_date=min_date,
-                         max_date=max_date,
-                         min_time=min_time,
-                         max_time=max_time,
-                         failed=failed,
-                         completed=completed,
-                         is_initial_query=is_initial_query,
-                         cluster=cluster,
-                         limit=limit,
-                         verbose=verbose,
-                         order_by=order_by,
-                         format='Vertical')
+    return execute_query(
+        ctx,
+        query_str,
+        user=user,
+        exclude_user=exclude_user,
+        query_id=query_id,
+        query_pattern=query_pattern,
+        exclude_query_pattern=exclude_query_pattern,
+        error=error,
+        min_date=min_date,
+        max_date=max_date,
+        min_time=min_time,
+        max_time=max_time,
+        failed=failed,
+        completed=completed,
+        is_initial_query=is_initial_query,
+        cluster=cluster,
+        limit=limit,
+        verbose=verbose,
+        order_by=order_by,
+        format='Vertical',
+    )
 
 
 def get_query_settings(ctx, query_id, on_cluster=False):

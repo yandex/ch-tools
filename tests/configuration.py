@@ -101,6 +101,7 @@ def _dbaas_conf(services: dict, network_name: str) -> dict:
     """
     Generate dbaas.conf contents.
     """
+
     def _fqdn(instance_name):
         return f'{instance_name}.{network_name}'
 
@@ -114,8 +115,7 @@ def _dbaas_conf(services: dict, network_name: str) -> dict:
                         'shard_id1': {
                             'name': 'shard1',
                             'hosts': {
-                                _fqdn(instance_name): {}
-                                for instance_name in services['clickhouse']['instances']
+                                _fqdn(instance_name): {} for instance_name in services['clickhouse']['instances']
                             },
                         },
                     },

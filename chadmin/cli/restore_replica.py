@@ -50,8 +50,7 @@ def _restore(ctx, cluster, database, table):
             ON CLUSTER '{{ cluster }}'
         {% endif %}
     """
-    return execute_query(ctx, restore_query, database=database, table=table,
-                         cluster=cluster, format=None, timeout=600)
+    return execute_query(ctx, restore_query, database=database, table=table, cluster=cluster, format=None, timeout=600)
 
 
 def _restart(ctx, cluster, database, table):
@@ -62,5 +61,4 @@ def _restart(ctx, cluster, database, table):
         {% endif %}
             `{{ database }}`.`{{ table }}`
     """
-    return execute_query(ctx, restart_query, database=database, table=table,
-                         cluster=cluster, format=None)
+    return execute_query(ctx, restart_query, database=database, table=table, cluster=cluster, format=None)

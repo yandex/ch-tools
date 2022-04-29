@@ -31,12 +31,9 @@ def get_mutation(ctx, mutation, last):
 
 
 @mutation_group.command(name='list')
-@option('--completed/--incompleted', 'is_done', default=None,
-        help='Output only completed / incompleted mutations.')
-@option('--command', 'command_pattern',
-        help='Filter mutations to output by command pattern.')
-@option('--cluster', '--on-cluster', 'on_cluster', is_flag=True,
-        help='Get mutations from all hosts in the cluster.')
+@option('--completed/--incompleted', 'is_done', default=None, help='Output only completed / incompleted mutations.')
+@option('--command', 'command_pattern', help='Filter mutations to output by command pattern.')
+@option('--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Get mutations from all hosts in the cluster.')
 @pass_context
 def list_mutations(ctx, is_done, command_pattern, on_cluster):
     """List mutations."""
@@ -72,12 +69,8 @@ def list_mutations(ctx, is_done, command_pattern, on_cluster):
         {% endif %}
         """
     response = execute_query(
-        ctx,
-        query,
-        is_done=is_done,
-        command_pattern=command_pattern,
-        cluster=cluster,
-        format='Vertical')
+        ctx, query, is_done=is_done, command_pattern=command_pattern, cluster=cluster, format='Vertical'
+    )
     print(response)
 
 

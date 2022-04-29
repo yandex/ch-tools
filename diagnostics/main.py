@@ -539,6 +539,7 @@ class DiagnosticsData:
         """
         Dump diagnostic data in Yandex wiki format.
         """
+
         def _write_title(buffer, value):
             buffer.write(f'===+ {value}\n')
 
@@ -667,110 +668,137 @@ def main():
     diagnostics.add_xml_document('ClickHouse users configuration', ch_users_config.dump())
 
     if version_ge(version, '20.8'):
-        add_query(diagnostics, 'Access configuration',
-                  client=client,
-                  query=SELECT_ACCESS,
-                  format='TSVRaw')
-        add_query(diagnostics, 'Quotas',
-                  client=client,
-                  query=SELECT_QUOTA_USAGE,
-                  format='Vertical')
+        add_query(diagnostics, 'Access configuration', client=client, query=SELECT_ACCESS, format='TSVRaw')
+        add_query(diagnostics, 'Quotas', client=client, query=SELECT_QUOTA_USAGE, format='Vertical')
 
-    add_query(diagnostics, 'Database engines',
-              client=client,
-              query=SELECT_DATABASE_ENGINES,
-              format='PrettyCompactNoEscapes',
-              section='Schema')
-    add_query(diagnostics, 'Databases (top 10 by size)',
-              client=client,
-              query=SELECT_DATABASES,
-              format='PrettyCompactNoEscapes',
-              section='Schema')
-    add_query(diagnostics, 'Table engines',
-              client=client,
-              query=SELECT_TABLE_ENGINES,
-              format='PrettyCompactNoEscapes',
-              section='Schema')
-    add_query(diagnostics, 'Dictionaries',
-              client=client,
-              query=SELECT_DICTIONARIES,
-              format='PrettyCompactNoEscapes',
-              section='Schema')
+    add_query(
+        diagnostics,
+        'Database engines',
+        client=client,
+        query=SELECT_DATABASE_ENGINES,
+        format='PrettyCompactNoEscapes',
+        section='Schema',
+    )
+    add_query(
+        diagnostics,
+        'Databases (top 10 by size)',
+        client=client,
+        query=SELECT_DATABASES,
+        format='PrettyCompactNoEscapes',
+        section='Schema',
+    )
+    add_query(
+        diagnostics,
+        'Table engines',
+        client=client,
+        query=SELECT_TABLE_ENGINES,
+        format='PrettyCompactNoEscapes',
+        section='Schema',
+    )
+    add_query(
+        diagnostics,
+        'Dictionaries',
+        client=client,
+        query=SELECT_DICTIONARIES,
+        format='PrettyCompactNoEscapes',
+        section='Schema',
+    )
 
-    add_query(diagnostics, 'Replicated tables (top 10 by absolute delay)',
-              client=client,
-              query=SELECT_REPLICAS,
-              format='PrettyCompactNoEscapes',
-              section='Replication')
-    add_query(diagnostics, 'Replication queue (top 20 oldest tasks)',
-              client=client,
-              query=SELECT_REPLICATION_QUEUE,
-              format='Vertical',
-              section='Replication')
+    add_query(
+        diagnostics,
+        'Replicated tables (top 10 by absolute delay)',
+        client=client,
+        query=SELECT_REPLICAS,
+        format='PrettyCompactNoEscapes',
+        section='Replication',
+    )
+    add_query(
+        diagnostics,
+        'Replication queue (top 20 oldest tasks)',
+        client=client,
+        query=SELECT_REPLICATION_QUEUE,
+        format='Vertical',
+        section='Replication',
+    )
     if version_ge(version, '21.3'):
-        add_query(diagnostics, 'Replicated fetches',
-                  client=client,
-                  query=SELECT_REPLICATED_FETCHES,
-                  format='Vertical',
-                  section='Replication')
+        add_query(
+            diagnostics,
+            'Replicated fetches',
+            client=client,
+            query=SELECT_REPLICATED_FETCHES,
+            format='Vertical',
+            section='Replication',
+        )
 
-    add_query(diagnostics, 'Top 10 tables by max parts per partition',
-              client=client,
-              query=SELECT_PARTS_PER_TABLE,
-              format='PrettyCompactNoEscapes')
-    add_query(diagnostics, 'Merges in progress',
-              client=client,
-              query=SELECT_MERGES,
-              format='Vertical')
-    add_query(diagnostics, 'Mutations in progress',
-              client=client,
-              query=SELECT_MUTATIONS,
-              format='Vertical')
-    add_query(diagnostics, 'Recent data parts (modification time within last 3 minutes)',
-              client=client,
-              query=SELECT_RECENT_DATA_PARTS,
-              format='Vertical')
+    add_query(
+        diagnostics,
+        'Top 10 tables by max parts per partition',
+        client=client,
+        query=SELECT_PARTS_PER_TABLE,
+        format='PrettyCompactNoEscapes',
+    )
+    add_query(diagnostics, 'Merges in progress', client=client, query=SELECT_MERGES, format='Vertical')
+    add_query(diagnostics, 'Mutations in progress', client=client, query=SELECT_MUTATIONS, format='Vertical')
+    add_query(
+        diagnostics,
+        'Recent data parts (modification time within last 3 minutes)',
+        client=client,
+        query=SELECT_RECENT_DATA_PARTS,
+        format='Vertical',
+    )
 
-    add_query(diagnostics, 'system.detached_parts',
-              client=client,
-              query=SELECT_DETACHED_DATA_PARTS,
-              format='PrettyCompactNoEscapes',
-              section='Detached data')
-    add_command(diagnostics, 'Disk space usage',
-                command='du -sh -L -c /var/lib/clickhouse/data/*/*/detached/* | sort -rsh',
-                section='Detached data')
+    add_query(
+        diagnostics,
+        'system.detached_parts',
+        client=client,
+        query=SELECT_DETACHED_DATA_PARTS,
+        format='PrettyCompactNoEscapes',
+        section='Detached data',
+    )
+    add_command(
+        diagnostics,
+        'Disk space usage',
+        command='du -sh -L -c /var/lib/clickhouse/data/*/*/detached/* | sort -rsh',
+        section='Detached data',
+    )
 
-    add_query(diagnostics, 'Queries in progress (process list)',
-              client=client,
-              query=SELECT_PROCESSES,
-              format='Vertical',
-              section='Queries')
-    add_query(diagnostics, 'Top 10 queries by duration',
-              client=client,
-              query=SELECT_TOP_QUERIES_BY_DURATION,
-              format='Vertical',
-              section='Queries')
-    add_query(diagnostics, 'Top 10 queries by memory usage',
-              client=client,
-              query=SELECT_TOP_QUERIES_BY_MEMORY_USAGE,
-              format='Vertical',
-              section='Queries')
-    add_query(diagnostics, 'Last 10 failed queries',
-              client=client,
-              query=SELECT_FAILED_QUERIES,
-              format='Vertical',
-              section='Queries')
+    add_query(
+        diagnostics,
+        'Queries in progress (process list)',
+        client=client,
+        query=SELECT_PROCESSES,
+        format='Vertical',
+        section='Queries',
+    )
+    add_query(
+        diagnostics,
+        'Top 10 queries by duration',
+        client=client,
+        query=SELECT_TOP_QUERIES_BY_DURATION,
+        format='Vertical',
+        section='Queries',
+    )
+    add_query(
+        diagnostics,
+        'Top 10 queries by memory usage',
+        client=client,
+        query=SELECT_TOP_QUERIES_BY_MEMORY_USAGE,
+        format='Vertical',
+        section='Queries',
+    )
+    add_query(
+        diagnostics,
+        'Last 10 failed queries',
+        client=client,
+        query=SELECT_FAILED_QUERIES,
+        format='Vertical',
+        section='Queries',
+    )
 
-    add_query(diagnostics, 'Stack traces',
-              client=client,
-              query=SELECT_STACK_TRACES,
-              format='Vertical')
+    add_query(diagnostics, 'Stack traces', client=client, query=SELECT_STACK_TRACES, format='Vertical')
 
     if 'crash_log' in system_tables:
-        add_query(diagnostics, 'Crash log',
-                  client=client,
-                  query=SELECT_CRASH_LOG,
-                  format='Vertical')
+        add_query(diagnostics, 'Crash log', client=client, query=SELECT_CRASH_LOG, format='Vertical')
 
     if args.full:
         add_command(diagnostics, 'monrun', r'monrun | sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2})?)?[mGK]//g"')
@@ -785,15 +813,9 @@ def parse_args():
     Parse command-line arguments.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('--format',
-                        choices=['json', 'yaml', 'json.gz', 'yaml.gz', 'wiki', 'wiki.gz'],
-                        default='wiki')
-    parser.add_argument('--normalize-queries',
-                        action='store_true',
-                        default=False)
-    parser.add_argument('--full',
-                        action='store_true',
-                        default=False)
+    parser.add_argument('--format', choices=['json', 'yaml', 'json.gz', 'yaml.gz', 'wiki', 'wiki.gz'], default='wiki')
+    parser.add_argument('--normalize-queries', action='store_true', default=False)
+    parser.add_argument('--full', action='store_true', default=False)
     return parser.parse_args()
 
 
@@ -828,13 +850,17 @@ def add_chart_urls(diagnostics, dbaas_config):
     if dbaas_config.vtype == 'porto':
         solomon_url = 'https://solomon.yandex-team.ru'
         cluster_dashboard = f'{solomon_url}/?project=internal-mdb&service=mdb&dashboard=mdb-prod-cluster-clickhouse&cid={cluster_id}&e={end_time}'
-        host_dashboard = f'{solomon_url}/?project=internal-mdb&cluster=internal-mdb_dom0&service=dom0&host=by_cid_container&dc=by_cid_container' \
-                         f'&dashboard=internal-mdb-porto-instance&l.container={host}&l.cid={cluster_id}&e={end_time}'
+        host_dashboard = (
+            f'{solomon_url}/?project=internal-mdb&cluster=internal-mdb_dom0&service=dom0&host=by_cid_container&dc=by_cid_container'
+            f'&dashboard=internal-mdb-porto-instance&l.container={host}&l.cid={cluster_id}&e={end_time}'
+        )
     else:
         solomon_url = 'https://solomon.cloud.yandex-team.ru'
         cluster_dashboard = f'{solomon_url}/?project=yandexcloud&service=yandexcloud_dbaas&dashboard=mdb-prod-cluster-clickhouse&cid={cluster_id}&e={end_time}'
-        host_dashboard = f'{solomon_url}/?project=yandexcloud&service=yandexcloud_dbaas&dashboard=cloud-mdb-instance-system' \
-                         f'&cluster=mdb_{cluster_id}&host={host}&e={end_time}'
+        host_dashboard = (
+            f'{solomon_url}/?project=yandexcloud&service=yandexcloud_dbaas&dashboard=cloud-mdb-instance-system'
+            f'&cluster=mdb_{cluster_id}&host={host}&e={end_time}'
+        )
     diagnostics.add_url('Cluster dashboard', cluster_dashboard, section='Charts')
     diagnostics.add_url('Host dashboard', host_dashboard, section='Charts')
 
@@ -845,10 +871,8 @@ def add_query(diagnostics, name, client, query, format, section=None):
     }
     query = client.render_query(query, **query_args)
     diagnostics.add_query(
-        name=name,
-        query=query,
-        result=execute_query(client, query, render_query=False, format=format),
-        section=section)
+        name=name, query=query, result=execute_query(client, query, render_query=False, format=format), section=section
+    )
 
 
 def execute_query(client, query, render_query=True, format=None):
@@ -862,11 +886,7 @@ def execute_query(client, query, render_query=True, format=None):
 
 
 def add_command(diagnostics, name, command, section=None):
-    diagnostics.add_command(
-        name=name,
-        command=command,
-        result=execute_command(command),
-        section=section)
+    diagnostics.add_command(name=name, command=command, result=execute_command(command), section=section)
 
 
 def execute_command(command, input=None):

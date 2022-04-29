@@ -16,6 +16,7 @@ class ClickhouseClient:
     """
     ClickHouse Client.
     """
+
     def __init__(self, context: ContextT, node_name: str) -> None:
         protocol = 'http'
         port = context.conf['services']['clickhouse']['expose'][protocol]
@@ -118,12 +119,14 @@ class ClickhouseClient:
             """
         return self._query('GET', query)['data']
 
-    def _query(self,
-               method: str,
-               query: str = None,
-               url: str = None,
-               params: dict = None,
-               data: Union[bytes, str] = None) -> Any:
+    def _query(
+        self,
+        method: str,
+        query: str = None,
+        url: str = None,
+        params: dict = None,
+        data: Union[bytes, str] = None,
+    ) -> Any:
         if url:
             url = urljoin(self._url, url)
         else:

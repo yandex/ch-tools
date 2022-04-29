@@ -21,13 +21,16 @@ def list_threads_command(ctx, query_id, date, min_date, max_date, min_time, max_
     min_date = min_date or date
     max_date = max_date or date
     print(
-        get_threads(ctx,
-                    query_id=query_id,
-                    min_date=min_date,
-                    max_date=max_date,
-                    min_time=min_time,
-                    max_time=max_time,
-                    verbose=verbose))
+        get_threads(
+            ctx,
+            query_id=query_id,
+            min_date=min_date,
+            max_date=max_date,
+            min_time=min_time,
+            max_time=max_time,
+            verbose=verbose,
+        )
+    )
 
 
 def get_threads(ctx, query_id=None, min_date=None, max_date=None, min_time=None, max_time=None, verbose=False):
@@ -67,15 +70,17 @@ def get_threads(ctx, query_id=None, min_date=None, max_date=None, min_time=None,
         {% if query_id %}
         {% endif %}
         """
-    return execute_query(ctx,
-                         query_str,
-                         query_id=query_id,
-                         min_date=min_date,
-                         max_date=max_date,
-                         min_time=min_time,
-                         max_time=max_time,
-                         verbose=verbose,
-                         format='Vertical')
+    return execute_query(
+        ctx,
+        query_str,
+        query_id=query_id,
+        min_date=min_date,
+        max_date=max_date,
+        min_time=min_time,
+        max_time=max_time,
+        verbose=verbose,
+        format='Vertical',
+    )
 
 
 @thread_log_group.command('get-metrics')
@@ -116,10 +121,13 @@ def get_thread_metrics_command(ctx, query_id, date, min_date, max_date, min_time
         ORDER BY thread_name, thread_number, name
         """
     print(
-        execute_query(ctx,
-                      query_str,
-                      query_id=query_id,
-                      min_date=min_date,
-                      max_date=max_date,
-                      min_time=min_time,
-                      max_time=max_time))
+        execute_query(
+            ctx,
+            query_str,
+            query_id=query_id,
+            min_date=min_date,
+            max_date=max_date,
+            min_time=min_time,
+            max_time=max_time,
+        )
+    )

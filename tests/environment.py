@@ -7,6 +7,8 @@ import os
 import env_control
 from modules.logs import save_logs
 
+REQUIRE_VERSION_PREFIX_LEN = len("require_version_")
+
 try:
     import ipdb as pdb
 except ImportError:
@@ -62,7 +64,7 @@ def _check_tags(scenario):
     tags = list(filter(lambda tag: tag.startswith('require_version_'), scenario.tags))
     assert len(tags) <= 1, "Only one require_version_X_Y accepted"
     if len(tags) == 1:
-        req_ver_parts = tags[0][len("require_version_"):].split('.')
+        req_ver_parts = tags[0][REQUIRE_VERSION_PREFIX_LEN:].split('.')
         assert len(req_ver_parts) == 2, "Invalid required version"
         maj_req_ver, min_req_ver = int(req_ver_parts[0]), int(req_ver_parts[1])
 

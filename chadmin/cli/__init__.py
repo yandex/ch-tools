@@ -13,12 +13,8 @@ def execute_query(ctx, query, timeout=None, echo=False, dry_run=False, format='d
         format = 'PrettyCompact'
 
     return clickhouse_client(ctx).query(
-        query=query,
-        query_args=kwargs,
-        timeout=timeout,
-        format=format,
-        echo=echo,
-        dry_run=dry_run)
+        query=query, query_args=kwargs, timeout=timeout, format=format, echo=echo, dry_run=dry_run
+    )
 
 
 def get_config(ctx):

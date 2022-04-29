@@ -5,7 +5,8 @@ import json
 import os
 
 from docker.models.containers import Container
-from tenacity import (retry, retry_if_exception_type, stop_after_attempt, wait_fixed)
+from tenacity import (retry, retry_if_exception_type, stop_after_attempt,
+                      wait_fixed)
 
 from .docker import copy_container_dir, get_container
 from .typing import ContextT
@@ -15,6 +16,7 @@ class MinioException(Exception):
     """
     Minion exception.
     """
+
     def __init__(self, response: dict) -> None:
         super().__init__(self._fmt_message(response))
         self.response = response
@@ -39,6 +41,7 @@ class BucketAlreadyOwnedByYou(MinioException):
     """
     BucketAlreadyOwnedByYou Minion exception.
     """
+
     pass
 
 

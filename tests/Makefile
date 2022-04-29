@@ -23,15 +23,11 @@ staging/tools/:
 all: build lint test
 
 .PHONY: lint
-lint: isort yapf flake8 pylint mypy
+lint: isort flake8 pylint mypy
 
 .PHONY: isort
 isort: venv
 	venv/bin/isort --recursive --check-only --ignore-whitespace --diff modules steps *.py
-
-.PHONY: yapf
-yapf: venv
-	venv/bin/yapf -rpd modules steps *.py
 
 .PHONY: flake8
 flake8: venv
@@ -48,7 +44,6 @@ mypy: venv
 .PHONY: format
 format: venv
 	venv/bin/isort --recursive --apply modules steps *.py
-	venv/bin/yapf --recursive --parallel --in-place modules steps *.py
 
 .PHONY: test
 test: create_env
@@ -105,7 +100,7 @@ help:
 	@echo "  stop_env                   Stop test environment runtime."
 	@echo "  clean_env                  Clean up test environment."
 	@echo "  format                     Re-format source code to conform style settings enforced by"
-	@echo "                             isort and yapf tools."
+	@echo "                             isort tool."
 	@echo "  generate_requirements      Re-generate requirements.txt from requirements.in.txt."
 	@echo "  help                       Show this help message."
 	@echo

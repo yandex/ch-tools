@@ -8,11 +8,7 @@ import subprocess
 
 from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseClient
 
-CLIENT_RETRIES = dict(max_tries=6,
-                      delay=0.1,
-                      backoff=2,
-                      max_jitter=0.8,
-                      max_delay=60)
+CLIENT_RETRIES = dict(max_tries=6, delay=0.1, backoff=2, max_jitter=0.8, max_delay=60)
 
 GET_USER_TABLES_SQL = """
     SELECT name
@@ -28,21 +24,15 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', default=socket.getfqdn(), help='')
     parser.add_argument('--port', default=8443, help='Port for connection to local ClickHouse')
-    parser.add_argument('--tables',
-                        default='',
-                        help='Comma-separated list of tables to restore')
-    parser.add_argument('--service-manager',
-                        choices=['systemd', 'supervisord'],
-                        default='systemd')
-    parser.add_argument('--insecure',
-                        action='store_true',
-                        default=False,
-                        help='Disable certificate verification for ClickHouse requests.')
-    parser.add_argument('-v',
-                        '--verbose',
-                        action='store_true',
-                        default=False,
-                        help='Verbose mode.')
+    parser.add_argument('--tables', default='', help='Comma-separated list of tables to restore')
+    parser.add_argument('--service-manager', choices=['systemd', 'supervisord'], default='systemd')
+    parser.add_argument(
+        '--insecure',
+        action='store_true',
+        default=False,
+        help='Disable certificate verification for ClickHouse requests.',
+    )
+    parser.add_argument('-v', '--verbose', action='store_true', default=False, help='Verbose mode.')
     parser.add_argument('--zk-root', default='/clickhouse', help='zk path to clean metadata')
 
     return parser.parse_args()
