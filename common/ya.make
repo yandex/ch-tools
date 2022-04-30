@@ -2,6 +2,8 @@ OWNER(g:mdb)
 
 PY3_LIBRARY(ch-tools-common)
 
+STYLE_PYTHON()
+
 ALL_PY_SRCS(RECURSIVE)
 
 PEERDIR(

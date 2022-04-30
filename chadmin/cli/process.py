@@ -21,21 +21,23 @@ def get_process_command(ctx, query_id):
 @option('-U', '--exclude-user')
 @option('--query')
 @option('-v', '--verbose', is_flag=True)
-@option('--cluster', '--on-cluster', 'on_cluster', is_flag=True,
-        help='Get records from all hosts in the cluster.')
+@option('--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Get records from all hosts in the cluster.')
 @option('--order-by', type=Choice(['elapsed', 'memory_usage']), default='elapsed')
 @option('-l', '--limit')
 @pass_context
 def list_processes_command(ctx, user, exclude_user, query, verbose, on_cluster, order_by, limit):
     print(
-        get_processes(ctx,
-                      user=user,
-                      exclude_user=exclude_user,
-                      query_pattern=query,
-                      on_cluster=on_cluster,
-                      limit=limit,
-                      order_by=order_by,
-                      verbose=verbose))
+        get_processes(
+            ctx,
+            user=user,
+            exclude_user=exclude_user,
+            query_pattern=query,
+            on_cluster=on_cluster,
+            limit=limit,
+            order_by=order_by,
+            verbose=verbose,
+        )
+    )
 
 
 @process_group.command('kill')
@@ -96,15 +98,17 @@ def get_process_metrics_command(ctx, query_id):
     print(execute_query(ctx, query_str, query_id=query_id))
 
 
-def get_processes(ctx,
-                  user=None,
-                  exclude_user=None,
-                  query_id=None,
-                  query_pattern=None,
-                  on_cluster=None,
-                  limit=None,
-                  order_by='elsapsed',
-                  verbose=False):
+def get_processes(
+    ctx,
+    user=None,
+    exclude_user=None,
+    query_id=None,
+    query_pattern=None,
+    on_cluster=None,
+    limit=None,
+    order_by='elsapsed',
+    verbose=False,
+):
     cluster = get_cluster_name(ctx) if on_cluster else None
     query_str = """
         SELECT
@@ -158,14 +162,16 @@ def get_processes(ctx,
         LIMIT {{ limit }}
         {% endif %}
         """
-    return execute_query(ctx,
-                         query_str,
-                         user=user,
-                         exclude_user=exclude_user,
-                         query_id=query_id,
-                         query_pattern=query_pattern,
-                         cluster=cluster,
-                         limit=limit,
-                         verbose=verbose,
-                         order_by=order_by,
-                         format='Vertical')
+    return execute_query(
+        ctx,
+        query_str,
+        user=user,
+        exclude_user=exclude_user,
+        query_id=query_id,
+        query_pattern=query_pattern,
+        cluster=cluster,
+        limit=limit,
+        verbose=verbose,
+        order_by=order_by,
+        format='Vertical',
+    )

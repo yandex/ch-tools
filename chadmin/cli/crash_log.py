@@ -9,8 +9,7 @@ def crash_log_group():
 
 
 @crash_log_group.command('list')
-@option('--cluster', '--on-cluster', 'on_cluster', is_flag=True,
-        help='Get log records from all hosts in the cluster.')
+@option('--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Get log records from all hosts in the cluster.')
 @pass_context
 def list_crashes_command(ctx, on_cluster):
     cluster = get_cluster_name(ctx) if on_cluster else None

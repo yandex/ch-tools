@@ -31,18 +31,20 @@ def list_part_log_command(ctx, date, min_date, max_date, min_time, max_time, tim
     print(list_part_log(ctx, min_date=min_date, max_date=max_date, min_time=min_time, max_time=max_time, **kwargs))
 
 
-def list_part_log(ctx,
-                  database=None,
-                  table=None,
-                  partition=None,
-                  part=None,
-                  min_date=None,
-                  max_date=None,
-                  min_time=None,
-                  max_time=None,
-                  order_by='time',
-                  limit=10,
-                  verbose=False):
+def list_part_log(
+    ctx,
+    database=None,
+    table=None,
+    partition=None,
+    part=None,
+    min_date=None,
+    max_date=None,
+    min_time=None,
+    max_time=None,
+    order_by='time',
+    limit=10,
+    verbose=False,
+):
     order_by = {
         'time': 'event_time',
         'size': 'size_in_bytes',
@@ -98,17 +100,19 @@ def list_part_log(ctx,
         ORDER BY {{ order_by }} DESC
         LIMIT {{ limit }}
         """
-    return execute_query(ctx,
-                         query_str,
-                         database=database,
-                         table=table,
-                         partition=partition,
-                         part=part,
-                         min_date=min_date,
-                         max_date=max_date,
-                         min_time=min_time,
-                         max_time=max_time,
-                         order_by=order_by,
-                         limit=limit,
-                         verbose=verbose,
-                         format='Vertical')
+    return execute_query(
+        ctx,
+        query_str,
+        database=database,
+        table=table,
+        partition=partition,
+        part=part,
+        min_date=min_date,
+        max_date=max_date,
+        min_time=min_time,
+        max_time=max_time,
+        order_by=order_by,
+        limit=limit,
+        verbose=verbose,
+        format='Vertical',
+    )

@@ -51,6 +51,7 @@ def clean_zk_tables_metadata_for_host(context, node):
     """
     Remove all metadata for specified host from ZK
     """
+
     def recursive_remove_node_data(zk_client, path, node):
         for subpath in zk_client.get_children(path):
             if subpath == node:

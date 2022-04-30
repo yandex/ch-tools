@@ -13,9 +13,12 @@ PART_LOAD_SPEED = 5  # in data parts per second
 
 
 @command('wait-started')
-@option('--timeout', type=int,
-        help='Max amount of time to wait, in seconds. If not set, the timeout is determined dynamically'
-             ' based on data part count.')
+@option(
+    '--timeout',
+    type=int,
+    help='Max amount of time to wait, in seconds. If not set, the timeout is determined dynamically'
+    ' based on data part count.',
+)
 @option('-q', '--quiet', is_flag=True, default=False, help='Quiet mode.')
 @pass_context
 def wait_started_command(ctx, timeout, quiet):

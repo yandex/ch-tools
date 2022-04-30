@@ -105,9 +105,6 @@ def get_databases(ctx, database=None, exclude_database=None, active_parts=None, 
         {% endif %}
         ORDER BY database
         """
-    return execute_query(ctx,
-                         query,
-                         database=database,
-                         exclude_database=exclude_database,
-                         active_parts=active_parts,
-                         format=format)
+    return execute_query(
+        ctx, query, database=database, exclude_database=exclude_database, active_parts=active_parts, format=format
+    )

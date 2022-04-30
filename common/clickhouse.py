@@ -24,13 +24,15 @@ def retry(exception_types, max_attempts=5, max_interval=5):
         retry=tenacity.retry_if_exception_type(exception_types),
         wait=tenacity.wait_random_exponential(multiplier=0.5, max=max_interval),
         stop=tenacity.stop_after_attempt(max_attempts),
-        reraise=True)
+        reraise=True,
+    )
 
 
 class ClickhouseError(Exception):
     """
     ClickHouse interaction error.
     """
+
     def __init__(self, query, response):
         self.query = re.sub(r'\s*\n\s*', ' ', query.strip())
         self.response = response
@@ -89,12 +91,14 @@ class ClickhouseClient:
 
         logging.debug('Executing query: %s', query)
         try:
-            response = self._session.post(self._url,
-                                          params={
-                                              'query': query,
-                                          },
-                                          json=post_data,
-                                          timeout=timeout)
+            response = self._session.post(
+                self._url,
+                params={
+                    'query': query,
+                },
+                json=post_data,
+                timeout=timeout,
+            )
 
             response.raise_for_status()
 
@@ -117,7 +121,6 @@ class ClickhouseClient:
 
 
 class ClickhouseConfig:
-
     def __init__(self, config):
         self._config = config
 
@@ -160,7 +163,6 @@ class ClickhouseConfig:
 
 
 class ClickhouseUsersConfig:
-
     def __init__(self, config):
         self._config = config
 

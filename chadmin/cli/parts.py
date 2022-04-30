@@ -46,35 +46,39 @@ def list_parts_command(ctx, verbose, active, detached, reason, **kwargs):
 @option('--detached', is_flag=True)
 @option('--reason')
 @option('-l', '--limit')
-@option('-k', '--keep-going', is_flag=True,
-        help='Do not stop on the first failed command.')
+@option('-k', '--keep-going', is_flag=True, help='Do not stop on the first failed command.')
 @option('-n', '--dry-run', is_flag=True)
 @pass_context
-def delete_parts_command(ctx, database, table, partition_id, part_name, detached, reason, limit, keep_going, dry_run,
-                         **kwargs):
+def delete_parts_command(
+    ctx, database, table, partition_id, part_name, detached, reason, limit, keep_going, dry_run, **kwargs
+):
     """Delete one or several data parts."""
     if not any((database, table, partition_id, part_name)):
         ctx.fail('At least one of --database, --table, --partition or --part option must be specified.')
 
     if detached:
-        parts = get_detached_parts(ctx,
-                                   database=database,
-                                   table=table,
-                                   partition_id=partition_id,
-                                   part_name=part_name,
-                                   reason=reason,
-                                   limit=limit,
-                                   format='JSON',
-                                   **kwargs)['data']
+        parts = get_detached_parts(
+            ctx,
+            database=database,
+            table=table,
+            partition_id=partition_id,
+            part_name=part_name,
+            reason=reason,
+            limit=limit,
+            format='JSON',
+            **kwargs,
+        )['data']
     else:
-        parts = get_parts(ctx,
-                          database=database,
-                          table=table,
-                          partition_id=partition_id,
-                          part_name=part_name,
-                          limit=limit,
-                          format='JSON',
-                          **kwargs)['data']
+        parts = get_parts(
+            ctx,
+            database=database,
+            table=table,
+            partition_id=partition_id,
+            part_name=part_name,
+            limit=limit,
+            format='JSON',
+            **kwargs,
+        )['data']
     for part in parts:
         try:
             if detached:
@@ -96,24 +100,27 @@ def delete_parts_command(ctx, database, table, partition_id, part_name, detached
 @option('--disk', 'disk_name')
 @option('--new-disk', 'new_disk_name', required=True)
 @option('-l', '--limit')
-@option('-k', '--keep-going', is_flag=True,
-        help='Do not stop on the first failed command.')
+@option('-k', '--keep-going', is_flag=True, help='Do not stop on the first failed command.')
 @option('-n', '--dry-run', is_flag=True)
 @pass_context
-def move_parts_command(ctx, database, table, partition_id, part_name, disk_name, new_disk_name, limit, keep_going, dry_run):
+def move_parts_command(
+    ctx, database, table, partition_id, part_name, disk_name, new_disk_name, limit, keep_going, dry_run
+):
     """Move one or several data parts."""
     if not any((database, table, partition_id, part_name, disk_name)):
         ctx.fail('At least one of --database, --table, --partition, --part, --disk options must be specified.')
 
-    parts = get_parts(ctx,
-                      database=database,
-                      table=table,
-                      partition_id=partition_id,
-                      part_name=part_name,
-                      disk_name=disk_name,
-                      active=True,
-                      limit=limit,
-                      format='JSON')['data']
+    parts = get_parts(
+        ctx,
+        database=database,
+        table=table,
+        partition_id=partition_id,
+        part_name=part_name,
+        disk_name=disk_name,
+        active=True,
+        limit=limit,
+        format='JSON',
+    )['data']
     for part in parts:
         try:
             move_part(ctx, part['database'], part['table'], part['name'], new_disk_name, dry_run=dry_run)
@@ -124,20 +131,22 @@ def move_parts_command(ctx, database, table, partition_id, part_name, disk_name,
                 raise
 
 
-def get_parts(ctx,
-              *,
-              database=None,
-              table=None,
-              partition_id=None,
-              part_name=None,
-              disk_name=None,
-              level=None,
-              min_level=None,
-              max_level=None,
-              active=None,
-              verbose=False,
-              limit=None,
-              format=None):
+def get_parts(
+    ctx,
+    *,
+    database=None,
+    table=None,
+    partition_id=None,
+    part_name=None,
+    disk_name=None,
+    level=None,
+    min_level=None,
+    max_level=None,
+    active=None,
+    verbose=False,
+    limit=None,
+    format=None,
+):
     """
     Get data parts.
     """
@@ -216,20 +225,22 @@ def get_parts(ctx,
         LIMIT {{ limit }}
         {% endif -%}
         """
-    return execute_query(ctx,
-                         query,
-                         database=database,
-                         table=table,
-                         partition_id=partition_id,
-                         part_name=part_name,
-                         disk_name=disk_name,
-                         level=level,
-                         min_level=min_level,
-                         max_level=max_level,
-                         active=active,
-                         verbose=verbose,
-                         limit=limit,
-                         format=format)
+    return execute_query(
+        ctx,
+        query,
+        database=database,
+        table=table,
+        partition_id=partition_id,
+        part_name=part_name,
+        disk_name=disk_name,
+        level=level,
+        min_level=min_level,
+        max_level=max_level,
+        active=active,
+        verbose=verbose,
+        limit=limit,
+        format=format,
+    )
 
 
 def drop_part(ctx, database, table, part_name, dry_run=False):
@@ -248,20 +259,22 @@ def move_part(ctx, database, table, part_name, new_disk_name, dry_run=False):
     execute_query(ctx, query, echo=True, dry_run=dry_run, timeout=600)
 
 
-def get_detached_parts(ctx,
-                       *,
-                       database=None,
-                       table=None,
-                       partition_id=None,
-                       part_name=None,
-                       disk_name=None,
-                       level=None,
-                       min_level=None,
-                       max_level=None,
-                       reason=None,
-                       verbose=False,
-                       limit=None,
-                       format=None):
+def get_detached_parts(
+    ctx,
+    *,
+    database=None,
+    table=None,
+    partition_id=None,
+    part_name=None,
+    disk_name=None,
+    level=None,
+    min_level=None,
+    max_level=None,
+    reason=None,
+    verbose=False,
+    limit=None,
+    format=None,
+):
     """
     Get detached data parts.
     """
@@ -310,20 +323,22 @@ def get_detached_parts(ctx,
         LIMIT {{ limit }}
         {% endif -%}
         """
-    return execute_query(ctx,
-                         query,
-                         database=database,
-                         table=table,
-                         partition_id=partition_id,
-                         part_name=part_name,
-                         disk_name=disk_name,
-                         level=level,
-                         min_level=min_level,
-                         max_level=max_level,
-                         reason=reason,
-                         verbose=verbose,
-                         limit=limit,
-                         format=format)
+    return execute_query(
+        ctx,
+        query,
+        database=database,
+        table=table,
+        partition_id=partition_id,
+        part_name=part_name,
+        disk_name=disk_name,
+        level=level,
+        min_level=min_level,
+        max_level=max_level,
+        reason=reason,
+        verbose=verbose,
+        limit=limit,
+        format=format,
+    )
 
 
 def drop_detached_part(ctx, database, table, part_name, dry_run=False):

@@ -87,22 +87,27 @@ def reattach_partitions_command(ctx, dry_run, all, database, table, partition_id
 @option('--min-date')
 @option('--max-date')
 @pass_context
-def delete_partitions_command(ctx, dry_run, database, table, partition_id, min_partition, max_partition, min_date,
-                              max_date):
+def delete_partitions_command(
+    ctx, dry_run, database, table, partition_id, min_partition, max_partition, min_date, max_date
+):
     """Delete one or several partitions."""
     if not any((database, table, partition_id, min_partition, max_partition, min_date, max_date)):
-        ctx.fail('At least one of --database, --table, --partition, --min-partition, --max-partition,'
-                 ' --min-date and --max-date options must be specified.')
+        ctx.fail(
+            'At least one of --database, --table, --partition, --min-partition, --max-partition,'
+            ' --min-date and --max-date options must be specified.'
+        )
 
-    partitions = get_partitions(ctx,
-                                database,
-                                table,
-                                partition_id=partition_id,
-                                min_partition=min_partition,
-                                max_partition=max_partition,
-                                min_date=min_date,
-                                max_date=max_date,
-                                format='JSON')['data']
+    partitions = get_partitions(
+        ctx,
+        database,
+        table,
+        partition_id=partition_id,
+        min_partition=min_partition,
+        max_partition=max_partition,
+        min_date=min_date,
+        max_date=max_date,
+        format='JSON',
+    )['data']
     for p in partitions:
         drop_partition(ctx, p['database'], p['table'], p['partition_id'], dry_run=dry_run)
 
@@ -117,36 +122,43 @@ def delete_partitions_command(ctx, dry_run, database, table, partition_id, min_p
 @option('--min-date')
 @option('--max-date')
 @pass_context
-def optimize_partitions_command(ctx, dry_run, database, table, partition_id, min_partition, max_partition, min_date,
-                                max_date):
+def optimize_partitions_command(
+    ctx, dry_run, database, table, partition_id, min_partition, max_partition, min_date, max_date
+):
     """Optimize partitions."""
     if not any((database, table, partition_id, min_partition, max_partition, min_date, max_date)):
-        ctx.fail('At least one of --database, --table, --partition, --min-partition, --max-partition,'
-                 ' --min-date and --max-date options must be specified.')
+        ctx.fail(
+            'At least one of --database, --table, --partition, --min-partition, --max-partition,'
+            ' --min-date and --max-date options must be specified.'
+        )
 
-    for p in get_partitions(ctx,
-                            database,
-                            table,
-                            partition_id=partition_id,
-                            min_partition=min_partition,
-                            max_partition=max_partition,
-                            min_date=min_date,
-                            max_date=max_date,
-                            format='JSON')['data']:
+    for p in get_partitions(
+        ctx,
+        database,
+        table,
+        partition_id=partition_id,
+        min_partition=min_partition,
+        max_partition=max_partition,
+        min_date=min_date,
+        max_date=max_date,
+        format='JSON',
+    )['data']:
         optimize_partition(ctx, p['database'], p['table'], p['partition_id'], dry_run=dry_run)
 
 
-def get_partitions(ctx,
-                   database,
-                   table,
-                   partition_id=None,
-                   min_partition=None,
-                   max_partition=None,
-                   min_date=None,
-                   max_date=None,
-                   active_parts=None,
-                   detached=None,
-                   format=None):
+def get_partitions(
+    ctx,
+    database,
+    table,
+    partition_id=None,
+    min_partition=None,
+    max_partition=None,
+    min_date=None,
+    max_date=None,
+    active_parts=None,
+    detached=None,
+    format=None,
+):
     if detached:
         query = """
             SELECT
@@ -219,17 +231,19 @@ def get_partitions(ctx,
             {% endif %}
             ORDER BY database, table, partition_id
             """
-    return execute_query(ctx,
-                         query,
-                         database=database,
-                         table=table,
-                         partition_id=partition_id,
-                         min_partition=min_partition,
-                         max_partition=max_partition,
-                         min_date=min_date,
-                         max_date=max_date,
-                         active_parts=active_parts,
-                         format=format)
+    return execute_query(
+        ctx,
+        query,
+        database=database,
+        table=table,
+        partition_id=partition_id,
+        min_partition=min_partition,
+        max_partition=max_partition,
+        min_date=min_date,
+        max_date=max_date,
+        active_parts=active_parts,
+        format=format,
+    )
 
 
 def attach_partition(ctx, database, table, partition_id, dry_run=False):
@@ -268,10 +282,9 @@ def get_partition_key_type(ctx, database, table):
     """
     Get partition key type.
     """
-    query = 'SELECT {partition_key} FROM `{database}`.`{table}` LIMIT 0'.format(database=database,
-                                                                                table=table,
-                                                                                partition_key=get_partition_key(
-                                                                                    ctx, database, table))
+    query = 'SELECT {partition_key} FROM `{database}`.`{table}` LIMIT 0'.format(
+        database=database, table=table, partition_key=get_partition_key(ctx, database, table)
+    )
     return execute_query(ctx, query, format='JSON')['meta'][0]['type']
 
 
@@ -284,5 +297,7 @@ def get_partition_key(ctx, database, table):
         FROM system.tables
         WHERE database = '{database}'
           AND name = '{table}'
-        """.format(database=database, table=table)
+        """.format(
+        database=database, table=table
+    )
     return execute_query(ctx, query, format='JSONCompact')['data'][0][0]

@@ -83,7 +83,9 @@ def _get_zk_client(ctx):
     zkcli_identity = args.get('zkcli_identity')
 
     zk_config = get_config(ctx).zookeeper
-    connect_str = ','.join(f'{host if host else node["host"]}:{port if port else node["port"]}' for node in zk_config['node'])
+    connect_str = ','.join(
+        f'{host if host else node["host"]}:{port if port else node["port"]}' for node in zk_config['node']
+    )
     if 'root' in zk_config:
         connect_str += zk_config['root']
 
@@ -93,6 +95,6 @@ def _get_zk_client(ctx):
 
     auth_data = None
     if zkcli_identity is not None:
-        auth_data=[("digest", zkcli_identity)]
+        auth_data = [("digest", zkcli_identity)]
 
     return KazooClient(connect_str, auth_data=auth_data)

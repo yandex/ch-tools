@@ -3,15 +3,24 @@ from pprint import pprint
 from click import argument, group, option, pass_context
 
 from cloud.mdb.cli.common.cli import print_response
-from cloud.mdb.clickhouse.tools.chadmin.internal.zookeeper import create_zk_nodes, delete_zk_node, get_zk_node, \
-    get_zk_node_acls, list_zk_nodes
+from cloud.mdb.clickhouse.tools.chadmin.internal.zookeeper import (
+    create_zk_nodes,
+    delete_zk_node,
+    get_zk_node,
+    get_zk_node_acls,
+    list_zk_nodes,
+)
 
 
 @group('zookeeper')
 @option('--port', help='ZooKeeper port.', type=int, default=2181)
 @option('--host', help='ZooKeeper host.', type=str)
-@option('--zkcli_identity', help='Identity for zookeeper cli shell. In a format login:password. '
-                                 'Example: clickhouse:X7ui1dXIXXXXXXXXXXXXXXXXXXXXXXXX', type=str)
+@option(
+    '--zkcli_identity',
+    help='Identity for zookeeper cli shell. In a format login:password. '
+    'Example: clickhouse:X7ui1dXIXXXXXXXXXXXXXXXXXXXXXXXX',
+    type=str,
+)
 @pass_context
 def zookeeper_group(ctx, host, port, zkcli_identity):
     """ZooKeeper management commands.

@@ -33,15 +33,18 @@ def list_tables_command(ctx, database, table, exclude_table, engine, active_part
         raise Exception('You can not pass both format and verbose flag')
     format = 'Vertical' if verbose else format
     print(
-        get_tables(ctx,
-                   database=database,
-                   table=table,
-                   exclude_table=exclude_table,
-                   engine=engine,
-                   active_parts=active_parts,
-                   verbose=verbose,
-                   limit=limit,
-                   format=format))
+        get_tables(
+            ctx,
+            database=database,
+            table=table,
+            exclude_table=exclude_table,
+            engine=engine,
+            active_parts=active_parts,
+            verbose=verbose,
+            limit=limit,
+            format=format,
+        )
+    )
 
 
 @table_group.command('columns')
@@ -85,13 +88,7 @@ def delete_tables_command(ctx, dry_run, all, database, table, exclude_table, clu
             {% endif %}
             NO DELAY
             """
-        execute_query(ctx,
-                      query,
-                      database=t['database'],
-                      table=t['table'],
-                      cluster=cluster,
-                      echo=True,
-                      dry_run=dry_run)
+        execute_query(ctx, query, database=t['database'], table=t['table'], cluster=cluster, echo=True, dry_run=dry_run)
 
 
 @table_group.command('get-statistics')
@@ -110,15 +107,9 @@ def get_statistics_command(ctx, database):
         print('{0}: {1}'.format(t['table'], stats['count']))
 
 
-def get_tables(ctx,
-               database,
-               table=None,
-               exclude_table=None,
-               engine=None,
-               active_parts=None,
-               verbose=None,
-               limit=None,
-               format=None):
+def get_tables(
+    ctx, database, table=None, exclude_table=None, engine=None, active_parts=None, verbose=None, limit=None, format=None
+):
     query = """
         SELECT
             database,
@@ -176,13 +167,15 @@ def get_tables(ctx,
         LIMIT {{ limit }}
         {% endif %}
         """
-    return execute_query(ctx,
-                         query,
-                         database=database,
-                         table=table,
-                         exclude_table=exclude_table,
-                         engine=engine,
-                         active_parts=active_parts,
-                         verbose=verbose,
-                         limit=limit,
-                         format=format)
+    return execute_query(
+        ctx,
+        query,
+        database=database,
+        table=table,
+        exclude_table=exclude_table,
+        engine=engine,
+        active_parts=active_parts,
+        verbose=verbose,
+        limit=limit,
+        format=format,
+    )

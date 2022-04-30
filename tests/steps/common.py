@@ -34,8 +34,9 @@ def step_try_command(context, node):
 @when('we execute command on {node:w}')
 def step_command(context, node):
     step_try_command(context, node)
-    assert context.exit_code == 0, (f'"{context.command}" failed with exit code {context.exit_code},'
-                                    f' output:\n {context.response}')
+    assert context.exit_code == 0, (
+        f'"{context.command}" failed with exit code {context.exit_code},' f' output:\n {context.response}'
+    )
 
 
 @then('it fails')

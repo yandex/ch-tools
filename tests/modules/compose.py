@@ -37,9 +37,11 @@ def build_images(context: ContextT) -> None:
                 if proc.stderr:
                     print('Command stderr: ', str(proc.stderr, errors='replace', encoding='utf-8'))
             except subprocess.CalledProcessError as err:
-                raise RuntimeError('prebuild command {cmd} failed: {err}\n'
-                                   'stdout: {stdout}\n'
-                                   'stderr: {stderr}'.format(cmd=cmd, err=err, stdout=err.stdout, stderr=err.stderr))
+                raise RuntimeError(
+                    'prebuild command {cmd} failed: {err}\n'
+                    'stdout: {stdout}\n'
+                    'stderr: {stderr}'.format(cmd=cmd, err=err, stdout=err.stdout, stderr=err.stderr),
+                )
 
     _call_compose(context.conf, 'build')
 

@@ -2,7 +2,6 @@ requests
 PyYAML
 tenacity
 isort
-yapf
 flake8
 flake8-string-format
 flake8-commas

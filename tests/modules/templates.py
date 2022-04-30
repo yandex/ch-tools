@@ -60,6 +60,7 @@ def _environment(context: ContextT, loader: BaseLoader = None) -> Environment:
     """
     Create Environment object.
     """
+
     def _get_file_size(container_name, path):
         container = docker.get_container(context, container_name)
         return docker.get_file_size(container, path)
@@ -67,11 +68,13 @@ def _environment(context: ContextT, loader: BaseLoader = None) -> Environment:
     def _clickhouse_version(container_name):
         return ClickhouseClient(context, container_name).get_version()
 
-    environment = Environment(autoescape=False,
-                              trim_blocks=False,
-                              undefined=StrictUndefined,
-                              keep_trailing_newline=True,
-                              loader=loader)
+    environment = Environment(
+        autoescape=False,
+        trim_blocks=False,
+        undefined=StrictUndefined,
+        keep_trailing_newline=True,
+        loader=loader,
+    )
 
     environment.filters['json'] = lambda x: json.dumps(x, indent=4)
 

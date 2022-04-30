@@ -19,26 +19,27 @@ def _parse_args():
     parser = argparse.ArgumentParser()
     actions = parser.add_subparsers()
 
-    parser.add_argument('-m', '--metadata-address', type=str, default='169.254.169.254',
-                        help='compute metadata api address')
+    parser.add_argument(
+        '-m', '--metadata-address', type=str, default='169.254.169.254', help='compute metadata api address'
+    )
 
     update = actions.add_parser('update', help='update ch default s3 credentials config')
     update.set_defaults(func=_update_config)
     update.add_argument('-e', '--endpoint', type=str, help='S3 endpoint')
-    update.add_argument('-s', '--random-sleep', action='store_true', default=False,
-                        help='whether need a random sleep')
+    update.add_argument('-s', '--random-sleep', action='store_true', default=False, help='whether need a random sleep')
 
     check = actions.add_parser('check', help='check ch default s3 credentials config status')
     check.set_defaults(func=_check_config)
-    check.add_argument('-p', '--present', action='store_true', default=False,
-                       help='whether config expected to present')
+    check.add_argument('-p', '--present', action='store_true', default=False, help='whether config expected to present')
 
     return parser.parse_args()
 
 
 def _request_token(endpoint):
-    return requests.get(f'http://{endpoint}/computeMetadata/v1/instance/service-accounts/default/token',
-                        headers={'Metadata-Flavor': 'Google'})
+    return requests.get(
+        f'http://{endpoint}/computeMetadata/v1/instance/service-accounts/default/token',
+        headers={'Metadata-Flavor': 'Google'},
+    )
 
 
 def _get_token(endpoint):
@@ -65,7 +66,8 @@ def _update_config(args):
     storage = _add_node(doc, _add_node(doc, _add_node(doc, doc, 'yandex'), 's3'), 'cloud_storage')
     _add_node(doc, storage, 'endpoint').appendChild(doc.createTextNode(args.endpoint))
     _add_node(doc, storage, 'header').appendChild(
-        doc.createTextNode(f'X-YaCloud-SubjectToken: {_get_token(args.metadata_address)}'))
+        doc.createTextNode(f'X-YaCloud-SubjectToken: {_get_token(args.metadata_address)}')
+    )
     with open('/etc/clickhouse-server/config.d/s3_credentials.xml', 'wb') as file:
         file.write(doc.toprettyxml(indent=4 * ' ', encoding='utf-8'))
 
@@ -97,8 +99,10 @@ def _check_config(args):
 
     code = _request_token(args.metadata_address).status_code
     if code == 404:
-        if 'default' in requests.get(f'http://{args.metadata_address}/computeMetadata/v1/instance/?recursive=true',
-                                     headers={'Metadata-Flavor': 'Google'}).json().get('serviceAccounts', {}):
+        if 'default' in requests.get(
+            f'http://{args.metadata_address}/computeMetadata/v1/instance/?recursive=true',
+            headers={'Metadata-Flavor': 'Google'},
+        ).json().get('serviceAccounts', {}):
             result(1, 'service account deleted')
         else:
             result(2, 'service account not linked')

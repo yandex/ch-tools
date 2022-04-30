@@ -30,7 +30,9 @@ def parse_args():
     parser.add_argument('--timeout', default=10, type=int, help='Connection timeout (s)')
     parser.add_argument('--debug', default=False, action='store_true', help='Debug output')
     parser.add_argument('--workers', default=10, type=int, help='Worker threads')
-    parser.add_argument('--replicas', default=0, type=int, help='Maximun number of replicas (maximum allowed copies of one part)')
+    parser.add_argument(
+        '--replicas', default=0, type=int, help='Maximun number of replicas (maximum allowed copies of one part)'
+    )
 
     return parser.parse_args()
 
@@ -42,7 +44,6 @@ zc_nodes = ['zero_copy_s3', 'zero_copy_hdfs']
 
 
 class Worker(Thread):
-
     def __init__(self, args, queue, number):
         Thread.__init__(self)
         self.client = get_client(args)
@@ -211,17 +212,18 @@ def scan(queue, client, args):
 
 
 def get_client(args):
-    client = KazooClient(connection_retry=args.retries,
-                         command_retry=args.retries,
-                         timeout=args.timeout,
-                         hosts=args.hosts,
-                         use_ssl=args.secure,
-                         certfile=args.cert,
-                         keyfile=args.key,
-                         ca=args.ca
-                         )
+    client = KazooClient(
+        connection_retry=args.retries,
+        command_retry=args.retries,
+        timeout=args.timeout,
+        hosts=args.hosts,
+        use_ssl=args.secure,
+        certfile=args.cert,
+        keyfile=args.key,
+        ca=args.ca,
+    )
     client.start()
-    if (args.user and args.password):
+    if args.user and args.password:
         client.add_auth('digest', f'{args.user}:{args.password}')
     return client
 

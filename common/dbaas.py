@@ -2,7 +2,6 @@ import json
 
 
 class DbaasConfig:
-
     def __init__(self, config):
         self._config = config
 
