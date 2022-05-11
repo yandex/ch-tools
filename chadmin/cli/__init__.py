@@ -17,7 +17,7 @@ def execute_query(ctx, query, timeout=None, echo=False, dry_run=False, format='d
     )
 
 
-def get_config(ctx):
+def get_config(ctx) -> ClickhouseConfig:
     if 'config' not in ctx.obj:
         ctx.obj['config'] = ClickhouseConfig.load()
 
