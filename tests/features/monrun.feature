@@ -19,7 +19,7 @@ Feature: ch-monitoring tool
 
     INSERT INTO test.dtable_01 (n) SELECT number FROM system.numbers LIMIT 10;
 
-    CREATE TABLE test.test_unfreeze (id int, name String) ENGINE=MergeTree() ORDER BY id SETTINGS storage_policy='object_storage';
+    CREATE TABLE IF NOT EXISTS test.test_unfreeze (id int, name String) ENGINE=MergeTree() ORDER BY id SETTINGS storage_policy='object_storage';
     INSERT INTO test.test_unfreeze VALUES(5, 'hello');
     """
 

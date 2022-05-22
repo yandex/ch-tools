@@ -5,7 +5,8 @@ import json
 import os
 
 from docker.models.containers import Container
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
+from tenacity import (retry, retry_if_exception_type, stop_after_attempt,
+                      wait_fixed)
 
 from .docker import copy_container_dir, get_container
 from .typing import ContextT
