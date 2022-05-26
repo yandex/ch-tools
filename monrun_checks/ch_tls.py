@@ -37,7 +37,7 @@ def tls_command(crit: int, warn: int, ports: Optional[str]) -> Result:
             return Result(1, f'Failed to get certificate: {repr(e)}')
 
         if certificate != file_certificate:
-            return Result(1, f'certificate on {port} and {CERTIFICATE_PATH} is different')
+            return Result(2, f'certificate on {port} and {CERTIFICATE_PATH} is different')
         if days_to_expire < crit:
             return Result(2, f'certificate {port} expires in {days_to_expire} days')
         if days_to_expire < warn:
