@@ -23,6 +23,14 @@
             <profile>default</profile>
             <quota>default</quota>
         </_monitor>
+        <_admin>
+            <password></password>
+            <networks>
+                <ip>::/0</ip>
+            </networks>
+            <profile>default</profile>
+            <quota>default</quota>
+        </_admin>
     </users>
 
     <quotas>

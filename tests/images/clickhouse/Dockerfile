@@ -3,6 +3,7 @@ FROM registry.yandex.net/ubuntu:bionic
 ENV TZ=Europe/Moscow
 
 ARG CLICKHOUSE_VERSION
+ARG NETWORK_NAME
 
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
     apt-get update -qq && \
@@ -58,7 +59,7 @@ RUN rm -rf /etc/supervisor && \
 RUN mkdir -p /etc/clickhouse-server/ssl && \
     openssl req -subj "/CN=localhost" -new -newkey rsa:2048 -days 365 -nodes -x509 \
         -keyout /etc/clickhouse-server/ssl/server.key \
-        -addext "subjectAltName=DNS:clickhouse01,DNS:clickhouse02" \
+        -addext "subjectAltName=DNS:clickhouse01,DNS:clickhouse02,DNS:clickhouse01.$NETWORK_NAME,DNS:clickhouse02.$NETWORK_NAME" \
         -out /etc/clickhouse-server/ssl/server.crt && \
     ln -s /etc/clickhouse-server/ssl/server.crt /etc/clickhouse-server/ssl/allCAs.pem && \
     mkdir -p /etc/clickhouse-server/conf.d && \
