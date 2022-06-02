@@ -26,6 +26,10 @@ class DbaasConfig:
         return self._config['cluster_name']
 
     @property
+    def created_at(self):
+        return self._config['created_at']
+
+    @property
     def shard_count(self):
         subcluster = self._clickhouse_subcluster()
         return len(subcluster['shards'])

@@ -349,7 +349,17 @@ Feature: ch-monitoring tool
     """
     2;Some parts restore failed: 2(66%)
     """
-
+  
+  Scenario: Check valid backups do not exist
+    When we execute command on clickhouse01
+    """
+    ch-monitoring backup
+    """
+    Then we get response
+    """
+    2;No valid backups found
+    """
+  
   @require_version_21.8
   Scenario: Check CH Keeper alive
     Given a working keeper on clickhouse01

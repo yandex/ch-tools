@@ -32,6 +32,7 @@ def create():
             'depends_on': ['zookeeper'],
             'args': {
                 'CLICKHOUSE_VERSION': '$CLICKHOUSE_VERSION',
+                'NETWORK_NAME': network_name,
             },
             'db': {
                 'user': 'reader',
@@ -107,6 +108,7 @@ def _dbaas_conf(services: dict, network_name: str) -> dict:
 
     return {
         'cluster_id': 'cid1',
+        'created_at': '2022-01-01T12:00:00.000000+03:00',
         'cluster': {
             'subclusters': {
                 'subcid1': {

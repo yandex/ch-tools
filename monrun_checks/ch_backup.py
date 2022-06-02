@@ -10,9 +10,11 @@ import click
 
 from cloud.mdb.clickhouse.tools.common.backup import BackupConfig, get_backups
 from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseClient
+from cloud.mdb.clickhouse.tools.common.dbaas import DbaasConfig
 from cloud.mdb.clickhouse.tools.monrun_checks.exceptions import die
 
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S %z'
+FULL_DATE_FORMAT = '%Y-%m-%dT%H:%M:%S.%f%z'
 RESTORE_CONTEXT_PATH = '/tmp/ch_backup_restore_state.json'
 FAILED_PARTS_THRESHOLD = 10
 
@@ -21,7 +23,14 @@ FAILED_PARTS_THRESHOLD = 10
 def backup_command():
     """
     Check ClickHouse backups: its state, age and count.
+    Skip backup checks for recently created clusters.
     """
+    dbaas_config = DbaasConfig.load()
+
+    cluster_created_at = parse_str_datetime(dbaas_config.created_at)
+    if not check_now_pass_threshold(cluster_created_at):
+        return
+
     ch_client = ClickhouseClient()
     backup_config = BackupConfig.load()
     backups = get_backups()
@@ -133,3 +142,31 @@ def get_backup_age(backup):
     """
     backup_time = datetime.strptime(backup['start_time'], DATE_FORMAT)
     return datetime.now(timezone.utc) - backup_time
+
+
+def parse_str_datetime(input: str) -> datetime:
+    """
+    Parse input string to datetime.
+    """
+    if input is None:
+        return None
+
+    try:
+        return datetime.strptime(input, FULL_DATE_FORMAT)
+    except Exception:
+        return None
+
+
+def check_now_pass_threshold(date_time: datetime, hours_threshold: int = 25) -> bool:
+    """
+    Check that hours threshold is passed since input date
+    """
+    if date_time is None:
+        return True
+
+    diff = datetime.now(date_time.tzinfo) - date_time
+
+    days, seconds = diff.days, diff.seconds
+    diff_in_hours = days * 24 + seconds // (60 * 60)
+
+    return diff_in_hours >= hours_threshold
