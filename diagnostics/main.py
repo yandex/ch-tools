@@ -273,7 +273,9 @@ SELECT_TOP_QUERIES_BY_DURATION = r'''SELECT
     query_start_time,
     query_duration_ms,
     query_id,
+    {% if version_ge('21.3') -%}
     query_kind,
+    {% endif -%}
     is_initial_query,
     {% if normalize_queries -%}
     normalizeQuery(query) AS normalized_query,
@@ -327,7 +329,9 @@ SELECT_TOP_QUERIES_BY_MEMORY_USAGE = r'''SELECT
     query_start_time,
     query_duration_ms,
     query_id,
+    {% if version_ge('21.3') -%}
     query_kind,
+    {% endif -%}
     is_initial_query,
     {% if normalize_queries -%}
     normalizeQuery(query) AS normalized_query,
@@ -381,7 +385,9 @@ SELECT_FAILED_QUERIES = r'''SELECT
     query_start_time,
     query_duration_ms,
     query_id,
+    {% if version_ge('21.3') -%}
     query_kind,
+    {% endif -%}
     is_initial_query,
     {% if normalize_queries -%}
     normalizeQuery(query) AS normalized_query,
