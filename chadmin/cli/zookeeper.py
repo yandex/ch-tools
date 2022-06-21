@@ -2,7 +2,7 @@ from pprint import pprint
 
 from click import argument, group, option, pass_context
 
-from cloud.mdb.cli.common.cli import print_response
+from cloud.mdb.cli.common.formatting import print_response
 from cloud.mdb.clickhouse.tools.chadmin.internal.zookeeper import (
     create_zk_nodes,
     delete_zk_node,
