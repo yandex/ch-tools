@@ -1,6 +1,7 @@
 from click import group, option
 import os
 import re
+import shutil
 
 
 @group('disks')
@@ -9,16 +10,25 @@ def disks_group():
 
 
 @disks_group.command('check-s3-metadata')
-@option('--path', 'path', default='/var/lib/clickhouse/disks/object_storage/store', help='Path to S3 metadata')
-def check_s3_metadata_command(path):
-    check_dir(path)
+@option('--path', 'path', default='/var/lib/clickhouse/disks/object_storage/store', help='Path to S3 metadata.')
+@option('--cleanup', is_flag=True, help='Remove parts with corrupted S3 metadata.')
+def check_s3_metadata_command(path, cleanup):
+    check_dir(path, cleanup)
 
 
-def check_dir(path):
+def check_dir(path, cleanup):
+    corrupted_dirs = []
     for (dirpath, _, filenames) in os.walk(path):
         for filename in filenames:
             if not check_file(f'{dirpath}/{filename}'):
                 print(f'{dirpath}/{filename}')
+                if dirpath not in corrupted_dirs:
+                    corrupted_dirs.append(dirpath)
+    if cleanup:
+        print('')
+        for dirpath in corrupted_dirs:
+            print(f'Remove directory "{dirpath}"')
+            shutil.rmtree(dirpath)
 
 
 def check_file(filename):
