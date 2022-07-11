@@ -1,6 +1,6 @@
 from click import Choice, group, option, pass_context
 
-from cloud.mdb.clickhouse.tools.chadmin.cli import execute_query
+from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 
 
 @group('part-log')
@@ -62,7 +62,9 @@ def list_part_log(
              partition_id,
              rows,
              formatReadableSize(size_in_bytes) "size",
-             merged_from
+             merged_from,
+             concat(toString(read_rows), ' rows / ', formatReadableSize(read_bytes)) "read",
+             formatReadableSize(peak_memory_usage) "peak_memory_usage"
         FROM system.part_log
         {% if database %}
         WHERE database {{ format_str_match(database) }}

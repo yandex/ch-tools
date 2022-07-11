@@ -1,6 +1,6 @@
 from click import argument, group, option, pass_context
 
-from cloud.mdb.clickhouse.tools.chadmin.cli import execute_query
+from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 
 
 @group('database')
