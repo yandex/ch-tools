@@ -8,10 +8,11 @@ from kazoo.client import KazooClient
 from cloud.mdb.clickhouse.tools.chadmin.cli import get_config, get_macros
 
 
-def get_zk_node(ctx, path):
+def get_zk_node(ctx, path, binary=False):
     with _zk_client(ctx) as zk:
         path = _format_path(ctx, path)
-        return zk.get(path)
+        value = zk.get(path)[0]
+        return value if binary else value.decode().strip()
 
 
 def get_zk_node_acls(ctx, path):
@@ -46,11 +47,24 @@ def list_zk_nodes(ctx, path, verbose=False):
         return [_stat_node(zk, node) for node in nodes] if verbose else nodes
 
 
-def create_zk_nodes(ctx, paths):
+def create_zk_nodes(ctx, paths, value=None):
+    if isinstance(value, str):
+        value = value.encode()
+    else:
+        value = b''
+
     with _zk_client(ctx) as zk:
         for path in paths:
-            path = _format_path(ctx, path)
-            zk.create(path)
+            zk.create(_format_path(ctx, path), value)
+
+
+def update_zk_nodes(ctx, paths, value):
+    if isinstance(value, str):
+        value = value.encode()
+
+    with _zk_client(ctx) as zk:
+        for path in paths:
+            zk.set(_format_path(ctx, path), value)
 
 
 def delete_zk_node(ctx, path):

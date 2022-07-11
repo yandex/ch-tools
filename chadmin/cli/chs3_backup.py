@@ -3,7 +3,7 @@ import os
 import requests
 from click import argument, ClickException, group, option, pass_context
 
-from cloud.mdb.clickhouse.tools.chadmin.cli import execute_query
+from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 from cloud.mdb.clickhouse.tools.chadmin.cli.tables import get_tables
 from cloud.mdb.clickhouse.tools.common.backup import CHS3_BACKUPS_DIRECTORY, get_chs3_backups, get_orphaned_chs3_backups
 from cloud.mdb.clickhouse.tools.common.utils import clear_empty_directories_recursively, strip_query

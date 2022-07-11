@@ -7,7 +7,6 @@ from cloud.mdb.clickhouse.tools.chadmin.cli.async_metrics import list_async_metr
 from cloud.mdb.clickhouse.tools.chadmin.cli.crash_log import crash_log_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.databases import database_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.parts import part_group
-from cloud.mdb.clickhouse.tools.chadmin.cli.system import system_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.dictionaries import list_dictionaries_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.events import list_events_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.functions import list_functions_command
@@ -22,6 +21,7 @@ from cloud.mdb.clickhouse.tools.chadmin.cli.replication_queue import replication
 from cloud.mdb.clickhouse.tools.chadmin.cli.restore_replica import restore_replica_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.settings import list_settings_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.stack_trace import stack_trace_command
+from cloud.mdb.clickhouse.tools.chadmin.cli.table_replica import table_replica_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.tables import table_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.thread_log import thread_log_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.wait_started import wait_started_command
@@ -48,6 +48,7 @@ def cli(ctx, format, debug):
 
 cli.add_command(database_group)
 cli.add_command(table_group)
+cli.add_command(table_replica_group)
 cli.add_command(partition_group)
 cli.add_command(part_group)
 cli.add_command(mutation_group)
@@ -67,7 +68,6 @@ cli.add_command(list_metrics_command)
 cli.add_command(list_async_metrics_command)
 cli.add_command(zookeeper_group)
 cli.add_command(stack_trace_command)
-cli.add_command(system_group)
 cli.add_command(chs3_backup_group)
 cli.add_command(wait_started_command)
 cli.add_command(disks_group)
