@@ -776,30 +776,32 @@ def main():
         format='Vertical',
         section='Queries',
     )
-    add_query(
-        diagnostics,
-        'Top 10 queries by duration',
-        client=client,
-        query=SELECT_TOP_QUERIES_BY_DURATION,
-        format='Vertical',
-        section='Queries',
-    )
-    add_query(
-        diagnostics,
-        'Top 10 queries by memory usage',
-        client=client,
-        query=SELECT_TOP_QUERIES_BY_MEMORY_USAGE,
-        format='Vertical',
-        section='Queries',
-    )
-    add_query(
-        diagnostics,
-        'Last 10 failed queries',
-        client=client,
-        query=SELECT_FAILED_QUERIES,
-        format='Vertical',
-        section='Queries',
-    )
+
+    if 'query_log' in system_tables:
+        add_query(
+            diagnostics,
+            'Top 10 queries by duration',
+            client=client,
+            query=SELECT_TOP_QUERIES_BY_DURATION,
+            format='Vertical',
+            section='Queries',
+        )
+        add_query(
+            diagnostics,
+            'Top 10 queries by memory usage',
+            client=client,
+            query=SELECT_TOP_QUERIES_BY_MEMORY_USAGE,
+            format='Vertical',
+            section='Queries',
+        )
+        add_query(
+            diagnostics,
+            'Last 10 failed queries',
+            client=client,
+            query=SELECT_FAILED_QUERIES,
+            format='Vertical',
+            section='Queries',
+        )
 
     add_query(diagnostics, 'Stack traces', client=client, query=SELECT_STACK_TRACES, format='Vertical')
 
