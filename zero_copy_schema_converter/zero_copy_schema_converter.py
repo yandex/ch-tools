@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import logging
 import socket
 import uuid
 from kazoo.client import KazooClient
@@ -25,11 +26,10 @@ def parse_args():
     parser.add_argument('--dryrun', default=False, action='store_true', help='Do not perform any actions')
     parser.add_argument('--cleanup', default=False, action='store_true', help='Clean old nodes')
     parser.add_argument('--no-create', default=False, action='store_true', help='Do not crete new nodes')
-    parser.add_argument('-v', '--verbose', action='store_true', default=False, help='Verbose mode')
     parser.add_argument('--retries', default=3, type=int, help='Connection retries')
     parser.add_argument('--timeout', default=10, type=int, help='Connection timeout (s)')
-    parser.add_argument('--debug', default=False, action='store_true', help='Debug output')
     parser.add_argument('--workers', default=10, type=int, help='Worker threads')
+    parser.add_argument('--logfile', default='', help='Log file')
     parser.add_argument(
         '--replicas', default=0, type=int, help='Maximun number of replicas (maximum allowed copies of one part)'
     )
@@ -62,43 +62,38 @@ class Worker(Thread):
                     break
                 except (ConnectionLoss, ConnectionClosedError):
                     if retry < self.args.retries:
-                        if self.args.debug:
-                            print(f'Worker {self.number} lost connection. Reconnect...')
+                        logging.warning(f'Worker {self.number} lost connection. Reconnect...')
                         self.client.stop()
                         self.client = get_client(self.args)
                     else:
-                        print(f'Worker {self.number} lost connection. Retries are over.')
+                        logging.error(f'Worker {self.number} lost connection. Retries are over.')
                         raise
             self.queue.task_done()
 
 
 def convert_part(client, args, part_path, new_part_path):
     uniq_ids = client.get_children(part_path)
-    if args.debug:
-        print(f'In part "{part_path}" found {len(uniq_ids)} uniq ids')
+    logging.debug(f'In part "{part_path}" found {len(uniq_ids)} uniq ids')
     if args.replicas > 0 and len(uniq_ids) > args.replicas:
-        print(f'In part "{part_path}" found too much uniq ids: {len(uniq_ids)}, skipped`')
+        logging.error(f'In part "{part_path}" found too much uniq ids: {len(uniq_ids)}, skipped`')
     else:
         for uniq_id in uniq_ids:
             uniq_path = f'{part_path}/{uniq_id}'
             replicas = client.get_children(uniq_path)
-            if args.debug:
-                print(f'In uniq_id "{uniq_path}" found {len(replicas)} replicas')
+            logging.debug(f'In uniq_id "{uniq_path}" found {len(replicas)} replicas')
             for replica in replicas:
                 replica_path = f'{uniq_path}/{replica}'
                 new_path = f'{new_part_path}/{uniq_id}/{replica}'
                 if not args.no_create:
                     if not client.exists(new_path):
-                        if args.verbose:
-                            print(f'Make node "{new_path}"')
+                        logging.info(f'Make node "{new_path}"')
                         if not args.dryrun:
                             client.ensure_path(f'{new_part_path}/{uniq_id}')
                             client.create(new_path, value=b'lock')
-                    elif args.debug:
-                        print(f'Path {new_path} already exists')
+                    else:
+                        logging.warning(f'Path {new_path} already exists')
                 if args.cleanup:
-                    if args.verbose:
-                        print(f'Remove node "{replica_path}"')
+                    logging.info(f'Remove node "{replica_path}"')
                     if not args.dryrun:
                         client.delete(replica_path)
             if args.cleanup and not args.dryrun:
@@ -117,12 +112,11 @@ def get_children(client, args, path):
             break
         except (ConnectionLoss, ConnectionClosedError):
             if retry < args.retries:
-                if args.debug:
-                    print('Main thread lost connection. Reconnect...')
+                logging.warning('Main thread lost connection. Reconnect...')
                 client.stop()
                 client = get_client(args)
             else:
-                print('Main thread lost connection. Retries are over.')
+                logging.error('Main thread lost connection. Retries are over.')
                 raise
     return nodes
 
@@ -130,20 +124,17 @@ def get_children(client, args, path):
 def convert_node(queue, client, args, path, zc_node):
     base_path = f'{path}/{zc_node}/shared'
     parts = client.get_children(base_path)
-    if args.debug:
-        print(f'In table "{path}" node "{zc_node}" found {len(parts)} parts')
+    logging.debug(f'In table "{path}" node "{zc_node}" found {len(parts)} parts')
     table_id_path = f'{path}/table_shared_id'
     table_id = ''
     if client.exists(table_id_path):
         table_id = client.get(table_id_path)[0].decode('UTF-8')
     else:
         table_id = str(uuid.uuid4())
-        if args.verbose:
-            print(f'Make table_id "{table_id_path}" = "{table_id}"')
+        logging.info(f'Make table_id "{table_id_path}" = "{table_id}"')
         if not args.dryrun:
             client.create(table_id_path, bytes(table_id, 'UTF-8'))
-    if args.debug:
-        print(f'For path "{path}" found table_id "{table_id}"')
+    logging.info(f'For path "{path}" found table_id "{table_id}"')
     for part in parts:
         part_path = f'{base_path}/{part}'
         new_part_path = f'{args.root}/{args.zcroot}/{zc_node}/{table_id}/{part}'
@@ -155,12 +146,11 @@ def convert_node(queue, client, args, path, zc_node):
         except NotEmptyError:
             # When other replicas still in compatibility mode they can create subnodes
             # Node will be deleted later from that replica
-            if args.debug:
-                print(f'Other replica create subnode in "{path}/{zc_node}", skip delete')
+            logging.debug(f'Other replica create subnode in "{path}/{zc_node}", skip delete')
 
 
 def convert_table(queue, client, args, path, nodes):
-    print(f'Convert table nodes by path "{path}"')
+    logging.info(f'Convert table nodes by path "{path}"')
     for zc_node in zc_nodes:
         if zc_node in nodes:
             retry = 0
@@ -171,15 +161,13 @@ def convert_table(queue, client, args, path, nodes):
                     break
                 except (ConnectionLoss, ConnectionClosedError):
                     if retry < args.retries:
-                        if args.debug:
-                            print('Main thread lost connection. Reconnect...')
+                        logging.warning('Main thread lost connection. Reconnect...')
                         client.stop()
                         client = get_client(args)
                     else:
-                        print('Main thread lost connection. Retries are over.')
+                        logging.error('Main thread lost connection. Retries are over.')
                         raise
-    if args.debug:
-        print(f'Convert table nodes by path "{path}" completed')
+    logging.info(f'Convert table nodes by path "{path}" completed')
 
 
 def is_like_a_table(nodes):
@@ -191,11 +179,9 @@ def is_like_a_table(nodes):
 
 def scan_recursive(queue, client, args, path):
     if path == f'{args.root}/{args.zcroot}':
-        if args.debug:
-            print(f'Skip scan node "{path}"')
+        logging.debug(f'Skip scan node "{path}"')
         return
-    if args.debug:
-        print(f'Scan node "{path}"')
+    logging.debug(f'Scan node "{path}"')
     nodes = get_children(client, args, path)
     if is_like_a_table(nodes):
         convert_table(queue, client, args, path, nodes)
@@ -230,6 +216,23 @@ def get_client(args):
 
 def main():
     args = parse_args()
+
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+
+    log_format = logging.Formatter('%(asctime)s %(levelname)s:\t%(message)s')
+
+    if args.logfile:
+        file_log = logging.FileHandler(args.logfile)
+        file_log.setLevel(logging.DEBUG)
+        file_log.setFormatter(log_format)
+        logger.addHandler(file_log)
+
+    console_log = logging.StreamHandler()
+    console_log.setLevel(logging.WARNING)
+    console_log.setFormatter(log_format)
+    logger.addHandler(console_log)
+
     client = get_client(args)
 
     queue = Queue()
