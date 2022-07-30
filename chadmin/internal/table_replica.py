@@ -41,3 +41,8 @@ def get_table_replica(ctx, database, table):
         raise ClickException(f'Replicated table `{database}`.`{table}` not found.')
 
     return replicas[0]
+
+
+def restart_table_replica(ctx, database, table):
+    query = f"""SYSTEM RESTART REPLICA `{database}`.`{table}`"""
+    execute_query(ctx, query, format=None)
