@@ -63,7 +63,7 @@ def delete_chs3_backups(ctx, chs3_backups: [str], dry_run=True):
             )
             print(query)
             try:
-                execute_query(ctx, query, dry_run=dry_run)
+                execute_query(ctx, query, timeout=300, dry_run=dry_run)
             except requests.exceptions.HTTPError:
                 print(f"Can't unfreeze table {table} in backup {chs3_backup}. Maybe it was deleted.")
         if not dry_run:

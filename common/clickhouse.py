@@ -44,13 +44,16 @@ class ClickhouseClient:
     ClickHouse client.
     """
 
-    def __init__(self, *, host=socket.getfqdn(), port=8443, user='_admin', insecure=False):
+    def __init__(self, *, host=socket.getfqdn(), timeout=None, port=8443, user='_admin', insecure=False):
+        if timeout is None:
+            timeout = 60
+
         self._session = requests.Session()
         self._session.verify = False if insecure else '/etc/clickhouse-server/ssl/allCAs.pem'
         if user:
             self._session.headers['X-ClickHouse-User'] = user
         self._url = f'https://{host}:{port}'
-        self._timeout = 60
+        self._timeout = timeout
         self._ch_version = None
 
     def get_clickhouse_version(self):
@@ -80,14 +83,13 @@ class ClickhouseClient:
         if format:
             query += f' FORMAT {format}'
 
-        if timeout is None:
-            timeout = self._timeout
-
         if echo:
             print(sqlparse.format(query, reindent=True), '\n')
 
         if dry_run:
             return None
+
+        timeout = max(self._timeout, timeout or 0)
 
         logging.debug('Executing query: %s', query)
         try:
