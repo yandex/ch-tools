@@ -3,11 +3,11 @@ import logging
 
 from click import Choice, group, option, pass_context
 
+from cloud.mdb.clickhouse.tools.chadmin.cli.dictionary_group import dictionary_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.async_metrics import list_async_metrics_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.crash_log import crash_log_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.databases import database_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.parts import part_group
-from cloud.mdb.clickhouse.tools.chadmin.cli.dictionaries import list_dictionaries_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.events import list_events_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.functions import list_functions_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.macros import list_macros_command
@@ -21,7 +21,7 @@ from cloud.mdb.clickhouse.tools.chadmin.cli.replication_queue import replication
 from cloud.mdb.clickhouse.tools.chadmin.cli.restore_replica import restore_replica_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.settings import list_settings_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.stack_trace import stack_trace_command
-from cloud.mdb.clickhouse.tools.chadmin.cli.table_replica import table_replica_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.table_replica_group import table_replica_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.tables import table_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.thread_log import thread_log_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.wait_started import wait_started_command
@@ -51,6 +51,7 @@ cli.add_command(table_group)
 cli.add_command(table_replica_group)
 cli.add_command(partition_group)
 cli.add_command(part_group)
+cli.add_command(dictionary_group)
 cli.add_command(mutation_group)
 cli.add_command(query_log_group)
 cli.add_command(thread_log_group)
@@ -62,7 +63,6 @@ cli.add_command(restore_replica_command)
 cli.add_command(list_settings_command)
 cli.add_command(list_functions_command)
 cli.add_command(list_macros_command)
-cli.add_command(list_dictionaries_command)
 cli.add_command(list_events_command)
 cli.add_command(list_metrics_command)
 cli.add_command(list_async_metrics_command)
