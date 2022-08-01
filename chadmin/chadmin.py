@@ -33,15 +33,16 @@ from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseClient
 
 @group(context_settings=dict(help_option_names=['-h', '--help']))
 @option('-f', '--format', type=Choice(['json', 'yaml', 'table']), help="Output format.")
+@option('--timeout', is_flag=True, help="Timeout for SQL queries.")
 @option('-d', '--debug', is_flag=True, help="Enable debug output.")
 @pass_context
-def cli(ctx, format, debug):
+def cli(ctx, format, timeout, debug):
     """ClickHouse administration tool."""
 
     if debug:
         logging.basicConfig(level='DEBUG', format='%(levelname)s:%(message)s')
 
-    chcli = ClickhouseClient()
+    chcli = ClickhouseClient(timeout=timeout)
 
     ctx.obj = dict(chcli=chcli, format=format, debug=debug)
 
