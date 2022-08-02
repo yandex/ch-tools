@@ -2,6 +2,7 @@
 import logging
 
 from click import Choice, group, option, pass_context
+from cloud.mdb.cli.common.parameters import TimeSpanParamType
 
 from cloud.mdb.clickhouse.tools.chadmin.cli.dictionary_group import dictionary_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.async_metrics import list_async_metrics_command
@@ -33,7 +34,7 @@ from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseClient
 
 @group(context_settings=dict(help_option_names=['-h', '--help']))
 @option('-f', '--format', type=Choice(['json', 'yaml', 'table']), help="Output format.")
-@option('--timeout', is_flag=True, help="Timeout for SQL queries.")
+@option('--timeout', type=TimeSpanParamType(), help="Timeout for SQL queries.")
 @option('-d', '--debug', is_flag=True, help="Enable debug output.")
 @pass_context
 def cli(ctx, format, timeout, debug):
@@ -42,7 +43,9 @@ def cli(ctx, format, timeout, debug):
     if debug:
         logging.basicConfig(level='DEBUG', format='%(levelname)s:%(message)s')
 
-    chcli = ClickhouseClient(timeout=timeout)
+    timeout_seconds = timeout.total_seconds() if timeout else None
+
+    chcli = ClickhouseClient(timeout=timeout_seconds)
 
     ctx.obj = dict(chcli=chcli, format=format, debug=debug)
 
