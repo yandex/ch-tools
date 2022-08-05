@@ -23,7 +23,7 @@ from cloud.mdb.clickhouse.tools.chadmin.cli.restore_replica import restore_repli
 from cloud.mdb.clickhouse.tools.chadmin.cli.settings import list_settings_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.stack_trace import stack_trace_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.table_replica_group import table_replica_group
-from cloud.mdb.clickhouse.tools.chadmin.cli.tables import table_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.table_group import table_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.thread_log import thread_log_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.wait_started import wait_started_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.zookeeper import zookeeper_group
@@ -35,9 +35,10 @@ from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseClient
 @group(context_settings=dict(help_option_names=['-h', '--help']))
 @option('-f', '--format', type=Choice(['json', 'yaml', 'table']), help="Output format.")
 @option('--timeout', type=TimeSpanParamType(), help="Timeout for SQL queries.")
+@option('--port', type=int, help="Port to connect.")
 @option('-d', '--debug', is_flag=True, help="Enable debug output.")
 @pass_context
-def cli(ctx, format, timeout, debug):
+def cli(ctx, format, timeout, port, debug):
     """ClickHouse administration tool."""
 
     if debug:
@@ -45,7 +46,7 @@ def cli(ctx, format, timeout, debug):
 
     timeout_seconds = timeout.total_seconds() if timeout else None
 
-    chcli = ClickhouseClient(timeout=timeout_seconds)
+    chcli = ClickhouseClient(timeout=timeout_seconds, port=port)
 
     ctx.obj = dict(chcli=chcli, format=format, debug=debug)
 

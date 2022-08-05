@@ -4,7 +4,7 @@ import requests
 from click import argument, ClickException, group, option, pass_context
 
 from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
-from cloud.mdb.clickhouse.tools.chadmin.cli.tables import get_tables
+from cloud.mdb.clickhouse.tools.chadmin.internal.table import get_tables
 from cloud.mdb.clickhouse.tools.common.backup import CHS3_BACKUPS_DIRECTORY, get_chs3_backups, get_orphaned_chs3_backups
 from cloud.mdb.clickhouse.tools.common.utils import clear_empty_directories_recursively, strip_query
 
@@ -71,9 +71,8 @@ def delete_chs3_backups(ctx, chs3_backups: [str], dry_run=True):
 
 
 def get_tables_dict(ctx):
-    tables_output = get_tables(ctx, database=None, format='JSON', engine='%MergeTree%')
-    tables_output_dict = tables_output
-    return [{'database': item['database'], 'table': item['table']} for item in tables_output_dict['data']]
+    tables = get_tables(ctx, engine='%MergeTree%')
+    return [{'database': item['database'], 'table': item['table']} for item in tables]
 
 
 def clear_empty_backup(orphaned_chs3_backup):

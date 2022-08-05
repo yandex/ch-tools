@@ -17,6 +17,7 @@ def partition_group():
 @option('--max-partition')
 @option('--min-date')
 @option('--max-date')
+@option('--disk', 'disk_name')
 @option('--detached', is_flag=True, help='Show detached partitions instead of attached.')
 @option('--active-parts', is_flag=True, help='Account only active data parts.')
 @pass_context
@@ -156,6 +157,7 @@ def get_partitions(
     min_date=None,
     max_date=None,
     active_parts=None,
+    disk_name=None,
     detached=None,
     format=None,
 ):
@@ -214,6 +216,9 @@ def get_partitions(
             {% endif %}
             GROUP BY database, table, partition_id
             HAVING 1
+            {% if disk_name %}
+               AND has(groupUniqArray(disk_name), '{{ disk_name }}')
+            {% endif %}
             {% if partition_id %}
               AND partition_id {{ format_str_match(partition_id) }}
             {% endif %}
@@ -242,6 +247,7 @@ def get_partitions(
         min_date=min_date,
         max_date=max_date,
         active_parts=active_parts,
+        disk_name=disk_name,
         format=format,
     )
 
