@@ -44,5 +44,8 @@ def get_table_replica(ctx, database, table):
 
 
 def restart_table_replica(ctx, database, table):
+    """
+    Perform "SYSTEM RESTART REPLICA" for the specified replicated table.
+    """
     query = f"""SYSTEM RESTART REPLICA `{database}`.`{table}`"""
     execute_query(ctx, query, format=None)

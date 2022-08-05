@@ -44,9 +44,12 @@ class ClickhouseClient:
     ClickHouse client.
     """
 
-    def __init__(self, *, host=socket.getfqdn(), timeout=None, port=8443, user='_admin', insecure=False):
+    def __init__(self, *, host=socket.getfqdn(), timeout=None, port=None, user='_admin', insecure=False):
         if timeout is None:
             timeout = 60
+
+        if port is None:
+            port = 8443
 
         self._session = requests.Session()
         self._session.verify = False if insecure else '/etc/clickhouse-server/ssl/allCAs.pem'
