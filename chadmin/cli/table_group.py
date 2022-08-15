@@ -1,6 +1,7 @@
 from click import argument, group, option, pass_context
 from cloud.mdb.cli.common.formatting import print_response
-from cloud.mdb.clickhouse.tools.chadmin.internal.table import get_table, get_tables
+from cloud.mdb.clickhouse.tools.chadmin.cli import get_cluster_name
+from cloud.mdb.clickhouse.tools.chadmin.internal.table import attach_table, detach_table, get_table, get_tables
 
 from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 
@@ -106,23 +107,49 @@ def delete_command(ctx, dry_run, all, database, table, exclude_table, cluster):
 @option('-t', '--table')
 @option('--engine', help='Filter tables to detach by the specified engine.')
 @option('--exclude-table')
-@option('--cluster')
-def detach_command(ctx, dry_run, all, database, table, engine, exclude_table, cluster):
+@option(
+    '--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Perform detach queries with ON CLUSTER modificator.'
+)
+def detach_command(ctx, dry_run, all, database, table, engine, exclude_table, on_cluster):
     """
     Detach one or several tables.
     """
     if not any((all, database, table)):
         ctx.fail('At least one of --all, --database or --table options must be specified.')
 
+    cluster = get_cluster_name(ctx) if on_cluster else None
+
     for t in get_tables(ctx, database=database, table=table, engine=engine, exclude_table=exclude_table):
-        query = """
-            DETACH TABLE `{{ database }}`.`{{ table }}`
-            {% if cluster %}
-            ON CLUSTER '{{ cluster }}'
-            {% endif %}
-            NO DELAY
-            """
-        execute_query(ctx, query, database=t['database'], table=t['table'], cluster=cluster, echo=True, dry_run=dry_run)
+        detach_table(ctx, database=t['database'], table=t['table'], cluster=cluster, echo=True, dry_run=dry_run)
+
+
+@table_group.command('reattach')
+@pass_context
+@option('-n', '--dry-run', is_flag=True)
+@option('-a', '--all', is_flag=True)
+@option('--database')
+@option('-t', '--table')
+@option('--engine', help='Filter tables to detach by the specified engine.')
+@option('--exclude-table')
+@option(
+    '--cluster',
+    '--on-cluster',
+    'on_cluster',
+    is_flag=True,
+    help='Perform attach and detach queries with ON CLUSTER modificator.',
+)
+def reattach_command(ctx, dry_run, all, database, table, engine, exclude_table, on_cluster):
+    """
+    Reattach one or several tables.
+    """
+    if not any((all, database, table)):
+        ctx.fail('At least one of --all, --database or --table options must be specified.')
+
+    cluster = get_cluster_name(ctx) if on_cluster else None
+
+    for t in get_tables(ctx, database=database, table=table, engine=engine, exclude_table=exclude_table):
+        detach_table(ctx, database=t['database'], table=t['table'], cluster=cluster, echo=True, dry_run=dry_run)
+        attach_table(ctx, database=t['database'], table=t['table'], cluster=cluster, echo=True, dry_run=dry_run)
 
 
 @table_group.command('get-statistics')

@@ -8,6 +8,7 @@ from cloud.mdb.clickhouse.tools.chadmin.cli.dictionary_group import dictionary_g
 from cloud.mdb.clickhouse.tools.chadmin.cli.async_metrics import list_async_metrics_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.crash_log import crash_log_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.databases import database_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.merge_group import merge_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.parts import part_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.events import list_events_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.functions import list_functions_command
@@ -16,7 +17,7 @@ from cloud.mdb.clickhouse.tools.chadmin.cli.metrics import list_metrics_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.mutations import mutation_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.part_log import part_log_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.partitions import partition_group
-from cloud.mdb.clickhouse.tools.chadmin.cli.process import process_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.process_group import process_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.query_log import query_log_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.replication_queue import replication_queue_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.restore_replica import restore_replica_command
@@ -57,6 +58,7 @@ cli.add_command(table_replica_group)
 cli.add_command(partition_group)
 cli.add_command(part_group)
 cli.add_command(dictionary_group)
+cli.add_command(merge_group)
 cli.add_command(mutation_group)
 cli.add_command(query_log_group)
 cli.add_command(thread_log_group)

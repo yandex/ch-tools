@@ -83,3 +83,31 @@ def get_tables(
         limit=limit,
         format='JSON',
     )['data']
+
+
+def detach_table(ctx, database, table, *, cluster=None, echo=False, dry_run=False):
+    """
+    Perform "DETACH TABLE" for the specified table.
+    """
+    query = """
+        DETACH TABLE `{{ database }}`.`{{ table }}`
+        {% if cluster %}
+        ON CLUSTER '{{ cluster }}'
+        {% endif %}
+        NO DELAY
+        """
+    execute_query(ctx, query, database=database, table=table, cluster=cluster, echo=echo, dry_run=dry_run, format=None)
+
+
+def attach_table(ctx, database, table, *, cluster=None, echo=False, dry_run=False):
+    """
+    Perform "ATTACH TABLE" for the specified table.
+    """
+    query = """
+        ATTACH TABLE `{{ database }}`.`{{ table }}`
+        {% if cluster %}
+        ON CLUSTER '{{ cluster }}'
+        {% endif %}
+        NO DELAY
+        """
+    execute_query(ctx, query, database=database, table=table, cluster=cluster, echo=echo, dry_run=dry_run, format=None)
