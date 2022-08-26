@@ -7,11 +7,18 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 from cloud.mdb.clickhouse.tools.chadmin.internal.table import get_tables
 from cloud.mdb.clickhouse.tools.common.backup import CHS3_BACKUPS_DIRECTORY, get_chs3_backups, get_orphaned_chs3_backups
 from cloud.mdb.clickhouse.tools.common.utils import clear_empty_directories_recursively, strip_query
+from cloud.mdb.clickhouse.tools.chadmin.internal.system import match_ch_version
 
 UNFREEZE_TABLE_SQL = strip_query(
     """
     ALTER TABLE `{db_name}`.`{table_name}`
     UNFREEZE WITH NAME '{backup_name}'
+"""
+)
+
+SYSTEM_UNFREEZE_SQL = strip_query(
+    """
+    SYSTEM UNFREEZE WITH NAME '{backup_name}'
 """
 )
 
@@ -54,20 +61,27 @@ def cleanup_backups(ctx, dry_run):
 
 
 def delete_chs3_backups(ctx, chs3_backups: [str], dry_run=True):
-    tables = get_tables_dict(ctx)
+    has_system_unfreeze = match_ch_version(ctx, min_version="22.6")
+    if not has_system_unfreeze:
+        tables = get_tables_dict(ctx)
     for chs3_backup in chs3_backups:
         print(f'Removing backup: {chs3_backup}')
-        for table in tables:
-            query = UNFREEZE_TABLE_SQL.format(
-                db_name=table['database'], table_name=table['table'], backup_name=chs3_backup
-            )
+        if has_system_unfreeze:
+            query = SYSTEM_UNFREEZE_SQL.format(backup_name=chs3_backup)
             print(query)
-            try:
-                execute_query(ctx, query, timeout=300, dry_run=dry_run)
-            except requests.exceptions.HTTPError:
-                print(f"Can't unfreeze table {table} in backup {chs3_backup}. Maybe it was deleted.")
-        if not dry_run:
-            clear_empty_backup(chs3_backup)
+            execute_query(ctx, query, timeout=300, dry_run=dry_run)
+        else:
+            for table in tables:
+                query = UNFREEZE_TABLE_SQL.format(
+                    db_name=table['database'], table_name=table['table'], backup_name=chs3_backup
+                )
+                print(query)
+                try:
+                    execute_query(ctx, query, timeout=300, dry_run=dry_run)
+                except requests.exceptions.HTTPError:
+                    print(f"Can't unfreeze table {table} in backup {chs3_backup}. Maybe it was deleted.")
+                if not dry_run:
+                    clear_empty_backup(chs3_backup)
 
 
 def get_tables_dict(ctx):
