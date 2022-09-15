@@ -1,4 +1,5 @@
 from click import group, option, pass_context
+from cloud.mdb.cli.common.parameters import BytesParamType
 
 from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 
@@ -13,16 +14,20 @@ def part_group():
 @option('--database')
 @option('-t', '--table')
 @option('--partition', 'partition_id')
+@option('--min-partition', 'min_partition_id')
+@option('--max-partition', 'max_partition_id')
 @option('--part', 'part_name')
 @option('--disk', 'disk_name')
 @option('--level', type=int)
 @option('--min-level', type=int)
 @option('--max-level', type=int)
-@option('--active', is_flag=True)
-@option('--detached', is_flag=True, help='Show detached parts instead of attached.')
-@option('--reason')
+@option('--min-size', type=BytesParamType())
+@option('--max-size', type=BytesParamType())
+@option('--active', is_flag=True, help='Output only active data parts.')
+@option('--detached', is_flag=True, help='Output detached parts instead of attached.')
+@option('--reason', help='Filter out data parts to output by reason. Applicable only for detached data parts.')
 @option('-v', '--verbose', is_flag=True)
-@option('-l', '--limit')
+@option('-l', '--limit', help='Limit the max number of objects in the output.')
 @pass_context
 def list_parts_command(ctx, verbose, active, detached, reason, **kwargs):
     """List data parts."""
@@ -38,14 +43,18 @@ def list_parts_command(ctx, verbose, active, detached, reason, **kwargs):
 @option('--database')
 @option('-t', '--table')
 @option('--partition', 'partition_id')
+@option('--min-partition', 'min_partition_id')
+@option('--max-partition', 'max_partition_id')
 @option('--part', 'part_name')
 @option('--disk', 'disk_name')
 @option('--level', type=int)
 @option('--min-level', type=int)
 @option('--max-level', type=int)
+@option('--min-size', type=BytesParamType())
+@option('--max-size', type=BytesParamType())
 @option('--detached', is_flag=True)
 @option('--reason')
-@option('-l', '--limit')
+@option('-l', '--limit', help='Limit the max number of objects in the output.')
 @option('-k', '--keep-going', is_flag=True, help='Do not stop on the first failed command.')
 @option('-n', '--dry-run', is_flag=True)
 @pass_context
@@ -96,15 +105,19 @@ def delete_parts_command(
 @option('--database')
 @option('-t', '--table')
 @option('--partition', 'partition_id')
+@option('--min-partition', 'min_partition_id')
+@option('--max-partition', 'max_partition_id')
 @option('--part', 'part_name')
 @option('--disk', 'disk_name')
 @option('--new-disk', 'new_disk_name', required=True)
-@option('-l', '--limit')
+@option('--min-size', type=BytesParamType())
+@option('--max-size', type=BytesParamType())
+@option('-l', '--limit', help='Limit the max number of objects in the output.')
 @option('-k', '--keep-going', is_flag=True, help='Do not stop on the first failed command.')
 @option('-n', '--dry-run', is_flag=True)
 @pass_context
 def move_parts_command(
-    ctx, database, table, partition_id, part_name, disk_name, new_disk_name, limit, keep_going, dry_run
+    ctx, database, table, partition_id, part_name, disk_name, new_disk_name, limit, keep_going, dry_run, **kwargs
 ):
     """Move one or several data parts."""
     if not any((database, table, partition_id, part_name, disk_name)):
@@ -120,6 +133,7 @@ def move_parts_command(
         active=True,
         limit=limit,
         format='JSON',
+        **kwargs,
     )['data']
     for part in parts:
         try:
@@ -137,11 +151,15 @@ def get_parts(
     database=None,
     table=None,
     partition_id=None,
+    min_partition_id=None,
+    max_partition_id=None,
     part_name=None,
     disk_name=None,
     level=None,
     min_level=None,
     max_level=None,
+    min_size=None,
+    max_size=None,
     active=None,
     verbose=False,
     limit=None,
@@ -165,8 +183,8 @@ def get_parts(
         {% if verbose -%}
             path,
         {% endif -%}
-            min_date,
-            max_date,
+            min_time,
+            max_time,
             rows,
         {% if not verbose -%}
             formatReadableSize(bytes_on_disk) "size"
@@ -199,6 +217,12 @@ def get_parts(
         {% if partition_id -%}
           AND partition_id {{ format_str_match(partition_id) }}
         {% endif -%}
+        {% if min_partition_id -%}
+          AND partition_id >= '{{ min_partition_id }}'
+        {% endif -%}
+        {% if max_partition_id -%}
+          AND partition_id <= '{{ max_partition_id }}'
+        {% endif -%}
         {% if part_name -%}
           AND name {{ format_str_match(part_name) }}
         {% endif -%}
@@ -217,6 +241,12 @@ def get_parts(
         {% if max_level is not none -%}
           AND level <= {{ max_level }}
         {% endif -%}
+        {% if min_size is not none -%}
+          AND bytes_on_disk >= {{ min_size }}
+        {% endif -%}
+        {% if max_size is not none -%}
+          AND bytes_on_disk <= {{ max_size }}
+        {% endif -%}
         {% if active -%}
           AND active
         {% endif -%}
@@ -231,11 +261,15 @@ def get_parts(
         database=database,
         table=table,
         partition_id=partition_id,
+        min_partition_id=min_partition_id,
+        max_partition_id=max_partition_id,
         part_name=part_name,
         disk_name=disk_name,
         level=level,
         min_level=min_level,
         max_level=max_level,
+        min_size=min_size,
+        max_size=max_size,
         active=active,
         verbose=verbose,
         limit=limit,

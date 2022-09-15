@@ -34,7 +34,7 @@ def get_process_command(ctx, query_id):
 @option('-v', '--verbose', is_flag=True)
 @option('--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Get records from all hosts in the cluster.')
 @option('--order-by', type=Choice(['elapsed', 'memory_usage']), default='elapsed')
-@option('-l', '--limit')
+@option('-l', '--limit', help='Limit the max number of objects in the output.')
 @pass_context
 def list_processes_command(ctx, user, exclude_user, query, verbose, on_cluster, order_by, limit):
     """

@@ -1,4 +1,5 @@
 from click import group, option, pass_context
+from cloud.mdb.cli.common.parameters import BytesParamType
 
 from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 
@@ -13,12 +14,14 @@ def partition_group():
 @option('--database')
 @option('-t', '--table')
 @option('--partition', 'partition_id')
-@option('--min-partition')
-@option('--max-partition')
+@option('--min-partition', 'min_partition_id')
+@option('--max-partition', 'max_partition_id')
 @option('--min-date')
 @option('--max-date')
 @option('--min-parts', '--min-part-count', 'min_part_count')
 @option('--max-parts', '--max-part-count', 'max_part_count')
+@option('--min-size', type=BytesParamType())
+@option('--max-size', type=BytesParamType())
 @option('--disk', 'disk_name')
 @option('--detached', is_flag=True, help='Show detached partitions instead of attached.')
 @option('--active-parts', is_flag=True, help='Account only active data parts.')
@@ -85,8 +88,8 @@ def reattach_partitions_command(ctx, dry_run, all, database, table, partition_id
 @option('--database')
 @option('-t', '--table')
 @option('--partition', 'partition_id')
-@option('--min-partition')
-@option('--max-partition')
+@option('--min-partition', 'min_partition_id')
+@option('--max-partition', 'max_partition_id')
 @option('--min-date')
 @option('--max-date')
 @pass_context
@@ -120,19 +123,19 @@ def delete_partitions_command(
 @option('--database')
 @option('-t', '--table')
 @option('--partition', 'partition_id')
-@option('--min-partition')
-@option('--max-partition')
+@option('--min-partition', 'min_partition_id')
+@option('--max-partition', 'max_partition_id')
 @option('--min-date')
 @option('--max-date')
 @pass_context
 def optimize_partitions_command(
-    ctx, dry_run, database, table, partition_id, min_partition, max_partition, min_date, max_date
+    ctx, dry_run, database, table, partition_id, min_partition_id, max_partition_id, min_date, max_date
 ):
     """Optimize partitions."""
-    if not any((database, table, partition_id, min_partition, max_partition, min_date, max_date)):
+    if not any((database, table, partition_id, min_partition_id, max_partition_id)):
         ctx.fail(
-            'At least one of --database, --table, --partition, --min-partition, --max-partition,'
-            ' --min-date and --max-date options must be specified.'
+            'At least one of --database, --table, --partition, --min-partition and --max-partition'
+            ' options must be specified.'
         )
 
     for p in get_partitions(
@@ -140,8 +143,8 @@ def optimize_partitions_command(
         database,
         table,
         partition_id=partition_id,
-        min_partition=min_partition,
-        max_partition=max_partition,
+        min_partition_id=min_partition_id,
+        max_partition_id=max_partition_id,
         min_date=min_date,
         max_date=max_date,
         format='JSON',
@@ -154,12 +157,14 @@ def get_partitions(
     database,
     table,
     partition_id=None,
-    min_partition=None,
-    max_partition=None,
+    min_partition_id=None,
+    max_partition_id=None,
     min_date=None,
     max_date=None,
     min_part_count=None,
     max_part_count=None,
+    min_size=None,
+    max_size=None,
     active_parts=None,
     disk_name=None,
     detached=None,
@@ -186,11 +191,11 @@ def get_partitions(
             {% if partition_id %}
               AND partition_id {{ format_str_match(partition_id) }}
             {% endif %}
-            {% if min_partition %}
-              AND partition_id >= '{{ min_partition }}'
+            {% if min_partition_id %}
+              AND partition_id >= '{{ min_partition_id }}'
             {% endif %}
-            {% if max_partition %}
-              AND partition_id <= '{{ max_partition }}'
+            {% if max_partition_id %}
+              AND partition_id <= '{{ max_partition_id }}'
             {% endif %}
             {% if min_part_count %}
               AND parts >= {{ min_part_count }}
@@ -207,8 +212,8 @@ def get_partitions(
                 table,
                 partition_id,
                 count() "parts",
-                min(min_date) "min_date",
-                max(max_date) "max_date",
+                min(min_time) "min_time",
+                max(max_time) "max_time",
                 arrayStringConcat(groupUniqArray(disk_name), ', ') "disks",
                 sum(rows) "rows",
                 formatReadableSize(sum(bytes_on_disk)) "bytes"
@@ -232,17 +237,23 @@ def get_partitions(
             {% if partition_id %}
               AND partition_id {{ format_str_match(partition_id) }}
             {% endif %}
-            {% if min_partition %}
-              AND partition_id >= '{{ min_partition }}'
+            {% if min_partition_id %}
+              AND partition_id >= '{{ min_partition_id }}'
             {% endif %}
-            {% if max_partition %}
-              AND partition_id <= '{{ max_partition }}'
+            {% if max_partition_id %}
+              AND partition_id <= '{{ max_partition_id }}'
             {% endif %}
             {% if min_date %}
               AND max_date >= '{{ min_date }}'
             {% endif %}
             {% if max_date %}
               AND min_date <= '{{ max_date }}'
+            {% endif %}
+            {% if min_size %}
+              AND sum(bytes_on_disk) >= '{{ min_size }}'
+            {% endif %}
+            {% if max_size %}
+              AND sum(bytes_on_disk) <= '{{ max_size }}'
             {% endif %}
             ORDER BY database, table, partition_id
             """
@@ -252,12 +263,14 @@ def get_partitions(
         database=database,
         table=table,
         partition_id=partition_id,
-        min_partition=min_partition,
-        max_partition=max_partition,
+        min_partition_id=min_partition_id,
+        max_partition_id=max_partition_id,
         min_date=min_date,
         max_date=max_date,
         min_part_count=min_part_count,
         max_part_count=max_part_count,
+        min_size=min_size,
+        max_size=max_size,
         active_parts=active_parts,
         disk_name=disk_name,
         format=format,
