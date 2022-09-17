@@ -56,7 +56,9 @@ def list_parts_command(ctx, verbose, active, detached, reason, **kwargs):
 @option('--reason')
 @option('-l', '--limit', help='Limit the max number of objects in the output.')
 @option('-k', '--keep-going', is_flag=True, help='Do not stop on the first failed command.')
-@option('-n', '--dry-run', is_flag=True)
+@option(
+    '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
+)
 @pass_context
 def delete_parts_command(
     ctx, database, table, partition_id, part_name, detached, reason, limit, keep_going, dry_run, **kwargs
@@ -114,7 +116,9 @@ def delete_parts_command(
 @option('--max-size', type=BytesParamType())
 @option('-l', '--limit', help='Limit the max number of objects in the output.')
 @option('-k', '--keep-going', is_flag=True, help='Do not stop on the first failed command.')
-@option('-n', '--dry-run', is_flag=True)
+@option(
+    '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
+)
 @pass_context
 def move_parts_command(
     ctx, database, table, partition_id, part_name, disk_name, new_disk_name, limit, keep_going, dry_run, **kwargs

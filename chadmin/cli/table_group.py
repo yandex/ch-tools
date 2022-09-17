@@ -15,7 +15,7 @@ def table_group():
 @table_group.command('get')
 @argument('database')
 @argument('table')
-@option('--active-parts', is_flag=True, help='Account only active data parts.')
+@option('--active', '--active-parts', 'active_parts', is_flag=True, help='Account only active data parts.')
 @pass_context
 def get_command(ctx, database, table, active_parts):
     """
@@ -31,7 +31,7 @@ def get_command(ctx, database, table, active_parts):
 @option('--exclude-table', help='Do not output the specified table.')
 @option('--engine', help='Filter tables to output by the specified engine.')
 @option('--format', default='PrettyCompact')
-@option('--active-parts', is_flag=True, help='Account only active data parts.')
+@option('--active', '--active-parts', 'active_parts', is_flag=True, help='Account only active data parts.')
 @option('-v', '--verbose', is_flag=True)
 @option('-l', '--limit', type=int, default=1000, help='Limit the max number of objects in the output.')
 @pass_context
@@ -75,12 +75,14 @@ def columns_command(ctx, database, table):
 
 @table_group.command('delete')
 @pass_context
-@option('-n', '--dry-run', is_flag=True)
-@option('-a', '--all', is_flag=True)
 @option('--database')
 @option('-t', '--table')
 @option('--exclude-table')
+@option('-a', '--all', is_flag=True, help='Delete all tables.')
 @option('--cluster')
+@option(
+    '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
+)
 def delete_command(ctx, dry_run, all, database, table, exclude_table, cluster):
     """
     Delete one or several tables.
@@ -101,14 +103,16 @@ def delete_command(ctx, dry_run, all, database, table, exclude_table, cluster):
 
 @table_group.command('detach')
 @pass_context
-@option('-n', '--dry-run', is_flag=True)
-@option('-a', '--all', is_flag=True)
 @option('--database')
 @option('-t', '--table')
 @option('--engine', help='Filter tables to detach by the specified engine.')
 @option('--exclude-table')
+@option('-a', '--all', is_flag=True, help='Detach all tables.')
 @option(
     '--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Perform detach queries with ON CLUSTER modificator.'
+)
+@option(
+    '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
 )
 def detach_command(ctx, dry_run, all, database, table, engine, exclude_table, on_cluster):
     """
@@ -125,18 +129,20 @@ def detach_command(ctx, dry_run, all, database, table, engine, exclude_table, on
 
 @table_group.command('reattach')
 @pass_context
-@option('-n', '--dry-run', is_flag=True)
-@option('-a', '--all', is_flag=True)
 @option('--database')
 @option('-t', '--table')
 @option('--engine', help='Filter tables to detach by the specified engine.')
 @option('--exclude-table')
+@option('-a', '--all', is_flag=True, help='Reattach all tables.')
 @option(
     '--cluster',
     '--on-cluster',
     'on_cluster',
     is_flag=True,
     help='Perform attach and detach queries with ON CLUSTER modificator.',
+)
+@option(
+    '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
 )
 def reattach_command(ctx, dry_run, all, database, table, engine, exclude_table, on_cluster):
     """

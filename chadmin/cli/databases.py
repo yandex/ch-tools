@@ -11,7 +11,7 @@ def database_group():
 
 @database_group.command('get')
 @argument('database')
-@option('--active-parts', is_flag=True, help='Account only active data parts.')
+@option('--active', '--active-parts', 'active_parts', is_flag=True, help='Account only active data parts.')
 @pass_context
 def get_database_command(ctx, database, active_parts):
     print(get_databases(ctx, database=database, active_parts=active_parts, format='Vertical'))
@@ -20,7 +20,7 @@ def get_database_command(ctx, database, active_parts):
 @database_group.command('list')
 @option('--database')
 @option('--exclude-database')
-@option('--active-parts', is_flag=True, help='Account only active data parts.')
+@option('--active', '--active-parts', 'active_parts', is_flag=True, help='Account only active data parts.')
 @pass_context
 def list_databases_command(ctx, **kwargs):
     print(get_databases(ctx, **kwargs, format='PrettyCompact'))
@@ -28,11 +28,13 @@ def list_databases_command(ctx, **kwargs):
 
 @database_group.command('delete')
 @pass_context
-@option('-n', '--dry-run', is_flag=True)
-@option('-a', '--all', is_flag=True)
 @option('--database')
 @option('--exclude-database')
+@option('-a', '--all', is_flag=True, help='Delete all databases.')
 @option('--cluster')
+@option(
+    '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
+)
 def delete_databases_command(ctx, dry_run, all, database, exclude_database, cluster):
     if not any((all, database, exclude_database)):
         ctx.fail('At least one of --all, --database and --exclude-database options must be specified.')
