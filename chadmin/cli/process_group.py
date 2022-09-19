@@ -58,9 +58,9 @@ def list_processes_command(ctx, user, exclude_user, query, verbose, on_cluster, 
 
 @process_group.command('kill')
 @argument('query_id', required=False)
-@option('-a', '--all', is_flag=True)
 @option('-u', '--user')
 @option('-U', '--exclude-user')
+@option('-a', '--all', is_flag=True, help='Kill all processes.')
 @pass_context
 def kill_process_command(ctx, query_id, all, user, exclude_user):
     """

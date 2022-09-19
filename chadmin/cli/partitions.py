@@ -1,5 +1,12 @@
 from click import group, option, pass_context
 from cloud.mdb.cli.common.parameters import BytesParamType
+from cloud.mdb.clickhouse.tools.chadmin.internal.partition import (
+    attach_partition,
+    detach_partition,
+    drop_partition,
+    materialize_ttl_in_partition,
+    optimize_partition,
+)
 
 from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 
@@ -24,7 +31,7 @@ def partition_group():
 @option('--max-size', type=BytesParamType())
 @option('--disk', 'disk_name')
 @option('--detached', is_flag=True, help='Show detached partitions instead of attached.')
-@option('--active-parts', is_flag=True, help='Account only active data parts.')
+@option('--active', '--active-parts', 'active_parts', is_flag=True, help='Account only active data parts.')
 @pass_context
 def list_partitions_command(ctx, **kwargs):
     """List partitions."""
@@ -32,11 +39,13 @@ def list_partitions_command(ctx, **kwargs):
 
 
 @partition_group.command(name='attach')
-@option('-n', '--dry-run', is_flag=True)
-@option('-a', '--all', is_flag=True)
-@option('--database')
+@option('--database', help='Filter in partitions to attach by the specified database.')
 @option('-t', '--table')
 @option('--partition', 'partition_id')
+@option('-a', '--all', is_flag=True, help='Attach all partitions.')
+@option(
+    '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
+)
 @pass_context
 def attach_partitions_command(ctx, dry_run, all, database, table, partition_id):
     """Attach one or several partitions."""
@@ -49,11 +58,13 @@ def attach_partitions_command(ctx, dry_run, all, database, table, partition_id):
 
 
 @partition_group.command(name='detach')
-@option('-n', '--dry-run', is_flag=True)
-@option('-a', '--all', is_flag=True)
-@option('--database')
+@option('--database', help='Filter in partitions to detach by the specified database.')
 @option('-t', '--table')
 @option('--partition', 'partition_id')
+@option('-a', '--all', is_flag=True, help='Detach all partitions.')
+@option(
+    '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
+)
 @pass_context
 def detach_partitions_command(ctx, dry_run, all, database, table, partition_id):
     """Detach one or several partitions."""
@@ -66,11 +77,13 @@ def detach_partitions_command(ctx, dry_run, all, database, table, partition_id):
 
 
 @partition_group.command(name='reattach')
-@option('-n', '--dry-run', is_flag=True)
-@option('-a', '--all', is_flag=True)
-@option('--database')
+@option('--database', help='Filter in partitions to reattach by the specified database.')
 @option('-t', '--table')
 @option('--partition', 'partition_id')
+@option('-a', '--all', is_flag=True, help='Reattach all partitions.')
+@option(
+    '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
+)
 @pass_context
 def reattach_partitions_command(ctx, dry_run, all, database, table, partition_id):
     """Perform sequential attach and detach of one or several partitions."""
@@ -84,23 +97,25 @@ def reattach_partitions_command(ctx, dry_run, all, database, table, partition_id
 
 
 @partition_group.command(name='delete')
-@option('-n', '--dry-run', is_flag=True)
-@option('--database')
+@option('--database', help='Filter in partitions to delete by the specified database.')
 @option('-t', '--table')
 @option('--partition', 'partition_id')
 @option('--min-partition', 'min_partition_id')
 @option('--max-partition', 'max_partition_id')
 @option('--min-date')
 @option('--max-date')
+@option(
+    '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
+)
 @pass_context
 def delete_partitions_command(
-    ctx, dry_run, database, table, partition_id, min_partition, max_partition, min_date, max_date
+    ctx, dry_run, database, table, partition_id, min_partition_id, max_partition_id, min_date, max_date
 ):
     """Delete one or several partitions."""
-    if not any((database, table, partition_id, min_partition, max_partition, min_date, max_date)):
+    if not any((database, table, partition_id, min_partition_id, max_partition_id)):
         ctx.fail(
-            'At least one of --database, --table, --partition, --min-partition, --max-partition,'
-            ' --min-date and --max-date options must be specified.'
+            'At least one of --database, --table, --partition, --min-partition and --max-partition'
+            ' options must be specified.'
         )
 
     partitions = get_partitions(
@@ -108,8 +123,8 @@ def delete_partitions_command(
         database,
         table,
         partition_id=partition_id,
-        min_partition=min_partition,
-        max_partition=max_partition,
+        min_partition_id=min_partition_id,
+        max_partition_id=max_partition_id,
         min_date=min_date,
         max_date=max_date,
         format='JSON',
@@ -119,14 +134,16 @@ def delete_partitions_command(
 
 
 @partition_group.command(name='optimize')
-@option('-n', '--dry-run', is_flag=True)
-@option('--database')
+@option('--database', help='Filter in partitions to optimize by the specified database.')
 @option('-t', '--table')
 @option('--partition', 'partition_id')
 @option('--min-partition', 'min_partition_id')
 @option('--max-partition', 'max_partition_id')
 @option('--min-date')
 @option('--max-date')
+@option(
+    '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
+)
 @pass_context
 def optimize_partitions_command(
     ctx, dry_run, database, table, partition_id, min_partition_id, max_partition_id, min_date, max_date
@@ -150,6 +167,42 @@ def optimize_partitions_command(
         format='JSON',
     )['data']:
         optimize_partition(ctx, p['database'], p['table'], p['partition_id'], dry_run=dry_run)
+
+
+@partition_group.command(name='materialize-ttl')
+@option('--database', help='Filter in partitions to materialize TTL by the specified database.')
+@option('-t', '--table')
+@option('--partition', 'partition_id')
+@option('--min-partition', 'min_partition_id')
+@option('--max-partition', 'max_partition_id')
+@option('--min-date')
+@option('--max-date')
+@option(
+    '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
+)
+@pass_context
+def materialize_ttl_command(
+    ctx, dry_run, database, table, partition_id, min_partition_id, max_partition_id, min_date, max_date
+):
+    """Materialize TTL."""
+    if not any((database, table, partition_id, min_partition_id, max_partition_id)):
+        ctx.fail(
+            'At least one of --database, --table, --partition, --min-partition and --max-partition'
+            ' options must be specified.'
+        )
+
+    for p in get_partitions(
+        ctx,
+        database,
+        table,
+        partition_id=partition_id,
+        min_partition_id=min_partition_id,
+        max_partition_id=max_partition_id,
+        min_date=min_date,
+        max_date=max_date,
+        format='JSON',
+    )['data']:
+        materialize_ttl_in_partition(ctx, p['database'], p['table'], p['partition_id'], dry_run=dry_run)
 
 
 def get_partitions(
@@ -275,38 +328,6 @@ def get_partitions(
         disk_name=disk_name,
         format=format,
     )
-
-
-def attach_partition(ctx, database, table, partition_id, dry_run=False):
-    """
-    Attach the specified table partition.
-    """
-    query = f'ALTER TABLE `{database}`.`{table}` ATTACH PARTITION ID \'{partition_id}\''
-    execute_query(ctx, query, echo=True, dry_run=dry_run)
-
-
-def detach_partition(ctx, database, table, partition_id, dry_run=False):
-    """
-    Detach the specified table partition.
-    """
-    query = f'ALTER TABLE `{database}`.`{table}` DETACH PARTITION ID \'{partition_id}\''
-    execute_query(ctx, query, echo=True, dry_run=dry_run)
-
-
-def drop_partition(ctx, database, table, partition_id, dry_run=False):
-    """
-    Drop the specified table partition.
-    """
-    query = f'ALTER TABLE `{database}`.`{table}` DROP PARTITION ID \'{partition_id}\''
-    execute_query(ctx, query, echo=True, dry_run=dry_run)
-
-
-def optimize_partition(ctx, database, table, partition_id, dry_run=False):
-    """
-    Optimize the specified table partition.
-    """
-    query = f'OPTIMIZE TABLE `{database}`.`{table}` PARTITION ID \'{partition_id}\''
-    execute_query(ctx, query, echo=True, dry_run=dry_run)
 
 
 def get_partition_key_type(ctx, database, table):

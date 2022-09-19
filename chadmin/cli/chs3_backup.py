@@ -40,7 +40,9 @@ def list_backups(orphaned):
 
 @chs3_backup_group.command('delete')
 @argument('backup')
-@option('-n', '--dry-run', is_flag=True)
+@option(
+    '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
+)
 @pass_context
 def delete_backup(ctx, backup, dry_run):
     """Delete backup."""
@@ -52,7 +54,9 @@ def delete_backup(ctx, backup, dry_run):
 
 
 @chs3_backup_group.command('cleanup')
-@option('-n', '--dry-run', is_flag=True)
+@option(
+    '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
+)
 @pass_context
 def cleanup_backups(ctx, dry_run):
     """Removed unnecessary / orphaned backups."""
