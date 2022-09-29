@@ -11,13 +11,13 @@ def part_group():
 
 
 @part_group.command(name='list')
-@option('--database')
-@option('-t', '--table')
-@option('--partition', 'partition_id')
+@option('--database', help='Filter in parts to output by the specified database.')
+@option('-t', '--table', help='Filter in parts to output by the specified table.')
+@option('--partition', 'partition_id', help='Filter in parts to output by the specified partition.')
 @option('--min-partition', 'min_partition_id')
 @option('--max-partition', 'max_partition_id')
 @option('--part', 'part_name')
-@option('--disk', 'disk_name')
+@option('--disk', 'disk_name', help='Filter in parts to output by the specified disk.')
 @option('--level', type=int)
 @option('--min-level', type=int)
 @option('--max-level', type=int)
@@ -27,45 +27,59 @@ def part_group():
 @option('--detached', is_flag=True, help='Output detached parts instead of attached.')
 @option('--reason', help='Filter out data parts to output by reason. Applicable only for detached data parts.')
 @option('-v', '--verbose', is_flag=True)
-@option('-l', '--limit', help='Limit the max number of objects in the output.')
+@option('-l', '--limit', type=int, help='Limit the max number of objects in the output.')
 @pass_context
-def list_parts_command(ctx, verbose, active, detached, reason, **kwargs):
+def list_parts_command(ctx, verbose, active, min_size, max_size, detached, reason, **kwargs):
     """List data parts."""
     format = 'Vertical' if verbose else 'PrettyCompact'
     if detached:
         parts = get_detached_parts(ctx, reason=reason, verbose=verbose, format=format, **kwargs)
     else:
-        parts = get_parts(ctx, active=active, verbose=verbose, format=format, **kwargs)
+        parts = get_parts(
+            ctx, active=active, min_size=min_size, max_size=max_size, verbose=verbose, format=format, **kwargs
+        )
     print(parts)
 
 
 @part_group.command(name='delete')
-@option('--database')
-@option('-t', '--table')
-@option('--partition', 'partition_id')
+@option('--database', help='Filter in parts to delete by the specified database.')
+@option('-t', '--table', help='Filter in parts to delete by the specified table.')
+@option('--partition', 'partition_id', help='Filter in parts to delete by the specified partition.')
 @option('--min-partition', 'min_partition_id')
 @option('--max-partition', 'max_partition_id')
 @option('--part', 'part_name')
-@option('--disk', 'disk_name')
+@option('--disk', 'disk_name', help='Filter in parts to delete by the specified disk.')
 @option('--level', type=int)
 @option('--min-level', type=int)
 @option('--max-level', type=int)
 @option('--min-size', type=BytesParamType())
 @option('--max-size', type=BytesParamType())
 @option('--detached', is_flag=True)
-@option('--reason')
-@option('-l', '--limit', help='Limit the max number of objects in the output.')
+@option('--reason', help='Filter in parts to delete by the specified detach reason.')
+@option('-l', '--limit', type=int, help='Limit the max number of objects in the output.')
 @option('-k', '--keep-going', is_flag=True, help='Do not stop on the first failed command.')
 @option(
     '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
 )
 @pass_context
 def delete_parts_command(
-    ctx, database, table, partition_id, part_name, detached, reason, limit, keep_going, dry_run, **kwargs
+    ctx,
+    database,
+    table,
+    partition_id,
+    part_name,
+    min_size,
+    max_size,
+    detached,
+    reason,
+    limit,
+    keep_going,
+    dry_run,
+    **kwargs,
 ):
     """Delete one or several data parts."""
-    if not any((database, table, partition_id, part_name)):
-        ctx.fail('At least one of --database, --table, --partition or --part option must be specified.')
+    if not any((database, table, partition_id, part_name, reason)):
+        ctx.fail('At least one of --database, --table, --partition, --part and reason options must be specified.')
 
     if detached:
         parts = get_detached_parts(
@@ -80,12 +94,17 @@ def delete_parts_command(
             **kwargs,
         )['data']
     else:
+        if reason:
+            ctx.fail('Option --reason cannot be used without --detached.')
+
         parts = get_parts(
             ctx,
             database=database,
             table=table,
             partition_id=partition_id,
             part_name=part_name,
+            min_size=min_size,
+            max_size=max_size,
             limit=limit,
             format='JSON',
             **kwargs,
@@ -104,17 +123,17 @@ def delete_parts_command(
 
 
 @part_group.command(name='move')
-@option('--database')
-@option('-t', '--table')
-@option('--partition', 'partition_id')
+@option('--database', help='Filter in parts to move by the specified database.')
+@option('-t', '--table', help='Filter in parts to move by the specified table.')
+@option('--partition', 'partition_id', help='Filter in parts to move by the specified partition.')
 @option('--min-partition', 'min_partition_id')
 @option('--max-partition', 'max_partition_id')
 @option('--part', 'part_name')
-@option('--disk', 'disk_name')
+@option('--disk', 'disk_name', help='Filter in parts to move by the specified disk.')
 @option('--new-disk', 'new_disk_name', required=True)
 @option('--min-size', type=BytesParamType())
 @option('--max-size', type=BytesParamType())
-@option('-l', '--limit', help='Limit the max number of objects in the output.')
+@option('-l', '--limit', type=int, help='Limit the max number of objects in the output.')
 @option('-k', '--keep-going', is_flag=True, help='Do not stop on the first failed command.')
 @option(
     '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
@@ -303,6 +322,8 @@ def get_detached_parts(
     database=None,
     table=None,
     partition_id=None,
+    min_partition_id=None,
+    max_partition_id=None,
     part_name=None,
     disk_name=None,
     level=None,
@@ -334,6 +355,12 @@ def get_detached_parts(
         {% endif -%}
         {% if partition_id -%}
           AND partition_id {{ format_str_match(partition_id) }}
+        {% endif -%}
+        {% if min_partition_id -%}
+          AND partition_id >= '{{ min_partition_id }}'
+        {% endif -%}
+        {% if max_partition_id -%}
+          AND partition_id <= '{{ max_partition_id }}'
         {% endif -%}
         {% if part_name -%}
           AND name {{ format_str_match(part_name) }}
@@ -367,6 +394,8 @@ def get_detached_parts(
         database=database,
         table=table,
         partition_id=partition_id,
+        min_partition_id=min_partition_id,
+        max_partition_id=max_partition_id,
         part_name=part_name,
         disk_name=disk_name,
         level=level,

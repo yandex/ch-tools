@@ -21,7 +21,7 @@ def part_log_group():
 @option('--time')
 @option('-v', '--verbose', is_flag=True)
 @option('--order-by', type=Choice(['time', 'size', 'rows']), default='time')
-@option('-l', '--limit', default=10)
+@option('-l', '--limit', type=int, default=10, help='Limit the max number of objects in the output.')
 @pass_context
 def list_part_log_command(ctx, date, min_date, max_date, min_time, max_time, time, **kwargs):
     min_date = min_date or date

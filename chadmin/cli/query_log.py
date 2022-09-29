@@ -47,7 +47,7 @@ def get_query_command(ctx, **kwargs):
     type=Choice(['query_start_time', 'query_duration_ms', 'memory_usage', 'read_rows', 'written_rows', 'result_rows']),
     default='query_start_time',
 )
-@option('-l', '--limit', default=10)
+@option('-l', '--limit', type=int, default=10, help='Limit the max number of objects in the output.')
 @pass_context
 def list_queries_command(ctx, date, min_date, max_date, min_time, max_time, time, **kwargs):
     if not any((date, min_date, max_date, time, min_time, max_time)):

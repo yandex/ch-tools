@@ -134,8 +134,10 @@ def list_merges(ctx, *, cluster=None, limit=None):
             elapsed,
             progress,
             is_mutation,
+        {% if version_ge('21.3') -%}
             merge_type,
             merge_algorithm,
+        {% endif %}
             partition_id,
             num_parts,
             source_part_names,
@@ -155,6 +157,9 @@ def list_merges(ctx, *, cluster=None, limit=None):
         FROM clusterAllReplicas({{ cluster }}, system.merges)
         {% else %}
         FROM system.merges
+        {% endif %}
+        {% if limit %}
+        LIMIT {{ limit }}
         {% endif %}
         """
     return execute_query(
