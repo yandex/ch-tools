@@ -23,7 +23,7 @@ def replication_queue_group():
 @option('--database', help='Filter replication queue tasks to output by the specified database.')
 @option('--table', help='Filter replication queue tasks to output by the specified table.')
 @option('-v', '--verbose', is_flag=True)
-@option('-l', '--limit', help='Limit the max number of objects in the output.')
+@option('-l', '--limit', type=int, help='Limit the max number of objects in the output.')
 @pass_context
 def list_replication_queue_command(ctx, **kwargs):
     print(get_replication_queue_tasks(ctx, **kwargs, format='Vertical'))
