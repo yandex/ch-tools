@@ -13,7 +13,9 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 
 @group('partition')
 def partition_group():
-    """Partition management commands."""
+    """
+    Commands to manage partitions.
+    """
     pass
 
 
@@ -27,10 +29,13 @@ def partition_group():
 @option('--max-date')
 @option('--min-parts', '--min-part-count', 'min_part_count')
 @option('--max-parts', '--max-part-count', 'max_part_count')
-@option('--min-size', type=BytesParamType())
-@option('--max-size', type=BytesParamType())
+@option(
+    '--min-size', type=BytesParamType(), help='Output partitions which size greater or equal to the specified size.'
+)
+@option('--max-size', type=BytesParamType(), help='Output partitions which size less or equal to the specified size.')
 @option('--disk', 'disk_name', help='Filter in partitions to output by the specified disk.')
-@option('--merging', is_flag=True)
+@option('--merging', is_flag=True, help='Output only those partitions that have merging data parts.')
+@option('--mutating', is_flag=True, help='Output only those partitions that have mutating data parts.')
 @option('--detached', is_flag=True, help='Show detached partitions instead of attached.')
 @option('--active', '--active-parts', 'active_parts', is_flag=True, help='Account only active data parts.')
 @option('-l', '--limit', type=int, help='Limit the max number of objects in the output.')
@@ -88,7 +93,8 @@ def detach_partitions_command(ctx, dry_run, all, database, table, partition_id, 
 @option('--min-partition', 'min_partition_id')
 @option('--max-partition', 'max_partition_id')
 @option('--disk', 'disk_name', help='Filter in partitions to reattach by the specified disk.')
-@option('--merging', is_flag=True)
+@option('--merging', is_flag=True, help='Reattach only those partitions that have merging data parts.')
+@option('--mutating', is_flag=True, help='Reattach only those partitions that have mutating data parts.')
 @option('-a', '--all', is_flag=True, help='Reattach all partitions.')
 @option('-l', '--limit', type=int, help='Limit the max number of partitions to reaatach in the output.')
 @option(
@@ -96,13 +102,24 @@ def detach_partitions_command(ctx, dry_run, all, database, table, partition_id, 
 )
 @pass_context
 def reattach_partitions_command(
-    ctx, dry_run, all, database, table, partition_id, min_partition_id, max_partition_id, disk_name, merging, limit
+    ctx,
+    dry_run,
+    all,
+    database,
+    table,
+    partition_id,
+    min_partition_id,
+    max_partition_id,
+    disk_name,
+    merging,
+    mutating,
+    limit,
 ):
     """Perform sequential attach and detach of one or several partitions."""
-    if not any((all, merging, database, table, partition_id)):
+    if not any((all, merging, mutating, database, table, partition_id)):
         ctx.fail(
-            'At least one of --all, --database, --table, --partition, --min-partition, --max-partition'
-            ' and --merging options must be specified.'
+            'At least one of --all, --database, --table, --partition, --min-partition, --max-partition,'
+            ' --merging, --mutating options must be specified.'
         )
 
     partitions = get_partitions(
@@ -113,6 +130,7 @@ def reattach_partitions_command(
         min_partition_id=min_partition_id,
         max_partition_id=max_partition_id,
         merging=merging,
+        mutating=mutating,
         disk_name=disk_name,
         limit=limit,
         format='JSON',
@@ -254,6 +272,7 @@ def get_partitions(
     active_parts=None,
     disk_name=None,
     merging=None,
+    mutating=None,
     detached=None,
     limit=None,
     format=None,
@@ -352,6 +371,13 @@ def get_partitions(
                   FROM system.merges
               )
             {% endif %}
+            {% if mutating %}
+              AND (database, table, partition_id) IN (
+                  SELECT (database, table, partition_id)
+                  FROM system.merges
+                  WHERE is_mutation
+              )
+            {% endif %}
             ORDER BY database, table, partition_id
             {% if limit %}
             LIMIT {{ limit }}
@@ -374,6 +400,7 @@ def get_partitions(
         active_parts=active_parts,
         disk_name=disk_name,
         merging=merging,
+        mutating=mutating,
         limit=limit,
         format=format,
     )

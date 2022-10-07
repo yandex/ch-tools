@@ -12,7 +12,9 @@ FIELD_FORMATTERS = {
 
 @group('process')
 def process_group():
-    """Process management commands."""
+    """
+    Commands to manage processes.
+    """
     pass
 
 

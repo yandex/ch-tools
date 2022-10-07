@@ -120,7 +120,7 @@ def kill_process(ctx, query_id=None, user=None, exclude_user=None):
     print(execute_query(ctx, query_str, query_id=query_id, user=user, exclude_user=exclude_user))
 
 
-def list_merges(ctx, *, cluster=None, limit=None):
+def list_merges(ctx, *, database=None, table=None, is_mutation=None, cluster=None, limit=None):
     """
     Get list of executing merges from system.merges table.
     """
@@ -158,6 +158,16 @@ def list_merges(ctx, *, cluster=None, limit=None):
         {% else %}
         FROM system.merges
         {% endif %}
+        WHERE 1
+        {% if database %}
+          AND database {{ format_str_match(database) }}
+        {% endif %}
+        {% if table %}
+          AND table {{ format_str_match(table) }}
+        {% endif %}
+        {% if is_mutation %}
+          AND is_mutation
+        {% endif %}
         {% if limit %}
         LIMIT {{ limit }}
         {% endif %}
@@ -165,6 +175,9 @@ def list_merges(ctx, *, cluster=None, limit=None):
     return execute_query(
         ctx,
         query,
+        database=database,
+        table=table,
+        is_mutation=is_mutation,
         cluster=cluster,
         limit=limit,
         format='JSON',

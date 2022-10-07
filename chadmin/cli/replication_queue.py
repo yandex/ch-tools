@@ -8,6 +8,9 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.zookeeper import delete_zk_node
 
 @group('replication-queue')
 def replication_queue_group():
+    """
+    Commands to manage replication queue.
+    """
     pass
 
 
@@ -116,7 +119,7 @@ def get_replication_queue_tasks(
       AND type = '{{ type }}'
     {% endif %}
     ORDER BY table, position
-    {% if limit is not none %}
+    {% if limit %}
     LIMIT {{ limit }}
     {% endif %}
     """

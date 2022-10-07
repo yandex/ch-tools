@@ -8,6 +8,9 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 @option('--changed', is_flag=True)
 @pass_context
 def list_settings_command(ctx, name, changed):
+    """
+    Show settings.
+    """
     query = """
         SELECT *
         FROM system.settings

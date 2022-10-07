@@ -6,6 +6,9 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 
 @group('crash-log')
 def crash_log_group():
+    """
+    Commands for retrieving information from system.crash_log.
+    """
     pass
 
 

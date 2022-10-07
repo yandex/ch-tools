@@ -1,12 +1,15 @@
 from click import group, option, pass_context
 from cloud.mdb.cli.common.parameters import BytesParamType
+from cloud.mdb.clickhouse.tools.chadmin.internal.part import attach_part, drop_detached_part, drop_part, move_part
 
 from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 
 
 @group('part')
 def part_group():
-    """Part management commands."""
+    """
+    Commands to manage parts.
+    """
     pass
 
 
@@ -39,6 +42,28 @@ def list_parts_command(ctx, verbose, active, min_size, max_size, detached, reaso
             ctx, active=active, min_size=min_size, max_size=max_size, verbose=verbose, format=format, **kwargs
         )
     print(parts)
+
+
+@part_group.command(name='attach')
+@option('--database', help='Filter in parts to attach by the specified database.')
+@option('-t', '--table', help='Filter in parts to attach by the specified table.')
+@option('--partition', 'partition_id', help='Filter in parts to attach by the specified partition.')
+@option('--part', 'part_name')
+@option('-a', '--all', is_flag=True, help='Attach all parts.')
+@option(
+    '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
+)
+@pass_context
+def attach_parts_command(ctx, all, database, table, partition_id, part_name, dry_run):
+    """Attach one or several parts."""
+    if not any((all, database, table, partition_id)):
+        ctx.fail('At least one of --all, --database, --table, --partition options must be specified.')
+
+    parts = get_detached_parts(
+        ctx, database=database, table=table, partition_id=partition_id, part_name=part_name, format='JSON'
+    )['data']
+    for part in parts:
+        attach_part(ctx, part['database'], part['table'], part['name'], dry_run=dry_run)
 
 
 @part_group.command(name='delete')
@@ -300,22 +325,6 @@ def get_parts(
     )
 
 
-def drop_part(ctx, database, table, part_name, dry_run=False):
-    """
-    Drop the specified data part.
-    """
-    query = f'ALTER TABLE `{database}`.`{table}` DROP PART \'{part_name}\''
-    execute_query(ctx, query, echo=True, dry_run=dry_run)
-
-
-def move_part(ctx, database, table, part_name, new_disk_name, dry_run=False):
-    """
-    Move the specified data part.
-    """
-    query = f"ALTER TABLE `{database}`.`{table}` MOVE PART '{part_name}' TO DISK '{new_disk_name}'"
-    execute_query(ctx, query, echo=True, dry_run=dry_run, timeout=600)
-
-
 def get_detached_parts(
     ctx,
     *,
@@ -406,11 +415,3 @@ def get_detached_parts(
         limit=limit,
         format=format,
     )
-
-
-def drop_detached_part(ctx, database, table, part_name, dry_run=False):
-    """
-    Drop the specified detached data part.
-    """
-    query = f'ALTER TABLE `{database}`.`{table}` DROP DETACHED PART \'{part_name}\''
-    execute_query(ctx, query, echo=True, dry_run=dry_run)

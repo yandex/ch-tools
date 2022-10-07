@@ -5,6 +5,9 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 
 @group('thread-log')
 def thread_log_group():
+    """
+    Commands for retrieving information from system.query_thread_log.
+    """
     pass
 
 

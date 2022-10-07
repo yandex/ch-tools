@@ -5,7 +5,7 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 
 @group('database')
 def database_group():
-    """Database management commands."""
+    """Commands to manage databases."""
     pass
 
 
