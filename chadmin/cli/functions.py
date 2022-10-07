@@ -7,6 +7,9 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 @option('--name')
 @pass_context
 def list_functions_command(ctx, name):
+    """
+    Show available functions.
+    """
     query = """
         SELECT *
         FROM system.functions

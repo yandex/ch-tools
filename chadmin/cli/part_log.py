@@ -5,6 +5,9 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 
 @group('part-log')
 def part_log_group():
+    """
+    Commands for retrieving information from system.part_log.
+    """
     pass
 
 
@@ -100,7 +103,9 @@ def list_part_log(
           AND event_time <= toDateTime('{{ max_time }}')
         {% endif %}
         ORDER BY {{ order_by }} DESC
+        {% if limit %}
         LIMIT {{ limit }}
+        {% endif %}
         """
     return execute_query(
         ctx,

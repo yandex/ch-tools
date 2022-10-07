@@ -6,7 +6,7 @@ import shutil
 
 @group('disks')
 def disks_group():
-    """Disk management commands."""
+    """Commands to manage disks."""
     pass
 
 

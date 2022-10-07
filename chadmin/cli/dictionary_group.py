@@ -5,7 +5,7 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.dictionary import get_dictionar
 
 @group('dictionary')
 def dictionary_group():
-    """Dictionary management commands."""
+    """Commands to manage external dictionaries."""
     pass
 
 

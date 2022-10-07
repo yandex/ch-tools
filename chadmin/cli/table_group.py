@@ -8,7 +8,7 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 
 @group('table')
 def table_group():
-    """Table management commands."""
+    """Commands to manage tables."""
     pass
 
 

@@ -8,6 +8,9 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 
 @group('query-log')
 def query_log_group():
+    """
+    Commands for retrieving information from system.query_log.
+    """
     pass
 
 
@@ -37,6 +40,7 @@ def get_query_command(ctx, **kwargs):
 @option('--min-time')
 @option('--max-time')
 @option('--time')
+@option('--client')
 @option('--failed', is_flag=True)
 @option('--completed', is_flag=True)
 @option('--is-initial-query', '--initial', 'is_initial_query', type=bool)
@@ -210,6 +214,7 @@ def get_queries(
     max_date=None,
     min_time=None,
     max_time=None,
+    client=None,
     failed=None,
     completed=None,
     is_initial_query=None,
@@ -270,6 +275,9 @@ def get_queries(
         {% if max_time -%}
           AND query_start_time <= toDateTime('{{ max_time }}')
         {% endif -%}
+        {% if client -%}
+          AND client = '{{ client }}'
+        {% endif -%}
         {% if user -%}
           AND user = '{{ user }}'
         {% endif -%}
@@ -302,7 +310,9 @@ def get_queries(
         {% if not query_id -%}
         ORDER BY {{ order_by }} DESC
         {% endif -%}
+        {% if limit %}
         LIMIT {{ limit }}
+        {% endif %}
         """
     return execute_query(
         ctx,
@@ -317,6 +327,7 @@ def get_queries(
         max_date=max_date,
         min_time=min_time,
         max_time=max_time,
+        client=client,
         failed=failed,
         completed=completed,
         is_initial_query=is_initial_query,

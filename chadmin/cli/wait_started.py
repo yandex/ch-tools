@@ -9,7 +9,7 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 from cloud.mdb.clickhouse.tools.common.utils import execute
 
 BASE_TIMEOUT = 600
-PART_LOAD_SPEED = 5  # in data parts per second
+PART_LOAD_SPEED = 24  # in data parts per second
 
 
 @command('wait-started')
@@ -27,7 +27,7 @@ def wait_started_command(ctx, timeout, quiet):
         logging.basicConfig(level='INFO', format='%(message)s')
 
     if not timeout:
-        timeout = BASE_TIMEOUT + int(get_part_count() / PART_LOAD_SPEED)
+        timeout = BASE_TIMEOUT + int(get_data_dir_count() / PART_LOAD_SPEED)
 
     deadline = time.time() + timeout
 
@@ -46,11 +46,11 @@ def wait_started_command(ctx, timeout, quiet):
     sys.exit(1)
 
 
-def get_part_count():
+def get_data_dir_count():
     """
-    Return the number of data parts in ClickHouse data dir.
+    Return the number of directories with data. data parts in ClickHouse data dir.
     """
-    output = execute('find -L /var/lib/clickhouse/data/ -mindepth 3 -maxdepth 3 -type d | wc -l')
+    output = execute('find -L /var/lib/clickhouse/ -mindepth 4 -maxdepth 6 -type d | wc -l')
     return int(output)
 
 

@@ -6,6 +6,9 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 
 @group('mutation')
 def mutation_group():
+    """
+    Commands to manage mutations.
+    """
     pass
 
 

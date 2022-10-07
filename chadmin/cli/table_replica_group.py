@@ -5,7 +5,7 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.table_replica import get_table_
 
 @group('table-replica')
 def table_replica_group():
-    """Command to manage table replicas."""
+    """Commands to manage table replicas."""
     pass
 
 
