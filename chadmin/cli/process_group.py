@@ -33,7 +33,7 @@ def get_process_command(ctx, query_id):
 @option('-u', '--user')
 @option('-U', '--exclude-user')
 @option('--query')
-@option('-v', '--verbose', is_flag=True)
+@option('-v', '--verbose', is_flag=True, help='Verbose mode.')
 @option('--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Get records from all hosts in the cluster.')
 @option('--order-by', type=Choice(['elapsed', 'memory_usage']), default='elapsed')
 @option('-l', '--limit', type=int, help='Limit the max number of objects in the output.')
@@ -68,7 +68,7 @@ def kill_process_command(ctx, query_id, all, user, exclude_user):
     """
     Kill one or several processes using "KILL QUERY" query.
     """
-    if not any((query_id, all, user, exclude_user)):
-        ctx.fail('At least one of QUERY_ID, --all, --user and --exclude-user options must be specified.')
+    if not any((query_id, all, user)):
+        ctx.fail('At least one of QUERY_ID, --all, --user options must be specified.')
 
     kill_process(ctx, query_id=query_id, user=user, exclude_user=exclude_user)

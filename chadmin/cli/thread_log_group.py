@@ -18,7 +18,7 @@ def thread_log_group():
 @option('--max-date')
 @option('--min-time')
 @option('--max-time')
-@option('-v', '--verbose', is_flag=True)
+@option('-v', '--verbose', is_flag=True, help='Verbose mode.')
 @pass_context
 def list_threads_command(ctx, query_id, date, min_date, max_date, min_time, max_time, verbose):
     min_date = min_date or date

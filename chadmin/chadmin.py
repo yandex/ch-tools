@@ -5,31 +5,32 @@ from click import Choice, group, option, pass_context
 from cloud.mdb.cli.common.parameters import TimeSpanParamType
 
 from cloud.mdb.clickhouse.tools.chadmin.cli.dictionary_group import dictionary_group
-from cloud.mdb.clickhouse.tools.chadmin.cli.async_metrics import list_async_metrics_command
-from cloud.mdb.clickhouse.tools.chadmin.cli.crash_log import crash_log_group
-from cloud.mdb.clickhouse.tools.chadmin.cli.databases import database_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.list_async_metrics_command import list_async_metrics_command
+from cloud.mdb.clickhouse.tools.chadmin.cli.crash_log_group import crash_log_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.database_group import database_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.merge_group import merge_group
-from cloud.mdb.clickhouse.tools.chadmin.cli.parts import part_group
-from cloud.mdb.clickhouse.tools.chadmin.cli.events import list_events_command
-from cloud.mdb.clickhouse.tools.chadmin.cli.functions import list_functions_command
-from cloud.mdb.clickhouse.tools.chadmin.cli.macros import list_macros_command
-from cloud.mdb.clickhouse.tools.chadmin.cli.metrics import list_metrics_command
-from cloud.mdb.clickhouse.tools.chadmin.cli.mutations import mutation_group
-from cloud.mdb.clickhouse.tools.chadmin.cli.part_log import part_log_group
-from cloud.mdb.clickhouse.tools.chadmin.cli.partitions import partition_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.part_group import part_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.list_events_command import list_events_command
+from cloud.mdb.clickhouse.tools.chadmin.cli.list_functions_command import list_functions_command
+from cloud.mdb.clickhouse.tools.chadmin.cli.list_macros_command import list_macros_command
+from cloud.mdb.clickhouse.tools.chadmin.cli.list_metrics_command import list_metrics_command
+from cloud.mdb.clickhouse.tools.chadmin.cli.mutation_group import mutation_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.part_log_group import part_log_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.partition_group import partition_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.process_group import process_group
-from cloud.mdb.clickhouse.tools.chadmin.cli.query_log import query_log_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.query_log_group import query_log_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.replicated_fetch_group import replicated_fetch_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.replication_queue import replication_queue_group
-from cloud.mdb.clickhouse.tools.chadmin.cli.restore_replica import restore_replica_command
-from cloud.mdb.clickhouse.tools.chadmin.cli.settings import list_settings_command
-from cloud.mdb.clickhouse.tools.chadmin.cli.stack_trace import stack_trace_command
+from cloud.mdb.clickhouse.tools.chadmin.cli.restore_replica_command import restore_replica_command
+from cloud.mdb.clickhouse.tools.chadmin.cli.list_settings_command import list_settings_command
+from cloud.mdb.clickhouse.tools.chadmin.cli.stack_trace_command import stack_trace_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.table_replica_group import table_replica_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.table_group import table_group
-from cloud.mdb.clickhouse.tools.chadmin.cli.thread_log import thread_log_group
-from cloud.mdb.clickhouse.tools.chadmin.cli.wait_started import wait_started_command
-from cloud.mdb.clickhouse.tools.chadmin.cli.zookeeper import zookeeper_group
-from cloud.mdb.clickhouse.tools.chadmin.cli.chs3_backup import chs3_backup_group
-from cloud.mdb.clickhouse.tools.chadmin.cli.disks import disks_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.thread_log_group import thread_log_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.wait_started_command import wait_started_command
+from cloud.mdb.clickhouse.tools.chadmin.cli.zookeeper_group import zookeeper_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.chs3_backup_group import chs3_backup_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.disk_group import disks_group
 from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseClient
 
 
@@ -66,6 +67,7 @@ cli.add_command(part_log_group)
 cli.add_command(crash_log_group)
 cli.add_command(process_group)
 cli.add_command(replication_queue_group)
+cli.add_command(replicated_fetch_group)
 cli.add_command(restore_replica_command)
 cli.add_command(list_settings_command)
 cli.add_command(list_functions_command)
