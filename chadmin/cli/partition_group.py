@@ -159,7 +159,7 @@ def delete_partitions_command(
     """Delete one or several partitions."""
     if not any((database, table, partition_id, min_partition_id, max_partition_id)):
         ctx.fail(
-            'At least one of --database, --table, --partition, --min-partition and --max-partition'
+            'At least one of --database, --table, --partition, --min-partition, --max-partition'
             ' options must be specified.'
         )
 
@@ -198,7 +198,7 @@ def optimize_partitions_command(
     """Optimize partitions."""
     if not any((database, table, partition_id, min_partition_id, max_partition_id)):
         ctx.fail(
-            'At least one of --database, --table, --partition, --min-partition and --max-partition'
+            'At least one of --database, --table, --partition, --min-partition, --max-partition'
             ' options must be specified.'
         )
 
@@ -236,7 +236,7 @@ def materialize_ttl_command(
     """Materialize TTL."""
     if not any((database, table, partition_id, min_partition_id, max_partition_id)):
         ctx.fail(
-            'At least one of --database, --table, --partition, --min-partition and --max-partition'
+            'At least one of --database, --table, --partition, --min-partition, --max-partition'
             ' options must be specified.'
         )
 

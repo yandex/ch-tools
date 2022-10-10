@@ -36,8 +36,8 @@ def list_databases_command(ctx, **kwargs):
     '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
 )
 def delete_databases_command(ctx, dry_run, all, database, exclude_database, cluster):
-    if not any((all, database, exclude_database)):
-        ctx.fail('At least one of --all, --database and --exclude-database options must be specified.')
+    if not any((all, database)):
+        ctx.fail('At least one of --all, --database options must be specified.')
 
     for d in get_databases(ctx, database=database, exclude_database=exclude_database, format='JSON')['data']:
         query = """

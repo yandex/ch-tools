@@ -44,7 +44,7 @@ def get_query_command(ctx, **kwargs):
 @option('--failed', is_flag=True)
 @option('--completed', is_flag=True)
 @option('--is-initial-query', '--initial', 'is_initial_query', type=bool)
-@option('-v', '--verbose', is_flag=True)
+@option('-v', '--verbose', is_flag=True, help='Verbose mode.')
 @option('--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Get log records from all hosts in the cluster.')
 @option(
     '--order-by',

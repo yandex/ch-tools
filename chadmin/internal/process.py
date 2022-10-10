@@ -182,3 +182,55 @@ def list_merges(ctx, *, database=None, table=None, is_mutation=None, cluster=Non
         limit=limit,
         format='JSON',
     )['data']
+
+
+def list_replicated_fetches(ctx, *, database=None, table=None, cluster=None, limit=None):
+    """
+    Get list of executing fetches from system.replicated_fetches table.
+    """
+    query = """
+        SELECT
+        {% if cluster %}
+            hostName() "host",
+        {% endif %}
+            database,
+            table,
+            elapsed,
+            progress,
+            result_part_name,
+            result_part_path,
+            partition_id,
+            total_size_bytes_compressed,
+            bytes_read_compressed,
+            source_replica_path,
+            source_replica_hostname,
+            source_replica_port,
+            interserver_scheme,
+            URI,
+            to_detached,
+            thread_id
+        {% if cluster %}
+        FROM clusterAllReplicas({{ cluster }}, system.replicated_fetches)
+        {% else %}
+        FROM system.replicated_fetches
+        {% endif %}
+        WHERE 1
+        {% if database %}
+          AND database {{ format_str_match(database) }}
+        {% endif %}
+        {% if table %}
+          AND table {{ format_str_match(table) }}
+        {% endif %}
+        {% if limit %}
+        LIMIT {{ limit }}
+        {% endif %}
+        """
+    return execute_query(
+        ctx,
+        query,
+        database=database,
+        table=table,
+        cluster=cluster,
+        limit=limit,
+        format='JSON',
+    )['data']

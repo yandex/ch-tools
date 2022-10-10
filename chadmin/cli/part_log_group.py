@@ -22,7 +22,7 @@ def part_log_group():
 @option('--min-time')
 @option('--max-time')
 @option('--time')
-@option('-v', '--verbose', is_flag=True)
+@option('-v', '--verbose', is_flag=True, help='Verbose mode.')
 @option('--order-by', type=Choice(['time', 'size', 'rows']), default='time')
 @option('-l', '--limit', type=int, default=10, help='Limit the max number of objects in the output.')
 @pass_context

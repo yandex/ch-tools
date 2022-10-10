@@ -52,7 +52,7 @@ def get_command(ctx, path, binary):
 
 @zookeeper_group.command(name='list')
 @argument('path')
-@option('-v', '--verbose', is_flag=True)
+@option('-v', '--verbose', is_flag=True, help='Verbose mode.')
 @pass_context
 def list_command(ctx, path, verbose):
     """List ZooKeeper nodes.
