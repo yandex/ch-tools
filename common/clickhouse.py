@@ -7,8 +7,6 @@ from typing import MutableMapping
 import requests
 from copy import deepcopy
 
-import sqlparse
-
 from cloud.mdb.clickhouse.tools.common.utils import version_ge
 from jinja2 import Environment
 
@@ -87,7 +85,7 @@ class ClickhouseClient:
             query += f' FORMAT {format}'
 
         if echo:
-            print(sqlparse.format(query, reindent=True), '\n')
+            print(query, '\n')
 
         if dry_run:
             return None

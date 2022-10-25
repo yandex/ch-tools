@@ -1,6 +1,6 @@
 from click import group, option, pass_context
 from cloud.mdb.cli.common.formatting import print_response
-from cloud.mdb.clickhouse.tools.chadmin.internal.dictionary import get_dictionaries, reload_dictionary
+from cloud.mdb.clickhouse.tools.chadmin.internal.dictionary import list_dictionaries, reload_dictionary
 
 
 @group('dictionary')
@@ -17,7 +17,7 @@ def list_command(ctx, name, status):
     """
     List dictionaries.
     """
-    dictionaries = get_dictionaries(ctx, name=name, status=status)
+    dictionaries = list_dictionaries(ctx, name=name, status=status)
     print_response(
         ctx,
         dictionaries,
@@ -33,7 +33,7 @@ def reload_command(ctx, name, status):
     """
     Reload one or several dictionaries.
     """
-    dictionaries = get_dictionaries(ctx, name=name, status=status)
+    dictionaries = list_dictionaries(ctx, name=name, status=status)
     for dictionary in dictionaries:
         print(f'Reloading dictionary {_full_name(dictionary)}')
         reload_dictionary(ctx, database=dictionary['database'], name=dictionary['name'])

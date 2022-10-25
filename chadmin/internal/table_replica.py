@@ -6,7 +6,19 @@ def get_table_replica(ctx, database, table):
     """
     Get replica of replicated table.
     """
-    query = f"""
+    replicas = list_table_replicas(ctx, database=database, table=table)
+
+    if not replicas:
+        raise ClickException(f'Replicated table `{database}`.`{table}` not found.')
+
+    return replicas[0]
+
+
+def list_table_replicas(ctx, *, database=None, table=None, limit=None):
+    """
+    List replicas of replicated tables.
+    """
+    query = """
         SELECT
             database,
             table,
@@ -32,20 +44,42 @@ def get_table_replica(ctx, database, table):
             active_replicas,
             replica_is_active
         FROM system.replicas
-        WHERE database = '{database}'
-          AND table = '{table}'
+        WHERE true
+        {% if database %}
+          AND database {{ format_str_match(database) }}
+        {% endif %}
+        {% if table %}
+          AND table {{ format_str_match(table) }}
+        {% endif %}
+        {% if limit is not none %}
+        LIMIT {{ limit }}
+        {% endif %}
         """
-    replicas = execute_query(ctx, query, format='JSON')['data']
+    return execute_query(
+        ctx,
+        query,
+        database=database,
+        table=table,
+        limit=limit,
+        format='JSON',
+    )['data']
 
-    if not replicas:
-        raise ClickException(f'Replicated table `{database}`.`{table}` not found.')
 
-    return replicas[0]
-
-
-def restart_table_replica(ctx, database, table):
+def restart_table_replica(ctx, database, table, *, cluster):
     """
     Perform "SYSTEM RESTART REPLICA" for the specified replicated table.
     """
-    query = f"""SYSTEM RESTART REPLICA `{database}`.`{table}`"""
-    execute_query(ctx, query, format=None)
+    query = f"SYSTEM RESTART REPLICA `{database}`.`{table}`"
+    if cluster:
+        query += f" ON CLUSTER '{cluster}'"
+    execute_query(ctx, query, timeout=300, echo=True, format=None)
+
+
+def restore_table_replica(ctx, database, table, *, cluster):
+    """
+    Perform "SYSTEM RESTORE REPLICA" for the specified replicated table.
+    """
+    query = f"SYSTEM RESTORE REPLICA `{database}`.`{table}`"
+    if cluster:
+        query += f" ON CLUSTER '{cluster}'"
+    execute_query(ctx, query, timeout=600, echo=True, format=None)

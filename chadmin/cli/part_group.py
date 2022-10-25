@@ -8,8 +8,8 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.part import (
     detach_part,
     drop_detached_part,
     drop_part,
-    get_detached_parts,
-    get_parts,
+    list_detached_parts,
+    list_parts,
     move_part,
 )
 
@@ -70,9 +70,9 @@ def list_parts_command(ctx, active, min_size, max_size, detached, reason, **kwar
         return result
 
     if detached:
-        parts = get_detached_parts(ctx, reason=reason, **kwargs)
+        parts = list_detached_parts(ctx, reason=reason, **kwargs)
     else:
-        parts = get_parts(ctx, active=active, min_size=min_size, max_size=max_size, **kwargs)
+        parts = list_parts(ctx, active=active, min_size=min_size, max_size=max_size, **kwargs)
 
     print_response(
         ctx, parts, default_format='table', table_formatter=_table_formatter, field_formatters=FIELD_FORMATTERS
@@ -100,7 +100,7 @@ def attach_parts_command(ctx, all, database, table, partition_id, part_name, dis
             ' options must be specified.'
         )
 
-    parts = get_detached_parts(
+    parts = list_detached_parts(
         ctx,
         database=database,
         table=table,
@@ -141,7 +141,7 @@ def detach_parts_command(ctx, all, database, table, partition_id, part_name, dis
             ' options must be specified.'
         )
 
-    parts = get_parts(
+    parts = list_parts(
         ctx,
         database=database,
         table=table,
@@ -203,7 +203,7 @@ def delete_parts_command(
         ctx.fail('At least one of --all, --database, --table, --partition, --part, --reason options must be specified.')
 
     if detached:
-        parts = get_detached_parts(
+        parts = list_detached_parts(
             ctx,
             database=database,
             table=table,
@@ -217,7 +217,7 @@ def delete_parts_command(
         if reason:
             ctx.fail('Option --reason cannot be used without --detached.')
 
-        parts = get_parts(
+        parts = list_parts(
             ctx,
             database=database,
             table=table,
@@ -265,7 +265,7 @@ def move_parts_command(
     if not any((database, table, partition_id, part_name, disk_name)):
         ctx.fail('At least one of --database, --table, --partition, --part, --disk options must be specified.')
 
-    parts = get_parts(
+    parts = list_parts(
         ctx,
         database=database,
         table=table,

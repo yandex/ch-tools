@@ -3,15 +3,15 @@ from click import ClickException
 
 
 def get_table(ctx, database, table, active_parts=None):
-    tables = get_tables(ctx, database=database, table=table, active_parts=active_parts, verbose=True)
+    tables = list_tables(ctx, database=database, table=table, active_parts=active_parts, verbose=True)
 
-    if not table:
+    if not tables:
         raise ClickException(f'Table `{database}`.`{table}` not found.')
 
     return tables[0]
 
 
-def get_tables(
+def list_tables(
     ctx, *, database=None, table=None, exclude_table=None, engine=None, active_parts=None, verbose=None, limit=None
 ):
     query = """
@@ -108,6 +108,5 @@ def attach_table(ctx, database, table, *, cluster=None, echo=False, dry_run=Fals
         {% if cluster %}
         ON CLUSTER '{{ cluster }}'
         {% endif %}
-        NO DELAY
         """
     execute_query(ctx, query, database=database, table=table, cluster=cluster, echo=echo, dry_run=dry_run, format=None)
