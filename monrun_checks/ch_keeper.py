@@ -3,7 +3,7 @@ import click
 from kazoo.client import KazooClient, KazooException
 from kazoo.handlers.threading import KazooTimeoutError
 
-from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseConfig
+from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseKeeperConfig
 from cloud.mdb.clickhouse.tools.monrun_checks.result import Result
 
 
@@ -14,7 +14,7 @@ def keeper_command(retries, timeout) -> Result:
     """
     Checks ClickHouse Keeper is alive.
     """
-    zk_port = ClickhouseConfig.load().keeper_port()
+    zk_port = ClickhouseKeeperConfig.load().port
     if not zk_port:
         return Result(0, 'disabled')
 
