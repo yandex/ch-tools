@@ -1,9 +1,9 @@
 from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 
 
-def get_dictionaries(ctx, *, name=None, status=None):
+def list_dictionaries(ctx, *, name=None, status=None):
     """
-    Get dictionaries.
+    List external dictionaries.
     """
     query = """
         SELECT
@@ -26,7 +26,7 @@ def get_dictionaries(ctx, *, name=None, status=None):
 
 def reload_dictionary(ctx, *, name, database=None):
     """
-    Reload dictionary.
+    Reload external dictionary.
     """
     if database:
         full_name = f'`{database}`.`{name}`'
