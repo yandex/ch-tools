@@ -1,6 +1,7 @@
 import logging
 import re
 import socket
+import os.path
 from datetime import timedelta
 from typing import MutableMapping
 
@@ -12,6 +13,9 @@ from jinja2 import Environment
 
 import tenacity
 import xmltodict
+
+CLICKHOUSE_CONFIG_PATH = '/var/lib/clickhouse/preprocessed_configs/config.xml'
+CLICKHOUSE_KEEPER_CONFIG_PATH = '/etc/clickhouse-keeper/config.xml'
 
 
 def retry(exception_types, max_attempts=5, max_interval=5):
@@ -186,12 +190,9 @@ class ClickhouseConfig:
 
         return xmltodict.unparse(config, pretty=True)
 
-    def keeper_port(self):
-        return self._config.get('clickhouse', self._config.get('yandex', {})).get('keeper_server', {}).get('tcp_port')
-
     @staticmethod
     def load():
-        return ClickhouseConfig(_load_config('/var/lib/clickhouse/preprocessed_configs/config.xml'))
+        return ClickhouseConfig(_load_config(CLICKHOUSE_CONFIG_PATH))
 
 
 class ClickhouseUsersConfig:
@@ -212,6 +213,29 @@ class ClickhouseUsersConfig:
     @staticmethod
     def load():
         return ClickhouseConfig(_load_config('/var/lib/clickhouse/preprocessed_configs/users.xml'))
+
+
+class ClickhouseKeeperConfig:
+    """
+    ClickHouse keeper server config (config.xml).
+    """
+
+    def __init__(self, config):
+        self._config = config
+
+    @property
+    def port(self):
+        return self._config.get('keeper_server', {}).get('tcp_port')
+
+    @staticmethod
+    def load():
+        if os.path.exists(CLICKHOUSE_KEEPER_CONFIG_PATH):
+            conf = _load_config(CLICKHOUSE_KEEPER_CONFIG_PATH)
+        else:
+            conf = _load_config(CLICKHOUSE_CONFIG_PATH)
+
+        conf = conf.get('clickhouse', conf.get('yandex', {}))
+        return ClickhouseKeeperConfig(conf)
 
 
 def _load_config(config_path):
