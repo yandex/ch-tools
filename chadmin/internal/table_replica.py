@@ -65,7 +65,7 @@ def list_table_replicas(ctx, *, database=None, table=None, limit=None):
     )['data']
 
 
-def restart_table_replica(ctx, database, table, *, cluster):
+def restart_table_replica(ctx, database, table, *, cluster=None):
     """
     Perform "SYSTEM RESTART REPLICA" for the specified replicated table.
     """
@@ -75,7 +75,7 @@ def restart_table_replica(ctx, database, table, *, cluster):
     execute_query(ctx, query, timeout=300, echo=True, format=None)
 
 
-def restore_table_replica(ctx, database, table, *, cluster):
+def restore_table_replica(ctx, database, table, *, cluster=None):
     """
     Perform "SYSTEM RESTORE REPLICA" for the specified replicated table.
     """

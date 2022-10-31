@@ -91,9 +91,9 @@ def detach_table(ctx, database, table, *, cluster=None, echo=False, dry_run=Fals
     """
     query = """
         DETACH TABLE `{{ database }}`.`{{ table }}`
-        {% if cluster %}
+        {%- if cluster %}
         ON CLUSTER '{{ cluster }}'
-        {% endif %}
+        {%- endif %}
         NO DELAY
         """
     execute_query(ctx, query, database=database, table=table, cluster=cluster, echo=echo, dry_run=dry_run, format=None)
@@ -105,8 +105,8 @@ def attach_table(ctx, database, table, *, cluster=None, echo=False, dry_run=Fals
     """
     query = """
         ATTACH TABLE `{{ database }}`.`{{ table }}`
-        {% if cluster %}
+        {%- if cluster %}
         ON CLUSTER '{{ cluster }}'
-        {% endif %}
+        {%- endif %}
         """
     execute_query(ctx, query, database=database, table=table, cluster=cluster, echo=echo, dry_run=dry_run, format=None)
