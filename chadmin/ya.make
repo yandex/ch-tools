@@ -19,6 +19,7 @@ PEERDIR(
     contrib/python/humanfriendly
     contrib/python/kazoo
     contrib/python/PyYAML
+    contrib/python/setuptools
 )
 
 END()
