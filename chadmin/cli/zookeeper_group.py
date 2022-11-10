@@ -5,7 +5,7 @@ from cloud.mdb.cli.common.parameters import ListParamType, StringParamType
 from cloud.mdb.clickhouse.tools.chadmin.internal.table_replica import get_table_replica
 from cloud.mdb.clickhouse.tools.chadmin.internal.zookeeper import (
     create_zk_nodes,
-    delete_zk_node,
+    delete_zk_nodes,
     get_zk_node,
     get_zk_node_acls,
     list_zk_nodes,
@@ -84,7 +84,8 @@ def stat_command(ctx, path):
 def create_command(ctx, paths, value):
     """Create one or several ZooKeeper nodes.
 
-    Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
+    Node path can be specified with ClickHouse macros (e.g. "/test_table/{shard}/replicas/{replica}").
+    Multiple values can be specified through a comma.
     """
     create_zk_nodes(ctx, paths, value)
 
@@ -94,22 +95,24 @@ def create_command(ctx, paths, value):
 @argument('value', type=StringParamType())
 @pass_context
 def update_command(ctx, paths, value):
-    """Update one or several ZooKeeper node values.
+    """Update one or several ZooKeeper nodes.
 
-    Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
+    Node path can be specified with ClickHouse macros (e.g. "/test_table/{shard}/replicas/{replica}").
+    Multiple values can be specified through a comma.
     """
     update_zk_nodes(ctx, paths, value)
 
 
 @zookeeper_group.command(name='delete')
-@argument('path')
+@argument('paths', type=ListParamType())
 @pass_context
-def delete_command(ctx, path):
-    """Delete ZooKeeper node.
+def delete_command(ctx, paths):
+    """Delete one or several ZooKeeper nodes.
 
-    Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
+    Node path can be specified with ClickHouse macros (e.g. "/test_table/{shard}/replicas/{replica}").
+    Multiple values can be specified through a comma.
     """
-    delete_zk_node(ctx, path)
+    delete_zk_nodes(ctx, paths)
 
 
 @zookeeper_group.command(name='get-table-metadata')
@@ -148,3 +151,24 @@ def get_table_replica_metadata_command(ctx, database, table):
     table_replica = get_table_replica(ctx, database, table)
     path = table_replica['replica_path'] + '/metadata'
     print(get_zk_node(ctx, path))
+
+
+@zookeeper_group.command(name='get-ddl-task')
+@argument('task')
+@pass_context
+def get_ddl_task_command(ctx, task):
+    """Get DDL queue task metadata stored in ZooKeeper."""
+    path = f'/clickhouse/task_queue/ddl/{task}'
+    print(get_zk_node(ctx, path))
+
+
+@zookeeper_group.command(name='delete-ddl-task')
+@argument('tasks', type=ListParamType())
+@pass_context
+def delete_ddl_task_command(ctx, tasks):
+    """Delete one or several DDL queue task from ZooKeeper.
+
+    Multiple values can be specified through a comma.
+    """
+    paths = [f'/clickhouse/task_queue/ddl/{task}' for task in tasks]
+    delete_zk_nodes(ctx, paths)

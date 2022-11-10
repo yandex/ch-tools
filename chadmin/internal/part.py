@@ -247,3 +247,94 @@ def drop_detached_part(ctx, database, table, part_name, dry_run=False):
     """
     query = f'ALTER TABLE `{database}`.`{table}` DROP DETACHED PART \'{part_name}\''
     execute_query(ctx, query, timeout=300, format=None, echo=True, dry_run=dry_run)
+
+
+def list_part_log(
+    ctx,
+    database=None,
+    table=None,
+    partition=None,
+    part=None,
+    min_date=None,
+    max_date=None,
+    min_time=None,
+    max_time=None,
+    order_by=None,
+    limit=None,
+):
+    if not order_by:
+        order_by = 'event_time DESC'
+
+    query = """
+        SELECT
+             event_time,
+             event_type,
+             merge_reason,
+             duration_ms,
+             database,
+             table,
+             partition_id,
+             part_name,
+             part_type,
+             disk_name,
+             rows,
+             size_in_bytes,
+             merged_from,
+             read_rows,
+             read_bytes,
+             peak_memory_usage,
+             exception
+        FROM system.part_log
+        {% if database %}
+        WHERE database {{ format_str_match(database) }}
+        {% else %}
+        WHERE database != 'system'
+        {% endif %}
+        {% if table %}
+          AND table {{ format_str_match(table) }}
+        {% endif %}
+        {% if partition %}
+          AND partition_id {{ format_str_match(partition) }}
+        {% endif %}
+        {% if part %}
+          AND part_name {{ format_str_match(part) }}
+        {% endif %}
+        {% if min_date %}
+          AND event_date >= toDate('{{ min_date }}')
+        {% elif min_time %}
+          AND event_date >= toDate('{{ min_time }}')
+        {% endif %}
+        {% if max_date %}
+          AND event_date <= toDate('{{ max_date }}')
+        {% elif max_time %}
+          AND event_date <= toDate('{{ max_time }}')
+        {% endif %}
+        {% if not min_date and not max_date and not min_time and not max_time %}
+          AND event_date = today()
+        {% endif %}
+        {% if min_time %}
+          AND event_time - INTERVAL duration_ms/1000 second >= toDateTime('{{ min_time }}')
+        {% endif %}
+        {% if max_time %}
+          AND event_time <= toDateTime('{{ max_time }}')
+        {% endif %}
+        ORDER BY {{ order_by }}
+        {% if limit %}
+        LIMIT {{ limit }}
+        {% endif %}
+        """
+    return execute_query(
+        ctx,
+        query,
+        database=database,
+        table=table,
+        partition=partition,
+        part=part,
+        min_date=min_date,
+        max_date=max_date,
+        min_time=min_time,
+        max_time=max_time,
+        order_by=order_by,
+        limit=limit,
+        format='JSON',
+    )['data']

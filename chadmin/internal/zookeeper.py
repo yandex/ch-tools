@@ -68,9 +68,15 @@ def update_zk_nodes(ctx, paths, value):
 
 
 def delete_zk_node(ctx, path):
+    delete_zk_nodes(ctx, [path])
+
+
+def delete_zk_nodes(ctx, paths):
     with _zk_client(ctx) as zk:
-        path = _format_path(ctx, path)
-        zk.delete(path, recursive=True)
+        for path in paths:
+            path = _format_path(ctx, path)
+            print(f'Deleting ZooKeeper node {path}')
+            zk.delete(path, recursive=True)
 
 
 def _format_path(ctx, path):

@@ -34,7 +34,7 @@ from cloud.mdb.clickhouse.tools.chadmin.cli.disk_group import disks_group
 from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseClient
 
 
-@group(context_settings=dict(help_option_names=['-h', '--help']))
+@group(context_settings=dict(help_option_names=['-h', '--help'], terminal_width=120))
 @option('-f', '--format', type=Choice(['json', 'yaml', 'table']), help="Output format.")
 @option('--timeout', type=TimeSpanParamType(), help="Timeout for SQL queries.")
 @option('--port', type=int, help="Port to connect.")

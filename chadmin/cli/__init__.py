@@ -2,10 +2,10 @@ from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseConfig
 
 
 def get_config(ctx) -> ClickhouseConfig:
-    if 'config' not in ctx.obj:
-        ctx.obj['config'] = ClickhouseConfig.load()
+    if 'clickhouse_config' not in ctx.obj:
+        ctx.obj['clickhouse_config'] = ClickhouseConfig.load()
 
-    return ctx.obj['config']
+    return ctx.obj['clickhouse_config']
 
 
 def get_macros(ctx):
