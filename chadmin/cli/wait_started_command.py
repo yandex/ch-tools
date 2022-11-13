@@ -9,7 +9,7 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 from cloud.mdb.clickhouse.tools.common.utils import execute
 
 BASE_TIMEOUT = 600
-PART_LOAD_SPEED = 24  # in data parts per second
+PART_LOAD_SPEED = 12  # in data parts per second
 
 
 @command('wait-started')
