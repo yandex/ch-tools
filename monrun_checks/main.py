@@ -19,6 +19,7 @@ from cloud.mdb.clickhouse.tools.monrun_checks.ch_log_errors import log_errors_co
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_ping import ping_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_s3_backup_orphaned import orphaned_backups_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_keeper import keeper_command
+from cloud.mdb.clickhouse.tools.monrun_checks.ext_ip_dns import ext_ip_dns_command
 from cloud.mdb.clickhouse.tools.monrun_checks.status import status_command
 from .ch_backup import backup_command
 from .exceptions import translate_to_status
@@ -95,6 +96,7 @@ CLI_COMMANDS = [
     orphaned_backups_command,
     tls_command,
     keeper_command,
+    ext_ip_dns_command,
 ]
 
 cli.add_command(status_command(CLI_COMMANDS))
