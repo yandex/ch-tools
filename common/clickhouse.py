@@ -220,22 +220,41 @@ class ClickhouseKeeperConfig:
     ClickHouse keeper server config (config.xml).
     """
 
-    def __init__(self, config):
+    def __init__(self, config, config_path):
         self._config = config
+        self._config_path = config_path
+
+    @property
+    def _clickhouse(self):
+        return self._config.get('clickhouse', self._config.get('yandex', {}))
 
     @property
     def port(self):
-        return self._config.get('keeper_server', {}).get('tcp_port')
+        return self._clickhouse.get('keeper_server', {}).get('tcp_port')
+
+    @property
+    def separated(self):
+        """
+        Return True if ClickHouse Keeper is configured to run in separate process.
+        """
+        return self._config_path == CLICKHOUSE_KEEPER_CONFIG_PATH
+
+    def dump(self, mask_secrets=True):
+        config = deepcopy(self._config)
+        if mask_secrets:
+            _mask_secrets(config)
+
+        return xmltodict.unparse(config, pretty=True)
 
     @staticmethod
     def load():
         if os.path.exists(CLICKHOUSE_KEEPER_CONFIG_PATH):
-            conf = _load_config(CLICKHOUSE_KEEPER_CONFIG_PATH)
+            config_path = CLICKHOUSE_KEEPER_CONFIG_PATH
         else:
-            conf = _load_config(CLICKHOUSE_CONFIG_PATH)
+            config_path = CLICKHOUSE_CONFIG_PATH
 
-        conf = conf.get('clickhouse', conf.get('yandex', {}))
-        return ClickhouseKeeperConfig(conf)
+        config = _load_config(config_path)
+        return ClickhouseKeeperConfig(config, config_path)
 
 
 def _load_config(config_path):

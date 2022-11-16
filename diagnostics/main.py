@@ -9,7 +9,12 @@ from datetime import datetime, timezone
 import yaml
 from requests.exceptions import RequestException
 
-from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseClient, ClickhouseConfig, ClickhouseUsersConfig
+from cloud.mdb.clickhouse.tools.common.clickhouse import (
+    ClickhouseClient,
+    ClickhouseConfig,
+    ClickhouseKeeperConfig,
+    ClickhouseUsersConfig,
+)
 from cloud.mdb.clickhouse.tools.common.dbaas import DbaasConfig
 from cloud.mdb.clickhouse.tools.common.utils import version_ge
 from humanfriendly import format_size
@@ -647,6 +652,7 @@ def main():
     client = ClickhouseClient()
     dbaas_config = DbaasConfig.load()
     ch_config = ClickhouseConfig.load()
+    keeper_config = ClickhouseKeeperConfig.load()
     ch_users_config = ClickhouseUsersConfig.load()
     version = client.get_clickhouse_version()
     system_tables = [row[0] for row in execute_query(client, SELECT_SYSTEM_TABLES, format='JSONCompact')['data']]
@@ -670,6 +676,9 @@ def main():
         add_chart_urls(diagnostics, dbaas_config)
 
     diagnostics.add_xml_document('ClickHouse configuration', ch_config.dump())
+
+    if keeper_config.separated:
+        diagnostics.add_xml_document('ClickHouse Keeper configuration', keeper_config.dump())
 
     diagnostics.add_xml_document('ClickHouse users configuration', ch_users_config.dump())
 
