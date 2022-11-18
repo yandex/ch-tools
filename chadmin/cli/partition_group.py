@@ -1,4 +1,4 @@
-from click import group, option, pass_context
+from click import Choice, group, option, pass_context
 from cloud.mdb.cli.common.parameters import BytesParamType
 from cloud.mdb.clickhouse.tools.chadmin.internal.partition import (
     attach_partition,
@@ -38,11 +38,18 @@ def partition_group():
 @option('--mutating', is_flag=True, help='Output only those partitions that have mutating data parts.')
 @option('--detached', is_flag=True, help='Show detached partitions instead of attached.')
 @option('--active', '--active-parts', 'active_parts', is_flag=True, help='Account only active data parts.')
+@option('--order-by', type=Choice(['default', 'size', 'parts', 'rows']), default='default')
 @option('-l', '--limit', type=int, help='Limit the max number of objects in the output.')
 @pass_context
-def list_partitions_command(ctx, **kwargs):
+def list_partitions_command(ctx, order_by, **kwargs):
     """List partitions."""
-    print(get_partitions(ctx, format='PrettyCompact', **kwargs))
+    order_by = {
+        'default': 'database, table, partition_id',
+        'size': 'sum(bytes_on_disk) DESC',
+        'parts': 'parts DESC',
+        'rows': 'rows DESC',
+    }.get(order_by)
+    print(get_partitions(ctx, order_by=order_by, format='PrettyCompact', **kwargs))
 
 
 @partition_group.command(name='attach')
@@ -274,9 +281,13 @@ def get_partitions(
     merging=None,
     mutating=None,
     detached=None,
+    order_by=None,
     limit=None,
     format=None,
 ):
+    if not order_by:
+        order_by = 'database, table, partition_id'
+
     if detached:
         query = """
             SELECT
@@ -310,7 +321,7 @@ def get_partitions(
             {% if max_part_count %}
               AND parts <= {{ max_part_count }}
             {% endif %}
-            ORDER BY database, table, partition_id
+            ORDER BY {{ order_by }}
             {% if limit %}
             LIMIT {{ limit }}
             {% endif %}
@@ -378,7 +389,7 @@ def get_partitions(
                   WHERE is_mutation
               )
             {% endif %}
-            ORDER BY database, table, partition_id
+            ORDER BY {{ order_by }}
             {% if limit %}
             LIMIT {{ limit }}
             {% endif %}
@@ -401,6 +412,7 @@ def get_partitions(
         disk_name=disk_name,
         merging=merging,
         mutating=mutating,
+        order_by=order_by,
         limit=limit,
         format=format,
     )
