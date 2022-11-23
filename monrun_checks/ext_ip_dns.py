@@ -44,7 +44,10 @@ def _check_fqdn(target: _TargetRecord, ipv6: bool) -> list:
     resolver = dns.resolver.get_default_resolver()
 
     def _compare(record_type: str, ip_type: str) -> bool:
-        actual_addr = set(map(lambda a: a.to_text(), resolver.query(target.fqdn, record_type)))
+        try:
+            actual_addr = set(map(lambda a: a.to_text(), resolver.query(target.fqdn, record_type)))
+        except dns.resolver.NXDOMAIN:
+            actual_addr = set()
         target_addr = {_get_host_ip(ip_type)}
         if target.strict:
             return target_addr == actual_addr
