@@ -34,7 +34,7 @@ ACCESS_ENTITIES = (
 )
 
 
-@group('access-migrate')
+@group('access-storage')
 @option('--port', help='ZooKeeper port.', type=int, default=2181)
 @option('--host', help='ZooKeeper host.', type=str, default='127.0.0.1')
 @option(
@@ -53,9 +53,9 @@ def access_migration_group(ctx, host: str, port: int, zkcli_identity: str) -> No
     }
 
 
-@access_migration_group.command('replicated')
+@access_migration_group.command('migrate-to-replicated')
 @pass_context
-def replicated_to_local(ctx) -> None:
+def local_to_replicated(ctx) -> None:
     if not os.path.exists(CH_ACCESS_PATH):
         echo('access folder does not exist')
         return
@@ -63,6 +63,28 @@ def replicated_to_local(ctx) -> None:
     with zk_client(ctx) as zk:
         _migrate_sql_files(zk)
         _migrate_list_files(zk)
+
+
+@access_migration_group.command('migrate-to-local')
+@pass_context
+def replicated_to_local(ctx) -> None:
+    ch_user = _get_ch_user()
+    if ch_user is None:
+        echo('clickhouse user does not exist')
+        return
+
+    with zk_client(ctx) as zk:
+        uuid_list = zk.get_children(ZK_UUID_PATH)
+        if not uuid_list:
+            echo('uuid node is empty')
+            return
+
+        for uuid in uuid_list:
+            data, _ = zk.get(f'{ZK_UUID_PATH}/{uuid}')
+            file_path = _file_create(f'{uuid}.sql', data.decode())
+            _file_chown(file_path, ch_user)
+
+        _mark_to_rebuild(ch_user)
 
 
 def _migrate_sql_files(zk: KazooClient) -> None:
@@ -109,28 +131,6 @@ def _decode_next_uint(buffer: BinaryIO) -> int:
             break
 
     return res
-
-
-@access_migration_group.command('local')
-@pass_context
-def local_to_replicated(ctx) -> None:
-    ch_user = _get_ch_user()
-    if ch_user is None:
-        echo('clickhouse user does not exist')
-        return
-
-    with zk_client(ctx) as zk:
-        uuid_list = zk.get_children(ZK_UUID_PATH)
-        if not uuid_list:
-            echo('uuid node is empty')
-            return
-
-        for uuid in uuid_list:
-            data, _ = zk.get(f'{ZK_UUID_PATH}/{uuid}')
-            file_path = _file_create(f'{uuid}.sql', data.decode())
-            _file_chown(file_path, ch_user)
-
-        _mark_to_rebuild(ch_user)
 
 
 def _zk_upsert_data(zk: KazooClient, path: str, value: Union[str, bytes]) -> None:
