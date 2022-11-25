@@ -1,7 +1,6 @@
 OWNER(g:mdb)
 
 RECURSE(
-    access_migrate
     chadmin
     diagnostics
     monrun_checks
