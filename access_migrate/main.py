@@ -22,9 +22,9 @@ def cli(ctx, debug):
     """ClickHouse access migration tool."""
     if debug:
         logging.basicConfig(level='DEBUG', format='%(levelname)s:%(message)s')
-    
-    ch_config=ClickhouseConfig.load()
-    ch_keeper_config=ClickhouseKeeperConfig.load()
+
+    ch_config = ClickhouseConfig.load()
+    ch_keeper_config = ClickhouseKeeperConfig.load()
 
     ctx.obj = dict(
         ch_config=ch_config,
@@ -37,8 +37,10 @@ def cli(ctx, debug):
     def close_keeper():
         ctx.obj['keeper_cli'].close()
 
+
 for command in CLI_COMMANDS:
     cli.add_command(command)
+
 
 def main() -> None:
     cli()
