@@ -1,5 +1,6 @@
 import os
 import pwd
+from kazoo.client import KazooClient
 from typing import Optional
 
 from click import echo, group, option, pass_context
@@ -34,19 +35,29 @@ def access_migration_group(ctx, host: str, port: int, zkcli_identity: str) -> No
 @access_migration_group.command('replicated')
 @pass_context
 def replicated_to_local(ctx) -> None:
-    # todo: https://st.yandex-team.ru/MDB-20555
-    pass
+    if not os.path.exists(CH_ACCESS_PATH):
+        echo('access folder does not exist')
+        return
+
+    with zk_client(ctx) as zk:
+        access_files = os.listdir(CH_ACCESS_PATH)
+        for file in access_files:
+            uuid, file_ext = os.path.splitext(file)
+            if file_ext != '.sql':
+                continue
+            file_data = _file_read(file)
+            _upsert_zk_uuid(zk, uuid, file_data)
 
 
 @access_migration_group.command('local')
 @pass_context
 def local_to_replicated(ctx) -> None:
-    with zk_client(ctx) as zk:
-        ch_user = _get_ch_user()
-        if ch_user is None:
-            echo('clickhouse user does not exist')
-            return
+    ch_user = _get_ch_user()
+    if ch_user is None:
+        echo('clickhouse user does not exist')
+        return
 
+    with zk_client(ctx) as zk:
         uuid_list = zk.get_children(KEEPER_UUID_PATH)
         if not uuid_list:
             echo('uuid node is empty')
@@ -58,6 +69,16 @@ def local_to_replicated(ctx) -> None:
             _file_chown(file_path, ch_user)
 
         _mark_to_rebuild(ch_user)
+
+
+def _upsert_zk_uuid(zk: KazooClient, uuid: str, data: str) -> None:
+    value = data.encode()
+
+    zk_path = f'{KEEPER_UUID_PATH}/{uuid}'
+    if zk.exists(zk_path):
+        zk.set(zk_path, value)
+    else:
+        zk.create(zk_path, value)
 
 
 def _get_ch_user(user_name: str = CH_USER) -> Optional[pwd.struct_passwd]:
@@ -73,6 +94,12 @@ def _file_create(file_name: str, file_content: str = '') -> str:
         file.write(file_content)
 
     return file_path
+
+
+def _file_read(file_name: str) -> str:
+    file_path = os.path.join(CH_ACCESS_PATH, file_name)
+    with open(file_path, 'r') as file:
+        return file.read()
 
 
 def _file_chown(file_path: str, pwd_user: pwd.struct_passwd) -> None:
