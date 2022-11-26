@@ -36,11 +36,20 @@ from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseClient
 
 @group(context_settings=dict(help_option_names=['-h', '--help'], terminal_width=120))
 @option('-f', '--format', type=Choice(['json', 'yaml', 'table']), help="Output format.")
+@option(
+    '--setting',
+    'settings',
+    multiple=True,
+    type=(str, str),
+    metavar='NAME VALUE',
+    help="Name and value of ClickHouse setting to override."
+    " Can be specified multiple times to override several settings.",
+)
 @option('--timeout', type=TimeSpanParamType(), help="Timeout for SQL queries.")
 @option('--port', type=int, help="Port to connect.")
 @option('-d', '--debug', is_flag=True, help="Enable debug output.")
 @pass_context
-def cli(ctx, format, timeout, port, debug):
+def cli(ctx, format, settings, timeout, port, debug):
     """ClickHouse administration tool."""
 
     if debug:
@@ -48,7 +57,9 @@ def cli(ctx, format, timeout, port, debug):
 
     timeout_seconds = timeout.total_seconds() if timeout else None
 
-    chcli = ClickhouseClient(timeout=timeout_seconds, port=port)
+    settings = {item[0]: item[1] for item in settings}
+
+    chcli = ClickhouseClient(port=port, timeout=timeout_seconds, settings=settings)
 
     ctx.obj = dict(chcli=chcli, format=format, debug=debug)
 
