@@ -233,6 +233,10 @@ class ClickhouseKeeperConfig:
         return self._clickhouse.get('keeper_server', {}).get('tcp_port')
 
     @property
+    def snapshots_dir(self):
+        return self._clickhouse.get('keeper_server', {}).get('snapshot_storage_path')
+
+    @property
     def separated(self):
         """
         Return True if ClickHouse Keeper is configured to run in separate process.

@@ -4,7 +4,7 @@ from tabulate import tabulate
 
 from cloud.mdb.clickhouse.tools.monrun_checks.clickhouse_client import ClickhouseClient
 from cloud.mdb.clickhouse.tools.monrun_checks.clickhouse_info import ClickhouseInfo
-from cloud.mdb.clickhouse.tools.monrun_checks.result import Result
+from cloud.mdb.clickhouse.tools.common.result import Result
 
 
 @click.command('replication-lag')

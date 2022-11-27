@@ -2,7 +2,7 @@ import click
 
 from cloud.mdb.clickhouse.tools.common.backup import get_orphaned_chs3_backups
 
-from cloud.mdb.clickhouse.tools.monrun_checks.result import Result
+from cloud.mdb.clickhouse.tools.common.result import Result
 
 
 @click.command('orphaned-backups')

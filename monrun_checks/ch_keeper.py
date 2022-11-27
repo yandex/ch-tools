@@ -4,7 +4,7 @@ from kazoo.client import KazooClient, KazooException
 from kazoo.handlers.threading import KazooTimeoutError
 
 from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseKeeperConfig
-from cloud.mdb.clickhouse.tools.monrun_checks.result import Result
+from cloud.mdb.clickhouse.tools.common.result import Result
 
 
 @click.command('keeper')

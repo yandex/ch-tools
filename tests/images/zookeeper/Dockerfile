@@ -2,6 +2,9 @@ FROM ch-tools-tests-base
 
 ENV ZK_VERSION=3.4.8-1
 
+COPY staging/tools/ /tmp/tools/
+RUN tar -x -f /tmp/tools/mdb-ch-tools.*.tar.gz -C /
+
 RUN apt-get update -qq && apt-get install -y \
         openjdk-8-jre-headless \
         zookeeper=${ZK_VERSION} \
