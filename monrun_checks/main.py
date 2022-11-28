@@ -6,7 +6,7 @@ import sys
 import os
 import pwd
 
-from cloud.mdb.clickhouse.tools.monrun_checks.result import Status
+from cloud.mdb.clickhouse.tools.common.result import Status
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_replication_lag import replication_lag_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_system_queues import system_queues_command
 from cloud.mdb.clickhouse.tools.monrun_checks.ch_tls import tls_command

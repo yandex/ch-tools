@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple
 from OpenSSL.crypto import dump_certificate, load_certificate, FILETYPE_PEM
 
 from cloud.mdb.clickhouse.tools.monrun_checks.clickhouse_client import ClickhouseClient, ClickhousePort
-from cloud.mdb.clickhouse.tools.monrun_checks.result import Result
+from cloud.mdb.clickhouse.tools.common.result import Result
 
 CERTIFICATE_PATH = '/etc/clickhouse-server/ssl/server.crt'
 

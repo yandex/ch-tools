@@ -1,4 +1,4 @@
-from .result import Status
+from cloud.mdb.clickhouse.tools.common.result import Status
 from requests import RequestException
 
 

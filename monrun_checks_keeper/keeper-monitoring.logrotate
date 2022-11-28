@@ -1,0 +1,8 @@
+/var/log/keeper-monitoring/keeper-monitoring.log {
+    rotate 7
+    daily
+    compress
+    missingok
+    nodateext
+    copytruncate
+}
