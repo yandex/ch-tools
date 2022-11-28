@@ -46,18 +46,17 @@ class ClickhouseClient:
     ClickHouse client.
     """
 
-    def __init__(self, *, host=socket.getfqdn(), timeout=None, port=None, user='_admin', insecure=False):
-        if timeout is None:
-            timeout = 60
-
+    def __init__(self, *, host=socket.getfqdn(), port=None, user='_admin', settings=None, timeout=None, insecure=False):
         if port is None:
             port = 8443
+        if timeout is None:
+            timeout = 60
+        if settings is None:
+            settings = {}
 
-        self._session = requests.Session()
-        self._session.verify = False if insecure else '/etc/clickhouse-server/ssl/allCAs.pem'
-        if user:
-            self._session.headers['X-ClickHouse-User'] = user
+        self._session = self._create_session(user=user, insecure=insecure)
         self._url = f'https://{host}:{port}'
+        self._settings = settings
         self._timeout = timeout
         self._ch_version = None
 
@@ -101,6 +100,7 @@ class ClickhouseClient:
             response = self._session.post(
                 self._url,
                 params={
+                    **self._settings,
                     'query': query,
                 },
                 json=post_data,
@@ -125,6 +125,17 @@ class ClickhouseClient:
 
         template = env.from_string(query)
         return template.render(kwargs)
+
+    @staticmethod
+    def _create_session(user, insecure):
+        session = requests.Session()
+
+        session.verify = False if insecure else '/etc/clickhouse-server/ssl/allCAs.pem'
+
+        if user:
+            session.headers['X-ClickHouse-User'] = user
+
+        return session
 
 
 class ClickhouseZookeeperConfig:
