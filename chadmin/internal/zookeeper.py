@@ -9,14 +9,14 @@ from cloud.mdb.clickhouse.tools.chadmin.cli import get_config, get_macros
 
 
 def get_zk_node(ctx, path, binary=False):
-    with _zk_client(ctx) as zk:
+    with zk_client(ctx) as zk:
         path = _format_path(ctx, path)
         value = zk.get(path)[0]
         return value if binary else value.decode().strip()
 
 
 def get_zk_node_acls(ctx, path):
-    with _zk_client(ctx) as zk:
+    with zk_client(ctx) as zk:
         path = _format_path(ctx, path)
         return zk.get_acls(path)
 
@@ -40,7 +40,7 @@ def list_zk_nodes(ctx, path, verbose=False):
             'nodes': descendants_count,
         }
 
-    with _zk_client(ctx) as zk:
+    with zk_client(ctx) as zk:
         path = _format_path(ctx, path)
         result = zk.get_children(path)
         nodes = [os.path.join(path, node) for node in sorted(result)]
@@ -53,7 +53,7 @@ def create_zk_nodes(ctx, paths, value=None):
     else:
         value = b''
 
-    with _zk_client(ctx) as zk:
+    with zk_client(ctx) as zk:
         for path in paths:
             zk.create(_format_path(ctx, path), value)
 
@@ -62,7 +62,7 @@ def update_zk_nodes(ctx, paths, value):
     if isinstance(value, str):
         value = value.encode()
 
-    with _zk_client(ctx) as zk:
+    with zk_client(ctx) as zk:
         for path in paths:
             zk.set(_format_path(ctx, path), value)
 
@@ -72,7 +72,7 @@ def delete_zk_node(ctx, path):
 
 
 def delete_zk_nodes(ctx, paths):
-    with _zk_client(ctx) as zk:
+    with zk_client(ctx) as zk:
         for path in paths:
             path = _format_path(ctx, path)
             print(f'Deleting ZooKeeper node {path}')
@@ -84,7 +84,7 @@ def _format_path(ctx, path):
 
 
 @contextmanager
-def _zk_client(ctx):
+def zk_client(ctx):
     zk = _get_zk_client(ctx)
     try:
         zk.start()
