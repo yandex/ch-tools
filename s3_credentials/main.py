@@ -9,10 +9,13 @@ import requests
 import time
 import random
 from datetime import timedelta
-from os.path import exists, getmtime
+import os.path
 from xml.dom import minidom
 
-CONFIG_PATH = '/etc/clickhouse-server/config.d/s3_credentials.xml'
+from cloud.mdb.clickhouse.tools.common.clickhouse import (
+    CLICKHOUSE_RESETUP_CONFIG_PATH,
+    CLICKHOUSE_S3_CREDENTIALS_CONFIG_PATH,
+)
 
 
 def _parse_args():
@@ -78,13 +81,16 @@ def _delta_to_hours(delta: timedelta):
 
 def _check_config(args):
     if not args.present:
-        if exists(CONFIG_PATH):
+        if os.path.exists(CLICKHOUSE_S3_CREDENTIALS_CONFIG_PATH):
             result(2, 'S3 default config present, but shouldn\'t')
         else:
             result(0, 'OK')
 
-    if exists(CONFIG_PATH):
-        delta = timedelta(seconds=time.time() - getmtime(CONFIG_PATH))
+    if os.path.isfile(CLICKHOUSE_RESETUP_CONFIG_PATH):
+        result(0, 'Skipped as resetup is in progress')
+
+    if os.path.exists(CLICKHOUSE_S3_CREDENTIALS_CONFIG_PATH):
+        delta = timedelta(seconds=time.time() - os.path.getmtime(CLICKHOUSE_S3_CREDENTIALS_CONFIG_PATH))
         if delta < timedelta(hours=2):
             result(0, 'OK')
         elif delta < timedelta(hours=4):
@@ -111,7 +117,7 @@ def _check_config(args):
 
 
 def result(code, msg):
-    print(f'{code}; {msg}')
+    print(f'{code};{msg}')
     exit(0)
 
 

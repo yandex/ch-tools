@@ -10,6 +10,7 @@ PY_SRCS(
 )
 
 PEERDIR(
+    cloud/mdb/clickhouse/tools/common
     contrib/python/requests
 )
 

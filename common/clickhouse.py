@@ -16,6 +16,8 @@ import xmltodict
 
 CLICKHOUSE_CONFIG_PATH = '/var/lib/clickhouse/preprocessed_configs/config.xml'
 CLICKHOUSE_KEEPER_CONFIG_PATH = '/etc/clickhouse-keeper/config.xml'
+CLICKHOUSE_RESETUP_CONFIG_PATH = '/etc/clickhouse-server/config.d/resetup_config.xml'
+CLICKHOUSE_S3_CREDENTIALS_CONFIG_PATH = '/etc/clickhouse-server/config.d/s3_credentials.xml'
 
 
 def retry(exception_types, max_attempts=5, max_interval=5):

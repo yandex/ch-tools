@@ -15,7 +15,7 @@ Feature: ch_s3_credentials tool
     """
     Then we get response
     """
-    0; OK
+    0;OK
     """
     When we execute command on clickhouse01
     """
@@ -27,7 +27,7 @@ Feature: ch_s3_credentials tool
     """
     Then we get response
     """
-    0; OK
+    0;OK
     """
     When we execute command on clickhouse01
     """

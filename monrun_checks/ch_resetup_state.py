@@ -6,6 +6,7 @@ import requests
 import subprocess
 import psutil
 
+from cloud.mdb.clickhouse.tools.common.clickhouse import CLICKHOUSE_RESETUP_CONFIG_PATH
 from cloud.mdb.clickhouse.tools.monrun_checks.exceptions import die
 from cloud.mdb.clickhouse.tools.common.result import Result
 
@@ -27,7 +28,7 @@ def resetup_state_command(port, ssl, ca_bundle):
     if request(host, port, ssl, ca_bundle):
         return Result(2, 'ClickHouse is listening on ports reserved for resetup')
 
-    if os.path.isfile('/etc/clickhouse-server/config.d/resetup_config.xml'):
+    if os.path.isfile(CLICKHOUSE_RESETUP_CONFIG_PATH):
         return Result(2, 'Detected resetup config, but ch-backup is not running')
 
     return Result(0, 'OK')
