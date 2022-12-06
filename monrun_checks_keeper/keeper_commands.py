@@ -11,6 +11,8 @@ from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseKeeperConfig
 ZOOKEEPER_CFG_FILE = '/etc/zookeeper/conf/zoo.cfg'
 DEFAULT_ZOOKEEPER_DATA_DIR = '/var/lib/zookeeper'
 DEFAULT_ZOOKEEPER_DATA_LOG_DIR = '/var/log/zookeeper'
+KEEPER_DEFAULT_PATH = '/var/lib/clickhouse-keeper/snapshots'
+CH_DBMS_DEFAULT_PATH = '/var/lib/clickhouse/snapshots'
 
 
 @command('alive')
@@ -84,7 +86,7 @@ def check_snapshots():
     if os.path.exists(ZOOKEEPER_CFG_FILE):
         files = get_snapshot_files(read_zookeeper_config().get('dataDir', DEFAULT_ZOOKEEPER_DATA_DIR))
     else:
-        files = get_snapshot_files(ClickhouseKeeperConfig.load().snapshots_dir)
+        files = get_keeper_snapshot_files()
     if len(files) > 0:
         latest = sorted(files, key=os.path.getctime, reverse=True)[0]
     return Result(0, latest)
@@ -125,8 +127,21 @@ def get_zookeeper_log_files_for_last_day():
     return sorted(log_files, key=os.path.getctime)
 
 
+def get_keeper_snapshot_files():
+    """Perform look over all possible folders for snapshots files and grab it"""
+    files = []
+    ch_config = ClickhouseKeeperConfig.load()
+    dirs = [KEEPER_DEFAULT_PATH, CH_DBMS_DEFAULT_PATH, ch_config.snapshots_dir]
+    if ch_config.storage_dir:
+        dirs.append(os.path.join(ch_config.storage_dir, 'snapshots'))
+    for snapshot_path in set(dirs):
+        if snapshot_path and os.path.exists(snapshot_path):
+            files.extend(get_snapshot_files(snapshot_path))
+    return files
+
+
 def get_snapshot_files(snapshots_dir):
-    """Get snapshot file in mentioned directory"""
+    """Select snapshot files in given directory"""
     return [
         os.path.join(root, name)
         for root, _, files in os.walk(snapshots_dir)
