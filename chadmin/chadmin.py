@@ -8,6 +8,7 @@ from cloud.mdb.clickhouse.tools.chadmin.cli.access_migration_group import access
 from cloud.mdb.clickhouse.tools.chadmin.cli.dictionary_group import dictionary_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.list_async_metrics_command import list_async_metrics_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.crash_log_group import crash_log_group
+from cloud.mdb.clickhouse.tools.chadmin.cli.data_store_group import data_store_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.database_group import database_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.merge_group import merge_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.part_group import part_group
@@ -92,6 +93,7 @@ cli.add_command(stack_trace_command)
 cli.add_command(chs3_backup_group)
 cli.add_command(wait_started_command)
 cli.add_command(disks_group)
+cli.add_command(data_store_group)
 
 
 def main():
