@@ -23,6 +23,8 @@ class ClickhouseClient:
         host, exposed_port = docker.get_exposed_port(docker.get_container(context, node_name), port)
 
         self._session = Session()
+        if getattr(context, 'ch_user', None) is not None:
+            self._session.headers['X-ClickHouse-User'] = context.ch_user
         self._url = f'{protocol}://{host}:{exposed_port}'
         self._timeout = 30
 

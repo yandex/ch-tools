@@ -3,8 +3,10 @@ Steps for interacting with ZooKeeper.
 """
 import os
 
-from behave import given
+from behave import given, then, when
+from hamcrest import assert_that, has_length
 from kazoo.client import KazooClient
+from kazoo.exceptions import NoNodeError
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from modules.docker import get_container, get_exposed_port
@@ -16,10 +18,7 @@ def step_wait_for_zookeeper_alive(context):
     """
     Ensure that ZK is ready to accept incoming requests.
     """
-    zk_container = get_container(context, 'zookeeper01')
-    host, port = get_exposed_port(zk_container, 2181)
-
-    client = KazooClient(f'{host}:{port}')
+    client = _zk_client(context)
     try:
         client.start()
     finally:
@@ -32,10 +31,7 @@ def step_wait_for_keeper_alive(context, node):
     """
     Wait until clickhouse keeper is ready to accept incoming requests.
     """
-    zk_container = get_container(context, node)
-    host, port = get_exposed_port(zk_container, context.conf['services']['clickhouse']['keeper']['port'])
-
-    client = KazooClient(f'{host}:{port}')
+    client = _zk_client(context, instance_name=node, port=context.conf['services']['clickhouse']['keeper']['port'])
     try:
         client.start()
         client.get('/')
@@ -59,12 +55,35 @@ def clean_zk_tables_metadata_for_host(context, node):
             else:
                 recursive_remove_node_data(zk_client, os.path.join(path, subpath), node)
 
-    zk_container = get_container(context, 'zookeeper01')
-    host, port = get_exposed_port(zk_container, 2181)
-    client = KazooClient(f'{host}:{port}')
-
+    client = _zk_client(context)
     try:
         client.start()
         recursive_remove_node_data(client, '/', node)
     finally:
         client.stop()
+
+
+@when('we execute ZK list query on {node:w}')
+def step_zk_list_query(context, node):
+    zk_client = _zk_client(context, node)
+    try:
+        zk_client.start()
+        result = zk_client.get_children(context.text)
+        context.response = ';'.join(user for user in result)
+    except NoNodeError:
+        context.response = []
+    finally:
+        zk_client.stop()
+
+
+@then('we get ZK list with len {length:d}')
+def step_zk_list_len(context, length):
+    response = context.response if isinstance(context.response, list) else context.response.split(';')
+    assert_that(response, has_length(length))
+
+
+def _zk_client(context, instance_name='zookeeper01', port=2181):
+    zk_container = get_container(context, instance_name)
+    host, port = get_exposed_port(zk_container, port)
+
+    return KazooClient(f'{host}:{port}')

@@ -21,9 +21,6 @@ class AccessInfo(NamedTuple):
     unique_char: str
     file_name: str
 
-    def get_name(self):
-        return ''
-
 
 ACCESS_ENTITIES = (
     AccessInfo('P', 'row_policies.list'),
@@ -140,7 +137,7 @@ def _zk_upsert_data(zk: KazooClient, path: str, value: Union[str, bytes]) -> Non
     if zk.exists(path):
         zk.set(path, value)
     else:
-        zk.create(path, value)
+        zk.create(path, value, makepath=True)
 
 
 def _get_ch_user(user_name: str = CH_USER) -> Optional[pwd.struct_passwd]:

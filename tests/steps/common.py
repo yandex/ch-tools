@@ -6,7 +6,7 @@ import time
 import requests
 import yaml
 from behave import given, then, when
-from hamcrest import assert_that, contains_string, equal_to
+from hamcrest import assert_that, contains_string, equal_to, is_not
 
 from modules import docker
 from modules.utils import merge
@@ -52,6 +52,11 @@ def step_get_response(context):
 @then('we get response contains')
 def step_get_response_contains(context):
     assert_that(context.response, contains_string(context.text))
+
+
+@then('we get response not contains {entry:w}')
+def step_get_response_not_contains(context, entry):
+    assert_that(context.response, is_not(contains_string(entry)))
 
 
 @when('we sleep for {seconds:d} seconds')
