@@ -3,7 +3,8 @@ Steps for interacting with ZooKeeper.
 """
 import os
 
-from behave import given
+from behave import given, then, when
+from hamcrest import assert_that, equal_to
 from kazoo.client import KazooClient
 from tenacity import retry, stop_after_attempt, wait_fixed
 
@@ -68,3 +69,25 @@ def clean_zk_tables_metadata_for_host(context, node):
         recursive_remove_node_data(client, '/', node)
     finally:
         client.stop()
+
+@when('we execute ls ZK query on {node:w}')
+def step_zk_query(context, node):
+    zk_client = _zk_client(context, node)
+    try:
+        zk_client.start()
+        result, _ = zk_client.get_children(context.text)
+        context.response = ';'.join(user for user in result.decode())
+    finally:
+        zk_client.stop()
+
+
+@then('we get zk response')
+def step_zk_reponse(context):
+    assert_that(context.response, equal_to(context.text))
+
+
+def _zk_client(context, instance_name: str = 'zookeeper01') -> KazooClient:
+    zk_container = get_container(context, instance_name)
+    host, port = get_exposed_port(zk_container, 2181)
+
+    return KazooClient(f'{host}:{port}')
