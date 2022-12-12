@@ -21,9 +21,6 @@ class AccessInfo(NamedTuple):
     unique_char: str
     file_name: str
 
-    def get_name(self):
-        return ''
-
 
 ACCESS_ENTITIES = (
     AccessInfo('P', 'row_policies.list'),
