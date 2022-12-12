@@ -41,7 +41,7 @@ Feature: chadmin access-storage tool
   # - migrate them from `clickhouse01` to `zookeeper01` (migrate-to-replicated)
   # - migrate them from `zookeeper01` to `clickhouse02` (migrate-to-local)
   @require_version_22.3
-  Scenario: migrate to replicated and back
+  Scenario: migrate to replicated and then back
     # === case 1: migrate-to-replicated
     When we execute command on clickhouse01
       """
@@ -78,7 +78,7 @@ Feature: chadmin access-storage tool
       """
     Then we get response
       """
-      policy01
+      policy01 ON test.table_01
       """
     # check that we have already created settings profile in ZK
     When we execute ZK list query on zookeeper01
@@ -117,10 +117,12 @@ Feature: chadmin access-storage tool
       """
       exists
       """
-    When we have executed command on clickhouse02
+    When we execute command on clickhouse02
       """
       supervisorctl restart clickhouse-server
       """
+    # need some time for CH rebuilding files
+    And we sleep for 5 seconds
     And we execute command on clickhouse02
       """
       test -f /var/lib/clickhouse/access/need_rebuild_lists.mark && echo "exists" || echo "does not exist"
@@ -134,28 +136,43 @@ Feature: chadmin access-storage tool
       """
       SHOW USERS;
       """
-    Then we get response contains user01
+    Then we get response contains
+      """
+      user01
+      """
     # check that we have particular role in CH
     When we execute query on clickhouse02
       """
       SHOW ROLES;
       """
-    Then we get response contains role01
+    Then we get response contains
+      """
+      role01
+      """
     # check that we have particular quota in CH
     When we execute query on clickhouse02
       """
       SHOW QUOTAS;
       """
-    Then we get response contains quota01
+    Then we get response contains
+      """
+      quota01
+      """
     # check that we have particular profile in CH
     When we execute query on clickhouse02
       """
       SHOW PROFILES;
       """
-    Then we get response contains profile01
+    Then we get response contains
+      """
+      profile01
+      """
     # check that we have particular row policy in CH
     When we execute query on clickhouse02
       """
       SHOW ROW POLICIES;
       """
-    Then we get response contains policy01
+    Then we get response contains
+      """
+      policy01
+      """
