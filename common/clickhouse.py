@@ -174,11 +174,15 @@ class ClickhouseConfig:
         self._config = config
 
     @property
+    def _config_root(self) -> dict:
+        return self._config.get('clickhouse', self._config.get('yandex', {}))
+
+    @property
     def macros(self):
         """
         ClickHouse macros.
         """
-        macros = self._config['yandex'].get('macros', {})
+        macros = self._config_root.get('macros', {})
         return {key: value for key, value in macros.items() if not key.startswith('@')}
 
     @property
@@ -190,10 +194,10 @@ class ClickhouseConfig:
         """
         ZooKeeper configuration.
         """
-        return ClickhouseZookeeperConfig(self._config['yandex'].get('zookeeper', {}))
+        return ClickhouseZookeeperConfig(self._config_root.get('zookeeper', {}))
 
     def has_disk(self, name):
-        storage_configuration = self._config['yandex'].get('storage_configuration', {})
+        storage_configuration = self._config_root.get('storage_configuration', {})
         return name in storage_configuration.get('disks', {})
 
     def dump(self, mask_secrets=True):
