@@ -122,7 +122,7 @@ Feature: chadmin access-storage tool
       supervisorctl restart clickhouse-server
       """
     # need some time for CH rebuilding files
-    And we sleep for 5 seconds
+    And we sleep for 10 seconds
     And we execute command on clickhouse02
       """
       test -f /var/lib/clickhouse/access/need_rebuild_lists.mark && echo "exists" || echo "does not exist"
