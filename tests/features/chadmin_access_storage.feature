@@ -2,39 +2,39 @@ Feature: chadmin access-storage tool
 
   Background:
     Given configuration
-      """
-      ch_user: _access_admin
-      """
+    """
+    ch_user: _access_admin
+    """
     And a working s3
     And a working zookeeper
     And a working clickhouse on clickhouse01
     And a working clickhouse on clickhouse02
     # Create test data set.
     Given we have executed queries on clickhouse01
-      """
-      CREATE DATABASE IF NOT EXISTS test ON CLUSTER 'cluster';
+    """
+    CREATE DATABASE IF NOT EXISTS test ON CLUSTER 'cluster';
 
-      CREATE TABLE IF NOT EXISTS test.table_01 ON CLUSTER 'cluster' (n Int32)
-      ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n;
-      """
+    CREATE TABLE IF NOT EXISTS test.table_01 ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n;
+    """
     # Create test access entities.
     And we have executed queries on clickhouse01
-      """
-      CREATE USER IF NOT EXISTS user01;
+    """
+    CREATE USER IF NOT EXISTS user01;
 
-      CREATE ROLE IF NOT EXISTS role01;
+    CREATE ROLE IF NOT EXISTS role01;
 
-      CREATE ROW POLICY IF NOT EXISTS policy01 ON test.table_01 TO role01;
+    CREATE ROW POLICY IF NOT EXISTS policy01 ON test.table_01 TO role01;
 
-      CREATE SETTINGS PROFILE IF NOT EXISTS profile01 SETTINGS max_memory_usage = 10000000 TO role01;
+    CREATE SETTINGS PROFILE IF NOT EXISTS profile01 SETTINGS max_memory_usage = 10000000 TO role01;
 
-      CREATE QUOTA IF NOT EXISTS quota01 FOR INTERVAL 30 minute MAX queries = 123 TO role01;
-      """
+    CREATE QUOTA IF NOT EXISTS quota01 FOR INTERVAL 30 minute MAX queries = 123 TO role01;
+    """
     # We need to rebuild *.list files manually within restart, otherwise we have to wait ~60+ sec while CH will do that.
     And we have executed command on clickhouse01
-      """
-      supervisorctl restart clickhouse-server
-      """
+    """
+    supervisorctl restart clickhouse-server
+    """
 
   # This scenario will simulate the following case:
   # - create access entities on `clickhouse01` only via SQL queries
@@ -44,135 +44,135 @@ Feature: chadmin access-storage tool
   Scenario: migrate to replicated and then back
     # === case 1: migrate-to-replicated
     When we execute command on clickhouse01
-      """
-      chadmin access-storage --host zookeeper01 migrate-to-replicated
-      """
+    """
+    chadmin access-storage --host zookeeper01 migrate-to-replicated
+    """
     # check that we have 5 entities in ZK
     When we execute ZK list query on zookeeper01
-      """
-      /clickhouse/access/uuid
-      """
+    """
+    /clickhouse/access/uuid
+    """
     Then we get ZK list with len 5
     # check that we have already created user in ZK
     When we execute ZK list query on zookeeper01
-      """
-      /clickhouse/access/U
-      """
+    """
+    /clickhouse/access/U
+    """
     Then we get response
-      """
-      user01
-      """
+    """
+    user01
+    """
     # check that we have already created role in ZK
     When we execute ZK list query on zookeeper01
-      """
-      /clickhouse/access/R
-      """
+    """
+    /clickhouse/access/R
+    """
     Then we get response
-      """
-      role01
-      """
+    """
+    role01
+    """
     # check that we have already created policy in ZK
     When we execute ZK list query on zookeeper01
-      """
-      /clickhouse/access/P
-      """
+    """
+    /clickhouse/access/P
+    """
     Then we get response
-      """
-      policy01 ON test.table_01
-      """
+    """
+    policy01 ON test.table_01
+    """
     # check that we have already created settings profile in ZK
     When we execute ZK list query on zookeeper01
-      """
-      /clickhouse/access/S
-      """
+    """
+    /clickhouse/access/S
+    """
     Then we get response
-      """
-      profile01
-      """
+    """
+    profile01
+    """
     # check that we have already created settings quota in ZK
     When we execute ZK list query on zookeeper01
-      """
-      /clickhouse/access/Q
-      """
+    """
+    /clickhouse/access/Q
+    """
     Then we get response
-      """
-      quota01
-      """
+    """
+    quota01
+    """
     # === case 2: migrate-to-local
     When we execute query on clickhouse02
-      """
-      SHOW USERS;
-      """
+    """
+    SHOW USERS;
+    """
     # there are no users on this shard yet
     Then we get response not contains user01
     When we execute command on clickhouse02
-      """
-      chadmin access-storage --host zookeeper01 migrate-to-local
-      """
+    """
+    chadmin access-storage --host zookeeper01 migrate-to-local
+    """
     When we execute command on clickhouse02
-      """
-      test -f /var/lib/clickhouse/access/need_rebuild_lists.mark && echo "exists" || echo "does not exist"
-      """
+    """
+    test -f /var/lib/clickhouse/access/need_rebuild_lists.mark && echo "exists" || echo "does not exist"
+    """
     Then we get response
-      """
-      exists
-      """
+    """
+    exists
+    """
     When we execute command on clickhouse02
-      """
-      supervisorctl restart clickhouse-server
-      """
+    """
+    supervisorctl restart clickhouse-server
+    """
     # need some time for CH rebuilding files
     And we sleep for 10 seconds
     And we execute command on clickhouse02
-      """
-      test -f /var/lib/clickhouse/access/need_rebuild_lists.mark && echo "exists" || echo "does not exist"
-      """
+    """
+    test -f /var/lib/clickhouse/access/need_rebuild_lists.mark && echo "exists" || echo "does not exist"
+    """
     Then we get response
-      """
-      does not exist
-      """
+    """
+    does not exist
+    """
     # check that we have particular user in CH
     When we execute query on clickhouse02
-      """
-      SHOW USERS;
-      """
+    """
+    SHOW USERS;
+    """
     Then we get response contains
-      """
-      user01
-      """
+    """
+    user01
+    """
     # check that we have particular role in CH
     When we execute query on clickhouse02
-      """
-      SHOW ROLES;
-      """
+    """
+    SHOW ROLES;
+    """
     Then we get response contains
-      """
-      role01
-      """
+    """
+    role01
+    """
     # check that we have particular quota in CH
     When we execute query on clickhouse02
-      """
-      SHOW QUOTAS;
-      """
+    """
+    SHOW QUOTAS;
+    """
     Then we get response contains
-      """
-      quota01
-      """
+    """
+    quota01
+    """
     # check that we have particular profile in CH
     When we execute query on clickhouse02
-      """
-      SHOW PROFILES;
-      """
+    """
+    SHOW PROFILES;
+    """
     Then we get response contains
-      """
-      profile01
-      """
+    """
+    profile01
+    """
     # check that we have particular row policy in CH
     When we execute query on clickhouse02
-      """
-      SHOW ROW POLICIES;
-      """
+    """
+    SHOW ROW POLICIES;
+    """
     Then we get response contains
-      """
-      policy01
-      """
+    """
+    policy01
+    """
