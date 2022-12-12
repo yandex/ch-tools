@@ -6,6 +6,7 @@ import os
 from behave import given, then, when
 from hamcrest import assert_that, has_length
 from kazoo.client import KazooClient
+from kazoo.exceptions import NoNodeError
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from modules.docker import get_container, get_exposed_port
@@ -69,6 +70,8 @@ def step_zk_list_query(context, node):
         zk_client.start()
         result = zk_client.get_children(context.text)
         context.response = ';'.join(user for user in result)
+    except NoNodeError:
+        context.response = []
     finally:
         zk_client.stop()
 

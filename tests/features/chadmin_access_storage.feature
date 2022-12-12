@@ -1,3 +1,8 @@
+# This feature will simulate the following case:
+# - create access entities only on `clickhouse01` via SQL queries
+# - migrate them from `clickhouse01` to `zookeeper01` (use migrate-to-replicated command)
+# - migrate them from `zookeeper01` to `clickhouse02` (use migrate-to-local command)
+@dependent-scenarios
 Feature: chadmin access-storage tool
 
   Background:
@@ -10,7 +15,7 @@ Feature: chadmin access-storage tool
     And a working clickhouse on clickhouse01
     And a working clickhouse on clickhouse02
     # Create test data set.
-    Given we have executed queries on clickhouse01
+    And we have executed queries on clickhouse01
     """
     CREATE DATABASE IF NOT EXISTS test ON CLUSTER 'cluster';
 
@@ -36,13 +41,91 @@ Feature: chadmin access-storage tool
     supervisorctl restart clickhouse-server
     """
 
-  # This scenario will simulate the following case:
-  # - create access entities on `clickhouse01` only via SQL queries
-  # - migrate them from `clickhouse01` to `zookeeper01` (migrate-to-replicated)
-  # - migrate them from `zookeeper01` to `clickhouse02` (migrate-to-local)
+  # pre-check that we don't have any access entities in ZK yet
   @require_version_22.3
-  Scenario: migrate to replicated and then back
-    # === case 1: migrate-to-replicated
+  Scenario: pre-check zookeeper01's data
+    # check UUID
+    When we execute ZK list query on zookeeper01
+    """
+    /clickhouse/access/uuid
+    """
+    Then we get ZK list with len 0
+    # check U
+    When we execute ZK list query on zookeeper01
+    """
+    /clickhouse/access/U
+    """
+    Then we get ZK list with len 0
+    # check R
+    When we execute ZK list query on zookeeper01
+    """
+    /clickhouse/access/R
+    """
+    Then we get ZK list with len 0
+    # check P
+    When we execute ZK list query on zookeeper01
+    """
+    /clickhouse/access/P
+    """
+    Then we get ZK list with len 0
+    # check S
+    When we execute ZK list query on zookeeper01
+    """
+    /clickhouse/access/S
+    """
+    Then we get ZK list with len 0
+    # check Q
+    When we execute ZK list query on zookeeper01
+    """
+    /clickhouse/access/Q
+    """
+    Then we get ZK list with len 0
+
+  # pre-check that we don't have any access entities in CH on 2nd shard yet
+  @require_version_22.3
+  Scenario: pre-check clickhouse02's data
+    # don't have anything new from sql to rebuild lists
+    When we execute command on clickhouse02
+    """
+    test -f /var/lib/clickhouse/access/need_rebuild_lists.mark && echo "exists" || echo "does not exist"
+    """
+    Then we get response
+    """
+    does not exist
+    """
+    # check USERS
+    When we execute query on clickhouse02
+    """
+    SHOW USERS;
+    """
+    Then we get response not contains user01
+    # check ROLES
+    When we execute query on clickhouse02
+    """
+    SHOW ROLES;
+    """
+    Then we get response not contains role01
+    # check QUOTAS
+    When we execute query on clickhouse02
+    """
+    SHOW QUOTAS;
+    """
+    Then we get response not contains quota01
+    # check PROFILES
+    When we execute query on clickhouse02
+    """
+    SHOW PROFILES;
+    """
+    Then we get response not contains profile01
+    # check ROW POLICIES
+    When we execute query on clickhouse02
+    """
+    SHOW ROW POLICIES;
+    """
+    Then we get response not contains policy01
+
+  @require_version_22.3
+  Scenario: migrate to replicated
     When we execute command on clickhouse01
     """
     chadmin access-storage --host zookeeper01 migrate-to-replicated
@@ -98,17 +181,14 @@ Feature: chadmin access-storage tool
     """
     quota01
     """
-    # === case 2: migrate-to-local
-    When we execute query on clickhouse02
-    """
-    SHOW USERS;
-    """
-    # there are no users on this shard yet
-    Then we get response not contains user01
+
+  @require_version_22.3
+  Scenario: migrate to local
     When we execute command on clickhouse02
     """
     chadmin access-storage --host zookeeper01 migrate-to-local
     """
+    # now we have something new from sql files to rebuild lists
     When we execute command on clickhouse02
     """
     test -f /var/lib/clickhouse/access/need_rebuild_lists.mark && echo "exists" || echo "does not exist"
@@ -117,11 +197,11 @@ Feature: chadmin access-storage tool
     """
     exists
     """
+    # we have to restart CH to rebuild lists and wait a little bit for that
     When we execute command on clickhouse02
     """
     supervisorctl restart clickhouse-server
     """
-    # need some time for CH rebuilding files
     And we sleep for 10 seconds
     And we execute command on clickhouse02
     """
