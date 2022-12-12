@@ -1,7 +1,10 @@
 Feature: chadmin access-storage tool
 
   Background:
-    Given default configuration
+    Given configuration
+      """
+      ch_user: _access_admin
+      """
     And a working s3
     And a working zookeeper
     And a working clickhouse on clickhouse01
@@ -16,7 +19,7 @@ Feature: chadmin access-storage tool
   Scenario: migrate to replicated
     When we execute command on clickhouse01
       """
-      chadmin access-storage --migrate-to-replicated
+      chadmin access-storage --host zookeeper01 migrate-to-replicated
       """
     Then we get response
       """

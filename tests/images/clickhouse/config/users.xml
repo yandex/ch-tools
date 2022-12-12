@@ -31,6 +31,15 @@
             <profile>default</profile>
             <quota>default</quota>
         </_admin>
+        <_access_admin>
+            <password></password>
+            <networks>
+                <ip>::/0</ip>
+            </networks>
+            <profile>default</profile>
+            <quota>default</quota>
+            <access_management>1</access_management>
+        </_access_admin>
     </users>
 
     <quotas>
