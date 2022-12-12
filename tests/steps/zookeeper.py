@@ -70,6 +70,7 @@ def clean_zk_tables_metadata_for_host(context, node):
     finally:
         client.stop()
 
+
 @when('we execute ls ZK query on {node:w}')
 def step_zk_query(context, node):
     zk_client = _zk_client(context, node)
