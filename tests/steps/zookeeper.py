@@ -87,7 +87,7 @@ def step_zk_reponse(context):
     assert_that(context.response, equal_to(context.text))
 
 
-def _zk_client(context, instance_name: str = 'zookeeper01') -> KazooClient:
+def _zk_client(context, instance_name='zookeeper01'):
     zk_container = get_container(context, instance_name)
     host, port = get_exposed_port(zk_container, 2181)
 
