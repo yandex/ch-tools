@@ -42,6 +42,7 @@ def list_parts(
             delete_ttl_info_max,
             move_ttl_info.expression,
             move_ttl_info.min,
+        {% if version_ge('21.8') -%}
             move_ttl_info.max,
             default_compression_codec,
             recompression_ttl_info.expression,
@@ -54,6 +55,9 @@ def list_parts(
             rows_where_ttl_info.min,
             rows_where_ttl_info.max,
             projections
+        {% else -%}
+            move_ttl_info.max
+        {% endif -%}
         FROM system.parts
         {% if database -%}
         WHERE database {{ format_str_match(database) }}
@@ -269,14 +273,18 @@ def list_part_log(
         SELECT
              event_time,
              event_type,
+        {% if version_ge('21.8') -%}
              merge_reason,
+        {% endif -%}
              duration_ms,
              database,
              table,
              partition_id,
              part_name,
+        {% if version_ge('21.8') -%}
              part_type,
              disk_name,
+        {% endif -%}
              rows,
              size_in_bytes,
              merged_from,
