@@ -104,13 +104,13 @@ def check_backup_age(ch_client, backups, age_threshold=1):
     die(1, message)
 
 
-def check_backup_count(config: BackupConfig, backups: list) -> None:
+def check_backup_count(config: BackupConfig, backups: list[dict]) -> None:
     """
     Check that the number of backups is not too large.
     """
-    max_count = config.retain_count + config.deduplication_age_limit.days + 1
+    max_count = config.retain_count + config.deduplication_age_limit.days + 2  # backup-service backup retention delay
 
-    count = len(backups)
+    count = sum(1 for backup in backups if backup.get('labels', {}).get('user_initiator'))
     if count > max_count:
         die(1, f'Too many backups exist: {count} > {max_count}')
 

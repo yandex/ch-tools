@@ -30,7 +30,7 @@ class BackupConfig:
             return BackupConfig(yaml.safe_load(file))
 
 
-def get_backups():
+def get_backups() -> list[dict]:
     """
     Get ClickHouse backups.
     """
