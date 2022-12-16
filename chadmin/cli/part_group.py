@@ -1,6 +1,6 @@
 from collections import OrderedDict
 
-from click import group, option, pass_context
+from click import Choice, group, option, pass_context
 from cloud.mdb.cli.common.formatting import format_bytes, print_response
 from cloud.mdb.cli.common.parameters import BytesParamType
 from cloud.mdb.clickhouse.tools.chadmin.internal.part import (
@@ -45,6 +45,7 @@ def part_group():
 @option('--active', is_flag=True, help='Output only active data parts.')
 @option('--detached', is_flag=True, help='Output detached parts instead of attached.')
 @option('--reason', help='Filter in data parts to output by reason. Applicable only for detached data parts.')
+@option('--order-by', type=Choice(['size', 'rows']))
 @option('-l', '--limit', type=int, help='Limit the max number of objects in the output.')
 @pass_context
 def list_parts_command(ctx, active, min_size, max_size, detached, reason, **kwargs):

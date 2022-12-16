@@ -1,4 +1,4 @@
-from click import argument, group, option, pass_context
+from click import argument, Choice, group, option, pass_context
 from cloud.mdb.cli.common.formatting import print_response
 from cloud.mdb.clickhouse.tools.chadmin.cli import get_cluster_name
 from cloud.mdb.clickhouse.tools.chadmin.internal.table import attach_table, detach_table, get_table, list_tables
@@ -30,12 +30,12 @@ def get_command(ctx, database, table, active_parts):
 @option('-t', '--table', help='Output only the specified table.')
 @option('--exclude-table', help='Do not output the specified table.')
 @option('--engine', help='Filter tables to output by the specified engine.')
-@option('--format', default='PrettyCompact')
 @option('--active', '--active-parts', 'active_parts', is_flag=True, help='Account only active data parts.')
 @option('-v', '--verbose', is_flag=True, help='Verbose mode.')
+@option('--order-by', type=Choice(['size', 'parts', 'rows']))
 @option('-l', '--limit', type=int, default=1000, help='Limit the max number of objects in the output.')
 @pass_context
-def list_command(ctx, database, table, exclude_table, engine, active_parts, verbose, format, limit):
+def list_command(ctx, database, table, exclude_table, engine, active_parts, verbose, order_by, limit):
     """
     List tables.
     """
@@ -47,6 +47,7 @@ def list_command(ctx, database, table, exclude_table, engine, active_parts, verb
         engine=engine,
         active_parts=active_parts,
         verbose=verbose,
+        order_by=order_by,
         limit=limit,
     )
     print_response(ctx, tables, default_format='table')

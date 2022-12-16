@@ -33,13 +33,7 @@ def part_log_group():
 @option('--order-by', type=Choice(['time', 'size', 'rows', 'peak_memory_usage']), default='time')
 @option('-l', '--limit', type=int, default=10, help='Limit the max number of objects in the output.')
 @pass_context
-def list_part_log_command(ctx, date, min_date, max_date, min_time, max_time, time, order_by, **kwargs):
-    order_by = {
-        'time': 'event_time DESC',
-        'size': 'size_in_bytes DESC',
-        'rows': 'rows DESC',
-        'peak_memory_usage': 'peak_memory_usage DESC',
-    }.get(order_by)
+def list_part_log_command(ctx, date, min_date, max_date, min_time, max_time, time, **kwargs):
     min_date = min_date or date
     max_date = max_date or date
     min_time = min_time or time
@@ -60,9 +54,7 @@ def list_part_log_command(ctx, date, min_date, max_date, min_time, max_time, tim
 
         return result
 
-    records = list_part_log(
-        ctx, min_date=min_date, max_date=max_date, min_time=min_time, max_time=max_time, order_by=order_by, **kwargs
-    )
+    records = list_part_log(ctx, min_date=min_date, max_date=max_date, min_time=min_time, max_time=max_time, **kwargs)
 
     print_response(
         ctx,
