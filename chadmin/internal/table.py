@@ -12,23 +12,38 @@ def get_table(ctx, database, table, active_parts=None):
 
 
 def list_tables(
-    ctx, *, database=None, table=None, exclude_table=None, engine=None, active_parts=None, verbose=None, limit=None
+    ctx,
+    *,
+    database=None,
+    table=None,
+    exclude_table=None,
+    engine=None,
+    active_parts=None,
+    verbose=None,
+    order_by=None,
+    limit=None,
 ):
+    order_by = {
+        'size': 'bytes_on_disk DESC',
+        'parts': 'parts DESC',
+        'rows': 'rows DESC',
+        None: 'database, table',
+    }[order_by]
     query = """
         SELECT
             database,
             table,
-            disk_size,
+            formatReadableSize(bytes_on_disk),
             partitions,
             parts,
             rows,
             metadata_mtime,
-        {% if verbose %}
+            {%- if verbose %}
             engine,
             create_table_query
-        {% else %}
+            {%- else %}
             engine
-        {% endif %}
+            {%- endif %}
         FROM (
             SELECT
                 database,
@@ -45,31 +60,31 @@ def list_tables(
                  uniq(partition) "partitions",
                  count() "parts",
                  sum(rows) "rows",
-                 formatReadableSize(sum(bytes_on_disk)) "disk_size"
+                 sum(bytes_on_disk) "bytes_on_disk"
              FROM system.parts
-        {% if active_parts %}
+        {% if active_parts -%}
              WHERE active
-        {% endif %}
+        {% endif -%}
              GROUP BY database, table
         ) parts USING database, table
-        {% if database %}
+        {% if database -%}
         WHERE database {{ format_str_match(database) }}
-        {% else %}
+        {% else -%}
         WHERE database != 'system'
-        {% endif %}
-        {% if table %}
+        {% endif -%}
+        {% if table -%}
           AND table {{ format_str_match(table) }}
-        {% endif %}
-        {% if exclude_table %}
+        {% endif -%}
+        {% if exclude_table -%}
           AND table NOT {{ format_str_match(exclude_table) }}
-        {% endif %}
-        {% if engine %}
+        {% endif -%}
+        {% if engine -%}
           AND engine {{ format_str_match(engine) }}
-        {% endif %}
-        ORDER BY database, table
-        {% if limit is not none %}
+        {% endif -%}
+        ORDER BY {{ order_by }}
+        {% if limit is not none -%}
         LIMIT {{ limit }}
-        {% endif %}
+        {% endif -%}
         """
     return execute_query(
         ctx,
@@ -80,6 +95,7 @@ def list_tables(
         engine=engine,
         active_parts=active_parts,
         verbose=verbose,
+        order_by=order_by,
         limit=limit,
         format='JSON',
     )['data']

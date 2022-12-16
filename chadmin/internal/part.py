@@ -17,11 +17,18 @@ def list_parts(
     min_size=None,
     max_size=None,
     active=None,
+    order_by=None,
     limit=None,
 ):
     """
     List data parts.
     """
+    order_by = {
+        'size': 'bytes_on_disk DESC',
+        'rows': 'rows DESC',
+        None: 'database, table, name',
+    }[order_by]
+
     query = """
         SELECT
             database,
@@ -121,6 +128,7 @@ def list_parts(
         min_size=min_size,
         max_size=max_size,
         active=active,
+        order_by=order_by,
         limit=limit,
         format='JSON',
     )['data']
@@ -266,8 +274,13 @@ def list_part_log(
     order_by=None,
     limit=None,
 ):
-    if not order_by:
-        order_by = 'event_time DESC'
+    order_by = {
+        'size': 'size_in_bytes DESC',
+        'rows': 'rows DESC',
+        'peak_memory_usage': 'peak_memory_usage DESC',
+        'time': 'event_time DESC',
+        None: 'event_time DESC',
+    }[order_by]
 
     query = """
         SELECT

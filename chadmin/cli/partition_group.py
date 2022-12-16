@@ -38,18 +38,12 @@ def partition_group():
 @option('--mutating', is_flag=True, help='Output only those partitions that have mutating data parts.')
 @option('--detached', is_flag=True, help='Show detached partitions instead of attached.')
 @option('--active', '--active-parts', 'active_parts', is_flag=True, help='Account only active data parts.')
-@option('--order-by', type=Choice(['default', 'size', 'parts', 'rows']), default='default')
+@option('--order-by', type=Choice(['size', 'parts', 'rows']))
 @option('-l', '--limit', type=int, help='Limit the max number of objects in the output.')
 @pass_context
 def list_partitions_command(ctx, order_by, **kwargs):
     """List partitions."""
-    order_by = {
-        'default': 'database, table, partition_id',
-        'size': 'sum(bytes_on_disk) DESC',
-        'parts': 'parts DESC',
-        'rows': 'rows DESC',
-    }.get(order_by)
-    print(get_partitions(ctx, order_by=order_by, format='PrettyCompact', **kwargs))
+    print(get_partitions(ctx, format='PrettyCompact', **kwargs))
 
 
 @partition_group.command(name='attach')
@@ -285,8 +279,12 @@ def get_partitions(
     limit=None,
     format=None,
 ):
-    if not order_by:
-        order_by = 'database, table, partition_id'
+    order_by = {
+        'size': 'sum(bytes_on_disk) DESC',
+        'parts': 'parts DESC',
+        'rows': 'rows DESC',
+        None: 'database, table, partition_id',
+    }[order_by]
 
     if detached:
         query = """
@@ -296,35 +294,35 @@ def get_partitions(
                 partition_id,
                 count() "parts"
             FROM system.detached_parts
-            {% if database %}
+            {% if database -%}
               WHERE database {{ format_str_match(database) }}
-            {% else %}
+            {% else -%}
               WHERE database != 'system'
-            {% endif %}
-            {% if table %}
+            {% endif -%}
+            {% if table -%}
               AND table {{ format_str_match(table) }}
-            {% endif %}
+            {% endif -%}
             GROUP BY database, table, partition_id
             HAVING 1
-            {% if partition_id %}
+            {% if partition_id -%}
               AND partition_id {{ format_str_match(partition_id) }}
-            {% endif %}
-            {% if min_partition_id %}
+            {% endif -%}
+            {% if min_partition_id -%}
               AND partition_id >= '{{ min_partition_id }}'
-            {% endif %}
-            {% if max_partition_id %}
+            {% endif -%}
+            {% if max_partition_id -%}
               AND partition_id <= '{{ max_partition_id }}'
-            {% endif %}
-            {% if min_part_count %}
+            {% endif -%}
+            {% if min_part_count -%}
               AND parts >= {{ min_part_count }}
-            {% endif %}
-            {% if max_part_count %}
+            {% endif -%}
+            {% if max_part_count -%}
               AND parts <= {{ max_part_count }}
             {% endif %}
             ORDER BY {{ order_by }}
-            {% if limit %}
+            {% if limit -%}
             LIMIT {{ limit }}
-            {% endif %}
+            {% endif -%}
             """
     else:
         query = """
@@ -339,60 +337,60 @@ def get_partitions(
                 sum(rows) "rows",
                 formatReadableSize(sum(bytes_on_disk)) "bytes"
             FROM system.parts
-            {% if database %}
-              WHERE database {{ format_str_match(database) }}
-            {% else %}
-              WHERE database != 'system'
-            {% endif %}
-            {% if active_parts %}
-                AND active
-            {% endif %}
-            {% if table %}
+            {% if database -%}
+            WHERE database {{ format_str_match(database) }}
+            {% else -%}
+            WHERE database != 'system'
+            {% endif -%}
+            {% if active_parts -%}
+              AND active
+            {% endif -%}
+            {% if table -%}
               AND table {{ format_str_match(table) }}
-            {% endif %}
+            {% endif -%}
             GROUP BY database, table, partition_id
             HAVING 1
-            {% if disk_name %}
+            {% if disk_name -%}
                AND has(groupUniqArray(disk_name), '{{ disk_name }}')
-            {% endif %}
-            {% if partition_id %}
-              AND partition_id {{ format_str_match(partition_id) }}
-            {% endif %}
-            {% if min_partition_id %}
-              AND partition_id >= '{{ min_partition_id }}'
-            {% endif %}
-            {% if max_partition_id %}
-              AND partition_id <= '{{ max_partition_id }}'
-            {% endif %}
-            {% if min_date %}
-              AND max_date >= '{{ min_date }}'
-            {% endif %}
-            {% if max_date %}
-              AND min_date <= '{{ max_date }}'
-            {% endif %}
-            {% if min_size %}
-              AND sum(bytes_on_disk) >= '{{ min_size }}'
-            {% endif %}
-            {% if max_size %}
-              AND sum(bytes_on_disk) <= '{{ max_size }}'
-            {% endif %}
-            {% if merging %}
-              AND (database, table, partition_id) IN (
-                  SELECT (database, table, partition_id)
-                  FROM system.merges
-              )
-            {% endif %}
-            {% if mutating %}
-              AND (database, table, partition_id) IN (
-                  SELECT (database, table, partition_id)
-                  FROM system.merges
-                  WHERE is_mutation
-              )
-            {% endif %}
+            {% endif -%}
+            {% if partition_id -%}
+               AND partition_id {{ format_str_match(partition_id) }}
+            {% endif -%}
+            {% if min_partition_id -%}
+               AND partition_id >= '{{ min_partition_id }}'
+            {% endif -%}
+            {% if max_partition_id -%}
+               AND partition_id <= '{{ max_partition_id }}'
+            {% endif -%}
+            {% if min_date -%}
+               AND max_date >= '{{ min_date }}'
+            {% endif -%}
+            {% if max_date -%}
+               AND min_date <= '{{ max_date }}'
+            {% endif -%}
+            {% if min_size -%}
+               AND sum(bytes_on_disk) >= '{{ min_size }}'
+            {% endif -%}
+            {% if max_size -%}
+               AND sum(bytes_on_disk) <= '{{ max_size }}'
+            {% endif -%}
+            {% if merging -%}
+               AND (database, table, partition_id) IN (
+                   SELECT (database, table, partition_id)
+                   FROM system.merges
+               )
+            {% endif -%}
+            {% if mutating -%}
+               AND (database, table, partition_id) IN (
+                   SELECT (database, table, partition_id)
+                   FROM system.merges
+                   WHERE is_mutation
+               )
+            {% endif -%}
             ORDER BY {{ order_by }}
-            {% if limit %}
+            {% if limit -%}
             LIMIT {{ limit }}
-            {% endif %}
+            {% endif -%}
             """
     return execute_query(
         ctx,
