@@ -1,7 +1,7 @@
 from collections import OrderedDict
 
 from click import group, option, pass_context
-from cloud.mdb.cli.common.formatting import format_bytes, format_float, format_percents, print_response
+from cloud.mdb.internal.python.cli.formatting import format_bytes, format_float, format_percents, print_response
 from cloud.mdb.clickhouse.tools.chadmin.cli import get_cluster_name
 from cloud.mdb.clickhouse.tools.chadmin.internal.process import list_replicated_fetches
 

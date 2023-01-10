@@ -1,7 +1,7 @@
 from click import argument, group, option, pass_context
 
-from cloud.mdb.cli.common.formatting import print_response
-from cloud.mdb.cli.common.parameters import ListParamType, StringParamType
+from cloud.mdb.internal.python.cli.formatting import print_response
+from cloud.mdb.internal.python.cli.parameters import ListParamType, StringParamType
 from cloud.mdb.clickhouse.tools.chadmin.internal.table_replica import get_table_replica
 from cloud.mdb.clickhouse.tools.chadmin.internal.zookeeper import (
     create_zk_nodes,

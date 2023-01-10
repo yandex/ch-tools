@@ -1,5 +1,5 @@
 from click import group, option, pass_context
-from cloud.mdb.cli.common.formatting import print_response
+from cloud.mdb.internal.python.cli.formatting import print_response
 from cloud.mdb.clickhouse.tools.chadmin.internal.dictionary import list_dictionaries, reload_dictionary
 
 

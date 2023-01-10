@@ -13,7 +13,7 @@ ALL_PY_SRCS(
 PY_MAIN(cloud.mdb.clickhouse.tools.chadmin.chadmin:main)
 
 PEERDIR(
-    cloud/mdb/cli/common
+    cloud/mdb/internal/python/cli
     cloud/mdb/clickhouse/tools/common
     contrib/python/click
     contrib/python/humanfriendly

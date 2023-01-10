@@ -2,7 +2,7 @@
 import logging
 
 from click import Choice, group, option, pass_context
-from cloud.mdb.cli.common.parameters import TimeSpanParamType
+from cloud.mdb.internal.python.cli.parameters import TimeSpanParamType
 
 from cloud.mdb.clickhouse.tools.chadmin.cli.access_migration_group import access_migration_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.dictionary_group import dictionary_group
