@@ -1,5 +1,5 @@
 from click import argument, group, pass_context
-from cloud.mdb.cli.common.formatting import print_response
+from cloud.mdb.internal.python.cli.formatting import print_response
 from cloud.mdb.clickhouse.tools.chadmin.internal.table_replica import get_table_replica, restart_table_replica
 
 

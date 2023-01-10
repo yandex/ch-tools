@@ -1,8 +1,8 @@
 from collections import OrderedDict
 
 from click import Choice, group, option, pass_context
-from cloud.mdb.cli.common.formatting import format_bytes, print_response
-from cloud.mdb.cli.common.parameters import BytesParamType
+from cloud.mdb.internal.python.cli.formatting import format_bytes, print_response
+from cloud.mdb.internal.python.cli.parameters import BytesParamType
 from cloud.mdb.clickhouse.tools.chadmin.internal.part import (
     attach_part,
     detach_part,

@@ -1,5 +1,5 @@
 from click import Choice, argument, group, option, pass_context
-from cloud.mdb.cli.common.formatting import print_response
+from cloud.mdb.internal.python.cli.formatting import print_response
 
 from cloud.mdb.clickhouse.tools.chadmin.cli import get_cluster_name
 from cloud.mdb.clickhouse.tools.chadmin.internal.process import get_process, list_processes, kill_process
