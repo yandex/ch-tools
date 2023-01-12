@@ -16,6 +16,7 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.zookeeper import (
 @group('zookeeper')
 @option('--port', help='ZooKeeper port.', type=int, default=2181)
 @option('--host', help='ZooKeeper host.', type=str)
+@option('--timeout', help='ZooKeeper timeout.', default=10)
 @option(
     '--zkcli_identity',
     help='Identity for zookeeper cli shell. In a format login:password. '
@@ -23,7 +24,7 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.zookeeper import (
     type=str,
 )
 @pass_context
-def zookeeper_group(ctx, host, port, zkcli_identity):
+def zookeeper_group(ctx, host, port, timeout, zkcli_identity):
     """ZooKeeper management commands.
 
     ZooKeeper command runs client which connects to Zookeeper node.
@@ -34,6 +35,7 @@ def zookeeper_group(ctx, host, port, zkcli_identity):
     ctx.obj['zk_client_args'] = {
         'port': port,
         'host': host,
+        'timeout': timeout,
         'zkcli_identity': zkcli_identity,
     }
 
