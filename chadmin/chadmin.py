@@ -4,7 +4,6 @@ import logging
 from click import Choice, group, option, pass_context
 from cloud.mdb.internal.python.cli.parameters import TimeSpanParamType
 
-from cloud.mdb.clickhouse.tools.chadmin.cli.access_migration_group import access_migration_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.dictionary_group import dictionary_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.list_async_metrics_command import list_async_metrics_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.crash_log_group import crash_log_group
@@ -65,7 +64,6 @@ def cli(ctx, format, settings, timeout, port, debug):
     ctx.obj = dict(chcli=chcli, format=format, debug=debug)
 
 
-cli.add_command(access_migration_group)
 cli.add_command(database_group)
 cli.add_command(table_group)
 cli.add_command(table_replica_group)
