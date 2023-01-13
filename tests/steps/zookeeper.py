@@ -3,10 +3,8 @@ Steps for interacting with ZooKeeper.
 """
 import os
 
-from behave import given, then, when
-from hamcrest import assert_that, has_length
+from behave import given
 from kazoo.client import KazooClient
-from kazoo.exceptions import NoNodeError
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from modules.docker import get_container, get_exposed_port
