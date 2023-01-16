@@ -3,10 +3,8 @@ Steps for interacting with ZooKeeper.
 """
 import os
 
-from behave import given, then, when
-from hamcrest import assert_that, has_length
+from behave import given
 from kazoo.client import KazooClient
-from kazoo.exceptions import NoNodeError
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from modules.docker import get_container, get_exposed_port
@@ -61,25 +59,6 @@ def clean_zk_tables_metadata_for_host(context, node):
         recursive_remove_node_data(client, '/', node)
     finally:
         client.stop()
-
-
-@when('we execute ZK list query on {node:w}')
-def step_zk_list_query(context, node):
-    zk_client = _zk_client(context, node)
-    try:
-        zk_client.start()
-        result = zk_client.get_children(context.text)
-        context.response = ';'.join(user for user in result)
-    except NoNodeError:
-        context.response = []
-    finally:
-        zk_client.stop()
-
-
-@then('we get ZK list with len {length:d}')
-def step_zk_list_len(context, length):
-    response = context.response if isinstance(context.response, list) else context.response.split(';')
-    assert_that(response, has_length(length))
 
 
 def _zk_client(context, instance_name='zookeeper01', port=2181):
