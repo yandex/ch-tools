@@ -1,0 +1,234 @@
+{
+    "meta": {
+        "name": "mdb-ch-tools",
+        "maintainer": "MDB <mdb@yandex-team.ru>",
+        "description": "MDB ClickHouse tools",
+        "version": "1.{revision}",
+        "homepage": "https://wiki.yandex-team.ru/MDB/"
+    },
+    "build": {
+        "bin": {
+            "targets": [
+                "cloud/mdb/clickhouse/tools/chadmin",
+                "cloud/mdb/clickhouse/tools/diagnostics",
+                "cloud/mdb/clickhouse/tools/monrun_checks",
+                "cloud/mdb/clickhouse/tools/monrun_checks_keeper",
+                "cloud/mdb/clickhouse/tools/resetup",
+                "cloud/mdb/clickhouse/tools/s3_credentials",
+                "cloud/mdb/clickhouse/tools/zero_copy_schema_converter"
+            ],
+            "target-platforms": [
+                "DEFAULT-LINUX-AARCH64"
+            ]
+        }
+    },
+    "params": {
+      "debian_arch": "arm64"
+    },
+    "data": [
+        {
+            "source": {
+                "type": "BUILD_OUTPUT",
+                "build_key": "bin",
+                "path": "cloud/mdb/clickhouse/tools/chadmin/chadmin"
+            },
+            "destination": {
+                "path": "/opt/yandex/mdb-ch-tools/bin/chadmin"
+            }
+        },
+        {
+            "source": {
+                "type": "SYMLINK"
+            },
+            "destination": {
+                "path": "/usr/bin/chadmin",
+                "target": "/opt/yandex/mdb-ch-tools/bin/chadmin"
+            }
+        },
+        {
+            "source": {
+                "type": "ARCADIA",
+                "path": "cloud/mdb/clickhouse/tools/chadmin/completion.bash"
+            },
+            "destination": {
+                "path": "/etc/bash_completion.d/chadmin"
+            }
+        },
+        {
+            "source": {
+                "type": "BUILD_OUTPUT",
+                "build_key": "bin",
+                "path": "cloud/mdb/clickhouse/tools/resetup/ch-resetup"
+            },
+            "destination": {
+                "path": "/opt/yandex/mdb-ch-tools/bin/ch-resetup"
+            }
+        },
+        {
+            "source": {
+                "type": "SYMLINK"
+            },
+            "destination": {
+                "path": "/usr/bin/ch-resetup",
+                "target": "/opt/yandex/mdb-ch-tools/bin/ch-resetup"
+            }
+        },
+        {
+            "source": {
+                "type": "BUILD_OUTPUT",
+                "build_key": "bin",
+                "path": "cloud/mdb/clickhouse/tools/s3_credentials/ch-s3-credentials"
+            },
+            "destination": {
+                "path": "/opt/yandex/mdb-ch-tools/bin/ch-s3-credentials"
+            }
+        },
+        {
+            "source": {
+                "type": "SYMLINK"
+            },
+            "destination": {
+                "path": "/usr/bin/ch-s3-credentials",
+                "target": "/opt/yandex/mdb-ch-tools/bin/ch-s3-credentials"
+            }
+        },
+        {
+            "source": {
+                "type": "BUILD_OUTPUT",
+                "build_key": "bin",
+                "path": "cloud/mdb/clickhouse/tools/monrun_checks/ch-monitoring"
+            },
+            "destination": {
+                "path": "/opt/yandex/mdb-ch-tools/bin/ch-monitoring"
+            }
+        },
+        {
+            "source": {
+                "type": "SYMLINK"
+            },
+            "destination": {
+                "path": "/usr/bin/ch-monitoring",
+                "target": "/opt/yandex/mdb-ch-tools/bin/ch-monitoring"
+            }
+        },
+        {
+            "source": {
+                "type": "ARCADIA",
+                "path": "cloud/mdb/clickhouse/tools/monrun_checks/completion.bash"
+            },
+            "destination": {
+                "path": "/etc/bash_completion.d/ch-monitoring"
+            }
+        },
+        {
+            "source": {
+                "type": "BUILD_OUTPUT",
+                "build_key": "bin",
+                "path": "cloud/mdb/clickhouse/tools/monrun_checks_keeper/keeper-monitoring"
+            },
+            "destination": {
+                "path": "/opt/yandex/mdb-ch-tools/bin/keeper-monitoring"
+            }
+        },
+        {
+            "source": {
+                "type": "SYMLINK"
+            },
+            "destination": {
+                "path": "/usr/bin/keeper-monitoring",
+                "target": "/opt/yandex/mdb-ch-tools/bin/keeper-monitoring"
+            }
+        },
+        {
+            "source": {
+                "type": "ARCADIA",
+                "path": "cloud/mdb/clickhouse/tools/monrun_checks_keeper/completion.bash"
+            },
+            "destination": {
+                "path": "/etc/bash_completion.d/keeper-monitoring"
+            }
+        },
+        {
+            "source": {
+                "type": "BUILD_OUTPUT",
+                "build_key": "bin",
+                "path": "cloud/mdb/clickhouse/tools/diagnostics/ch-diagnostics"
+            },
+            "destination": {
+                "path": "/opt/yandex/mdb-ch-tools/bin/ch-diagnostics"
+            }
+        },
+        {
+            "source": {
+                "type": "SYMLINK"
+            },
+            "destination": {
+                "path": "/usr/bin/ch-diagnostics",
+                "target": "/opt/yandex/mdb-ch-tools/bin/ch-diagnostics"
+            }
+        },
+        {
+            "source": {
+                "type": "BUILD_OUTPUT",
+                "build_key": "bin",
+                "path": "cloud/mdb/clickhouse/tools/zero_copy_schema_converter"
+            },
+            "destination": {
+                "path": "/opt/yandex/mdb-ch-tools/bin/zero_copy_schema_converter"
+            }
+        },
+        {
+            "source": {
+                "type": "SYMLINK"
+            },
+            "destination": {
+                "path": "/usr/bin/zero_copy_schema_converter",
+                "target": "/opt/yandex/mdb-ch-tools/bin/zero_copy_schema_converter"
+            }
+        },
+        {
+            "source": {
+                "type": "ARCADIA",
+                "path": "cloud/mdb/clickhouse/tools/monrun_checks/clickhouse-monitoring.logrotate"
+            },
+            "destination": {
+                "path": "/etc/logrotate.d/clickhouse-monitoring"
+            }
+        },
+        {
+            "source": {
+                "type": "ARCADIA",
+                "path": "cloud/mdb/clickhouse/tools/monrun_checks_keeper/keeper-monitoring.logrotate"
+            },
+            "destination": {
+                "path": "/etc/logrotate.d/keeper-monitoring"
+            }
+        },
+        {
+            "source": {
+                "type": "DIRECTORY"
+            },
+            "destination": {
+                "path": "/var/log/clickhouse-monitoring",
+                "attributes": {
+                    "mode": {
+                        "value": "775"
+                    }
+                }
+            }
+        },
+        {
+            "source": {
+                "type": "DIRECTORY"
+            },
+            "destination": {
+                "path": "/var/log/keeper-monitoring",
+                "attributes": {
+                    "mode": {
+                        "value": "775"
+                    }
+                }
+            }
+        }
+    ]
+}
