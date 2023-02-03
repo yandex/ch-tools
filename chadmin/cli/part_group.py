@@ -48,7 +48,7 @@ def part_group():
 @option('--order-by', type=Choice(['size', 'rows']))
 @option('-l', '--limit', type=int, help='Limit the max number of objects in the output.')
 @pass_context
-def list_parts_command(ctx, active, min_size, max_size, detached, reason, **kwargs):
+def list_parts_command(ctx, active, min_size, max_size, detached, reason, order_by, **kwargs):
     """List data parts."""
 
     def _table_formatter(part):
@@ -73,7 +73,7 @@ def list_parts_command(ctx, active, min_size, max_size, detached, reason, **kwar
     if detached:
         parts = list_detached_parts(ctx, reason=reason, **kwargs)
     else:
-        parts = list_parts(ctx, active=active, min_size=min_size, max_size=max_size, **kwargs)
+        parts = list_parts(ctx, active=active, min_size=min_size, max_size=max_size, order_by=order_by, **kwargs)
 
     print_response(
         ctx, parts, default_format='table', table_formatter=_table_formatter, field_formatters=FIELD_FORMATTERS
