@@ -100,6 +100,7 @@ def _get_zk_client(ctx):
     args = ctx.obj.get('zk_client_args', {})
     host = args.get('host')
     port = args.get('port', 2181)
+    timeout = args.get('timeout', 10)
     zkcli_identity = args.get('zkcli_identity')
 
     zk_config = get_config(ctx).zookeeper
@@ -116,4 +117,4 @@ def _get_zk_client(ctx):
     if zkcli_identity is not None:
         auth_data = [("digest", zkcli_identity)]
 
-    return KazooClient(connect_str, auth_data=auth_data)
+    return KazooClient(connect_str, auth_data=auth_data, timeout=timeout)
