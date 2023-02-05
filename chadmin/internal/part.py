@@ -160,6 +160,9 @@ def list_detached_parts(
             partition_id,
             name,
             disk "disk_name",
+        {% if version_ge('23.1') -%}
+            bytes_on_disk,
+        {% endif -%}
             reason
         FROM system.detached_parts
         {% if database -%}
