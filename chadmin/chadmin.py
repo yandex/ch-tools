@@ -34,6 +34,8 @@ from cloud.mdb.clickhouse.tools.chadmin.cli.chs3_backup_group import chs3_backup
 from cloud.mdb.clickhouse.tools.chadmin.cli.disk_group import disks_group
 from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseClient
 
+LOG_FILE = '/var/log/chadmin/chadmin.log'
+
 
 @group(context_settings=dict(help_option_names=['-h', '--help'], terminal_width=120))
 @option('-f', '--format', type=Choice(['json', 'yaml', 'table']), help="Output format.")
@@ -53,8 +55,16 @@ from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseClient
 def cli(ctx, format, settings, timeout, port, debug):
     """ClickHouse administration tool."""
 
+    handlers = [logging.FileHandler(LOG_FILE)]
     if debug:
-        logging.basicConfig(level='DEBUG', format='%(levelname)s:%(message)s')
+        handlers.append(logging.StreamHandler())
+
+    logConfig = {
+        'level': logging.DEBUG if debug else logging.INFO,
+        'format': '%(asctime)s [%(levelname)s]:%(message)s',
+        'handlers': handlers,
+    }
+    logging.basicConfig(**logConfig)
 
     timeout_seconds = timeout.total_seconds() if timeout else None
     settings = {item[0]: item[1] for item in settings}

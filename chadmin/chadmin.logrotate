@@ -1,0 +1,10 @@
+/var/log/chadmin/chadmin.log {
+    rotate 5
+    monthly
+    compress
+    missingok
+    nodateext
+    notifempty
+    copytruncate
+    size 1M
+}
