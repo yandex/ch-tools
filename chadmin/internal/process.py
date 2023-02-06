@@ -234,3 +234,19 @@ def list_replicated_fetches(ctx, *, database=None, table=None, cluster=None, lim
         limit=limit,
         format='JSON',
     )['data']
+
+
+def stop_merges(ctx, database, table, dry_run=False):
+    """
+    Stop merges for the specified table.
+    """
+    query = f'SYSTEM STOP MERGES `{database}`.`{table}`'
+    execute_query(ctx, query, timeout=300, format=None, echo=True, dry_run=dry_run)
+
+
+def start_merges(ctx, database, table, dry_run=False):
+    """
+    Start merges for the specified table.
+    """
+    query = f'SYSTEM START MERGES `{database}`.`{table}`'
+    execute_query(ctx, query, timeout=300, format=None, echo=True, dry_run=dry_run)

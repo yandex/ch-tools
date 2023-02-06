@@ -1,6 +1,7 @@
 from collections import OrderedDict
 
 from click import Choice, group, option, pass_context
+from cloud.mdb.clickhouse.tools.chadmin.internal.system import match_ch_version
 from cloud.mdb.internal.python.cli.formatting import format_bytes, print_response
 from cloud.mdb.internal.python.cli.parameters import BytesParamType
 from cloud.mdb.clickhouse.tools.chadmin.internal.part import (
@@ -62,6 +63,8 @@ def list_parts_command(ctx, active, min_size, max_size, detached, reason, order_
         result['disk'] = part['disk_name']
         if detached:
             result['reason'] = part['reason']
+            if match_ch_version(ctx, min_version="23.1"):
+                result['size'] = part['bytes_on_disk']
         else:
             result['min_time'] = part['min_time']
             result['max_time'] = part['max_time']
