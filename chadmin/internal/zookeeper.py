@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import contextmanager
 
@@ -117,4 +118,4 @@ def _get_zk_client(ctx):
     if zkcli_identity is not None:
         auth_data = [("digest", zkcli_identity)]
 
-    return KazooClient(connect_str, auth_data=auth_data, timeout=timeout)
+    return KazooClient(connect_str, auth_data=auth_data, timeout=timeout, logger=logging.getLogger())

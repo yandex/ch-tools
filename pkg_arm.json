@@ -189,6 +189,15 @@
         {
             "source": {
                 "type": "ARCADIA",
+                "path": "cloud/mdb/clickhouse/tools/chadmin/chadmin.logrotate"
+            },
+            "destination": {
+                "path": "/etc/logrotate.d/chadmin"
+            }
+        },
+        {
+            "source": {
+                "type": "ARCADIA",
                 "path": "cloud/mdb/clickhouse/tools/monrun_checks/clickhouse-monitoring.logrotate"
             },
             "destination": {
@@ -202,6 +211,19 @@
             },
             "destination": {
                 "path": "/etc/logrotate.d/keeper-monitoring"
+            }
+        },
+        {
+            "source": {
+                "type": "DIRECTORY"
+            },
+            "destination": {
+                "path": "/var/log/chadmin",
+                "attributes": {
+                    "mode": {
+                        "value": "775"
+                    }
+                }
             }
         },
         {
