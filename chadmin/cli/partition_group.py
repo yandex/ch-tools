@@ -41,7 +41,7 @@ def partition_group():
 @option('--order-by', type=Choice(['size', 'parts', 'rows']))
 @option('-l', '--limit', type=int, help='Limit the max number of objects in the output.')
 @pass_context
-def list_partitions_command(ctx, order_by, **kwargs):
+def list_partitions_command(ctx, **kwargs):
     """List partitions."""
     print(get_partitions(ctx, format='PrettyCompact', **kwargs))
 
