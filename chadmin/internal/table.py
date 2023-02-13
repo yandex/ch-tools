@@ -126,3 +126,25 @@ def attach_table(ctx, database, table, *, cluster=None, echo=False, dry_run=Fals
         {%- endif %}
         """
     execute_query(ctx, query, database=database, table=table, cluster=cluster, echo=echo, dry_run=dry_run, format=None)
+
+
+def delete_table(ctx, database, table, *, cluster=None, echo=False, dry_run=False):
+    """
+    Perform "DROP TABLE" for the specified table.
+    """
+    query = """
+        DROP TABLE `{{ database }}`.`{{ table }}`
+        {%- if cluster %}
+        ON CLUSTER '{{ cluster }}'
+        {%- endif %}
+        NO DELAY
+        """
+    execute_query(ctx, query, database=database, table=table, cluster=cluster, echo=echo, dry_run=dry_run, format=None)
+
+
+def materialize_ttl(ctx, database, table, echo=False, dry_run=False):
+    """
+    Materialize TTL for the specified table.
+    """
+    query = f'ALTER TABLE `{database}`.`{table}` MATERIALIZE TTL'
+    execute_query(ctx, query, timeout=300, echo=echo, dry_run=dry_run, format=None)

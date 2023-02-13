@@ -38,7 +38,7 @@ def partition_group():
 @option('--mutating', is_flag=True, help='Output only those partitions that have mutating data parts.')
 @option('--detached', is_flag=True, help='Show detached partitions instead of attached.')
 @option('--active', '--active-parts', 'active_parts', is_flag=True, help='Account only active data parts.')
-@option('--order-by', type=Choice(['size', 'parts', 'rows']))
+@option('--order-by', type=Choice(['size', 'parts', 'rows']), help='Sorting order.')
 @option('-l', '--limit', type=int, help='Limit the max number of objects in the output.')
 @pass_context
 def list_partitions_command(ctx, **kwargs):
