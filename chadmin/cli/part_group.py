@@ -46,7 +46,7 @@ def part_group():
 @option('--active', is_flag=True, help='Output only active data parts.')
 @option('--detached', is_flag=True, help='Output detached parts instead of attached.')
 @option('--reason', help='Filter in data parts to output by reason. Applicable only for detached data parts.')
-@option('--order-by', type=Choice(['size', 'rows']))
+@option('--order-by', type=Choice(['size', 'rows']), help='Sorting order.')
 @option('-l', '--limit', type=int, help='Limit the max number of objects in the output.')
 @pass_context
 def list_parts_command(ctx, active, min_size, max_size, detached, reason, order_by, **kwargs):

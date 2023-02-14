@@ -1,7 +1,14 @@
 from click import argument, Choice, group, option, pass_context
 from cloud.mdb.internal.python.cli.formatting import print_response
 from cloud.mdb.clickhouse.tools.chadmin.cli import get_cluster_name
-from cloud.mdb.clickhouse.tools.chadmin.internal.table import attach_table, detach_table, get_table, list_tables
+from cloud.mdb.clickhouse.tools.chadmin.internal.table import (
+    attach_table,
+    delete_table,
+    detach_table,
+    get_table,
+    list_tables,
+    materialize_ttl,
+)
 
 from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 
@@ -26,13 +33,13 @@ def get_command(ctx, database, table, active_parts):
 
 
 @table_group.command('list')
-@option('--database', help='Filter tables to output by the specified database.')
-@option('-t', '--table', help='Output only the specified table.')
-@option('--exclude-table', help='Do not output the specified table.')
+@option('--database', help='Filter tables to output by the specified database name.')
+@option('-t', '--table', help='Filter in tables to output by the specified table name.')
+@option('--exclude-table', help='Filter out tables to output by the specified table name.')
 @option('--engine', help='Filter tables to output by the specified engine.')
 @option('--active', '--active-parts', 'active_parts', is_flag=True, help='Account only active data parts.')
 @option('-v', '--verbose', is_flag=True, help='Verbose mode.')
-@option('--order-by', type=Choice(['size', 'parts', 'rows']))
+@option('--order-by', type=Choice(['size', 'parts', 'rows']), help='Sorting order.')
 @option('-l', '--limit', type=int, default=1000, help='Limit the max number of objects in the output.')
 @pass_context
 def list_command(ctx, database, table, exclude_table, engine, active_parts, verbose, order_by, limit):
@@ -58,6 +65,9 @@ def list_command(ctx, database, table, exclude_table, engine, active_parts, verb
 @argument('table')
 @pass_context
 def columns_command(ctx, database, table):
+    """
+    Describe columns for table.
+    """
     query = """
         SELECT
             name,
@@ -76,9 +86,9 @@ def columns_command(ctx, database, table):
 
 @table_group.command('delete')
 @pass_context
-@option('--database')
-@option('-t', '--table')
-@option('--exclude-table')
+@option('--database', help='Filter in tables to delete by the specified database name.')
+@option('-t', '--table', help='Filter in tables to delete by the specified table name.')
+@option('--exclude-table', help='Filter out tables to delete by the specified table name.')
 @option('-a', '--all', is_flag=True, help='Delete all tables.')
 @option('--cluster')
 @option(
@@ -92,21 +102,14 @@ def delete_command(ctx, dry_run, all, database, table, exclude_table, cluster):
         ctx.fail('At least one of --all, --database, --table options must be specified.')
 
     for t in list_tables(ctx, database=database, table=table, exclude_table=exclude_table):
-        query = """
-            DROP TABLE `{{ database }}`.`{{ table }}`
-            {% if cluster %}
-            ON CLUSTER '{{ cluster }}'
-            {% endif %}
-            NO DELAY
-            """
-        execute_query(ctx, query, database=t['database'], table=t['table'], cluster=cluster, echo=True, dry_run=dry_run)
+        delete_table(ctx, database=t['database'], table=t['table'], cluster=cluster, echo=True, dry_run=dry_run)
 
 
 @table_group.command('recreate')
 @pass_context
-@option('--database')
-@option('-t', '--table')
-@option('--exclude-table')
+@option('--database', help='Filter in tables to recreate by the specified database name.')
+@option('-t', '--table', help='Filter in tables to recreate by the specified table name.')
+@option('--exclude-table', help='Filter out tables to recreate by the specified table name.')
 @option('-a', '--all', is_flag=True, help='Recreate all tables.')
 @option(
     '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
@@ -119,19 +122,16 @@ def recreate_command(ctx, dry_run, all, database, table, exclude_table):
         ctx.fail('At least one of --all, --database, --table options must be specified.')
 
     for t in list_tables(ctx, database=database, table=table, exclude_table=exclude_table, verbose=True):
-        drop_query = """DROP TABLE `{{ database }}`.`{{ table }}` NO DELAY"""
-        execute_query(
-            ctx, drop_query, database=t['database'], table=t['table'], echo=True, format=None, dry_run=dry_run
-        )
+        delete_table(ctx, database=t['database'], table=t['table'], echo=True, dry_run=dry_run)
         execute_query(ctx, t['create_table_query'], echo=True, format=None, dry_run=dry_run)
 
 
 @table_group.command('detach')
 @pass_context
-@option('--database')
-@option('-t', '--table')
+@option('--database', help='Filter in tables to detach by the specified database name.')
+@option('-t', '--table', help='Filter in tables to detach by the specified table name.')
+@option('--exclude-table', help='Filter out tables to reattach by the specified table name.')
 @option('--engine', help='Filter tables to detach by the specified engine.')
-@option('--exclude-table')
 @option('-a', '--all', is_flag=True, help='Detach all tables.')
 @option(
     '--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Perform detach queries with ON CLUSTER modificator.'
@@ -154,10 +154,10 @@ def detach_command(ctx, dry_run, all, database, table, engine, exclude_table, on
 
 @table_group.command('reattach')
 @pass_context
-@option('--database')
-@option('-t', '--table')
-@option('--engine', help='Filter tables to detach by the specified engine.')
-@option('--exclude-table')
+@option('--database', help='Filter in tables to reattach by the specified database name.')
+@option('-t', '--table', help='Filter in tables to reattach by the specified table name.')
+@option('--exclude-table', help='Filter out tables to reattach by the specified table name.')
+@option('--engine', help='Filter tables to reattach by the specified engine.')
 @option('-a', '--all', is_flag=True, help='Reattach all tables.')
 @option(
     '--cluster',
@@ -183,17 +183,21 @@ def reattach_command(ctx, dry_run, all, database, table, engine, exclude_table, 
         attach_table(ctx, database=t['database'], table=t['table'], cluster=cluster, echo=True, dry_run=dry_run)
 
 
-@table_group.command('get-statistics')
-@option('--database')
+@table_group.command('materialize-ttl')
 @pass_context
-def get_statistics_command(ctx, database):
-    query = """
-        SELECT count() count
-        FROM system.query_log
-        WHERE type != 1
-        AND query LIKE '%{{ table }}%'
+@option('--database', help='Filter in tables to materialize TTL by the specified database name.')
+@option('-t', '--table', help='Filter in tables to materialize TTL by the specified table name.')
+@option('--exclude-table', help='Filter out tables to materialize TTL by the specified table name.')
+@option('-a', '--all', is_flag=True, help='Materialize TTL for all tables.')
+@option(
+    '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
+)
+def materialize_ttl_command(ctx, dry_run, all, database, table, exclude_table):
     """
+    Materialize TTL for one or several tables.
+    """
+    if not any((all, database, table)):
+        ctx.fail('At least one of --all, --database, --table options must be specified.')
 
-    for t in list_tables(ctx, database=database):
-        stats = execute_query(ctx, query, table=t['table'], format='JSON')['data'][0]
-        print('{0}: {1}'.format(t['table'], stats['count']))
+    for t in list_tables(ctx, database=database, table=table, exclude_table=exclude_table):
+        materialize_ttl(ctx, database=t['database'], table=t['table'], echo=True, dry_run=dry_run)

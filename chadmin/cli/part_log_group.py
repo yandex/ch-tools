@@ -30,7 +30,7 @@ def part_log_group():
 @option('--min-time')
 @option('--max-time')
 @option('--time')
-@option('--order-by', type=Choice(['time', 'size', 'rows', 'peak_memory_usage']), default='time')
+@option('--order-by', type=Choice(['time', 'size', 'rows', 'peak_memory_usage']), default='time', help='Sorting order.')
 @option('-l', '--limit', type=int, default=10, help='Limit the max number of objects in the output.')
 @pass_context
 def list_part_log_command(ctx, date, min_date, max_date, min_time, max_time, time, **kwargs):
