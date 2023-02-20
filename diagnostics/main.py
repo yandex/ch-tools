@@ -682,9 +682,8 @@ def main():
 
     diagnostics.add_xml_document('ClickHouse users configuration', ch_users_config.dump())
 
-    if version_ge(version, '20.8'):
-        add_query(diagnostics, 'Access configuration', client=client, query=SELECT_ACCESS, format='TSVRaw')
-        add_query(diagnostics, 'Quotas', client=client, query=SELECT_QUOTA_USAGE, format='Vertical')
+    add_query(diagnostics, 'Access configuration', client=client, query=SELECT_ACCESS, format='TSVRaw')
+    add_query(diagnostics, 'Quotas', client=client, query=SELECT_QUOTA_USAGE, format='Vertical')
 
     add_query(
         diagnostics,
