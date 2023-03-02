@@ -1,130 +1,123 @@
-import contextlib
 import logging
 
 from collections import defaultdict
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from itertools import chain
 from pathlib import Path
-from typing import IO, Any, Iterable, Iterator
+from typing import Any, Iterable
 
-from cloud.mdb.clickhouse.tools.chadmin.internal.object_storage.s3_analyzer_dump_paths import S3AnalyzerDumpPaths
-from cloud.mdb.clickhouse.tools.chadmin.internal.object_storage.s3_object_metadata import S3ObjectLocalMetaData
-from cloud.mdb.clickhouse.tools.chadmin.internal.utils import open_if_not_none
+from cloud.mdb.clickhouse.tools.chadmin.internal.object_storage.dump_writer import DumpWriter
+from cloud.mdb.clickhouse.tools.chadmin.internal.object_storage.s3_object_metadata import (
+    CheckedMetaData,
+    S3ObjectLocalMetaData,
+)
 
-# The name of the data S3 object looks like
-# r0000000000000000000000000000000000000000000000000000000000000001-file-btkncsrzgigakclscqdgcomafjrjaaya
-DATA_OBJ_MAME_PREFIX = 'r0'
+IGNORED_PREFIXES = ['operations', '.SCHEMA_VERSION']
 
-
-@dataclass
-class CheckedMetaData:
-    files: dict[Path, S3ObjectLocalMetaData] = field(default_factory=dict)
-    checked: bool = False
-
+# The guard interval is used for S3 objects for which metadata is not found.
+# And for metadata for which object is not found in S3.
+# These objects are not counted if their last modified time fall in the interval from the moment of starting analyzing.
+GUARD_INTERVAL = timedelta(hours=24)
 
 MetaDataByObjectKey = dict[str, CheckedMetaData]
 
 
 @dataclass
+class CommonStats:
+    count: int = 0
+    total_size: int = 0
+    dump_path: Path | None = None
+
+    def inc(self, count: int = 1, size: int = 0) -> None:
+        self.count += count
+        self.total_size += size
+
+
+@dataclass
 class S3AnalyzerStats:
-    existing_objects_with_metadata_count: int = 0
-    existing_objects_with_metadata_total_size: int = 0
-    existing_objects_without_metadata_count: int = 0
-    existing_objects_without_metadata_total_size: int = 0
-    non_existing_objects_with_metadata_count: int = 0
-    metadata_files_unparsed: int = 0
+    objects_with_metadata: CommonStats = field(default_factory=CommonStats)
+    objects_without_metadata: CommonStats = field(default_factory=CommonStats)
+    not_found_objects_with_metadata: CommonStats = field(default_factory=CommonStats)
+    unparsed_metadata: CommonStats = field(default_factory=CommonStats)
+    ignored_objects: CommonStats = field(default_factory=CommonStats)
 
 
 class S3Analyzer:
-    def __init__(self, bucket: Any, prefix: str | None = None, dump_paths: S3AnalyzerDumpPaths | None = None) -> None:
+    def __init__(self, bucket: Any, dump_writer: DumpWriter, prefix: str = '') -> None:
         self._bucket = bucket
-        self._dump_paths = dump_paths
-
-        self._base_prefix = prefix if prefix else ''
-        # When listing objects we are only interested in data objects. A bucket can also contain other objects,
-        # such as operations with names like {base_prefix}operations/...
-        self._list_prefix = self._base_prefix + DATA_OBJ_MAME_PREFIX
+        self._dump_writer = dump_writer
+        self._prefix = prefix
 
         self._stats = S3AnalyzerStats()
+        self._save_dump_paths_to_stats()
 
-    @contextlib.contextmanager
-    def open_dump_files_if_needed(self) -> Iterator[list[IO | None]]:
-        with open_if_not_none(
-            self._dump_paths.objects_with_metadata if self._dump_paths else None,
-            self._dump_paths.objects_without_metadata if self._dump_paths else None,
-            self._dump_paths.objects_not_found if self._dump_paths else None,
-            self._dump_paths.metadata_files_unparsed if self._dump_paths else None,
-            mode='w',
-        ) as dump_files:
-            yield dump_files
+        self._pivot_time = datetime.now(timezone.utc) - GUARD_INTERVAL
 
     def analyze(self, metadata_paths_to_analyze: Iterable[Path]) -> S3AnalyzerStats:
-        with self.open_dump_files_if_needed() as (
-            objects_with_metadata_dump,
-            objects_without_metadata_dump,
-            objects_not_found_dump,
-            metadata_files_unparsed_dump,
-        ):
-            metadata_by_object_key = self._collect_metadata(metadata_paths_to_analyze, metadata_files_unparsed_dump)
-            stats = self._analyze_s3_bucket(
-                self._bucket,
-                metadata_by_object_key,
-                objects_with_metadata_dump,
-                objects_without_metadata_dump,
-                objects_not_found_dump,
-            )
+        """
+        Analyze objects in S3 and references to them in metadata and return statistics.
+        """
+        metadata_by_object_key = self._collect_metadata(metadata_paths_to_analyze)
+        self._analyze_s3_bucket(self._bucket, metadata_by_object_key)
+        self._collect_unchecked_keys(metadata_by_object_key)
 
-            return stats
+        return self._stats
 
     def _analyze_s3_bucket(
         self,
         bucket: Any,
         metadata_by_object_key: MetaDataByObjectKey,
-        objects_with_metadata_dump: IO | None,
-        objects_without_metadata_dump: IO | None,
-        objects_not_found_dump: IO | None,
-    ) -> S3AnalyzerStats:
+    ) -> None:
+        """
+        Run over S3 bucket objects and try to find its metadata.
+
+        Update statistics and dump object keys if needed.
+        """
         logging.debug(f'Start S3 bucket [{bucket.name}] analyzing...')
-        for obj in bucket.objects.filter(Prefix=self._list_prefix):
-            key = obj.key[len(self._base_prefix) :]
+
+        for obj in bucket.objects.filter(Prefix=self._prefix):
+            key: str = obj.key[len(self._prefix) :]
+
+            if self._is_ignored(key):
+                self._stats.ignored_objects.inc(1, obj.size)
+                continue
+
             metadata = metadata_by_object_key.get(key)
 
             if metadata:
                 metadata.checked = True
 
-                if objects_with_metadata_dump:
-                    files = ', '.join(str(file) for file in metadata.files)
-                    objects_with_metadata_dump.write(
-                        f'S3 object: {obj.key} | Size: {obj.size:<10} | LastModified: {obj.last_modified} | '
-                        f'Files: {files}\n'
-                    )
+                self._dump_writer.write_object_with_metadata(obj, metadata)
+                self._stats.objects_with_metadata.inc(1, obj.size)
 
-                self._stats.existing_objects_with_metadata_count += 1
-                self._stats.existing_objects_with_metadata_total_size += obj.size
-            else:
-                if objects_without_metadata_dump:
-                    objects_without_metadata_dump.write(
-                        f'S3 object: {obj.key} | Size: {obj.size:<10} | LastModified: {obj.last_modified}\n'
-                    )
-
-                self._stats.existing_objects_without_metadata_count += 1
-                self._stats.existing_objects_without_metadata_total_size += obj.size
-
-        for key, value in metadata_by_object_key.items():
-            if not value.checked:
-                self._stats.non_existing_objects_with_metadata_count += 1
-
-                if objects_not_found_dump:
-                    for file, meta in value.files.items():
-                        s3_objects = ','.join(obj.key for obj in meta.objects)
-                        objects_not_found_dump.write(f'File: {file} | S3 objects: {s3_objects}\n')
+            elif obj.last_modified <= self._pivot_time:
+                self._dump_writer.write_object_without_metadata(obj)
+                self._stats.objects_without_metadata.inc(1, obj.size)
 
         logging.debug(f'S3 Bucket [{bucket.name}] analyzing is finished')
-        return self._stats
 
-    def _collect_metadata(self, paths: Iterable[Path], metadata_files_unparsed_dump: IO | None) -> MetaDataByObjectKey:
+    def _collect_unchecked_keys(self, metadata_by_object_key: MetaDataByObjectKey) -> None:
         """
-        Return collection of parsed metadata from local disk with access by S3 object key.
+        Find S3 object keys that are referenced in the metadata but not found in S3 bucket.
+
+        They have not been checked during running over all S3 objects in the course of analysing.
+        """
+        for key, metadata in metadata_by_object_key.items():
+            if metadata.checked:
+                continue
+
+            for file, meta in metadata.files.items():
+                metadata_file_last_modified = datetime.fromtimestamp(file.stat().st_mtime, timezone.utc)
+
+                if metadata_file_last_modified <= self._pivot_time:
+                    self._stats.not_found_objects_with_metadata.inc()
+                    self._dump_writer.write_not_found_object(key, metadata)
+                    break
+
+    def _collect_metadata(self, paths: Iterable[Path]) -> MetaDataByObjectKey:
+        """
+        Return dictionary of parsed metadata from local disk with access by S3 object key.
         """
         logging.debug('Metadata collecting...')
         res: MetaDataByObjectKey = defaultdict(CheckedMetaData)
@@ -140,10 +133,8 @@ class S3Analyzer:
             try:
                 metadata = S3ObjectLocalMetaData.from_file(file)
             except Exception:
-                self._stats.metadata_files_unparsed += 1
-
-                if metadata_files_unparsed_dump:
-                    metadata_files_unparsed_dump.write(f'File: {file}\n')
+                self._stats.unparsed_metadata.inc(1, file.stat().st_size)
+                self._dump_writer.write_unparsed_metadata(str(file))
                 continue
 
             for obj in metadata.objects:
@@ -151,3 +142,13 @@ class S3Analyzer:
 
         logging.debug('Metadata collecting is finished')
         return res
+
+    def _save_dump_paths_to_stats(self) -> None:
+        self._stats.objects_without_metadata.dump_path = self._dump_writer.objects_without_metadata_dump_path
+        self._stats.objects_with_metadata.dump_path = self._dump_writer.objects_with_metadata_dump_path
+        self._stats.not_found_objects_with_metadata.dump_path = self._dump_writer.not_found_objects_dump_path
+        self._stats.unparsed_metadata.dump_path = self._dump_writer.unparsed_metadata_dump_path
+
+    @staticmethod
+    def _is_ignored(key: str) -> bool:
+        return any(key.startswith(p) for p in IGNORED_PREFIXES)
