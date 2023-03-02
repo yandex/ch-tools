@@ -44,10 +44,11 @@ class S3AnalyzerStats:
 
 
 class S3Analyzer:
-    def __init__(self, bucket: Any, dump_writer: DumpWriter, prefix: str = '') -> None:
+    def __init__(self, bucket: Any, dump_writer: DumpWriter, prefix: str = '', object_name_prefix: str = '') -> None:
         self._bucket = bucket
         self._dump_writer = dump_writer
         self._prefix = prefix
+        self._object_name_prefix = object_name_prefix
 
         self._stats = S3AnalyzerStats()
         self._save_dump_paths_to_stats()
@@ -76,7 +77,7 @@ class S3Analyzer:
         """
         logging.debug(f'Start S3 bucket [{bucket.name}] analyzing...')
 
-        for obj in bucket.objects.filter(Prefix=self._prefix):
+        for obj in bucket.objects.filter(Prefix=self._prefix + self._object_name_prefix):
             key: str = obj.key[len(self._prefix) :]
 
             if self._is_ignored(key):

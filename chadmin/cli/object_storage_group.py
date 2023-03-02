@@ -60,8 +60,14 @@ def object_storage_group(ctx: Context, config_path: Path, disk_name: str) -> Non
     metavar='[DIRECTORY]',
     help='Dump files directory. If the option has no value, the `/tmp` default is used',
 )
+@option(
+    '--object-name-prefix',
+    'object_name_prefix',
+    default='',
+    help='Additional prefix of object name using for listing',
+)
 @pass_context
-def analyze_object_storage(ctx: Context, dump_dir: Path | None = None) -> None:
+def analyze_object_storage(ctx: Context, object_name_prefix: str, dump_dir: Path | None = None) -> None:
     disk_conf: S3DiskConfiguration = ctx.obj['disk_configuration']
 
     s3 = boto3.resource(
@@ -80,7 +86,7 @@ def analyze_object_storage(ctx: Context, dump_dir: Path | None = None) -> None:
         dump_writer = NullDumpWriter()
 
     with dump_writer:
-        stats = S3Analyzer(bucket, dump_writer, disk_conf.prefix).analyze(metadata_paths)
+        stats = S3Analyzer(bucket, dump_writer, disk_conf.prefix, object_name_prefix).analyze(metadata_paths)
 
     match ctx.obj['format']:
         case 'json':
