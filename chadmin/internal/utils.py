@@ -3,6 +3,9 @@ Utility functions.
 """
 import re
 
+from itertools import islice
+from typing import Iterable, Iterator
+
 
 def clickhouse_client(ctx):
     """
@@ -28,3 +31,19 @@ def format_query(query):
     Format SQL query for output.
     """
     return re.sub(r'(\A|\n)\s*\n', r'\1', query, re.MULTILINE)
+
+
+def chunked(iterable: Iterable, n: int) -> Iterator[list]:
+    """
+    Chunkify data into lists of length n. The last chunk may be shorter.
+
+    Based on https://docs.python.org/3/library/itertools.html#itertools-recipes
+
+    >>> chunked('ABCDEFG', 3)
+    ABC DEF G
+    """
+    if n < 1:
+        raise ValueError('n must be at least one')
+    it = iter(iterable)
+    while chunk := list(islice(it, n)):
+        yield chunk
