@@ -19,6 +19,7 @@ PEERDIR(
     contrib/python/boto3
     contrib/python/click
     contrib/python/humanfriendly
+    contrib/python/isodate
     contrib/python/kazoo
     contrib/python/lxml
     contrib/python/setuptools
