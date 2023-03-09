@@ -5,12 +5,11 @@ import sys
 
 from datetime import datetime, timedelta, timezone
 from gzip import GzipFile
-from io import TextIOWrapper, BufferedIOBase
+from io import BufferedIOBase, TextIOWrapper
 from pathlib import Path
 from typing import Iterator
 
 import click
-import isodate
 
 from click import Context, group, option, pass_context
 
@@ -22,12 +21,13 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.object_storage import (
     collect_metadata,
     s3_object_storage_iterator,
 )
+from cloud.mdb.internal.python.cli.parameters import TimeSpanParamType
 
 STORAGE_POLICY_CONFIG_PATH = Path('/etc/clickhouse-server/config.d/storage_policy.xml')
 # The guard interval is used for S3 objects for which metadata is not found.
 # And for metadata for which object is not found in S3.
 # These objects are not counted if their last modified time fall in the interval from the moment of starting analyzing.
-GUARD_INTERVAL = 'PT24H'
+DEFAULT_GUARD_INTERVAL = '24h'
 
 
 def get_disk_metadata_paths(disk_name: str) -> list[Path]:
@@ -104,9 +104,9 @@ def object_storage_group(ctx: Context, config_path: Path, disk_name: str) -> Non
     help='Compress an output using GZIP format',
 )
 @option(
-    '-s',
-    '--short',
-    'short',
+    '-q',
+    '--quiet',
+    'quiet',
     is_flag=True,
     help='Output only newline delimited object keys',
 )
@@ -114,11 +114,11 @@ def object_storage_group(ctx: Context, config_path: Path, disk_name: str) -> Non
     '-g',
     '--guard-interval',
     'guard_interval',
-    default=GUARD_INTERVAL,
+    default=DEFAULT_GUARD_INTERVAL,
     show_default=True,
-    callback=lambda ctx, param, value: isodate.parse_duration(value),
+    type=TimeSpanParamType(),
     help=(
-        'Guard interval in ISO 8601 format. '
+        'Guard interval in human-friendly format.'
         'Objects with a modification time falling within it from the now are not considered orphaned'
     ),
 )
@@ -129,7 +129,7 @@ def list_objects(
     object_name_prefix: str,
     dump_file: Path | None,
     compressed: bool,
-    short: bool,
+    quiet: bool,
     guard_interval: timedelta,
     limit: int | None,
 ) -> None:
@@ -150,7 +150,7 @@ def list_objects(
             if not orphaned and not metadata:
                 continue
 
-            writer.write(_get_dump_line(obj, metadata, short))
+            writer.write(_get_dump_line(obj, metadata, quiet))
             counter += 1
 
 
@@ -205,8 +205,8 @@ def _set_boto_log_level(level: int) -> None:
     logging.getLogger('urllib3').setLevel(level)
 
 
-def _get_dump_line(obj: ObjectSummary, metadata_files: dict[Path, S3ObjectLocalMetaData] | None, short: bool) -> bytes:
-    if short:
+def _get_dump_line(obj: ObjectSummary, metadata_files: dict[Path, S3ObjectLocalMetaData] | None, quiet: bool) -> bytes:
+    if quiet:
         res = obj.key
     else:
         res = json.dumps(
