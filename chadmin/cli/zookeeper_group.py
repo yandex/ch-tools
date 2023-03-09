@@ -1,4 +1,7 @@
 from click import argument, group, option, pass_context
+import re
+
+from kazoo.security import make_digest_acl
 
 from cloud.mdb.internal.python.cli.formatting import print_response
 from cloud.mdb.internal.python.cli.parameters import ListParamType, StringParamType
@@ -10,6 +13,7 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.zookeeper import (
     get_zk_node_acls,
     list_zk_nodes,
     update_zk_nodes,
+    update_acls_zk_node,
 )
 
 
@@ -18,13 +22,19 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.zookeeper import (
 @option('--host', help='ZooKeeper host.', type=str)
 @option('--timeout', help='ZooKeeper timeout.', default=10)
 @option(
-    '--zkcli_identity',
+    '--zkcli-identity',
     help='Identity for zookeeper cli shell. In a format login:password. '
     'Example: clickhouse:X7ui1dXIXXXXXXXXXXXXXXXXXXXXXXXX',
     type=str,
 )
+@option(
+    '--no-chroot',
+    is_flag=True,
+    help='If parameter is True we won\'t use root from CH config and use ZK absolute root',
+    default=False,
+)
 @pass_context
-def zookeeper_group(ctx, host, port, timeout, zkcli_identity):
+def zookeeper_group(ctx, host, port, timeout, zkcli_identity, no_chroot):
     """ZooKeeper management commands.
 
     ZooKeeper command runs client which connects to Zookeeper node.
@@ -37,6 +47,7 @@ def zookeeper_group(ctx, host, port, timeout, zkcli_identity):
         'host': host,
         'timeout': timeout,
         'zkcli_identity': zkcli_identity,
+        'no_chroot': no_chroot,
     }
 
 
@@ -50,6 +61,17 @@ def get_command(ctx, path, binary):
     Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
     """
     print(get_zk_node(ctx, path, binary=binary))
+
+
+@zookeeper_group.command(name='get-acl')
+@argument('path')
+@pass_context
+def get_acl_command(ctx, path):
+    """Show node's ACL by path.
+
+    Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
+    """
+    print(get_zk_node_acls(ctx, path)[0])
 
 
 @zookeeper_group.command(name='list')
@@ -82,14 +104,15 @@ def stat_command(ctx, path):
 @zookeeper_group.command(name='create')
 @argument('paths', type=ListParamType())
 @argument('value', type=StringParamType(), required=False)
+@option('--make-parents', is_flag=True, help='Will create all missing parent nodes.', default=False)
 @pass_context
-def create_command(ctx, paths, value):
+def create_command(ctx, paths, value, make_parents):
     """Create one or several ZooKeeper nodes.
 
     Node path can be specified with ClickHouse macros (e.g. "/test_table/{shard}/replicas/{replica}").
     Multiple values can be specified through a comma.
     """
-    create_zk_nodes(ctx, paths, value)
+    create_zk_nodes(ctx, paths, value, make_parents=make_parents)
 
 
 @zookeeper_group.command(name='update')
@@ -142,6 +165,46 @@ def update_table_metadata_command(ctx, database, table, value):
         metadata_paths.append(f'{path}/metadata')
 
     update_zk_nodes(ctx, metadata_paths, value)
+
+
+@zookeeper_group.command(name='update-acl')
+@argument('path')
+@argument('acls', type=ListParamType())
+@pass_context
+def update_acls_command(ctx, path, acls):
+    """Update node's ACLs on specified path by acls in format: bob:q1w2e3:cdrwa,rob:a9s8d7:all.
+
+    Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
+    """
+
+    def _parse_acl(acl):
+        splitted = acl.split(':')
+        if len(splitted) != 3:
+            ctx.fail('Invalid --acls parameter format. See --help for valid format.')
+
+        username, password, short_acl = splitted
+
+        if short_acl == 'all':
+            return make_digest_acl(username, password, all=True)
+
+        if not re.search('^[rwcda]+$', short_acl):
+            ctx.fail(
+                'Only `r`, `w`, `c`, `d` or `a` are allowed in acl for read, write, create, delete or admin permissions.'
+            )
+
+        return make_digest_acl(
+            username,
+            password,
+            read='r' in short_acl,
+            write='w' in short_acl,
+            create='c' in short_acl,
+            delete='d' in short_acl,
+            admin='a' in short_acl,
+        )
+
+    parsed_acls = [_parse_acl(a) for a in acls]
+
+    update_acls_zk_node(ctx, path, parsed_acls)
 
 
 @zookeeper_group.command(name='get-table-replica-metadata')

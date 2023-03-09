@@ -48,7 +48,7 @@ def list_zk_nodes(ctx, path, verbose=False):
         return [_stat_node(zk, node) for node in nodes] if verbose else nodes
 
 
-def create_zk_nodes(ctx, paths, value=None):
+def create_zk_nodes(ctx, paths, value=None, make_parents=False):
     if isinstance(value, str):
         value = value.encode()
     else:
@@ -56,7 +56,7 @@ def create_zk_nodes(ctx, paths, value=None):
 
     with zk_client(ctx) as zk:
         for path in paths:
-            zk.create(_format_path(ctx, path), value)
+            zk.create(_format_path(ctx, path), value, makepath=make_parents)
 
 
 def update_zk_nodes(ctx, paths, value):
@@ -66,6 +66,11 @@ def update_zk_nodes(ctx, paths, value):
     with zk_client(ctx) as zk:
         for path in paths:
             zk.set(_format_path(ctx, path), value)
+
+
+def update_acls_zk_node(ctx, path, acls):
+    with zk_client(ctx) as zk:
+        zk.set_acls(_format_path(ctx, path), acls)
 
 
 def delete_zk_node(ctx, path):
@@ -103,12 +108,13 @@ def _get_zk_client(ctx):
     port = args.get('port', 2181)
     timeout = args.get('timeout', 10)
     zkcli_identity = args.get('zkcli_identity')
+    no_chroot = args.get('no_chroot', False)
 
     zk_config = get_config(ctx).zookeeper
     connect_str = ','.join(
         f'{host if host else node["host"]}:{port if port else node["port"]}' for node in zk_config.nodes
     )
-    if zk_config.root is not None:
+    if not no_chroot and zk_config.root is not None:
         connect_str += zk_config.root
 
     if zkcli_identity is None:
