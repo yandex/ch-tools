@@ -9,7 +9,8 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
 from cloud.mdb.clickhouse.tools.common.utils import execute
 
 BASE_TIMEOUT = 600
-PART_LOAD_SPEED = 12  # in data parts per second
+LOCAL_PART_LOAD_SPEED = 10  # in data parts per second
+S3_PART_LOAD_SPEED = 0.5  # in data parts per second
 
 
 @command('wait-started')
@@ -27,7 +28,7 @@ def wait_started_command(ctx, timeout, quiet):
         logging.basicConfig(level='INFO', format='%(message)s')
 
     if not timeout:
-        timeout = BASE_TIMEOUT + int(get_data_dir_count() / PART_LOAD_SPEED)
+        timeout = get_timeout()
 
     deadline = time.time() + timeout
 
@@ -46,12 +47,32 @@ def wait_started_command(ctx, timeout, quiet):
     sys.exit(1)
 
 
-def get_data_dir_count():
+def get_timeout():
     """
-    Return the number of directories with data. data parts in ClickHouse data dir.
+    Calculate and return timeout.
     """
-    output = execute('find -L /var/lib/clickhouse/ -mindepth 4 -maxdepth 6 -type d | wc -l')
-    return int(output)
+    timeout = BASE_TIMEOUT
+    timeout += int(get_local_data_part_count() / LOCAL_PART_LOAD_SPEED)
+    timeout += int(get_s3_data_part_count() / S3_PART_LOAD_SPEED)
+    return timeout
+
+
+def get_local_data_part_count():
+    """
+    Return approximate number of data parts stored locally.
+    """
+    return int(execute('find -L /var/lib/clickhouse/data -mindepth 3 -maxdepth 3 -type d | wc -l'))
+
+
+def get_s3_data_part_count():
+    """
+    Return approximate number of data parts stored in S3.
+    """
+    s3_metadata_store_path = '/var/lib/clickhouse/disks/object_storage/store'
+    if not os.path.exists(s3_metadata_store_path):
+        return 0
+
+    return int(execute(f'find -L {s3_metadata_store_path} -mindepth 3 -maxdepth 3 -type d | wc -l'))
 
 
 def is_clickhouse_alive():
