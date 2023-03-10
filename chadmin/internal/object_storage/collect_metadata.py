@@ -19,9 +19,9 @@ def collect_metadata(paths: Iterable[Path]) -> ObjectKeyToMetadata:
 
     for path in paths:
         if not path.exists():
-            raise ValueError(f'Metadata path `{path}` is not exist')
+            logging.debug(f'Metadata path `{path}` is not exist')
 
-    for file in chain.from_iterable(path.rglob('*') for path in paths):
+    for file in chain.from_iterable(path.rglob('*') for path in paths if path.exists()):
         if not file.is_file():
             continue
 
