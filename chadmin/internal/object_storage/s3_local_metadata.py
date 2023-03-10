@@ -1,6 +1,6 @@
 import re
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Self
 
@@ -73,18 +73,3 @@ class S3ObjectLocalMetaData:
             raise ValueError(f'Metadata file too large. Its size must not exceed {MAX_METADATA_FILE_SIZE} bytes')
         with path.open(encoding='latin-1') as file:
             return cls.from_string(file.read())
-
-
-@dataclass
-class CheckedMetaData:
-    """
-    Contains collection of parsed metadata files referencing to the same S3 object.
-
-    Use when analyzing S3. Created based on metadata files.
-    Attributes:
-        files - dictionary of metadata files paths and its parsed content.
-        checked -  flag used for finding non-existing S3 objects for which there is metadata.
-    """
-
-    files: dict[Path, S3ObjectLocalMetaData] = field(default_factory=dict)
-    checked: bool = False

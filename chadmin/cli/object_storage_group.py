@@ -1,24 +1,41 @@
+import contextlib
 import json
 import logging
+import sys
 
-from dataclasses import asdict
+from datetime import datetime, timedelta, timezone
+from gzip import GzipFile
+from io import BufferedIOBase, TextIOWrapper
 from pathlib import Path
+from typing import Iterator
 
-import boto3  # type: ignore[import]
 import click
-import yaml
 
-from botocore.client import Config  # type: ignore[import]
 from click import Context, group, option, pass_context
 
-from cloud.mdb.clickhouse.tools.chadmin.internal.object_storage import S3Analyzer, S3AnalyzerStats, S3DiskConfiguration
-from cloud.mdb.clickhouse.tools.chadmin.internal.object_storage.dump_writer import FileDumpWriter, NullDumpWriter
-from cloud.mdb.clickhouse.tools.chadmin.internal.object_storage.s3_analyzer import CommonStats
-from cloud.mdb.clickhouse.tools.chadmin.internal.object_storage.s3_cleaner import S3Cleaner
-from cloud.mdb.internal.python.cli.formatting import format_bytes
+from cloud.mdb.clickhouse.tools.chadmin.internal.object_storage import (
+    ObjectSummary,
+    S3DiskConfiguration,
+    S3ObjectLocalMetaData,
+    cleanup_s3_object_storage,
+    collect_metadata,
+    s3_object_storage_iterator,
+)
+from cloud.mdb.internal.python.cli.parameters import TimeSpanParamType
 
 STORAGE_POLICY_CONFIG_PATH = Path('/etc/clickhouse-server/config.d/storage_policy.xml')
-DEFAULT_DUMP_DIR = Path('/tmp')
+# The guard interval is used for S3 objects for which metadata is not found.
+# And for metadata for which object is not found in S3.
+# These objects are not counted if their last modified time fall in the interval from the moment of starting analyzing.
+DEFAULT_GUARD_INTERVAL = '24h'
+
+
+def get_disk_metadata_paths(disk_name: str) -> list[Path]:
+    return [
+        Path(f'/var/lib/clickhouse/disks/{disk_name}/store'),  # Atomic database engine
+        Path(f'/var/lib/clickhouse/disks/{disk_name}/data'),  # Ordinary database engine
+        Path(f'/var/lib/clickhouse/disks/{disk_name}/shadow'),  # Backups
+    ]
 
 
 @group('object-storage')
@@ -49,78 +66,135 @@ def object_storage_group(ctx: Context, config_path: Path, disk_name: str) -> Non
     ctx.obj['disk_configuration'] = S3DiskConfiguration.from_config(config_path, disk_name)
 
 
-@object_storage_group.command('analyze')
+@object_storage_group.command('list')
 @option(
-    '-d',
-    '--dump',
-    'dump_dir',
-    is_flag=False,
-    flag_value=DEFAULT_DUMP_DIR,
-    type=click.Path(exists=True, file_okay=False, writable=True, path_type=Path),
-    metavar='[DIRECTORY]',
-    help='Dump files directory. If the option has no value, the `/tmp` default is used',
+    '-o',
+    '--orphaned',
+    'orphaned',
+    is_flag=True,
+    default=False,
+    help='List objects that are not referenced in the metadata',
 )
 @option(
+    '-p',
     '--object-name-prefix',
     'object_name_prefix',
     default='',
     help='Additional prefix of object name using for listing',
 )
+@option(
+    '-l',
+    '--limit',
+    'limit',
+    type=int,
+    help='Return at most this many objects',
+)
+@option(
+    '-f',
+    '--dump-file',
+    'dump_file',
+    type=click.Path(path_type=Path),
+    help='Dump result to the file instead of STDOUT',
+)
+@option(
+    '-c',
+    '--compressed',
+    'compressed',
+    is_flag=True,
+    help='Compress an output using GZIP format',
+)
+@option(
+    '-q',
+    '--quiet',
+    'quiet',
+    is_flag=True,
+    help='Output only newline delimited object keys',
+)
+@option(
+    '-g',
+    '--guard-interval',
+    'guard_interval',
+    default=DEFAULT_GUARD_INTERVAL,
+    show_default=True,
+    type=TimeSpanParamType(),
+    help=(
+        'Guard interval in human-friendly format.'
+        'Objects with a modification time falling within it from the now are not considered orphaned'
+    ),
+)
 @pass_context
-def analyze_object_storage(ctx: Context, object_name_prefix: str, dump_dir: Path | None = None) -> None:
+def list_objects(
+    ctx: Context,
+    orphaned: bool,
+    object_name_prefix: str,
+    dump_file: Path | None,
+    compressed: bool,
+    quiet: bool,
+    guard_interval: timedelta,
+    limit: int | None,
+) -> None:
     disk_conf: S3DiskConfiguration = ctx.obj['disk_configuration']
+    pivot_time = datetime.now(timezone.utc) - guard_interval
+    counter = 0
 
-    s3 = boto3.resource(
-        's3',
-        endpoint_url=disk_conf.endpoint_url,
-        aws_access_key_id=disk_conf.access_key_id,
-        aws_secret_access_key=disk_conf.secret_access_key,
-        config=Config(s3={'addressing_style': 'virtual'}),
-    )
-    bucket = s3.Bucket(disk_conf.bucket_name)
-    metadata_paths = _get_disk_metadata_paths(disk_conf.name)
+    with dump_writer(compressed, dump_file) as writer:
+        object_key_to_metadata = collect_metadata(get_disk_metadata_paths(disk_conf.name))
+        for name, obj in s3_object_storage_iterator(disk_conf, object_name_prefix):
+            if limit is not None and counter >= limit:
+                break
 
-    if dump_dir:
-        dump_writer = FileDumpWriter(dump_dir)
-    else:
-        dump_writer = NullDumpWriter()
+            metadata = object_key_to_metadata.get(name)
 
-    with dump_writer:
-        stats = S3Analyzer(bucket, dump_writer, disk_conf.prefix, object_name_prefix).analyze(metadata_paths)
+            if orphaned and (metadata or obj.last_modified > pivot_time):
+                continue
+            if not orphaned and not metadata:
+                continue
 
-    match ctx.obj['format']:
-        case 'json':
-            click.echo(json.dumps(asdict(stats)))
-        case 'yaml':
-            click.echo(yaml.dump(asdict(stats)))
-        case _:
-            _show_human_friendly_report(disk_conf.bucket_name, stats)
+            writer.write(_get_dump_line(obj, metadata, quiet))
+            counter += 1
 
 
 @object_storage_group.command('clean')
 @option(
     '-f',
-    '--dump-file',
-    'dump_path',
-    type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=Path),
-    help='Dump file produced by analyze command',
-    required=True,
+    '--file',
+    'file',
+    type=click.File('rb'),
+    help='File containing S3 object keys delimited by newlines',
+    default=sys.stdin.buffer,
+    show_default='STDIN',
+)
+@option(
+    '-c',
+    '--compressed',
+    'compressed',
+    is_flag=True,
+    help='Input stream is compressed using GZIP format',
 )
 @pass_context
-def clean_object_storage(ctx: Context, dump_path: Path) -> None:
+def clean_object_storage(ctx: Context, file: BufferedIOBase, compressed: bool) -> None:
     disk_conf: S3DiskConfiguration = ctx.obj['disk_configuration']
 
-    s3 = boto3.resource(
-        's3',
-        endpoint_url=disk_conf.endpoint_url,
-        aws_access_key_id=disk_conf.access_key_id,
-        aws_secret_access_key=disk_conf.secret_access_key,
-        config=Config(s3={'addressing_style': 'virtual'}),
-    )
-    bucket = s3.Bucket(disk_conf.bucket_name)
+    if compressed:
+        file = GzipFile(fileobj=file)
+    file = TextIOWrapper(file)
 
-    deleted = S3Cleaner(bucket).clean_dumped_objects(dump_path)
-    click.echo(f'Deleted {deleted} objects from bucket [{bucket.name}]')
+    lines_stripped = (line.rstrip() for line in file)  # lazily iterate over file stripping newline
+    deleted = cleanup_s3_object_storage(disk_conf, lines_stripped)
+
+    click.echo(f'Deleted {deleted} objects from bucket [{disk_conf.bucket_name}]')
+
+
+@contextlib.contextmanager
+def dump_writer(compressed: bool, file_path: Path | None = None) -> Iterator[BufferedIOBase | GzipFile]:
+    writer = open(file_path, "wb") if file_path is not None else sys.stdout.buffer
+    if compressed:
+        writer = GzipFile(mode='wb', fileobj=writer)
+    try:
+        yield writer
+    finally:
+        if file_path is not None or compressed:
+            writer.close()
 
 
 def _set_boto_log_level(level: int) -> None:
@@ -131,24 +205,15 @@ def _set_boto_log_level(level: int) -> None:
     logging.getLogger('urllib3').setLevel(level)
 
 
-def _get_disk_metadata_paths(disk_name: str) -> list[Path]:
-    return [
-        Path(f'/var/lib/clickhouse/disks/{disk_name}/store'),  # Atomic database engine
-        Path(f'/var/lib/clickhouse/disks/{disk_name}/data'),  # Ordinary database engine
-        Path(f'/var/lib/clickhouse/disks/{disk_name}/shadow'),  # Backups
-    ]
-
-
-def _show_human_friendly_report(bucket_name: str, stats: S3AnalyzerStats) -> None:
-    click.echo('*** S3 usage analysis report ***'.center(120))
-    click.echo('Bucket name: {}'.format(bucket_name))
-    click.echo(_make_report_line('Objects with metadata', stats.objects_with_metadata))
-    click.echo(_make_report_line('Objects without metadata', stats.objects_without_metadata))
-    click.echo(_make_report_line('Ignored objects', stats.ignored_objects))
-    click.echo(_make_report_line('Not-found objects with metadata', stats.not_found_objects_with_metadata))
-    click.echo(_make_report_line('Unparsed metadata files', stats.unparsed_metadata))
-
-
-def _make_report_line(title: str, stats: CommonStats) -> str:
-    stats_line = '{:45} count: {:<12,} total_size: {:<14}'.format(title, stats.count, format_bytes(stats.total_size))
-    return '{:<90} {}'.format(stats_line, 'Dump: {}'.format(stats.dump_path) if stats.dump_path else '')
+def _get_dump_line(obj: ObjectSummary, metadata_files: dict[Path, S3ObjectLocalMetaData] | None, quiet: bool) -> bytes:
+    if quiet:
+        res = obj.key
+    else:
+        res = json.dumps(
+            {
+                'object': {'key': obj.key, 'size': obj.size, 'last_modified': str(obj.last_modified)},
+                'files': list(metadata_files) if metadata_files else [],
+            },
+            default=str,
+        )
+    return f'{res}\n'.encode()
