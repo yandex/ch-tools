@@ -14,10 +14,16 @@ from jinja2 import Environment
 import tenacity
 import xmltodict
 
-CLICKHOUSE_CONFIG_PATH = '/var/lib/clickhouse/preprocessed_configs/config.xml'
-CLICKHOUSE_KEEPER_CONFIG_PATH = '/etc/clickhouse-keeper/config.xml'
+from cloud.mdb.internal.python.utils import deep_merge
+
+CLICKHOUSE_SERVER_PREPROCESSED_CONFIG_PATH = '/var/lib/clickhouse/preprocessed_configs/config.xml'
+CLICKHOUSE_SERVER_MAIN_CONFIG_PATH = '/etc/clickhouse-server/config.xml'
+CLICKHOUSE_SERVER_CLUSTER_CONFIG_PATH = '/etc/clickhouse-server/cluster.xml'
+CLICKHOUSE_SERVER_CONFIGD_PATH = '/etc/clickhouse-server/config.d'
 CLICKHOUSE_RESETUP_CONFIG_PATH = '/etc/clickhouse-server/config.d/resetup_config.xml'
 CLICKHOUSE_S3_CREDENTIALS_CONFIG_PATH = '/etc/clickhouse-server/config.d/s3_credentials.xml'
+CLICKHOUSE_KEEPER_CONFIG_PATH = '/etc/clickhouse-keeper/config.xml'
+CLICKHOUSE_USERS_CONFIG_PATH = '/etc/clickhouse-server/users.xml'
 
 
 def retry(exception_types, max_attempts=5, max_interval=5):
@@ -170,8 +176,9 @@ class ClickhouseConfig:
     ClickHouse server config (config.xml).
     """
 
-    def __init__(self, config):
+    def __init__(self, config, preprocessed):
         self._config = config
+        self.preprocessed = preprocessed
 
     @property
     def _config_root(self) -> dict:
@@ -201,15 +208,41 @@ class ClickhouseConfig:
         return name in storage_configuration.get('disks', {})
 
     def dump(self, mask_secrets=True):
-        config = deepcopy(self._config)
-        if mask_secrets:
-            _mask_secrets(config)
+        return _dump_config(self._config, mask_secrets=mask_secrets)
 
-        return xmltodict.unparse(config, pretty=True)
+    def dump_xml(self, mask_secrets=True):
+        return _dump_config(self._config, mask_secrets=mask_secrets, xml_format=True)
 
     @staticmethod
     def load():
-        return ClickhouseConfig(_load_config(CLICKHOUSE_CONFIG_PATH))
+        # Load preprocessed server config if exists
+        if os.path.exists(CLICKHOUSE_SERVER_PREPROCESSED_CONFIG_PATH):
+            return ClickhouseConfig(_load_config(CLICKHOUSE_SERVER_PREPROCESSED_CONFIG_PATH), preprocessed=True)
+
+        # Otherwise load all server config files and perform manual merge and processing
+        config = _load_config(CLICKHOUSE_SERVER_MAIN_CONFIG_PATH)
+        deep_merge(config, _load_config(CLICKHOUSE_SERVER_CLUSTER_CONFIG_PATH))
+        for file in os.listdir(CLICKHOUSE_SERVER_CONFIGD_PATH):
+            deep_merge(config, _load_config(os.path.join(CLICKHOUSE_SERVER_CONFIGD_PATH, file)))
+
+        # Process includes
+        root_key = next(iter(config))
+        root_section = config[root_key]
+        for key, config_section in root_section.copy().items():
+            if not isinstance(config_section, dict):
+                continue
+
+            include = config_section.get('@incl')
+            if not include:
+                continue
+
+            if include != key and include in root_section:
+                root_section[key] = root_section[include]
+                del root_section[include]
+
+            del config_section['@incl']
+
+        return ClickhouseConfig(config, preprocessed=False)
 
 
 class ClickhouseUsersConfig:
@@ -221,15 +254,14 @@ class ClickhouseUsersConfig:
         self._config = config
 
     def dump(self, mask_secrets=True):
-        config = deepcopy(self._config)
-        if mask_secrets:
-            _mask_secrets(config)
+        return _dump_config(self._config, mask_secrets=mask_secrets)
 
-        return xmltodict.unparse(config, pretty=True)
+    def dump_xml(self, mask_secrets=True):
+        return _dump_config(self._config, mask_secrets=mask_secrets, xml_format=True)
 
     @staticmethod
     def load():
-        return ClickhouseConfig(_load_config('/var/lib/clickhouse/preprocessed_configs/users.xml'))
+        return ClickhouseUsersConfig(_load_config(CLICKHOUSE_USERS_CONFIG_PATH))
 
 
 class ClickhouseKeeperConfig:
@@ -265,18 +297,17 @@ class ClickhouseKeeperConfig:
         return self._config_path == CLICKHOUSE_KEEPER_CONFIG_PATH
 
     def dump(self, mask_secrets=True):
-        config = deepcopy(self._config)
-        if mask_secrets:
-            _mask_secrets(config)
+        return _dump_config(self._config, mask_secrets=mask_secrets)
 
-        return xmltodict.unparse(config, pretty=True)
+    def dump_xml(self, mask_secrets=True):
+        return _dump_config(self._config, mask_secrets=mask_secrets, xml_format=True)
 
     @staticmethod
     def load():
         if os.path.exists(CLICKHOUSE_KEEPER_CONFIG_PATH):
             config_path = CLICKHOUSE_KEEPER_CONFIG_PATH
         else:
-            config_path = CLICKHOUSE_CONFIG_PATH
+            config_path = CLICKHOUSE_SERVER_PREPROCESSED_CONFIG_PATH
 
         config = _load_config(config_path)
         return ClickhouseKeeperConfig(config, config_path)
@@ -285,6 +316,18 @@ class ClickhouseKeeperConfig:
 def _load_config(config_path):
     with open(config_path, 'r') as file:
         return xmltodict.parse(file.read())
+
+
+def _dump_config(config, *, mask_secrets=True, xml_format=False):
+    result = deepcopy(config)
+
+    if mask_secrets:
+        _mask_secrets(result)
+
+    if xml_format:
+        result = xmltodict.unparse(result, pretty=True)
+
+    return result
 
 
 def _mask_secrets(config):
