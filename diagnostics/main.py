@@ -675,12 +675,12 @@ def main():
     if args.full:
         add_chart_urls(diagnostics, dbaas_config)
 
-    diagnostics.add_xml_document('ClickHouse configuration', ch_config.dump())
+    diagnostics.add_xml_document('ClickHouse configuration', ch_config.dump_xml())
 
     if keeper_config.separated:
-        diagnostics.add_xml_document('ClickHouse Keeper configuration', keeper_config.dump())
+        diagnostics.add_xml_document('ClickHouse Keeper configuration', keeper_config.dump_xml())
 
-    diagnostics.add_xml_document('ClickHouse users configuration', ch_users_config.dump())
+    diagnostics.add_xml_document('ClickHouse users configuration', ch_users_config.dump_xml())
 
     add_query(diagnostics, 'Access configuration', client=client, query=SELECT_ACCESS, format='TSVRaw')
     add_query(diagnostics, 'Quotas', client=client, query=SELECT_QUOTA_USAGE, format='Vertical')

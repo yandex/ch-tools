@@ -2,6 +2,7 @@
 import logging
 
 from click import Choice, group, option, pass_context
+from cloud.mdb.clickhouse.tools.chadmin.cli.config_command import config_command
 from cloud.mdb.internal.python.cli.parameters import TimeSpanParamType
 
 from cloud.mdb.clickhouse.tools.chadmin.cli.chs3_backup_group import chs3_backup_group
@@ -104,6 +105,7 @@ cli.add_command(wait_started_command)
 cli.add_command(disks_group)
 cli.add_command(data_store_group)
 cli.add_command(object_storage_group)
+cli.add_command(config_command)
 
 
 def main():
