@@ -34,7 +34,6 @@ from cloud.mdb.clickhouse.tools.chadmin.cli.table_replica_group import table_rep
 from cloud.mdb.clickhouse.tools.chadmin.cli.thread_log_group import thread_log_group
 from cloud.mdb.clickhouse.tools.chadmin.cli.wait_started_command import wait_started_command
 from cloud.mdb.clickhouse.tools.chadmin.cli.zookeeper_group import zookeeper_group
-from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseClient
 
 LOG_FILE = '/var/log/chadmin/chadmin.log'
 
@@ -71,9 +70,9 @@ def cli(ctx, format, settings, timeout, port, debug):
     timeout_seconds = timeout.total_seconds() if timeout else None
     settings = {item[0]: item[1] for item in settings}
 
-    chcli = ClickhouseClient(port=port, timeout=timeout_seconds, settings=settings)
+    chcliconf = dict(port=port, timeout=timeout_seconds, settings=settings)
 
-    ctx.obj = dict(chcli=chcli, format=format, debug=debug)
+    ctx.obj = dict(chcli_conf=chcliconf, format=format, debug=debug)
 
 
 cli.add_command(database_group)
