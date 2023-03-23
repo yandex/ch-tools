@@ -3,7 +3,10 @@ import re
 
 from kazoo.security import make_digest_acl
 
-from cloud.mdb.internal.python.cli.formatting import print_response
+from cloud.mdb.internal.python.cli.formatting import (
+    print_response,
+    print_json,
+)
 from cloud.mdb.internal.python.cli.parameters import ListParamType, StringParamType
 from cloud.mdb.clickhouse.tools.chadmin.internal.table_replica import get_table_replica
 from cloud.mdb.clickhouse.tools.chadmin.internal.zookeeper import (
@@ -71,7 +74,7 @@ def get_acl_command(ctx, path):
 
     Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
     """
-    print(get_zk_node_acls(ctx, path)[0])
+    print_json(ctx, get_zk_node_acls(ctx, path)[0])
 
 
 @zookeeper_group.command(name='list')
