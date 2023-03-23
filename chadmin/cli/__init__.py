@@ -1,9 +1,9 @@
 from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseConfig
 
 
-def get_config(ctx) -> ClickhouseConfig:
+def get_config(ctx, try_preprocessed=True) -> ClickhouseConfig:
     if 'clickhouse_config' not in ctx.obj:
-        ctx.obj['clickhouse_config'] = ClickhouseConfig.load()
+        ctx.obj['clickhouse_config'] = ClickhouseConfig.load(try_preprocessed)
 
     return ctx.obj['clickhouse_config']
 

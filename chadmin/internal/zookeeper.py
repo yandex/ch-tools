@@ -110,7 +110,9 @@ def _get_zk_client(ctx):
     zkcli_identity = args.get('zkcli_identity')
     no_chroot = args.get('no_chroot', False)
 
-    zk_config = get_config(ctx).zookeeper
+    # Intentionally don't try to load preprocessed.
+    # We are not sure here if zookeeper-servers's changes already have been reloaded by CH.
+    zk_config = get_config(ctx, try_preprocessed=False).zookeeper
     connect_str = ','.join(
         f'{host if host else node["host"]}:{port if port else node["port"]}' for node in zk_config.nodes
     )

@@ -214,9 +214,9 @@ class ClickhouseConfig:
         return _dump_config(self._config, mask_secrets=mask_secrets, xml_format=True)
 
     @staticmethod
-    def load():
-        # Load preprocessed server config if exists
-        if os.path.exists(CLICKHOUSE_SERVER_PREPROCESSED_CONFIG_PATH):
+    def load(try_preprocessed=True):
+        # Load preprocessed server config if exists and try_preprocessed
+        if try_preprocessed and os.path.exists(CLICKHOUSE_SERVER_PREPROCESSED_CONFIG_PATH):
             return ClickhouseConfig(_load_config(CLICKHOUSE_SERVER_PREPROCESSED_CONFIG_PATH), preprocessed=True)
 
         # Otherwise load all server config files and perform manual merge and processing
