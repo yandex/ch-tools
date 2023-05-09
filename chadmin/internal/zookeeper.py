@@ -16,6 +16,12 @@ def get_zk_node(ctx, path, binary=False):
         return value if binary else value.decode().strip()
 
 
+def check_zk_node(ctx, path):
+    with zk_client(ctx) as zk:
+        path = _format_path(ctx, path)
+        return zk.exists(path)
+
+
 def get_zk_node_acls(ctx, path):
     with zk_client(ctx) as zk:
         path = _format_path(ctx, path)
@@ -86,6 +92,10 @@ def delete_zk_nodes(ctx, paths):
 
 
 def _format_path(ctx, path):
+    args = ctx.obj.get('zk_client_args', {})
+    no_ch_config = args.get('no_ch_config', False)
+    if no_ch_config:
+        return path
     return path.format_map(get_macros(ctx))
 
 
@@ -109,18 +119,24 @@ def _get_zk_client(ctx):
     timeout = args.get('timeout', 10)
     zkcli_identity = args.get('zkcli_identity')
     no_chroot = args.get('no_chroot', False)
+    no_ch_config = args.get('no_ch_config', False)
 
-    # Intentionally don't try to load preprocessed.
-    # We are not sure here if zookeeper-servers's changes already have been reloaded by CH.
-    zk_config = get_config(ctx, try_preprocessed=False).zookeeper
-    connect_str = ','.join(
-        f'{host if host else node["host"]}:{port if port else node["port"]}' for node in zk_config.nodes
-    )
-    if not no_chroot and zk_config.root is not None:
-        connect_str += zk_config.root
+    if no_ch_config:
+        if not host:
+            host = 'localhost'
+        connect_str = f'{host}:{port}'
+    else:
+        # Intentionally don't try to load preprocessed.
+        # We are not sure here if zookeeper-servers's changes already have been reloaded by CH.
+        zk_config = get_config(ctx, try_preprocessed=False).zookeeper
+        connect_str = ','.join(
+            f'{host if host else node["host"]}:{port if port else node["port"]}' for node in zk_config.nodes
+        )
+        if not no_chroot and zk_config.root is not None:
+            connect_str += zk_config.root
 
-    if zkcli_identity is None:
-        zkcli_identity = zk_config.identity
+        if zkcli_identity is None:
+            zkcli_identity = zk_config.identity
 
     auth_data = None
     if zkcli_identity is not None:

@@ -1,5 +1,6 @@
 from click import argument, group, option, pass_context
 import re
+import sys
 
 from kazoo.security import make_digest_acl
 
@@ -10,6 +11,7 @@ from cloud.mdb.internal.python.cli.formatting import (
 from cloud.mdb.internal.python.cli.parameters import ListParamType, StringParamType
 from cloud.mdb.clickhouse.tools.chadmin.internal.table_replica import get_table_replica
 from cloud.mdb.clickhouse.tools.chadmin.internal.zookeeper import (
+    check_zk_node,
     create_zk_nodes,
     delete_zk_nodes,
     get_zk_node,
@@ -36,8 +38,14 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.zookeeper import (
     help='If parameter is True we won\'t use root from CH config and use ZK absolute root',
     default=False,
 )
+@option(
+    '--no-ch-config',
+    is_flag=True,
+    help='Do not try to get parameters from clickhouse config.xml.',
+    default=False,
+)
 @pass_context
-def zookeeper_group(ctx, host, port, timeout, zkcli_identity, no_chroot):
+def zookeeper_group(ctx, host, port, timeout, zkcli_identity, no_chroot, no_ch_config):
     """ZooKeeper management commands.
 
     ZooKeeper command runs client which connects to Zookeeper node.
@@ -51,6 +59,7 @@ def zookeeper_group(ctx, host, port, timeout, zkcli_identity, no_chroot):
         'timeout': timeout,
         'zkcli_identity': zkcli_identity,
         'no_chroot': no_chroot,
+        'no_ch_config': no_ch_config,
     }
 
 
@@ -64,6 +73,21 @@ def get_command(ctx, path, binary):
     Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
     """
     print(get_zk_node(ctx, path, binary=binary))
+
+
+@zookeeper_group.command(name='exists')
+@argument('path')
+@pass_context
+def exists_command(ctx, path):
+    """Check ZooKeeper node exists or not.
+
+    Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
+    """
+    if check_zk_node(ctx, path):
+        print(True)
+        return
+    print(False)
+    sys.exit(1)
 
 
 @zookeeper_group.command(name='get-acl')
