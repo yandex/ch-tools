@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from gzip import GzipFile
 from io import BufferedIOBase, TextIOWrapper
 from pathlib import Path
-from typing import Iterator
+from typing import Dict, Iterator, Optional, Union
 
 import click
 
@@ -127,11 +127,11 @@ def list_objects(
     ctx: Context,
     orphaned: bool,
     object_name_prefix: str,
-    dump_file: Path | None,
+    dump_file: Optional[Path],
     compressed: bool,
     quiet: bool,
     guard_interval: timedelta,
-    limit: int | None,
+    limit: Optional[int],
 ) -> None:
     disk_conf: S3DiskConfiguration = ctx.obj['disk_configuration']
     pivot_time = datetime.now(timezone.utc) - guard_interval
@@ -186,7 +186,7 @@ def clean_object_storage(ctx: Context, file: BufferedIOBase, compressed: bool) -
 
 
 @contextlib.contextmanager
-def dump_writer(compressed: bool, file_path: Path | None = None) -> Iterator[BufferedIOBase | GzipFile]:
+def dump_writer(compressed: bool, file_path: Optional[Path] = None) -> Iterator[Union[BufferedIOBase, GzipFile]]:
     writer = open(file_path, "wb") if file_path is not None else sys.stdout.buffer
     if compressed:
         writer = GzipFile(mode='wb', fileobj=writer)
@@ -205,7 +205,9 @@ def _set_boto_log_level(level: int) -> None:
     logging.getLogger('urllib3').setLevel(level)
 
 
-def _get_dump_line(obj: ObjectSummary, metadata_files: dict[Path, S3ObjectLocalMetaData] | None, quiet: bool) -> bytes:
+def _get_dump_line(
+    obj: ObjectSummary, metadata_files: Optional[Dict[Path, S3ObjectLocalMetaData]], quiet: bool
+) -> bytes:
     if quiet:
         res = obj.key
     else:

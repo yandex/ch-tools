@@ -20,7 +20,8 @@ class S3DiskConfiguration:
         config = etree.parse(config_path)
         disk = config.find(f'/storage_configuration/disks/{disk_name}')
 
-        if (disk_type := disk.find('type').text) != 's3':
+        disk_type = disk.find('type').text
+        if disk_type != 's3':
             raise TypeError(f'Unsupported object storage type {disk_type}')
 
         access_key_id = disk.find('access_key_id').text
