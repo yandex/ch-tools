@@ -4,8 +4,8 @@ import boto3
 
 from botocore.client import Config  # type: ignore[import]
 
-from cloud.mdb.clickhouse.tools.chadmin.internal.object_storage.s3_disk_configuration import S3DiskConfiguration
-from cloud.mdb.clickhouse.tools.chadmin.internal.utils import chunked
+from chadmin.internal.object_storage.s3_disk_configuration import S3DiskConfiguration
+from chadmin.internal.utils import chunked
 
 BULK_DELETE_CHUNK_SIZE = 1000
 

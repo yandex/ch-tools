@@ -1,4 +1,4 @@
-from cloud.mdb.clickhouse.tools.chadmin.internal.utils import clickhouse_client
+from chadmin.internal.utils import clickhouse_client
 from pkg_resources import parse_version
 
 

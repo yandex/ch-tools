@@ -1,7 +1,7 @@
 from click import argument, Choice, group, option, pass_context
-from cloud.mdb.internal.python.cli.formatting import print_response
-from cloud.mdb.clickhouse.tools.chadmin.cli import get_cluster_name
-from cloud.mdb.clickhouse.tools.chadmin.internal.table import (
+from common.cli.formatting import print_response
+from chadmin.cli import get_cluster_name
+from chadmin.internal.table import (
     attach_table,
     delete_table,
     detach_table,
@@ -9,8 +9,7 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.table import (
     list_tables,
     materialize_ttl,
 )
-
-from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
+from chadmin.internal.utils import execute_query
 
 
 @group('table')

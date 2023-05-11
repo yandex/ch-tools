@@ -1,7 +1,8 @@
 import json
-import subprocess
 import os
+import subprocess
 from datetime import timedelta
+from typing import List
 
 import yaml
 
@@ -30,21 +31,21 @@ class BackupConfig:
             return BackupConfig(yaml.safe_load(file))
 
 
-def get_backups() -> list[dict]:
+def get_backups() -> List[dict]:
     """
     Get ClickHouse backups.
     """
     return json.loads(run('sudo ch-backup list -a -v --format json'))
 
 
-def get_chs3_backups() -> [str]:
+def get_chs3_backups() -> List[str]:
     if os.path.exists(CHS3_BACKUPS_DIRECTORY):
         return os.listdir(CHS3_BACKUPS_DIRECTORY)
     else:
         return []
 
 
-def get_orphaned_chs3_backups() -> [str]:
+def get_orphaned_chs3_backups() -> List[str]:
     backups = get_backups()
     chs3_backups = get_chs3_backups()
     return list(set(chs3_backups) - set(backup['name'] for backup in backups))
@@ -54,7 +55,13 @@ def run(command, data=None):
     """
     Run the command and return its output.
     """
-    proc = subprocess.Popen(command, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc = subprocess.Popen(
+        command,
+        shell=True,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
 
     encoded_data = data.encode() if data else None
 

@@ -5,8 +5,8 @@ import time
 
 from click import command, option, pass_context
 
-from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
-from cloud.mdb.clickhouse.tools.common.utils import execute
+from chadmin.internal.utils import execute_query
+from common.utils import execute
 
 BASE_TIMEOUT = 600
 LOCAL_PART_LOAD_SPEED = 10  # in data parts per second

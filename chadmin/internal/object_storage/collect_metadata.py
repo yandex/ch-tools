@@ -5,7 +5,7 @@ from itertools import chain
 from pathlib import Path
 from typing import Iterable
 
-from cloud.mdb.clickhouse.tools.chadmin.internal.object_storage.s3_local_metadata import S3ObjectLocalMetaData
+from chadmin.internal.object_storage.s3_local_metadata import S3ObjectLocalMetaData
 
 ObjectKeyToMetadata = dict[str, dict[Path, S3ObjectLocalMetaData]]
 

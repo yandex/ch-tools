@@ -6,21 +6,21 @@ import sys
 import os
 import pwd
 
-from cloud.mdb.clickhouse.tools.common.result import Status
-from cloud.mdb.clickhouse.tools.monrun_checks.ch_replication_lag import replication_lag_command
-from cloud.mdb.clickhouse.tools.monrun_checks.ch_system_queues import system_queues_command
-from cloud.mdb.clickhouse.tools.monrun_checks.ch_tls import tls_command
-from cloud.mdb.clickhouse.tools.monrun_checks.ch_core_dumps import core_dumps_command
-from cloud.mdb.clickhouse.tools.monrun_checks.ch_dist_tables import dist_tables_command
-from cloud.mdb.clickhouse.tools.monrun_checks.ch_resetup_state import resetup_state_command
-from cloud.mdb.clickhouse.tools.monrun_checks.ch_ro_replica import ro_replica_command
-from cloud.mdb.clickhouse.tools.monrun_checks.ch_geobase import geobase_command
-from cloud.mdb.clickhouse.tools.monrun_checks.ch_log_errors import log_errors_command
-from cloud.mdb.clickhouse.tools.monrun_checks.ch_ping import ping_command
-from cloud.mdb.clickhouse.tools.monrun_checks.ch_s3_backup_orphaned import orphaned_backups_command
-from cloud.mdb.clickhouse.tools.monrun_checks.ch_keeper import keeper_command
-from cloud.mdb.clickhouse.tools.monrun_checks.ext_ip_dns import ext_ip_dns_command
-from cloud.mdb.clickhouse.tools.monrun_checks.status import status_command
+from common.result import Status
+from monrun_checks.ch_replication_lag import replication_lag_command
+from monrun_checks.ch_system_queues import system_queues_command
+from monrun_checks.ch_tls import tls_command
+from monrun_checks.ch_core_dumps import core_dumps_command
+from monrun_checks.ch_dist_tables import dist_tables_command
+from monrun_checks.ch_resetup_state import resetup_state_command
+from monrun_checks.ch_ro_replica import ro_replica_command
+from monrun_checks.ch_geobase import geobase_command
+from monrun_checks.ch_log_errors import log_errors_command
+from monrun_checks.ch_ping import ping_command
+from monrun_checks.ch_s3_backup_orphaned import orphaned_backups_command
+from monrun_checks.ch_keeper import keeper_command
+from monrun_checks.ext_ip_dns import ext_ip_dns_command
+from monrun_checks.status import status_command
 from .ch_backup import backup_command
 from .exceptions import translate_to_status
 

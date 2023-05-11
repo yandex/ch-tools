@@ -11,7 +11,7 @@ CLICKHOUSE_STORE_PATH = CLICKHOUSE_PATH + '/store'
 @group('data-store')
 def data_store_group():
     """
-    Commands for manupalating data stored by ClickHouse.
+    Commands for manipulating data stored by ClickHouse.
     """
     pass
 

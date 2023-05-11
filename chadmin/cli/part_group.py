@@ -1,10 +1,10 @@
 from collections import OrderedDict
 
 from click import Choice, group, option, pass_context
-from cloud.mdb.clickhouse.tools.chadmin.internal.system import match_ch_version
-from cloud.mdb.internal.python.cli.formatting import format_bytes, print_response
-from cloud.mdb.internal.python.cli.parameters import BytesParamType
-from cloud.mdb.clickhouse.tools.chadmin.internal.part import (
+from chadmin.internal.system import match_ch_version
+from common.cli.formatting import format_bytes, print_response
+from common.cli.parameters import BytesParamType
+from chadmin.internal.part import (
     attach_part,
     detach_part,
     drop_detached_part,

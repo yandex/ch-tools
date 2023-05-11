@@ -1,9 +1,8 @@
 from click import Choice, argument, group, option, pass_context
-from cloud.mdb.internal.python.cli.formatting import print_response
-
-from cloud.mdb.clickhouse.tools.chadmin.cli import get_cluster_name
-from cloud.mdb.clickhouse.tools.chadmin.internal.process import get_process, list_processes, kill_process
-from cloud.mdb.clickhouse.tools.chadmin.internal.utils import format_query
+from common.cli.formatting import print_response
+from chadmin.cli import get_cluster_name
+from chadmin.internal.process import get_process, list_processes, kill_process
+from chadmin.internal.utils import format_query
 
 FIELD_FORMATTERS = {
     'query': format_query,

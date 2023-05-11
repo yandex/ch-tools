@@ -6,7 +6,7 @@ import re
 from itertools import islice
 from typing import Iterable, Iterator
 
-from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseClient
+from common.clickhouse.client import ClickhouseClient
 
 
 def clickhouse_client(ctx):
@@ -60,5 +60,7 @@ def chunked(iterable: Iterable, n: int) -> Iterator[list]:
     if n < 1:
         raise ValueError('n must be at least one')
     it = iter(iterable)
-    while chunk := list(islice(it, n)):
+
+    chunk = list(islice(it, n))
+    while chunk:
         yield chunk

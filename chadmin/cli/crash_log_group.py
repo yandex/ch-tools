@@ -1,7 +1,7 @@
 from click import group, option, pass_context
 
-from cloud.mdb.clickhouse.tools.chadmin.cli import get_cluster_name
-from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
+from chadmin.cli import get_cluster_name
+from chadmin.internal.utils import execute_query
 
 
 @group('crash-log')

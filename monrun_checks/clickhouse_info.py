@@ -1,6 +1,6 @@
 import functools
 
-from cloud.mdb.clickhouse.tools.monrun_checks.clickhouse_client import ClickhouseClient, ClickhousePort
+from monrun_checks.clickhouse_client import ClickhouseClient, ClickhousePort
 
 
 class ClickhouseInfo(object):

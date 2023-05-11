@@ -1,6 +1,7 @@
-import re
 import os
+import re
 import subprocess
+from collections import OrderedDict
 from pathlib import Path
 
 
@@ -54,3 +55,16 @@ def execute(command):
         raise RuntimeError(msg)
 
     return stdout.decode()
+
+
+def deep_merge(dest, update):
+    """
+    Deep merge two dictionaries.
+    Like `dict.update`, but instead of updating only top-level keys, perform recursive dict merge.
+    """
+    for key, value in update.items():
+        if key in dest and isinstance(dest[key], (dict, OrderedDict)) and isinstance(value, (dict, OrderedDict)):
+            deep_merge(dest[key], value)
+        else:
+            dest[key] = value
+    return dest

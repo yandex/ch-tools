@@ -9,14 +9,14 @@ from datetime import datetime, timezone
 import yaml
 from requests.exceptions import RequestException
 
-from cloud.mdb.clickhouse.tools.common.clickhouse import (
-    ClickhouseClient,
+from common.clickhouse.client import ClickhouseClient
+from common.clickhouse.config import (
     ClickhouseConfig,
     ClickhouseKeeperConfig,
     ClickhouseUsersConfig,
 )
-from cloud.mdb.clickhouse.tools.common.dbaas import DbaasConfig
-from cloud.mdb.clickhouse.tools.common.utils import version_ge
+from common.dbaas import DbaasConfig
+from common.utils import version_ge
 from humanfriendly import format_size
 
 SELECT_UPTIME = r'''

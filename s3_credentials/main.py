@@ -12,7 +12,7 @@ from datetime import timedelta
 import os.path
 from xml.dom import minidom
 
-from cloud.mdb.clickhouse.tools.common.clickhouse import (
+from common.clickhouse.config.path import (
     CLICKHOUSE_RESETUP_CONFIG_PATH,
     CLICKHOUSE_S3_CREDENTIALS_CONFIG_PATH,
 )

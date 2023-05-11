@@ -1,5 +1,5 @@
 import click
-from cloud.mdb.clickhouse.tools.common.result import Result
+from common.result import Result
 
 from functools import cache
 import dns.resolver

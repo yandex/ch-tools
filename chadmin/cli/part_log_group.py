@@ -1,8 +1,8 @@
 from collections import OrderedDict
 
 from click import Choice, group, option, pass_context
-from cloud.mdb.internal.python.cli.formatting import format_bytes, print_response
-from cloud.mdb.clickhouse.tools.chadmin.internal.part import list_part_log
+from common.cli.formatting import format_bytes, print_response
+from chadmin.internal.part import list_part_log
 
 FIELD_FORMATTERS = {
     'size_in_bytes': format_bytes,

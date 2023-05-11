@@ -1,14 +1,13 @@
 from click import Choice, group, option, pass_context
-from cloud.mdb.internal.python.cli.parameters import BytesParamType
-from cloud.mdb.clickhouse.tools.chadmin.internal.partition import (
+from common.cli.parameters import BytesParamType
+from chadmin.internal.partition import (
     attach_partition,
     detach_partition,
     drop_partition,
     materialize_ttl_in_partition,
     optimize_partition,
 )
-
-from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
+from chadmin.internal.utils import execute_query
 
 
 @group('partition')

@@ -7,10 +7,10 @@ STYLE_PYTHON()
 ALL_PY_SRCS(
     RECURSIVE
     NAMESPACE
-    cloud.mdb.clickhouse.tools.monrun_checks
+    monrun_checks
 )
 
-PY_MAIN(cloud.mdb.clickhouse.tools.monrun_checks.main:main)
+PY_MAIN(monrun_checks.main:main)
 
 PEERDIR(
     cloud/mdb/clickhouse/tools/common
@@ -22,7 +22,6 @@ PEERDIR(
     contrib/python/pyOpenSSL
     contrib/python/tabulate
     contrib/python/kazoo
-    cloud/mdb/clickhouse/tools/common
 )
 
 END()

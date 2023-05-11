@@ -1,4 +1,4 @@
-from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseConfig
+from common.clickhouse.config import ClickhouseConfig
 
 
 def get_config(ctx, try_preprocessed=True) -> ClickhouseConfig:

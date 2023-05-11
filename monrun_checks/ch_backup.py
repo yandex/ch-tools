@@ -8,10 +8,10 @@ from os.path import exists
 
 import click
 
-from cloud.mdb.clickhouse.tools.common.backup import BackupConfig, get_backups
-from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseClient
-from cloud.mdb.clickhouse.tools.common.dbaas import DbaasConfig
-from cloud.mdb.clickhouse.tools.monrun_checks.exceptions import die
+from common.backup import BackupConfig, get_backups
+from common.clickhouse.client import ClickhouseClient
+from common.dbaas import DbaasConfig
+from monrun_checks.exceptions import die
 
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S %z'
 FULL_DATE_FORMAT = '%Y-%m-%dT%H:%M:%S.%f%z'
