@@ -6,7 +6,7 @@ from kazoo.exceptions import NoNodeError
 
 from kazoo.client import KazooClient
 
-from cloud.mdb.clickhouse.tools.chadmin.cli import get_config, get_macros
+from chadmin.cli import get_config, get_macros
 
 
 def get_zk_node(ctx, path, binary=False):

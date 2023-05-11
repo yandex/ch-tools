@@ -7,14 +7,13 @@ STYLE_PYTHON()
 ALL_PY_SRCS(
     RECURSIVE
     NAMESPACE
-    cloud.mdb.clickhouse.tools.chadmin
+    chadmin
 )
 
-PY_MAIN(cloud.mdb.clickhouse.tools.chadmin.chadmin:main)
+PY_MAIN(chadmin.chadmin_cli:main)
 
 PEERDIR(
     cloud/mdb/clickhouse/tools/common
-    cloud/mdb/internal/python/cli
     contrib/python/PyYAML
     contrib/python/boto3
     contrib/python/click

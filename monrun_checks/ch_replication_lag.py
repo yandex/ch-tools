@@ -2,9 +2,9 @@ import click
 import logging
 from tabulate import tabulate
 
-from cloud.mdb.clickhouse.tools.monrun_checks.clickhouse_client import ClickhouseClient
-from cloud.mdb.clickhouse.tools.monrun_checks.clickhouse_info import ClickhouseInfo
-from cloud.mdb.clickhouse.tools.common.result import Result
+from monrun_checks.clickhouse_client import ClickhouseClient
+from monrun_checks.clickhouse_info import ClickhouseInfo
+from common.result import Result
 
 
 @click.command('replication-lag')

@@ -4,7 +4,7 @@ import boto3  # type: ignore[import]
 
 from botocore.client import Config  # type: ignore[import]
 
-from cloud.mdb.clickhouse.tools.chadmin.internal.object_storage.s3_disk_configuration import S3DiskConfiguration
+from chadmin.internal.object_storage.s3_disk_configuration import S3DiskConfiguration
 
 ObjectSummary = Any
 IGNORED_OBJECT_NAME_PREFIXES = ['operations', '.SCHEMA_VERSION']

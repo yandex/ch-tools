@@ -1,9 +1,9 @@
 from collections import defaultdict
 
 from click import Choice, group, option, pass_context
-from cloud.mdb.clickhouse.tools.chadmin.cli import get_cluster_name
-from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
-from cloud.mdb.clickhouse.tools.chadmin.internal.zookeeper import delete_zk_node
+from chadmin.cli import get_cluster_name
+from chadmin.internal.utils import execute_query
+from chadmin.internal.zookeeper import delete_zk_node
 
 
 @group('replication-queue')

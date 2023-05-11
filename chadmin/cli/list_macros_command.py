@@ -1,6 +1,6 @@
 from click import command, pass_context
 
-from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
+from chadmin.internal.utils import execute_query
 
 
 @command('macros')

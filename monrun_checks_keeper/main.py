@@ -3,9 +3,9 @@ from functools import wraps
 import logging
 
 from click import group, option, pass_context
-from cloud.mdb.clickhouse.tools.common.result import Status
-from cloud.mdb.clickhouse.tools.monrun_checks_keeper.status import status_command
-from cloud.mdb.clickhouse.tools.monrun_checks_keeper.keeper_commands import (
+from common.result import Status
+from monrun_checks_keeper.status import status_command
+from monrun_checks_keeper.keeper_commands import (
     alive_command,
     avg_latency_command,
     min_latency_command,

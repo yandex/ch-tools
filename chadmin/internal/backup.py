@@ -1,4 +1,4 @@
-from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
+from chadmin.internal.utils import execute_query
 
 
 def unfreeze_table(ctx, database, table, backup_name, dry_run=False):

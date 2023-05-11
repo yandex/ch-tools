@@ -13,7 +13,7 @@ import click
 
 from click import Context, group, option, pass_context
 
-from cloud.mdb.clickhouse.tools.chadmin.internal.object_storage import (
+from chadmin.internal.object_storage import (
     ObjectSummary,
     S3DiskConfiguration,
     S3ObjectLocalMetaData,
@@ -21,7 +21,7 @@ from cloud.mdb.clickhouse.tools.chadmin.internal.object_storage import (
     collect_metadata,
     s3_object_storage_iterator,
 )
-from cloud.mdb.internal.python.cli.parameters import TimeSpanParamType
+from common.cli.parameters import TimeSpanParamType
 
 STORAGE_POLICY_CONFIG_PATH = Path('/etc/clickhouse-server/config.d/storage_policy.xml')
 # The guard interval is used for S3 objects for which metadata is not found.

@@ -6,7 +6,7 @@ import re
 from itertools import islice
 from typing import Iterable, Iterator
 
-from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseClient
+from common.clickhouse.client import ClickhouseClient
 
 
 def clickhouse_client(ctx):

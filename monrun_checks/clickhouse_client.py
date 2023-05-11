@@ -5,7 +5,7 @@ import json
 import xml.etree.ElementTree as xml
 from enum import Enum
 
-from cloud.mdb.clickhouse.tools.monrun_checks.exceptions import die
+from monrun_checks.exceptions import die
 
 
 class ClickhousePort(Enum):

@@ -5,8 +5,8 @@ import time
 
 from click import command, pass_context
 from kazoo.client import KazooClient
-from cloud.mdb.clickhouse.tools.common.result import Result
-from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseKeeperConfig
+from common.result import Result
+from common.clickhouse.config import ClickhouseKeeperConfig
 
 ZOOKEEPER_CFG_FILE = '/etc/zookeeper/conf/zoo.cfg'
 DEFAULT_ZOOKEEPER_DATA_DIR = '/var/lib/zookeeper'

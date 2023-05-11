@@ -6,9 +6,9 @@ import requests
 import subprocess
 import psutil
 
-from cloud.mdb.clickhouse.tools.common.clickhouse import CLICKHOUSE_RESETUP_CONFIG_PATH
-from cloud.mdb.clickhouse.tools.monrun_checks.exceptions import die
-from cloud.mdb.clickhouse.tools.common.result import Result
+from common.clickhouse.config.path import CLICKHOUSE_RESETUP_CONFIG_PATH
+from monrun_checks.exceptions import die
+from common.result import Result
 
 
 @click.command('resetup-state')

@@ -1,7 +1,7 @@
 from click import command, pass_context
 
-from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseConfig
-from cloud.mdb.internal.python.cli.formatting import print_response
+from common.clickhouse.config import ClickhouseConfig
+from common.cli.formatting import print_response
 
 
 @command('config')

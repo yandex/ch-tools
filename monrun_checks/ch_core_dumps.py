@@ -3,7 +3,7 @@ import pathlib
 import time
 from datetime import datetime
 
-from cloud.mdb.clickhouse.tools.common.result import Result
+from common.result import Result
 
 
 @click.command('core-dumps')

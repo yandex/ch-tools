@@ -2,7 +2,7 @@ import click
 import subprocess
 import re
 
-from cloud.mdb.clickhouse.tools.common.result import Result
+from common.result import Result
 
 
 default_regex = r'([0-9]{4}\.[0-9]{2}\.[0-9]{2}\ [0-9]{2}\:[0-9]{2}\:[0-9]{2})'

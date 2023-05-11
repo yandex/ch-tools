@@ -1,4 +1,4 @@
-from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
+from chadmin.internal.utils import execute_query
 
 
 def attach_partition(ctx, database, table, partition_id, dry_run=False):

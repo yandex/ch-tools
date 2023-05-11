@@ -3,8 +3,8 @@ import click
 from kazoo.client import KazooClient, KazooException
 from kazoo.handlers.threading import KazooTimeoutError
 
-from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseKeeperConfig
-from cloud.mdb.clickhouse.tools.common.result import Result
+from common.clickhouse.config import ClickhouseKeeperConfig
+from common.result import Result
 
 
 @click.command('keeper')

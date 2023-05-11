@@ -1,9 +1,9 @@
 from click import command, option, pass_context
 
-from cloud.mdb.clickhouse.tools.chadmin.cli import get_cluster_name
-from cloud.mdb.clickhouse.tools.chadmin.internal.table_replica import restart_table_replica, restore_table_replica
-from cloud.mdb.clickhouse.tools.chadmin.internal.utils import execute_query
-from cloud.mdb.clickhouse.tools.common.clickhouse import ClickhouseError
+from chadmin.cli import get_cluster_name
+from chadmin.internal.table_replica import restart_table_replica, restore_table_replica
+from chadmin.internal.utils import execute_query
+from common.clickhouse.client import ClickhouseError
 
 
 @command('restore-replica')

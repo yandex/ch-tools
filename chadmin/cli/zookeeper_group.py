@@ -4,13 +4,13 @@ import sys
 
 from kazoo.security import make_digest_acl
 
-from cloud.mdb.internal.python.cli.formatting import (
+from common.cli.formatting import (
     print_response,
     print_json,
 )
-from cloud.mdb.internal.python.cli.parameters import ListParamType, StringParamType
-from cloud.mdb.clickhouse.tools.chadmin.internal.table_replica import get_table_replica
-from cloud.mdb.clickhouse.tools.chadmin.internal.zookeeper import (
+from common.cli.parameters import ListParamType, StringParamType
+from chadmin.internal.table_replica import get_table_replica
+from chadmin.internal.zookeeper import (
     check_zk_node,
     create_zk_nodes,
     delete_zk_nodes,
@@ -112,7 +112,7 @@ def list_command(ctx, path, verbose):
     """
     nodes = list_zk_nodes(ctx, path, verbose=verbose)
     if verbose:
-        print_response(ctx, nodes, format='table')
+        print_response(ctx, nodes, format_='table')
     else:
         print('\n'.join(nodes))
 
