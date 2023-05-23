@@ -5,11 +5,13 @@ Command-line parameters.
 import os
 import re
 import sys
+from typing import Sequence, Union
 
 import click
 import humanfriendly
 from click import ClickException
 
+from .formatting import format_var
 from .utils import parse_timespan
 
 
@@ -95,3 +97,11 @@ def _preprocess_value(value):
             return f.read()
 
     return value
+
+
+def env_var_help(v: Union[str, Sequence[str]]) -> str:
+    """
+    Returns help message declaring how parameter could be set via environment variables.
+    """
+    var_names: Sequence[str] = [v] if isinstance(v, str) else v
+    return f'Could be set via ENV var{"s" if len(var_names) > 1 else ""} {", ".join(map(format_var, var_names))}.'
