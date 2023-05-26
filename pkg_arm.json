@@ -10,7 +10,6 @@
         "bin": {
             "targets": [
                 "cloud/mdb/clickhouse/tools/chadmin",
-                "cloud/mdb/clickhouse/tools/diagnostics",
                 "cloud/mdb/clickhouse/tools/monrun_checks",
                 "cloud/mdb/clickhouse/tools/monrun_checks_keeper",
                 "cloud/mdb/clickhouse/tools/s3_credentials"
@@ -125,25 +124,6 @@
             },
             "destination": {
                 "path": "/etc/bash_completion.d/keeper-monitoring"
-            }
-        },
-        {
-            "source": {
-                "type": "BUILD_OUTPUT",
-                "build_key": "bin",
-                "path": "cloud/mdb/clickhouse/tools/diagnostics/ch-diagnostics"
-            },
-            "destination": {
-                "path": "/opt/yandex/mdb-ch-tools/bin/ch-diagnostics"
-            }
-        },
-        {
-            "source": {
-                "type": "SYMLINK"
-            },
-            "destination": {
-                "path": "/usr/bin/ch-diagnostics",
-                "target": "/opt/yandex/mdb-ch-tools/bin/ch-diagnostics"
             }
         },
         {
