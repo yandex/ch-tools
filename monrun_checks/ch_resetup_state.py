@@ -24,7 +24,7 @@ def resetup_state_command(port, ssl, ca_bundle):
     check_resetup_running()
     check_resetup_required()
 
-    host = socket.gethostname()
+    host = socket.getfqdn()
     if request(host, port, ssl, ca_bundle):
         return Result(2, 'ClickHouse is listening on ports reserved for resetup')
 
