@@ -5,6 +5,8 @@ from urllib.parse import urlparse
 
 from lxml import etree  # type: ignore[import]
 
+BUCKET_NAME_PREFIX = 'cloud-storage-'
+
 
 @dataclass
 class S3DiskConfiguration:
@@ -28,12 +30,7 @@ class S3DiskConfiguration:
         secret_access_key = disk.find('secret_access_key').text
         endpoint: str = disk.find('endpoint').text
 
-        url = urlparse(endpoint)
-        if url.hostname is None:
-            raise ValueError(f'Incorrect endpoint format {endpoint}')
-        bucket_name, host = url.hostname.split('.', maxsplit=1)
-        prefix = url.path.removeprefix('/')
-        endpoint_url = '{}://{}{}'.format(url.scheme, host, f':{url.port}' if url.port else '')
+        host, bucket_name, prefix, endpoint_url = _parse_endpoint(endpoint)
 
         return cls(
             name=disk_name,
@@ -43,3 +40,28 @@ class S3DiskConfiguration:
             bucket_name=bucket_name,
             prefix=prefix,
         )
+
+
+def _parse_endpoint(endpoint: str) -> tuple:
+    """
+    Parse both virtual and path style S3 url.
+    """
+    url = urlparse(endpoint)
+    if url.hostname is None:
+        raise ValueError(f'Incorrect endpoint format {endpoint}')
+
+    path = url.path.removeprefix('/')
+    if url.hostname.startswith(BUCKET_NAME_PREFIX):
+        # virtual addressing style
+        bucket_name, host = url.hostname.split('.', maxsplit=1)
+        prefix = path
+    else:
+        # path addressing style
+        host = url.hostname
+        bucket_name, prefix = path.split('/', maxsplit=1)
+        if not bucket_name.startswith(BUCKET_NAME_PREFIX):
+            raise ValueError(f'Unexpected bucket name `{bucket_name}`. Parser expects `{BUCKET_NAME_PREFIX}` prefix')
+
+    endpoint_url = '{}://{}{}'.format(url.scheme, host, f':{url.port}' if url.port else '')
+
+    return host, bucket_name, prefix, endpoint_url
