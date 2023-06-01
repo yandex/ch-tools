@@ -39,7 +39,7 @@ class ClickhouseClient:
 
     def __init__(self):
         self.__get_settings()
-        self.host = socket.gethostname()
+        self.host = socket.getfqdn()
 
     def __execute_http(self, query, port=ClickhousePort.https):
         # Private method, we are sure that port is https or http and presents in config
