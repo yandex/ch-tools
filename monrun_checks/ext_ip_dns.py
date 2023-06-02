@@ -13,6 +13,12 @@ IP_METADATA_PATHS = {
     'ipv6': 'http://169.254.169.254/latest/meta-data/ipv6',
 }
 
+IP_METADATA_PATHS_GCP = {
+    'public_v4': 'http://169.254.169.254/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip',
+    'private_v4': 'http://169.254.169.254/computeMetadata/v1/instance/network-interfaces/0/ip',
+    'ipv6': 'http://169.254.169.254/computeMetadata/v1/instance/network-interfaces/0/ipv6',
+}
+
 
 class _TargetRecord:
     def __init__(self, fqdn: str, private: bool, strict: bool):
@@ -41,11 +47,11 @@ def ext_ip_dns_command(cluster: bool, private: bool, ipv6: bool) -> Result:
 
 def _check_fqdn(target: _TargetRecord, ipv6: bool) -> list:
     err = []
-    resolver = dns.resolver.get_default_resolver()
+    resolver = dns.resolver.Resolver()
 
     def _compare(record_type: str, ip_type: str) -> bool:
         try:
-            actual_addr = set(map(lambda a: a.to_text(), resolver.query(target.fqdn, record_type)))
+            actual_addr = set(map(lambda a: a.to_text(), resolver.resolve(target.fqdn, record_type)))
         except dns.resolver.NXDOMAIN:
             actual_addr = set()
         target_addr = {_get_host_ip(ip_type)}
@@ -63,9 +69,19 @@ def _check_fqdn(target: _TargetRecord, ipv6: bool) -> list:
 
 @cache
 def _get_host_ip(addr_type: str) -> str:
-    resp = requests.get(IP_METADATA_PATHS[addr_type])
+    if _is_gcp():
+        resp = requests.get(IP_METADATA_PATHS_GCP[addr_type], headers={'Metadata-Flavor': 'Google'})
+    else:
+        resp = requests.get(IP_METADATA_PATHS[addr_type])
     resp.raise_for_status()
     return resp.text.strip()
+
+
+@cache
+def _is_gcp():
+    with open('/etc/dbaas.conf') as f:
+        vtype = json.load(f).get('flavor', {}).get('vtype', '')
+        return vtype == 'gcp'
 
 
 def _get_host_dns(cluster: bool, private: bool) -> list[_TargetRecord]:
