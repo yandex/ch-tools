@@ -2,25 +2,27 @@ from datetime import datetime
 
 import chadmin.internal.diagnostics.formatter as formatter
 import chadmin.internal.diagnostics.query as query
+from common.cli.formatting import format_duration
 from common.cli.progress_bar import progress
-from common.clickhouse.client import ClickhouseClient, OutputFormat
+from common.clickhouse.client import OutputFormat
 from common.clickhouse.config import ClickhouseConfig, ClickhouseKeeperConfig, ClickhouseUsersConfig
 from common.dbaas import DbaasConfig
 from common.utils import version_ge
 
 from .data import DiagnosticsData, add_command, add_query, execute_query
+from ..utils import clickhouse_client
 
 
-def diagnose(output_format: str, normalize_queries: bool):
+def diagnose(ctx, output_format: str, normalize_queries: bool):
     timestamp = datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')
-    client = ClickhouseClient()
+    client = clickhouse_client(ctx)
     dbaas_config = DbaasConfig.load()
     ch_config = ClickhouseConfig.load()
     keeper_config = ClickhouseKeeperConfig.load()
     ch_users_config = ClickhouseUsersConfig.load()
     version = client.get_clickhouse_version()
     system_tables = [
-        row[0] for row in execute_query(client, query.SELECT_SYSTEM_TABLES, format_=OutputFormat.JSONCompact)()['data']
+        row[0] for row in execute_query(client, query.SELECT_SYSTEM_TABLES, format_=OutputFormat.JSONCompact)['data']
     ]
 
     diagnostics = DiagnosticsData(host=dbaas_config.fqdn, normalize_queries=normalize_queries)
@@ -37,7 +39,7 @@ def diagnose(output_format: str, normalize_queries: bool):
         diagnostics.add_string('Resource preset', formatter.format_resource_preset(dbaas_config)),
         diagnostics.add_string('Storage', formatter.format_storage(dbaas_config, ch_config)),
         diagnostics.add_string('Timestamp', timestamp),
-        diagnostics.add_string('Uptime', execute_query(client, query.SELECT_UPTIME)),
+        diagnostics.add_string('Uptime', format_duration(client.get_uptime())),
         diagnostics.add_xml_document('ClickHouse configuration', ch_config.dump_xml()),
     ]
 

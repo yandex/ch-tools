@@ -41,6 +41,9 @@ class DiagnosticsData:
 
     @delayed
     def add_query(self, name, query, result, section=None):
+        self.add_query_sync(name, query, result, section)
+
+    def add_query_sync(self, name, query, result, section=None):
         self._section(section)[name] = {
             'type': 'query',
             'query': query,
@@ -49,6 +52,9 @@ class DiagnosticsData:
 
     @delayed
     def add_command(self, name, command, result, section=None):
+        self.add_command_sync(name, command, result, section)
+
+    def add_command_sync(self, name, command, result, section=None):
         self._section(section)[name] = {
             'type': 'command',
             'command': command,
@@ -192,7 +198,7 @@ def add_query(diagnostics, name, client, query, format_: OutputFormat, section=N
         'normalize_queries': diagnostics.normalize_queries,
     }
     query = client.render_query(query, **query_args)
-    diagnostics.add_query(
+    diagnostics.add_query_sync(
         name=name,
         query=query,
         result=execute_query(client, query, render_query=False, format_=format_),
@@ -200,7 +206,6 @@ def add_query(diagnostics, name, client, query, format_: OutputFormat, section=N
     )
 
 
-@delayed
 def execute_query(client, query, render_query=True, format_: OutputFormat = OutputFormat.Default):
     if render_query:
         query = client.render_query(query)
@@ -213,7 +218,7 @@ def execute_query(client, query, render_query=True, format_: OutputFormat = Outp
 
 @delayed
 def add_command(diagnostics, name, command, section=None):
-    diagnostics.add_command(name=name, command=command, result=_execute_command(command), section=section)
+    diagnostics.add_command_sync(name=name, command=command, result=_execute_command(command), section=section)
 
 
 def _execute_command(command, input_=None):

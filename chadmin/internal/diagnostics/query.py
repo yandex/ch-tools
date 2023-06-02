@@ -1,16 +1,3 @@
-SELECT_UPTIME = str.strip(
-    # language=clickhouse
-    r'''
-{% if version_ge('21.3') -%}
-SELECT formatReadableTimeDelta(uptime())
-{% else -%}
-SELECT
-    toString(floor(uptime() / 3600 / 24)) || ' days ' ||
-    toString(floor(uptime() % (24 * 3600) / 3600, 1)) || ' hours'
-{% endif -%}
-'''
-)
-
 SELECT_SYSTEM_TABLES = str.strip(
     # language=clickhouse
     r'''
