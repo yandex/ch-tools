@@ -61,7 +61,7 @@ def list_table_replicas(ctx, *, database=None, table=None, limit=None):
         database=database,
         table=table,
         limit=limit,
-        format='JSON',
+        format_='JSON',
     )['data']
 
 
@@ -72,7 +72,7 @@ def restart_table_replica(ctx, database, table, *, cluster=None):
     query = f"SYSTEM RESTART REPLICA `{database}`.`{table}`"
     if cluster:
         query += f" ON CLUSTER '{cluster}'"
-    execute_query(ctx, query, timeout=300, echo=True, format=None)
+    execute_query(ctx, query, timeout=300, echo=True, format_=None)
 
 
 def restore_table_replica(ctx, database, table, *, cluster=None):
@@ -82,4 +82,4 @@ def restore_table_replica(ctx, database, table, *, cluster=None):
     query = f"SYSTEM RESTORE REPLICA `{database}`.`{table}`"
     if cluster:
         query += f" ON CLUSTER '{cluster}'"
-    execute_query(ctx, query, timeout=600, echo=True, format=None)
+    execute_query(ctx, query, timeout=600, echo=True, format_=None)

@@ -29,7 +29,7 @@ def replication_queue_group():
 @option('-l', '--limit', type=int, help='Limit the max number of objects in the output.')
 @pass_context
 def list_replication_queue_command(ctx, **kwargs):
-    print(get_replication_queue_tasks(ctx, **kwargs, format='Vertical'))
+    print(get_replication_queue_tasks(ctx, **kwargs, format_='Vertical'))
 
 
 @replication_queue_group.command('delete')
@@ -43,12 +43,12 @@ def list_replication_queue_command(ctx, **kwargs):
 @option('--table', help='Filter replication queue tasks to delete by the specified table.')
 @pass_context
 def delete_command(ctx, **kwargs):
-    tasks = get_replication_queue_tasks(ctx, **kwargs, verbose=True, format='JSON')['data']
+    tasks = get_replication_queue_tasks(ctx, **kwargs, verbose=True, format_='JSON')['data']
     for table, tasks in group_tasks_by_table(tasks).items():
         database, table = table
 
         print(f'Detaching table `{database}`.`{table}`')
-        execute_query(ctx, f"""DETACH TABLE `{database}`.`{table}`""", timeout=300, echo=True, format=None)
+        execute_query(ctx, f"""DETACH TABLE `{database}`.`{table}`""", timeout=300, echo=True, format_=None)
 
         for task in tasks:
             zk_path = task['zk_path']
@@ -56,7 +56,7 @@ def delete_command(ctx, **kwargs):
             delete_zk_node(ctx, zk_path)
 
         print(f'Attaching table `{database}`.`{table}`')
-        execute_query(ctx, f"""ATTACH TABLE `{database}`.`{table}`""", timeout=300, echo=True, format=None)
+        execute_query(ctx, f"""ATTACH TABLE `{database}`.`{table}`""", timeout=300, echo=True, format_=None)
 
 
 def get_replication_queue_tasks(
@@ -70,7 +70,7 @@ def get_replication_queue_tasks(
     table=None,
     verbose=None,
     limit=None,
-    format=None,
+    format_=None,
 ):
     cluster = get_cluster_name(ctx) if on_cluster else None
     query = """
@@ -134,7 +134,7 @@ def get_replication_queue_tasks(
         type=type,
         verbose=verbose,
         limit=limit,
-        format=format,
+        format_=format_,
     )
 
 

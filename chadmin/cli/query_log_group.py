@@ -148,7 +148,7 @@ def get_statistics_command(
             min_time=min_time,
             max_time=max_time,
             failed=failed,
-            format='Vertical',
+            format_='Vertical',
         )
     )
 
@@ -335,7 +335,7 @@ def get_queries(
         limit=limit,
         verbose=verbose,
         order_by=order_by,
-        format='Vertical',
+        format_='Vertical',
     )
 
 

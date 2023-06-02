@@ -31,7 +31,7 @@ def get_mutation(ctx, mutation, last):
         LIMIT 1
         {% endif %}
         """
-    print(execute_query(ctx, query, mutation=mutation, format='Vertical'))
+    print(execute_query(ctx, query, mutation=mutation, format_='Vertical'))
 
 
 @mutation_group.command(name='list')
@@ -73,7 +73,7 @@ def list_mutations(ctx, is_done, command_pattern, on_cluster):
         {% endif %}
         """
     response = execute_query(
-        ctx, query, is_done=is_done, command_pattern=command_pattern, cluster=cluster, format='Vertical'
+        ctx, query, is_done=is_done, command_pattern=command_pattern, cluster=cluster, format_='Vertical'
     )
     print(response)
 
@@ -86,4 +86,4 @@ def kill_mutation(ctx):
         KILL MUTATION
         WHERE NOT is_done
         """
-    print(execute_query(ctx, query, format='PrettyCompact'))
+    print(execute_query(ctx, query, format_='PrettyCompact'))

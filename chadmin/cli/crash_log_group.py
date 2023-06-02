@@ -35,4 +35,4 @@ def list_crashes_command(ctx, on_cluster):
         {% endif %}
         ORDER BY event_time DESC
         """
-    print(execute_query(ctx, query_str, cluster=cluster, format='Vertical'))
+    print(execute_query(ctx, query_str, cluster=cluster, format_='Vertical'))

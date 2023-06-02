@@ -96,7 +96,7 @@ def list_processes(
         limit=limit,
         verbose=verbose,
         order_by=order_by,
-        format='JSON',
+        format_='JSON',
     )['data']
 
 
@@ -180,7 +180,7 @@ def list_merges(ctx, *, database=None, table=None, is_mutation=None, cluster=Non
         is_mutation=is_mutation,
         cluster=cluster,
         limit=limit,
-        format='JSON',
+        format_='JSON',
     )['data']
 
 
@@ -232,7 +232,7 @@ def list_replicated_fetches(ctx, *, database=None, table=None, cluster=None, lim
         table=table,
         cluster=cluster,
         limit=limit,
-        format='JSON',
+        format_='JSON',
     )['data']
 
 
@@ -241,7 +241,7 @@ def stop_merges(ctx, database, table, dry_run=False):
     Stop merges for the specified table.
     """
     query = f'SYSTEM STOP MERGES `{database}`.`{table}`'
-    execute_query(ctx, query, timeout=300, format=None, echo=True, dry_run=dry_run)
+    execute_query(ctx, query, timeout=300, format_=None, echo=True, dry_run=dry_run)
 
 
 def start_merges(ctx, database, table, dry_run=False):
@@ -249,4 +249,4 @@ def start_merges(ctx, database, table, dry_run=False):
     Start merges for the specified table.
     """
     query = f'SYSTEM START MERGES `{database}`.`{table}`'
-    execute_query(ctx, query, timeout=300, format=None, echo=True, dry_run=dry_run)
+    execute_query(ctx, query, timeout=300, format_=None, echo=True, dry_run=dry_run)

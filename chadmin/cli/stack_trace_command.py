@@ -24,4 +24,4 @@ def stack_trace_command(ctx):
         GROUP BY thread_name, trace
         ORDER BY min_thread_id
     """
-    print(execute_query(ctx, query_str, format='Vertical'))
+    print(execute_query(ctx, query_str, format_='Vertical'))
