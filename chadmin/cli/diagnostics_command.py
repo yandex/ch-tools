@@ -1,6 +1,7 @@
 import cloup
 
 from chadmin.internal.diagnostics.diagnose import diagnose
+from click import pass_context
 from common.cli.parameters import env_var_help
 
 
@@ -24,5 +25,6 @@ from common.cli.parameters import env_var_help
     envvar='CHADMIN_DIAGNOSTICS_NORMALIZE_QUERIES',
     help='Whether to normalize queries for ClickHouse client. ' + env_var_help('CHADMIN_DIAGNOSTICS_NORMALIZE_QUERIES'),
 )
-def diagnostics_command(output_format: str, normalize_queries: bool):
-    diagnose(output_format, normalize_queries)
+@pass_context
+def diagnostics_command(ctx, output_format: str, normalize_queries: bool):
+    diagnose(ctx, output_format, normalize_queries)
