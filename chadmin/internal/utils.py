@@ -29,15 +29,15 @@ def clickhouse_client(ctx):
     return ctx.obj['chcli']
 
 
-def execute_query(ctx, query, timeout=None, echo=False, dry_run=False, format='default', **kwargs):
+def execute_query(ctx, query, timeout=None, echo=False, dry_run=False, format_='default', **kwargs):
     """
     Execute ClickHouse query.
     """
-    if format == 'default':
-        format = 'PrettyCompact'
+    if format_ == 'default':
+        format_ = 'PrettyCompact'
 
     return clickhouse_client(ctx).query(
-        query=query, query_args=kwargs, timeout=timeout, format=format, echo=echo, dry_run=dry_run
+        query=query, query_args=kwargs, timeout=timeout, format_=format_, echo=echo, dry_run=dry_run
     )
 
 

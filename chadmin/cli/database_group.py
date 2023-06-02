@@ -14,7 +14,7 @@ def database_group():
 @option('--active', '--active-parts', 'active_parts', is_flag=True, help='Account only active data parts.')
 @pass_context
 def get_database_command(ctx, database, active_parts):
-    print(get_databases(ctx, database=database, active_parts=active_parts, format='Vertical'))
+    print(get_databases(ctx, database=database, active_parts=active_parts, format_='Vertical'))
 
 
 @database_group.command('list')
@@ -23,7 +23,7 @@ def get_database_command(ctx, database, active_parts):
 @option('--active', '--active-parts', 'active_parts', is_flag=True, help='Account only active data parts.')
 @pass_context
 def list_databases_command(ctx, **kwargs):
-    print(get_databases(ctx, **kwargs, format='PrettyCompact'))
+    print(get_databases(ctx, **kwargs, format_='PrettyCompact'))
 
 
 @database_group.command('delete')
@@ -39,7 +39,7 @@ def delete_databases_command(ctx, dry_run, all, database, exclude_database, clus
     if not any((all, database)):
         ctx.fail('At least one of --all, --database options must be specified.')
 
-    for d in get_databases(ctx, database=database, exclude_database=exclude_database, format='JSON')['data']:
+    for d in get_databases(ctx, database=database, exclude_database=exclude_database, format_='JSON')['data']:
         query = """
             DROP DATABASE `{{ database }}`
             {% if cluster %}
@@ -49,7 +49,7 @@ def delete_databases_command(ctx, dry_run, all, database, exclude_database, clus
         execute_query(ctx, query, database=d['database'], cluster=cluster, echo=True, dry_run=dry_run)
 
 
-def get_databases(ctx, database=None, exclude_database=None, active_parts=None, format=None):
+def get_databases(ctx, database=None, exclude_database=None, active_parts=None, format_=None):
     query = """
         SELECT
             database,
@@ -108,5 +108,5 @@ def get_databases(ctx, database=None, exclude_database=None, active_parts=None, 
         ORDER BY database
         """
     return execute_query(
-        ctx, query, database=database, exclude_database=exclude_database, active_parts=active_parts, format=format
+        ctx, query, database=database, exclude_database=exclude_database, active_parts=active_parts, format_=format_
     )

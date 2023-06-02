@@ -23,7 +23,7 @@ def restore_replica_command(ctx, database, table, on_cluster):
           AND table {{ format_str_match(table) }}
         {% endif %}
         """
-    ro_replicas = execute_query(ctx, query, database=database, table=table, format='JSON')['data']
+    ro_replicas = execute_query(ctx, query, database=database, table=table, format_='JSON')['data']
 
     cluster = get_cluster_name(ctx) if on_cluster else None
 

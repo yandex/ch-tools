@@ -82,7 +82,7 @@ def get_threads(ctx, query_id=None, min_date=None, max_date=None, min_time=None,
         min_time=min_time,
         max_time=max_time,
         verbose=verbose,
-        format='Vertical',
+        format_='Vertical',
     )
 
 

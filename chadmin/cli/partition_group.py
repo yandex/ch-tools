@@ -42,7 +42,7 @@ def partition_group():
 @pass_context
 def list_partitions_command(ctx, **kwargs):
     """List partitions."""
-    print(get_partitions(ctx, format='PrettyCompact', **kwargs))
+    print(get_partitions(ctx, format_='PrettyCompact', **kwargs))
 
 
 @partition_group.command(name='attach')
@@ -59,7 +59,7 @@ def attach_partitions_command(ctx, dry_run, all, database, table, partition_id):
     if not any((all, database, table, partition_id)):
         ctx.fail('At least one of --all, --database, --table, --partition options must be specified.')
 
-    partitions = get_partitions(ctx, database, table, partition_id=partition_id, detached=True, format='JSON')['data']
+    partitions = get_partitions(ctx, database, table, partition_id=partition_id, detached=True, format_='JSON')['data']
     for p in partitions:
         attach_partition(ctx, p['database'], p['table'], p['partition_id'], dry_run=dry_run)
 
@@ -79,7 +79,7 @@ def detach_partitions_command(ctx, dry_run, all, database, table, partition_id, 
     if not any((all, database, table, partition_id)):
         ctx.fail('At least one of --all, --database, --table, --partition options must be specified.')
 
-    partitions = get_partitions(ctx, database, table, partition_id=partition_id, disk_name=disk_name, format='JSON')[
+    partitions = get_partitions(ctx, database, table, partition_id=partition_id, disk_name=disk_name, format_='JSON')[
         'data'
     ]
     for p in partitions:
@@ -133,7 +133,7 @@ def reattach_partitions_command(
         mutating=mutating,
         disk_name=disk_name,
         limit=limit,
-        format='JSON',
+        format_='JSON',
     )['data']
     for p in partitions:
         detach_partition(ctx, p['database'], p['table'], p['partition_id'], dry_run=dry_run)
@@ -173,7 +173,7 @@ def delete_partitions_command(
         min_date=min_date,
         max_date=max_date,
         disk_name=disk_name,
-        format='JSON',
+        format_='JSON',
     )['data']
     for p in partitions:
         drop_partition(ctx, p['database'], p['table'], p['partition_id'], dry_run=dry_run)
@@ -212,7 +212,7 @@ def optimize_partitions_command(
         min_date=min_date,
         max_date=max_date,
         disk_name=disk_name,
-        format='JSON',
+        format_='JSON',
     )['data']:
         optimize_partition(ctx, p['database'], p['table'], p['partition_id'], dry_run=dry_run)
 
@@ -250,7 +250,7 @@ def materialize_ttl_command(
         min_date=min_date,
         max_date=max_date,
         disk_name=disk_name,
-        format='JSON',
+        format_='JSON',
     )['data']:
         materialize_ttl_in_partition(ctx, p['database'], p['table'], p['partition_id'], dry_run=dry_run)
 
@@ -276,7 +276,7 @@ def get_partitions(
     detached=None,
     order_by=None,
     limit=None,
-    format=None,
+    format_=None,
 ):
     order_by = {
         'size': 'sum(bytes_on_disk) DESC',
@@ -411,7 +411,7 @@ def get_partitions(
         mutating=mutating,
         order_by=order_by,
         limit=limit,
-        format=format,
+        format_=format,
     )
 
 
@@ -422,7 +422,7 @@ def get_partition_key_type(ctx, database, table):
     query = 'SELECT {partition_key} FROM `{database}`.`{table}` LIMIT 0'.format(
         database=database, table=table, partition_key=get_partition_key(ctx, database, table)
     )
-    return execute_query(ctx, query, format='JSON')['meta'][0]['type']
+    return execute_query(ctx, query, format_='JSON')['meta'][0]['type']
 
 
 def get_partition_key(ctx, database, table):
@@ -437,4 +437,4 @@ def get_partition_key(ctx, database, table):
         """.format(
         database=database, table=table
     )
-    return execute_query(ctx, query, format='JSONCompact')['data'][0][0]
+    return execute_query(ctx, query, format_='JSONCompact')['data'][0][0]

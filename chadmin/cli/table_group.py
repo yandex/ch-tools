@@ -122,7 +122,7 @@ def recreate_command(ctx, dry_run, all, database, table, exclude_table):
 
     for t in list_tables(ctx, database=database, table=table, exclude_table=exclude_table, verbose=True):
         delete_table(ctx, database=t['database'], table=t['table'], echo=True, dry_run=dry_run)
-        execute_query(ctx, t['create_table_query'], echo=True, format=None, dry_run=dry_run)
+        execute_query(ctx, t['create_table_query'], echo=True, format_=None, dry_run=dry_run)
 
 
 @table_group.command('detach')

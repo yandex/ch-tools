@@ -21,7 +21,7 @@ def list_dictionaries(ctx, *, name=None, status=None):
           AND status = '{{ status }}'
         {% endif %}
         """
-    return execute_query(ctx, query, name=name, status=status, format='JSON')['data']
+    return execute_query(ctx, query, name=name, status=status, format_='JSON')['data']
 
 
 def reload_dictionary(ctx, *, name, database=None):
@@ -34,4 +34,4 @@ def reload_dictionary(ctx, *, name, database=None):
         full_name = f'`{name}`'
 
     query = f"""SYSTEM RELOAD DICTIONARY {full_name}"""
-    execute_query(ctx, query, format=None)
+    execute_query(ctx, query, format_=None)
