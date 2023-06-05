@@ -29,6 +29,7 @@ def replication_queue_group():
     ' Multiple values can be specified through a comma.',
 )
 @option(
+    '-d',
     '--database',
     help='Filter replication queue tasks to output by the specified database.'
     ' Multiple values can be specified through a comma.',
@@ -62,6 +63,7 @@ def list_replication_queue_command(ctx, **kwargs):
     ' Multiple values can be specified through a comma.',
 )
 @option(
+    '-d',
     '--database',
     help='Filter replication queue tasks to delete by the specified database.'
     ' Multiple values can be specified through a comma.',

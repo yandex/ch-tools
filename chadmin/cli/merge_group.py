@@ -22,7 +22,7 @@ def merge_group():
 
 
 @merge_group.command(name='list')
-@option('--database', help='Filter in merges to output by the specified database.')
+@option('-d', '--database', help='Filter in merges to output by the specified database.')
 @option('-t', '--table', help='Filter in merges to output by the specified table.')
 @option('--mutation', 'is_mutation', is_flag=True)
 @option('--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Get merges from all hosts in the cluster.')

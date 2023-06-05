@@ -7,7 +7,7 @@ from common.clickhouse.client import ClickhouseError
 
 
 @command('restore-replica')
-@option('--database')
+@option('-d', '--database')
 @option('-t', '--table')
 @option('--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Run RESTORE REPLICA on cluster ')
 @pass_context

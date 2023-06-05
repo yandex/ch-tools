@@ -18,7 +18,7 @@ def get_database_command(ctx, database, active_parts):
 
 
 @database_group.command('list')
-@option('--database')
+@option('-d', '--database')
 @option('--exclude-database')
 @option('--active', '--active-parts', 'active_parts', is_flag=True, help='Account only active data parts.')
 @pass_context
@@ -28,7 +28,7 @@ def list_databases_command(ctx, **kwargs):
 
 @database_group.command('delete')
 @pass_context
-@option('--database')
+@option('-d', '--database')
 @option('--exclude-database')
 @option('-a', '--all', is_flag=True, help='Delete all databases.')
 @option('--cluster')

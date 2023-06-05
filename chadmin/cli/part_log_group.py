@@ -20,7 +20,7 @@ def part_log_group():
 
 
 @part_log_group.command('list')
-@option('--database')
+@option('-d', '--database')
 @option('-t', '--table')
 @option('--partition')
 @option('--part')

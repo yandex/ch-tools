@@ -19,7 +19,7 @@ def replicated_fetch_group():
 
 
 @replicated_fetch_group.command(name='list')
-@option('--database', help='Filter in merges to output by the specified database.')
+@option('-d', '--database', help='Filter in merges to output by the specified database.')
 @option('-t', '--table', help='Filter in merges to output by the specified table.')
 @option('--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Get merges from all hosts in the cluster.')
 @option('-l', '--limit', type=int, default=1000, help='Limit the max number of objects in the output.')
