@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from click import Choice, group, option, pass_context
+from click import group, option, pass_context
 from chadmin.cli import get_cluster_name
 from chadmin.internal.utils import execute_query
 from chadmin.internal.zookeeper import delete_zk_node
@@ -20,29 +20,63 @@ def replication_queue_group():
 @option('--executing', is_flag=True, help='Output only executing replication queue tasks.')
 @option(
     '--type',
-    type=Choice(['GET_PART', 'MERGE_PARTS', 'MUTATE_PART']),
-    help='Filter replication queue tasks to output by the specified type.',
+    help='Filter replication queue tasks to output by the specified type.'
+    ' Multiple values can be specified through a comma.',
 )
-@option('--database', help='Filter replication queue tasks to output by the specified database.')
-@option('--table', help='Filter replication queue tasks to output by the specified table.')
+@option(
+    '--exclude-type',
+    help='Filter replication queue tasks to not output by the specified type.'
+    ' Multiple values can be specified through a comma.',
+)
+@option(
+    '--database',
+    help='Filter replication queue tasks to output by the specified database.'
+    ' Multiple values can be specified through a comma.',
+)
+@option(
+    '-t',
+    '--table',
+    help='Filter replication queue tasks to output by the specified table.'
+    ' Multiple values can be specified through a comma.',
+)
 @option('-v', '--verbose', is_flag=True, help='Verbose mode.')
 @option('-l', '--limit', type=int, help='Limit the max number of objects in the output.')
 @pass_context
 def list_replication_queue_command(ctx, **kwargs):
+    """
+    List replication queue tasks.
+    """
     print(get_replication_queue_tasks(ctx, **kwargs, format_='Vertical'))
 
 
 @replication_queue_group.command('delete')
+@option('--failed', is_flag=True, help='Delete only failed replication queue tasks (tasks with non-empty exception).')
 @option(
     '--type',
-    type=Choice(['GET_PART', 'MERGE_PARTS', 'MUTATE_PART']),
-    help='Filter replication queue tasks to delete by the specified type.',
+    help='Filter replication queue tasks to delete by the specified type.'
+    ' Multiple values can be specified through a comma.',
 )
-@option('--failed', is_flag=True)
-@option('--database', help='Filter replication queue tasks to delete by the specified database.')
-@option('--table', help='Filter replication queue tasks to delete by the specified table.')
+@option(
+    '--exclude-type',
+    help='Filter replication queue tasks to not delete by the specified type.'
+    ' Multiple values can be specified through a comma.',
+)
+@option(
+    '--database',
+    help='Filter replication queue tasks to delete by the specified database.'
+    ' Multiple values can be specified through a comma.',
+)
+@option(
+    '-t',
+    '--table',
+    help='Filter replication queue tasks to delete by the specified table.'
+    ' Multiple values can be specified through a comma.',
+)
 @pass_context
 def delete_command(ctx, **kwargs):
+    """
+    Delete replication queue tasks.
+    """
     tasks = get_replication_queue_tasks(ctx, **kwargs, verbose=True, format_='JSON')['data']
     for table, tasks in group_tasks_by_table(tasks).items():
         database, table = table
@@ -66,6 +100,7 @@ def get_replication_queue_tasks(
     failed=None,
     executing=None,
     type=None,
+    exclude_type=None,
     database=None,
     table=None,
     verbose=None,
@@ -104,10 +139,10 @@ def get_replication_queue_tasks(
     {% endif %}
     WHERE 1
     {% if database %}
-      AND database = '{{ database }}'
+      AND database {{ format_str_match(database) }}
     {% endif %}
     {% if table %}
-      AND table = '{{ table }}'
+      AND table {{ format_str_match(table) }}
     {% endif %}
     {% if failed %}
       AND last_exception != ''
@@ -116,7 +151,10 @@ def get_replication_queue_tasks(
       AND is_currently_executing
     {% endif %}
     {% if type %}
-      AND type = '{{ type }}'
+      AND type {{ format_str_match(type) }}
+    {% endif %}
+    {% if exclude_type %}
+      AND type NOT {{ format_str_match(exclude_type) }}
     {% endif %}
     ORDER BY table, position
     {% if limit %}
@@ -132,6 +170,7 @@ def get_replication_queue_tasks(
         failed=failed,
         executing=executing,
         type=type,
+        exclude_type=exclude_type,
         verbose=verbose,
         limit=limit,
         format_=format_,
