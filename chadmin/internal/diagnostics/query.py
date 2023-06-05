@@ -54,7 +54,7 @@ SELECT
     engine,
     count() AS count
 FROM system.tables
-WHERE database != 'system'
+WHERE database NOT IN ('system', 'INFORMATION_SCHEMA')
 GROUP BY engine
 '''
 )

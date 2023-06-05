@@ -100,7 +100,7 @@ def get_databases(ctx, database=None, exclude_database=None, active_parts=None, 
         {% if database %}
         WHERE database {{ format_str_match(database) }}
         {% else %}
-        WHERE database != 'system'
+        WHERE database NOT IN ('system', 'INFORMATION_SCHEMA')
         {% endif %}
         {% if exclude_database %}
           AND database != '{{ exclude_database }}'

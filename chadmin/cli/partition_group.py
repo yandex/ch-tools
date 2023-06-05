@@ -296,7 +296,7 @@ def get_partitions(
             {% if database -%}
               WHERE database {{ format_str_match(database) }}
             {% else -%}
-              WHERE database != 'system'
+              WHERE database NOT IN ('system', 'INFORMATION_SCHEMA')
             {% endif -%}
             {% if table -%}
               AND table {{ format_str_match(table) }}
@@ -339,7 +339,7 @@ def get_partitions(
             {% if database -%}
             WHERE database {{ format_str_match(database) }}
             {% else -%}
-            WHERE database != 'system'
+            WHERE database NOT IN ('system', 'INFORMATION_SCHEMA')
             {% endif -%}
             {% if active_parts -%}
               AND active
@@ -411,7 +411,7 @@ def get_partitions(
         mutating=mutating,
         order_by=order_by,
         limit=limit,
-        format_=format,
+        format_=format_,
     )
 
 
