@@ -29,9 +29,9 @@ def part_group():
 
 
 @part_group.command(name='list')
-@option('--database', help='Filter in data parts to output by the specified database.')
+@option('-d', '--database', help='Filter in data parts to output by the specified database.')
 @option('-t', '--table', help='Filter in data parts to output by the specified table.')
-@option('--partition', 'partition_id', help='Filter in data parts to output by the specified partition.')
+@option('--id', '--partition', 'partition_id', help='Filter in data parts to output by the specified partition.')
 @option('--min-partition', 'min_partition_id')
 @option('--max-partition', 'max_partition_id')
 @option('--name', '--part', 'part_name', help='Filter in data parts to output by the specified data part name.')
@@ -84,9 +84,9 @@ def list_parts_command(ctx, active, min_size, max_size, detached, reason, order_
 
 
 @part_group.command(name='attach')
-@option('--database', help='Filter in data parts to attach by the specified database.')
+@option('-d', '--database', help='Filter in data parts to attach by the specified database.')
 @option('-t', '--table', help='Filter in data parts to attach by the specified table.')
-@option('--partition', 'partition_id', help='Filter in data parts to attach by the specified partition.')
+@option('--id', '--partition', 'partition_id', help='Filter in data parts to attach by the specified partition.')
 @option('--name', '--part', 'part_name', help='Filter in data parts to attach by the specified data part name.')
 @option('--disk', 'disk_name', help='Filter in data parts to attach by the specified disk.')
 @option('-a', '--all', is_flag=True, help='Attach all data parts.')
@@ -125,9 +125,9 @@ def attach_parts_command(ctx, all, database, table, partition_id, part_name, dis
 
 
 @part_group.command(name='detach')
-@option('--database', help='Filter in data parts to detach by the specified database.')
+@option('-d', '--database', help='Filter in data parts to detach by the specified database.')
 @option('-t', '--table', help='Filter in data parts to detach by the specified table.')
-@option('--partition', 'partition_id', help='Filter in data parts to detach by the specified partition.')
+@option('--id', '--partition', 'partition_id', help='Filter in data parts to detach by the specified partition.')
 @option('--name', '--part', 'part_name', help='Filter in data parts to detach by the specified data part name.')
 @option('--disk', 'disk_name', help='Filter in data parts to detach by the specified disk.')
 @option('-a', '--all', is_flag=True, help='Detach all data parts.')
@@ -165,9 +165,9 @@ def detach_parts_command(ctx, all, database, table, partition_id, part_name, dis
 
 
 @part_group.command(name='delete')
-@option('--database', help='Filter in data parts to delete by the specified database.')
+@option('-d', '--database', help='Filter in data parts to delete by the specified database.')
 @option('-t', '--table', help='Filter in data parts to delete by the specified table.')
-@option('--partition', 'partition_id', help='Filter in data parts to delete by the specified partition.')
+@option('--id', '--partition', 'partition_id', help='Filter in data parts to delete by the specified partition.')
 @option('--min-partition', 'min_partition_id')
 @option('--max-partition', 'max_partition_id')
 @option('--name', '--part', 'part_name', help='Filter in data parts to delete by the specified data part name.')
@@ -246,9 +246,9 @@ def delete_parts_command(
 
 
 @part_group.command(name='move')
-@option('--database', help='Filter in data parts to move by the specified database.')
+@option('-d', '--database', help='Filter in data parts to move by the specified database.')
 @option('-t', '--table', help='Filter in data parts to move by the specified table.')
-@option('--partition', 'partition_id', help='Filter in data parts to move by the specified partition.')
+@option('--id', '--partition', 'partition_id', help='Filter in data parts to move by the specified partition.')
 @option('--min-partition', 'min_partition_id')
 @option('--max-partition', 'max_partition_id')
 @option('--name', '--part', 'part_name', help='Filter in data parts to move by the specified data part name.')

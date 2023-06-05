@@ -32,7 +32,7 @@ def get_command(ctx, database, table, active_parts):
 
 
 @table_group.command('list')
-@option('--database', help='Filter tables to output by the specified database name.')
+@option('-d', '--database', help='Filter tables to output by the specified database name.')
 @option('-t', '--table', help='Filter in tables to output by the specified table name.')
 @option('--exclude-table', help='Filter out tables to output by the specified table name.')
 @option('--engine', help='Filter tables to output by the specified engine.')
@@ -85,7 +85,7 @@ def columns_command(ctx, database, table):
 
 @table_group.command('delete')
 @pass_context
-@option('--database', help='Filter in tables to delete by the specified database name.')
+@option('-d', '--database', help='Filter in tables to delete by the specified database name.')
 @option('-t', '--table', help='Filter in tables to delete by the specified table name.')
 @option('--exclude-table', help='Filter out tables to delete by the specified table name.')
 @option('-a', '--all', is_flag=True, help='Delete all tables.')
@@ -106,7 +106,7 @@ def delete_command(ctx, dry_run, all, database, table, exclude_table, cluster):
 
 @table_group.command('recreate')
 @pass_context
-@option('--database', help='Filter in tables to recreate by the specified database name.')
+@option('-d', '--database', help='Filter in tables to recreate by the specified database name.')
 @option('-t', '--table', help='Filter in tables to recreate by the specified table name.')
 @option('--exclude-table', help='Filter out tables to recreate by the specified table name.')
 @option('-a', '--all', is_flag=True, help='Recreate all tables.')
@@ -127,7 +127,7 @@ def recreate_command(ctx, dry_run, all, database, table, exclude_table):
 
 @table_group.command('detach')
 @pass_context
-@option('--database', help='Filter in tables to detach by the specified database name.')
+@option('-d', '--database', help='Filter in tables to detach by the specified database name.')
 @option('-t', '--table', help='Filter in tables to detach by the specified table name.')
 @option('--exclude-table', help='Filter out tables to reattach by the specified table name.')
 @option('--engine', help='Filter tables to detach by the specified engine.')
@@ -153,7 +153,7 @@ def detach_command(ctx, dry_run, all, database, table, engine, exclude_table, on
 
 @table_group.command('reattach')
 @pass_context
-@option('--database', help='Filter in tables to reattach by the specified database name.')
+@option('-d', '--database', help='Filter in tables to reattach by the specified database name.')
 @option('-t', '--table', help='Filter in tables to reattach by the specified table name.')
 @option('--exclude-table', help='Filter out tables to reattach by the specified table name.')
 @option('--engine', help='Filter tables to reattach by the specified engine.')
@@ -184,7 +184,7 @@ def reattach_command(ctx, dry_run, all, database, table, engine, exclude_table, 
 
 @table_group.command('materialize-ttl')
 @pass_context
-@option('--database', help='Filter in tables to materialize TTL by the specified database name.')
+@option('-d', '--database', help='Filter in tables to materialize TTL by the specified database name.')
 @option('-t', '--table', help='Filter in tables to materialize TTL by the specified table name.')
 @option('--exclude-table', help='Filter out tables to materialize TTL by the specified table name.')
 @option('-a', '--all', is_flag=True, help='Materialize TTL for all tables.')

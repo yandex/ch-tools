@@ -33,7 +33,7 @@ def list_tables(
         SELECT
             database,
             table,
-            formatReadableSize(bytes_on_disk),
+            formatReadableSize(bytes_on_disk) "disk_size",
             partitions,
             parts,
             rows,
@@ -70,7 +70,7 @@ def list_tables(
         {% if database -%}
         WHERE database {{ format_str_match(database) }}
         {% else -%}
-        WHERE database != 'system'
+        WHERE database NOT IN ('system', 'INFORMATION_SCHEMA')
         {% endif -%}
         {% if table -%}
           AND table {{ format_str_match(table) }}

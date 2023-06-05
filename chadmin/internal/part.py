@@ -69,7 +69,7 @@ def list_parts(
         {% if database -%}
         WHERE database {{ format_str_match(database) }}
         {% else -%}
-        WHERE database != 'system'
+        WHERE database NOT IN ('system', 'INFORMATION_SCHEMA')
         {% endif -%}
         {% if partition_id -%}
           AND partition_id {{ format_str_match(partition_id) }}
@@ -168,7 +168,7 @@ def list_detached_parts(
         {% if database -%}
         WHERE database {{ format_str_match(database) }}
         {% else -%}
-        WHERE database != 'system'
+        WHERE database NOT IN ('system', 'INFORMATION_SCHEMA')
         {% endif -%}
         {% if partition_id -%}
           AND partition_id {{ format_str_match(partition_id) }}
@@ -312,7 +312,7 @@ def list_part_log(
         {% if database %}
         WHERE database {{ format_str_match(database) }}
         {% else %}
-        WHERE database != 'system'
+        WHERE database NOT IN ('system', 'INFORMATION_SCHEMA')
         {% endif %}
         {% if table %}
           AND table {{ format_str_match(table) }}
