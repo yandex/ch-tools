@@ -9,10 +9,10 @@
     "build": {
         "bin": {
             "targets": [
-                "cloud/mdb/clickhouse/tools/chadmin",
-                "cloud/mdb/clickhouse/tools/monrun_checks",
-                "cloud/mdb/clickhouse/tools/monrun_checks_keeper",
-                "cloud/mdb/clickhouse/tools/s3_credentials"
+                "cloud/mdb/clickhouse/tools/src/chtools/chadmin",
+                "cloud/mdb/clickhouse/tools/src/chtools/monrun_checks",
+                "cloud/mdb/clickhouse/tools/src/chtools/monrun_checks_keeper",
+                "cloud/mdb/clickhouse/tools/src/chtools/s3_credentials"
             ]
         }
     },
@@ -21,7 +21,7 @@
             "source": {
                 "type": "BUILD_OUTPUT",
                 "build_key": "bin",
-                "path": "cloud/mdb/clickhouse/tools/chadmin/chadmin"
+                "path": "cloud/mdb/clickhouse/tools/src/chtools/chadmin/chadmin"
             },
             "destination": {
                 "path": "/opt/yandex/mdb-ch-tools/bin/chadmin"
@@ -39,7 +39,7 @@
         {
             "source": {
                 "type": "ARCADIA",
-                "path": "cloud/mdb/clickhouse/tools/chadmin/completion.bash"
+                "path": "cloud/mdb/clickhouse/tools/src/chtools/chadmin/completion.bash"
             },
             "destination": {
                 "path": "/etc/bash_completion.d/chadmin"
@@ -49,7 +49,7 @@
             "source": {
                 "type": "BUILD_OUTPUT",
                 "build_key": "bin",
-                "path": "cloud/mdb/clickhouse/tools/s3_credentials/ch-s3-credentials"
+                "path": "cloud/mdb/clickhouse/tools/src/chtools/s3_credentials/ch-s3-credentials"
             },
             "destination": {
                 "path": "/opt/yandex/mdb-ch-tools/bin/ch-s3-credentials"
@@ -68,7 +68,7 @@
             "source": {
                 "type": "BUILD_OUTPUT",
                 "build_key": "bin",
-                "path": "cloud/mdb/clickhouse/tools/monrun_checks/ch-monitoring"
+                "path": "cloud/mdb/clickhouse/tools/src/chtools/monrun_checks/ch-monitoring"
             },
             "destination": {
                 "path": "/opt/yandex/mdb-ch-tools/bin/ch-monitoring"
@@ -86,7 +86,7 @@
         {
             "source": {
                 "type": "ARCADIA",
-                "path": "cloud/mdb/clickhouse/tools/monrun_checks/completion.bash"
+                "path": "cloud/mdb/clickhouse/tools/src/chtools/monrun_checks/completion.bash"
             },
             "destination": {
                 "path": "/etc/bash_completion.d/ch-monitoring"
@@ -96,7 +96,7 @@
             "source": {
                 "type": "BUILD_OUTPUT",
                 "build_key": "bin",
-                "path": "cloud/mdb/clickhouse/tools/monrun_checks_keeper/keeper-monitoring"
+                "path": "cloud/mdb/clickhouse/tools/src/chtools/monrun_checks_keeper/keeper-monitoring"
             },
             "destination": {
                 "path": "/opt/yandex/mdb-ch-tools/bin/keeper-monitoring"
@@ -114,7 +114,7 @@
         {
             "source": {
                 "type": "ARCADIA",
-                "path": "cloud/mdb/clickhouse/tools/monrun_checks_keeper/completion.bash"
+                "path": "cloud/mdb/clickhouse/tools/src/chtools/monrun_checks_keeper/completion.bash"
             },
             "destination": {
                 "path": "/etc/bash_completion.d/keeper-monitoring"
@@ -123,7 +123,7 @@
         {
             "source": {
                 "type": "ARCADIA",
-                "path": "cloud/mdb/clickhouse/tools/chadmin/chadmin.logrotate"
+                "path": "cloud/mdb/clickhouse/tools/src/chtools/chadmin/chadmin.logrotate"
             },
             "destination": {
                 "path": "/etc/logrotate.d/chadmin"
@@ -132,7 +132,7 @@
         {
             "source": {
                 "type": "ARCADIA",
-                "path": "cloud/mdb/clickhouse/tools/monrun_checks/clickhouse-monitoring.logrotate"
+                "path": "cloud/mdb/clickhouse/tools/src/chtools/monrun_checks/clickhouse-monitoring.logrotate"
             },
             "destination": {
                 "path": "/etc/logrotate.d/clickhouse-monitoring"
@@ -141,7 +141,7 @@
         {
             "source": {
                 "type": "ARCADIA",
-                "path": "cloud/mdb/clickhouse/tools/monrun_checks_keeper/keeper-monitoring.logrotate"
+                "path": "cloud/mdb/clickhouse/tools/src/chtools/monrun_checks_keeper/keeper-monitoring.logrotate"
             },
             "destination": {
                 "path": "/etc/logrotate.d/keeper-monitoring"

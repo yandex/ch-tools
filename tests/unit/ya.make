@@ -10,7 +10,7 @@ ALL_PYTEST_SRCS(
 )
 
 PEERDIR(
-    cloud/mdb/clickhouse/tools/common
+    cloud/mdb/clickhouse/tools/src/chtools/common
     contrib/python/PyHamcrest
     contrib/python/pytest
 )
