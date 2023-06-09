@@ -1,0 +1,103 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ch-tools"
+version = "1.0.0"
+description = "A set of tools for administration and diagnostics of ClickHouse DBMS."
+readme = "README.md"
+requires-python = ">=3.6"
+license = { file="LICENSE" }
+authors = [
+    { name="Alexander Burmak", email="alex-burmak@yandex-team.ru"},
+    { name="Dmitry Starov", email="dstaroff@yandex-team.ru"},
+    { name="Anton Ivashkin", email="iantonspb@yandex-team.ru"},
+    { name="Grigory Pervakov", email="pervakovg@yandex-team.ru"},
+    { name="Petr Nuzhnov", email="petrnuzhnov@yandex-team.ru"},
+    { name="Egor Medvedev", email="egor-medvedev@yandex-team.ru"},
+    { name="Aleksei Filatov", email="alexfvk@yandex-team.ru"},
+    { name="Evgeny Dyukov", email="secwall@yandex-team.ru"},
+    { name="Evgeny Strizhnev", email="estrizhnev@yandex-team.ru"},
+    { name="Vadim Volodin", email="vadim-volodin@yandex-team.ru"},
+    { name="Anton Chaporgin", email="chapson@yandex-team.ru"},
+    { name="Evgenii Kopanev", email="ekopanev@yandex-team.ru"},
+]
+maintainers = [
+    { name="Alexander Burmak", email="alex-burmak@yandex-team.ru"},
+    { name="Dmitry Starov", email="dstaroff@yandex-team.ru"},
+    { name="Anton Ivashkin", email="iantonspb@yandex-team.ru"},
+    { name="Grigory Pervakov", email="pervakovg@yandex-team.ru"},
+    { name="Petr Nuzhnov", email="petrnuzhnov@yandex-team.ru"},
+    { name="Egor Medvedev", email="egor-medvedev@yandex-team.ru"},
+    { name="Aleksei Filatov", email="alexfvk@yandex-team.ru"},
+    { name="Evgenii Kopanev", email="ekopanev@yandex-team.ru"},
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Unix",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Database",
+    "Typing :: Typed",
+]
+dependencies = [
+    "Jinja2",
+    "PyYAML",
+    "Pygments",
+    "boto3",
+    "click",
+    "cloup",
+    "deepdiff",
+    "dnspython",
+    "humanfriendly",
+    "kazoo",
+    "lxml",
+    "psutil",
+    "pyOpenSSL",
+    "python-dateutil",
+    "requests",
+    "setuptools",
+    "tabulate",
+    "tenacity",
+    "termcolor",
+    "tqdm",
+    "xmltodict",
+]
+
+[project.optional-dependencies]
+dev = [
+    "behave",
+    "black",
+    "docker",
+    "docker-compose",
+    "flake",
+    "flake8",
+    "flake8-commas",
+    "flake8-print",
+    "flake8-quotes",
+    "flake8-string-format",
+    "isort",
+    "mypy",
+    "pep8",
+    "pyhamcrest",
+    "pylint",
+    "pytest",
+]
+
+[project.urls]
+"Source" = "https://github.com/yandex/ch-tools"
+
+[project.scripts]
+chadmin = "chtools.chadmin.chadmin_cli:main"
+ch-monitoring = "chtools.monrun_checks.main:main"
+keeper-monitoring = "chtools.monrun_checks_keeper.main:main"
+ch-s3-credentials = "chtools.s3_credentials.main:main"
