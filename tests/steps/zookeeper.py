@@ -23,6 +23,19 @@ def step_wait_for_zookeeper_alive(context):
         client.stop()
 
 
+@given('a working zookeeper with TLS')
+@retry(wait=wait_fixed(0.5), stop=stop_after_attempt(360))
+def step_wait_for_tls_zookeeper_alive(context):
+    """
+    Ensure that ZK on a secure port is ready to accept incoming requests.
+    """
+    client = _zk_client(context, port=2281, use_ssl=True)
+    try:
+        client.start()
+    finally:
+        client.stop()
+
+
 @given('a working keeper on {node:w}')
 @retry(wait=wait_fixed(0.5), stop=stop_after_attempt(360))
 def step_wait_for_keeper_alive(context, node):
@@ -30,6 +43,24 @@ def step_wait_for_keeper_alive(context, node):
     Wait until clickhouse keeper is ready to accept incoming requests.
     """
     client = _zk_client(context, instance_name=node, port=context.conf['services']['clickhouse']['keeper']['port'])
+    try:
+        client.start()
+        client.get('/')
+    except Exception:
+        client.stop()
+        raise
+    finally:
+        client.stop()
+
+
+@given('a working keeper with TLS on {node:w}')
+@retry(wait=wait_fixed(0.5), stop=stop_after_attempt(360))
+def step_wait_for_tls_keeper_alive(context, node):
+    """
+    Wait until clickhouse keeper is ready to accept incoming requests.
+    """
+    client = _zk_client(context, instance_name=node, port=context.conf['services']['clickhouse']['keeper']['port'],
+                        use_ssl=True)
     try:
         client.start()
         client.get('/')
@@ -61,8 +92,8 @@ def clean_zk_tables_metadata_for_host(context, node):
         client.stop()
 
 
-def _zk_client(context, instance_name='zookeeper01', port=2181):
+def _zk_client(context, instance_name='zookeeper01', port=2181, use_ssl=False):
     zk_container = get_container(context, instance_name)
     host, port = get_exposed_port(zk_container, port)
 
-    return KazooClient(f'{host}:{port}')
+    return KazooClient(f'{host}:{port}', use_ssl=use_ssl)
