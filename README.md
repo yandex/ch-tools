@@ -15,3 +15,13 @@ All of these tools must be run on the same host as ClickHouse server is running.
 ## Installation
 
 TBD
+
+## Testing
+
+```bash
+cd tests
+python3 -m venv env
+source venv/bin/activate
+python3 -m pip install -r requirements.txt
+make
+```

@@ -45,11 +45,13 @@ def create(keeper_secure):
                 'port': keeper_tcp_port,
                 'secure': keeper_secure,
             },
+            'zookeeper': {
+                'port': keeper_tcp_port,
+                'secure': keeper_secure,
+            }
         },
         'zookeeper': {
-            'secure': keeper_secure,
             'instances': ['zookeeper01'],
-            'port': keeper_tcp_port,
             'expose': {
                 'tcp': keeper_tcp_port,
             },

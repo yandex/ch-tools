@@ -33,6 +33,7 @@ maintainers = [
     { name="Egor Medvedev", email="egor-medvedev@yandex-team.ru"},
     { name="Aleksei Filatov", email="alexfvk@yandex-team.ru"},
     { name="Evgenii Kopanev", email="ekopanev@yandex-team.ru"},
+    { name="Mikhail Kot", email="myrrc@yandex-team.ru"},
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
