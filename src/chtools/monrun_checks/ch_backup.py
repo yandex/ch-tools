@@ -20,7 +20,8 @@ FAILED_PARTS_THRESHOLD = 10
 
 
 @click.command('backup')
-def backup_command():
+@click.option('--critical', 'crit', default=3, help='Critical threshold.')
+def backup_command(crit):
     """
     Check ClickHouse backups: its state, age and count.
     Skip backup checks for recently created clusters.
@@ -37,8 +38,8 @@ def backup_command():
 
     check_restored_parts()
     check_valid_backups_exist(backups)
-    check_last_backup_not_failed(backups)
-    check_backup_age(ch_client, backups)
+    check_last_backup_not_failed(backups, crit=crit)
+    check_backup_age(ch_client, backups, crit=crit)
     check_backup_count(backup_config, backups)
 
 
@@ -53,7 +54,7 @@ def check_valid_backups_exist(backups):
     die(2, 'No valid backups found')
 
 
-def check_last_backup_not_failed(backups):
+def check_last_backup_not_failed(backups, crit=3):
     """
     Check that the last backup is not failed. Its status must be 'created' or 'creating'.
     """
@@ -70,7 +71,7 @@ def check_last_backup_not_failed(backups):
     if counter == 0:
         return
 
-    status = 2 if counter >= 3 else 1
+    status = 2 if counter >= crit else 1
     if counter > 1:
         message = f'Last {counter} backups failed'
     else:
@@ -78,12 +79,13 @@ def check_last_backup_not_failed(backups):
     die(status, message)
 
 
-def check_backup_age(ch_client, backups, age_threshold=1):
+def check_backup_age(ch_client, backups, age_threshold=1, crit=3):
     """
     Check that the last backup is not too old.
     """
     # To avoid false warnings the check is skipped if ClickHouse uptime is less then age threshold.
-    if ch_client.get_uptime().days < age_threshold:
+    uptime = ch_client.get_uptime().days
+    if uptime < age_threshold:
         return
 
     checking_backup = None
@@ -101,7 +103,10 @@ def check_backup_age(ch_client, backups, age_threshold=1):
         message = f'Last backup was started {backup_age.days} days ago'
     else:
         message = f'Last backup was created {backup_age.days} days ago'
-    die(1, message)
+    status = 1
+    if uptime >= crit and backup_age.days >= crit:
+        status = 2
+    die(status, message)
 
 
 def check_backup_count(config: BackupConfig, backups: list[dict]) -> None:
