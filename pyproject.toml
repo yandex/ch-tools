@@ -22,6 +22,7 @@ authors = [
     { name="Vadim Volodin", email="vadim-volodin@yandex-team.ru"},
     { name="Anton Chaporgin", email="chapson@yandex-team.ru"},
     { name="Evgenii Kopanev", email="ekopanev@yandex-team.ru"},
+    { name="Mikhail Kot", email="myrrc@yandex-team.ru"},
 ]
 maintainers = [
     { name="Alexander Burmak", email="alex-burmak@yandex-team.ru"},
