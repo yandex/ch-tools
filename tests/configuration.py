@@ -7,7 +7,7 @@ import random
 from modules.utils import generate_random_string
 
 
-def create():
+def create(keeper_secure):
     """
     Create test configuration (non-idempotent function).
     """
@@ -20,9 +20,7 @@ def create():
     keeper_supported = maj_ver > 21 or (maj_ver == 21 and min_ver >= 8)
 
     keeper_port = 2183
-
-    keeper_tcp_port = 2181  # or 2281
-    keeper_secure = False
+    keeper_tcp_port = 2281 if keeper_secure else 2181
 
     services: dict = {
         'clickhouse': {
