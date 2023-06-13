@@ -63,14 +63,8 @@ def create(keeper_secure):
             },
             'prebuild_cmd': [
                 'mkdir -p images/minio/bin',
-                '/usr/bin/s3cmd -c /etc/s3cmd.cfg get --skip-existing '
-                's3://dbaas-infra-test-cache/minio.RELEASE.2021-01-16T02-19-44Z.gz '
-                'bin/minio.gz',
-                'gunzip -f bin/minio.gz',
-                '/usr/bin/s3cmd -c /etc/s3cmd.cfg get --skip-existing '
-                's3://dbaas-infra-test-cache/mc.RELEASE.2021-01-16T02-45-34Z.gz '
-                'bin/mc.gz',
-                'gunzip -f bin/mc.gz',
+                'wget -N https://dl.min.io/server/minio/release/linux-amd64/minio -O bin/minio',
+                'wget -N https://dl.min.io/client/mc/release/linux-amd64/mc -O bin/mc',
             ],
         },
         'http_mock': {
