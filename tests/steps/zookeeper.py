@@ -16,8 +16,7 @@ def step_wait_for_zookeeper_alive(context):
     """
     Ensure that ZK is ready to accept incoming requests.
     """
-    zk_conf = context.conf['services']['clickhouse']['zookeeper']
-    client = _zk_client(context, zk_conf["port"], zk_conf["secure"])
+    client = _zk_client(context)
     try:
         client.start()
     finally:
@@ -30,11 +29,7 @@ def step_wait_for_keeper_alive(context, node):
     """
     Wait until clickhouse keeper is ready to accept incoming requests.
     """
-    keeper_conf = context.conf['services']['clickhouse']['keeper']
-    port = keeper_conf['port']
-    use_ssl = keeper_conf['secure']
-
-    client = _zk_client(context, port, use_ssl, node)
+    client = _zk_client(context, instance_name=node)
     try:
         client.start()
         client.get('/')
@@ -58,8 +53,7 @@ def clean_zk_tables_metadata_for_host(context, node):
             else:
                 recursive_remove_node_data(zk_client, os.path.join(path, subpath), node)
 
-    zk_conf = context.conf['services']['clickhouse']['zookeeper']
-    client = _zk_client(context, zk_conf["port"], zk_conf["secure"])
+    client = _zk_client(context)
 
     try:
         client.start()
@@ -68,8 +62,8 @@ def clean_zk_tables_metadata_for_host(context, node):
         client.stop()
 
 
-def _zk_client(context, port, use_ssl, instance_name='zookeeper01'):
+def _zk_client(context, instance_name='zookeeper01'):
     zk_container = get_container(context, instance_name)
-    host, port = get_exposed_port(zk_container, port)
+    host, port = get_exposed_port(zk_container, 2281)
 
-    return KazooClient(f'{host}:{port}', use_ssl=use_ssl)
+    return KazooClient(f'{host}:{port}', use_ssl=True)
