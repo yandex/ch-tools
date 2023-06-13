@@ -45,14 +45,16 @@ def create():
             'keeper': {
                 'enabled': keeper_supported,
                 'port': keeper_tcp_port,
-                'secure': keeper_secure
+                'secure': keeper_secure,
             },
         },
         'zookeeper': {
             'secure': keeper_secure,
             'instances': ['zookeeper01'],
             'port': keeper_tcp_port,
-            'expose': {'tcp': keeper_tcp_port},
+            'expose': {
+                'tcp': keeper_tcp_port,
+            },
         },
         'minio': {
             'instances': ['minio01'],
