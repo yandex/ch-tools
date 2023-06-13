@@ -18,7 +18,11 @@ def create():
     assert len(version_parts) >= 2, "Invalid version string"
     maj_ver, min_ver = int(version_parts[0]), int(version_parts[1])
     keeper_supported = maj_ver > 21 or (maj_ver == 21 and min_ver >= 8)
+
     keeper_port = 2183
+
+    keeper_tcp_port = 2181  # or 2281
+    keeper_secure = False
 
     services: dict = {
         'clickhouse': {
@@ -40,14 +44,15 @@ def create():
             },
             'keeper': {
                 'enabled': keeper_supported,
-                'port': keeper_port,
+                'port': keeper_tcp_port,
+                'secure': keeper_secure
             },
         },
         'zookeeper': {
+            'secure': keeper_secure,
             'instances': ['zookeeper01'],
-            'expose': {
-                'tcp': 2181,
-            },
+            'port': keeper_tcp_port,
+            'expose': {'tcp': keeper_tcp_port},
         },
         'minio': {
             'instances': ['minio01'],

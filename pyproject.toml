@@ -60,7 +60,7 @@ dependencies = [
     "deepdiff",
     "dnspython",
     "humanfriendly",
-    "kazoo",
+    "kazoo >= 2.6",
     "lxml",
     "psutil",
     "pyOpenSSL",

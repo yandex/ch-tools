@@ -17,4 +17,4 @@ docker
 docker-compose
 Jinja2
 humanfriendly
-kazoo
+kazoo >= 2.6
