@@ -18,8 +18,16 @@ class ClickhouseKeeperConfig:
         return self._config.get('clickhouse', self._config.get('yandex', {}))
 
     @property
-    def port(self):
-        return self._clickhouse.get('keeper_server', {}).get('tcp_port')
+    def port_pair(self):
+        """
+        :returns tuple (ClickHouse port, port is secure)
+          If both <tcp_port> and <tcp_port_secure> are present, a secure port
+          is returned.
+        """
+        secure_port = self._clickhouse.get('keeper_server', {}).get('tcp_port_secure')
+        if secure_port is not None:
+            return secure_port, True
+        return self._clickhouse.get('keeper_server', {}).get('tcp_port'), False
 
     @property
     def snapshots_dir(self):
