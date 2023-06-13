@@ -20,8 +20,9 @@ FAILED_PARTS_THRESHOLD = 10
 
 
 @click.command('backup')
-@click.option('--critical', 'crit', default=3, help='Critical threshold.')
-def backup_command(crit):
+@click.option('--critical-failed', 'crit_failed', default=3, help='Critical threshold for failed backupd.')
+@click.option('--critical-absent', 'crit_absent', default=0, help='Critical threshold for absent backupd')
+def backup_command(crit_failed, crit_absent):
     """
     Check ClickHouse backups: its state, age and count.
     Skip backup checks for recently created clusters.
@@ -38,8 +39,8 @@ def backup_command(crit):
 
     check_restored_parts()
     check_valid_backups_exist(backups)
-    check_last_backup_not_failed(backups, crit=crit)
-    check_backup_age(ch_client, backups, crit=crit)
+    check_last_backup_not_failed(backups, crit=crit_failed)
+    check_backup_age(ch_client, backups, crit=crit_absent)
     check_backup_count(backup_config, backups)
 
 
@@ -71,7 +72,7 @@ def check_last_backup_not_failed(backups, crit=3):
     if counter == 0:
         return
 
-    status = 2 if counter >= crit else 1
+    status = 2 if crit > 0 and counter >= crit else 1
     if counter > 1:
         message = f'Last {counter} backups failed'
     else:
@@ -79,7 +80,7 @@ def check_last_backup_not_failed(backups, crit=3):
     die(status, message)
 
 
-def check_backup_age(ch_client, backups, age_threshold=1, crit=3):
+def check_backup_age(ch_client, backups, age_threshold=1, crit=0):
     """
     Check that the last backup is not too old.
     """
@@ -104,7 +105,7 @@ def check_backup_age(ch_client, backups, age_threshold=1, crit=3):
     else:
         message = f'Last backup was created {backup_age.days} days ago'
     status = 1
-    if uptime >= crit and backup_age.days >= crit:
+    if crit > 0 and uptime >= crit and backup_age.days >= crit:
         status = 2
     die(status, message)
 
