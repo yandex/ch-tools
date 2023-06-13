@@ -7,7 +7,7 @@ import random
 from modules.utils import generate_random_string
 
 
-def create(keeper_secure):
+def create():
     """
     Create test configuration (non-idempotent function).
     """
@@ -20,7 +20,7 @@ def create(keeper_secure):
     keeper_supported = maj_ver > 21 or (maj_ver == 21 and min_ver >= 8)
 
     keeper_port = 2183
-    keeper_tcp_port = 2281 if keeper_secure else 2181
+    keeper_tcp_port = 2281
 
     services: dict = {
         'clickhouse': {
@@ -43,12 +43,7 @@ def create(keeper_secure):
             'keeper': {
                 'enabled': keeper_supported,
                 'port': keeper_tcp_port,
-                'secure': keeper_secure,
             },
-            'zookeeper': {
-                'port': keeper_tcp_port,
-                'secure': keeper_secure,
-            }
         },
         'zookeeper': {
             'instances': ['zookeeper01'],
@@ -62,9 +57,14 @@ def create(keeper_secure):
                 'http': 9000,
             },
             'prebuild_cmd': [
-                'mkdir -p images/minio/bin',
-                'wget -N https://dl.min.io/server/minio/release/linux-amd64/minio -O bin/minio',
-                'wget -N https://dl.min.io/client/mc/release/linux-amd64/mc -O bin/mc',
+                '/usr/bin/s3cmd -c /etc/s3cmd.cfg get --skip-existing '
+                's3://dbaas-infra-test-cache/minio.RELEASE.2021-01-16T02-19-44Z.gz '
+                'bin/minio.gz',
+                'gunzip -f bin/minio.gz',
+                '/usr/bin/s3cmd -c /etc/s3cmd.cfg get --skip-existing '
+                's3://dbaas-infra-test-cache/mc.RELEASE.2021-01-16T02-45-34Z.gz '
+                'bin/mc.gz',
+                'gunzip -f bin/mc.gz',
             ],
         },
         'http_mock': {

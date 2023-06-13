@@ -94,7 +94,7 @@ def _init_context(context):
             context.conf = pickle.load(session_conf)
     except FileNotFoundError:
         logging.info('creating new test config')
-        context.conf = configuration.create(False)  # TODO
+        context.conf = configuration.create()
 
 
 def cli_main():

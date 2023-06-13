@@ -20,8 +20,17 @@ TBD
 
 ```bash
 cd tests
-python3 -m venv env
+make venv
 source venv/bin/activate
-python3 -m pip install -r requirements.txt
-make
+make test
+```
+
+If you don't have access to dbaas infra build cache: replace `prebuild_cmd` in `configuration.py`
+
+```python
+'prebuild_cmd': [
+    'mkdir -p images/minio/bin',
+    'wget -N https://dl.min.io/server/minio/release/linux-amd64/minio -O bin/minio',
+    'wget -N https://dl.min.io/client/mc/release/linux-amd64/mc -O bin/mc',
+],
 ```
