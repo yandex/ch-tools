@@ -29,7 +29,7 @@ def alive_command(ctx):
             connection_retry=ctx.obj.get('retries'),
             command_retry=ctx.obj.get('retries'),
             timeout=ctx.obj.get('timeout'),
-            use_ssl=use_ssl
+            use_ssl=use_ssl,
         )
         client.start()
         client.get("/")
