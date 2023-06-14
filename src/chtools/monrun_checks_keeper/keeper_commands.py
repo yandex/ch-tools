@@ -15,7 +15,7 @@ DEFAULT_ZOOKEEPER_DATA_LOG_DIR = '/var/log/zookeeper'
 KEEPER_DEFAULT_PATH = '/var/lib/clickhouse-keeper/snapshots'
 CH_DBMS_DEFAULT_PATH = '/var/lib/clickhouse/snapshots'
 
-context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+context = ssl.create_default_context()
 
 
 @command('alive')
