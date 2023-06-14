@@ -211,10 +211,7 @@ def keeper_mntr(ctx):
     attempt = 0
     while True:
         try:
-            response = keeper_command(
-                'mntr',
-                ctx.obj.get('timeout', 3),
-                not ctx.obj.get('no_verify_ssl_certs'))
+            response = keeper_command('mntr', ctx.obj.get('timeout', 3), not ctx.obj.get('no_verify_ssl_certs'))
             for line in response.split('\n'):
                 key_value = re.split('\\s+', line, 1)
                 if len(key_value) == 2:
