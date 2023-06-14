@@ -19,8 +19,6 @@ def create():
     maj_ver, min_ver = int(version_parts[0]), int(version_parts[1])
     keeper_supported = maj_ver > 21 or (maj_ver == 21 and min_ver >= 8)
 
-    keeper_port = 2183
-
     services: dict = {
         'clickhouse': {
             'instances': ['clickhouse01', 'clickhouse02'],
@@ -28,7 +26,7 @@ def create():
                 'http': 8123,
                 'clickhouse': 9000,
                 'ssh': 22,
-                'keeper': keeper_port,
+                'keeper': 2281,
             },
             'depends_on': ['zookeeper'],
             'args': {
@@ -41,7 +39,6 @@ def create():
             },
             'keeper': {
                 'enabled': keeper_supported,
-                'port': 2281,
             },
         },
         'zookeeper': {
@@ -56,6 +53,7 @@ def create():
                 'http': 9000,
             },
             'prebuild_cmd': [
+                'mkdir -p images/minio/bin',
                 '/usr/bin/s3cmd -c /etc/s3cmd.cfg get --skip-existing '
                 's3://dbaas-infra-test-cache/minio.RELEASE.2021-01-16T02-19-44Z.gz '
                 'bin/minio.gz',
