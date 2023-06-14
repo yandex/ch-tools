@@ -33,8 +33,7 @@
     <zookeeper>
          <node index="1">
             <host>zookeeper01</host>
-            <port>2281</port>
-            <secure>1</secure>
+            <port>2181</port>
          </node>
          <session_timeout_ms>3000</session_timeout_ms>
     </zookeeper>
@@ -69,7 +68,6 @@
 {% if conf.services.clickhouse.keeper.enabled %}
     <keeper_server>
         <tcp_port_secure>2281</tcp_port_secure>
-        <tcp_port>2181</tcp_port>
         <server_id>1</server_id>
         <log_storage_path>/var/lib/clickhouse/coordination/log</log_storage_path>
         <snapshot_storage_path>/var/lib/clickhouse/coordination/snapshots</snapshot_storage_path>

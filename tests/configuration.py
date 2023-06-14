@@ -20,7 +20,6 @@ def create():
     keeper_supported = maj_ver > 21 or (maj_ver == 21 and min_ver >= 8)
 
     keeper_port = 2183
-    keeper_tcp_port = 2281
 
     services: dict = {
         'clickhouse': {
@@ -42,13 +41,13 @@ def create():
             },
             'keeper': {
                 'enabled': keeper_supported,
-                'port': keeper_tcp_port,
+                'port': 2281,
             },
         },
         'zookeeper': {
             'instances': ['zookeeper01'],
             'expose': {
-                'tcp': keeper_tcp_port,
+                'tcp': 2181,
             },
         },
         'minio': {
