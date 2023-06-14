@@ -59,9 +59,17 @@ class KeeperChecks(click.Group):
 @group(cls=KeeperChecks, context_settings={'help_option_names': ['-h', '--help']})
 @option('-r', '--retries', 'retries', type=int, default=3, help='Number of retries')
 @option('-t', '--timeout', 'timeout', type=float, default=0.5, help='Connection timeout (in seconds)')
+@option(
+    '-n',
+    '--no-verify-ssl-certs',
+    'no_verify_ssl_certs',
+    is_flag=True,
+    default=False,
+    help='Allow unverified SSL certificates, e.g. self-signed ones',
+)
 @pass_context
-def cli(ctx, retries, timeout):
-    ctx.obj = dict(retries=retries, timeout=timeout)
+def cli(ctx, retries, timeout, no_verify_ssl_certs):
+    ctx.obj = dict(retries=retries, timeout=timeout, no_verify_ssl_certs=no_verify_ssl_certs)
 
 
 COMMANDS = [

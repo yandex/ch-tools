@@ -1,5 +1,5 @@
 """
-Steps for interacting with ZooKeeper.
+Steps for interacting with ZooKeeper or Clickhouse Keeper.
 """
 import os
 
@@ -29,7 +29,7 @@ def step_wait_for_keeper_alive(context, node):
     """
     Wait until clickhouse keeper is ready to accept incoming requests.
     """
-    client = _zk_client(context, instance_name=node, port=context.conf['services']['clickhouse']['keeper']['port'])
+    client = _zk_client(context, instance_name=node, port=2281, use_ssl=True)
     try:
         client.start()
         client.get('/')
@@ -54,6 +54,7 @@ def clean_zk_tables_metadata_for_host(context, node):
                 recursive_remove_node_data(zk_client, os.path.join(path, subpath), node)
 
     client = _zk_client(context)
+
     try:
         client.start()
         recursive_remove_node_data(client, '/', node)
@@ -61,8 +62,8 @@ def clean_zk_tables_metadata_for_host(context, node):
         client.stop()
 
 
-def _zk_client(context, instance_name='zookeeper01', port=2181):
+def _zk_client(context, instance_name='zookeeper01', port=2181, use_ssl=False):
     zk_container = get_container(context, instance_name)
     host, port = get_exposed_port(zk_container, port)
 
-    return KazooClient(f'{host}:{port}')
+    return KazooClient(f'{host}:{port}', use_ssl=use_ssl)

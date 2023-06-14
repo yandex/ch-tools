@@ -2,6 +2,7 @@ import os
 import re
 import socket
 import time
+import ssl
 
 from click import command, pass_context
 from kazoo.client import KazooClient
@@ -14,23 +15,28 @@ DEFAULT_ZOOKEEPER_DATA_LOG_DIR = '/var/log/zookeeper'
 KEEPER_DEFAULT_PATH = '/var/lib/clickhouse-keeper/snapshots'
 CH_DBMS_DEFAULT_PATH = '/var/lib/clickhouse/snapshots'
 
+context = ssl.create_default_context()
+
 
 @command('alive')
 @pass_context
 def alive_command(ctx):
     """Check (Zoo)Keeper service is alive"""
     try:
-        keeper_port = get_keeper_port()
+        keeper_port, use_ssl = get_keeper_port_pair()
         client = KazooClient(
             f'127.0.0.1:{keeper_port}',
             connection_retry=ctx.obj.get('retries'),
             command_retry=ctx.obj.get('retries'),
             timeout=ctx.obj.get('timeout'),
+            use_ssl=use_ssl,
+            verify_certs=not ctx.obj.get('no_verify_ssl_certs'),
         )
         client.start()
         client.get("/")
         client.create(path='/{0}_alive'.format(socket.getfqdn()), ephemeral=True)
         client.stop()
+        client.close()
     except Exception as e:
         return Result(2, repr(e))
 
@@ -163,26 +169,38 @@ def read_zookeeper_config():
     return config
 
 
-def get_keeper_port():
+def get_keeper_port_pair():
     """
-    Return port for (Zoo)Keeper - default(2181) or from CH configs
+    :returns tuple (port for (Zoo)Keeper, port is secure).
+      If no config was found, default (insecure) port 2181 is returned.
     """
     try:
-        return ClickhouseKeeperConfig.load().port or 2181
+        return ClickhouseKeeperConfig.load().port_pair
     except FileNotFoundError:
-        return 2181
+        return 2181, False
 
 
-def keeper_command(command, timeout):
+def keeper_command(command, timeout, verify_ssl_certs):
     """
     Execute (Zoo)Keeper 4-letter command.
     """
-    port = int(get_keeper_port())
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.settimeout(timeout)
-        s.connect(("localhost", port))
-        s.sendall(command.encode())
-        return s.makefile().read(-1)
+    port, is_secure = get_keeper_port_pair()
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(timeout)
+
+        if is_secure:
+            if not verify_ssl_certs:
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+            with context.wrap_socket(sock, server_hostname="localhost") as ssock:
+                ssock.connect(("localhost", port))
+                ssock.sendall(command.encode())
+                return ssock.makefile().read(-1)
+        else:
+            sock.connect(("localhost", port))
+            sock.sendall(command.encode())
+            return sock.makefile().read(-1)
 
 
 def keeper_mntr(ctx):
@@ -193,7 +211,7 @@ def keeper_mntr(ctx):
     attempt = 0
     while True:
         try:
-            response = keeper_command('mntr', ctx.obj.get('timeout', 3))
+            response = keeper_command('mntr', ctx.obj.get('timeout', 3), not ctx.obj.get('no_verify_ssl_certs'))
             for line in response.split('\n'):
                 key_value = re.split('\\s+', line, 1)
                 if len(key_value) == 2:

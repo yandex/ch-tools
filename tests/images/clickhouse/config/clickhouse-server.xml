@@ -32,8 +32,8 @@
     </remote_servers>
     <zookeeper>
          <node index="1">
-             <host>zookeeper01</host>
-             <port>2181</port>
+            <host>zookeeper01</host>
+            <port>2181</port>
          </node>
          <session_timeout_ms>3000</session_timeout_ms>
     </zookeeper>
@@ -67,7 +67,7 @@
     </storage_configuration>
 {% if conf.services.clickhouse.keeper.enabled %}
     <keeper_server>
-        <tcp_port>{{ conf.services.clickhouse.keeper.port }}</tcp_port>
+        <tcp_port_secure>2281</tcp_port_secure>
         <server_id>1</server_id>
         <log_storage_path>/var/lib/clickhouse/coordination/log</log_storage_path>
         <snapshot_storage_path>/var/lib/clickhouse/coordination/snapshots</snapshot_storage_path>
@@ -77,13 +77,11 @@
             <session_timeout_ms>10000</session_timeout_ms>
         </coordination_settings>
         <raft_configuration>
+            <secure>true</secure>
             <server>
-                <can_become_leader>true</can_become_leader>
                 <hostname>127.0.0.1</hostname>
                 <id>1</id>
                 <port>2888</port>
-                <priority>1</priority>
-                <start_as_follower>false</start_as_follower>
             </server>
         </raft_configuration>
     </keeper_server>

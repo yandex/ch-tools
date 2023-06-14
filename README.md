@@ -15,3 +15,22 @@ All of these tools must be run on the same host as ClickHouse server is running.
 ## Installation
 
 TBD
+
+## Testing
+
+```bash
+cd tests
+make venv
+source venv/bin/activate
+make test
+```
+
+If you don't have access to dbaas infra build cache: replace `prebuild_cmd` in `configuration.py`
+
+```python
+'prebuild_cmd': [
+    'mkdir -p images/minio/bin',
+    'wget -N https://dl.min.io/server/minio/release/linux-amd64/minio -O bin/minio',
+    'wget -N https://dl.min.io/client/mc/release/linux-amd64/mc -O bin/mc',
+],
+```
