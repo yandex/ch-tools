@@ -30,11 +30,13 @@ def alive_command(ctx):
             command_retry=ctx.obj.get('retries'),
             timeout=ctx.obj.get('timeout'),
             use_ssl=use_ssl,
+            verify_certs=not ctx.obj.get('no_verify_ssl_certs'),
         )
         client.start()
         client.get("/")
         client.create(path='/{0}_alive'.format(socket.getfqdn()), ephemeral=True)
         client.stop()
+        client.close()
     except Exception as e:
         return Result(2, repr(e))
 
@@ -178,7 +180,7 @@ def get_keeper_port_pair():
         return 2181, False
 
 
-def keeper_command(command, timeout):
+def keeper_command(command, timeout, verify_ssl_certs):
     """
     Execute (Zoo)Keeper 4-letter command.
     """
@@ -188,7 +190,10 @@ def keeper_command(command, timeout):
         sock.settimeout(timeout)
 
         if is_secure:
-            with context.wrap_socket(sock) as ssock:
+            if not verify_ssl_certs:
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+            with context.wrap_socket(sock, server_hostname="localhost") as ssock:
                 ssock.connect(("localhost", port))
                 ssock.sendall(command.encode())
                 return ssock.makefile().read(-1)
@@ -206,7 +211,10 @@ def keeper_mntr(ctx):
     attempt = 0
     while True:
         try:
-            response = keeper_command('mntr', ctx.obj.get('timeout', 3))
+            response = keeper_command(
+                'mntr',
+                ctx.obj.get('timeout', 3),
+                not ctx.obj.get('no_verify_ssl_certs'))
             for line in response.split('\n'):
                 key_value = re.split('\\s+', line, 1)
                 if len(key_value) == 2:

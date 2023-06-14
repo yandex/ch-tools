@@ -26,8 +26,8 @@ class ClickhouseKeeperConfig:
         """
         secure_port = self._clickhouse.get('keeper_server', {}).get('tcp_port_secure')
         if secure_port is not None:
-            return secure_port, True
-        return self._clickhouse.get('keeper_server', {}).get('tcp_port'), False
+            return int(secure_port), True
+        return int(self._clickhouse.get('keeper_server', {}).get('tcp_port')), False
 
     @property
     def snapshots_dir(self):
