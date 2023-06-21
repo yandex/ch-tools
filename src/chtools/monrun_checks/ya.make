@@ -15,6 +15,7 @@ PY_MAIN(chtools.monrun_checks.main:main)
 PEERDIR(
     cloud/mdb/clickhouse/tools/src/chtools/common
     contrib/python/click
+    contrib/python/cloup
     contrib/python/dnspython
     contrib/python/requests
     contrib/python/PyYAML

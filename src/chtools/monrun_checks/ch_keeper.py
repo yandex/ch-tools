@@ -1,5 +1,4 @@
-import click
-
+import cloup
 from kazoo.client import KazooClient, KazooException
 from kazoo.handlers.threading import KazooTimeoutError
 
@@ -7,10 +6,32 @@ from chtools.common.clickhouse.config import ClickhouseKeeperConfig
 from chtools.common.result import Result
 
 
-@click.command('keeper')
-@click.option('-r', '--retries', 'retries', type=int, default=3, help='Connection retries')
-@click.option('-t', '--timeout', 'timeout', type=int, default=10, help='Connection timeout (s)')
-def keeper_command(retries, timeout) -> Result:
+@cloup.command('keeper')
+@cloup.option(
+    '-r',
+    '--retries',
+    'retries',
+    type=int,
+    default=3,
+    help='Connection retries',
+)
+@cloup.option(
+    '-t',
+    '--timeout',
+    'timeout',
+    type=int,
+    default=10,
+    help='Connection timeout (s)',
+)
+@cloup.option(
+    '-n',
+    '--no-verify-ssl-certs',
+    'no_verify_ssl_certs',
+    is_flag=True,
+    default=False,
+    help='Allow unverified SSL certificates, e.g. self-signed ones',
+)
+def keeper_command(retries, timeout, no_verify_ssl_certs) -> Result:
     """
     Checks ClickHouse Keeper is alive.
     """
@@ -24,6 +45,7 @@ def keeper_command(retries, timeout) -> Result:
         command_retry=retries,
         timeout=timeout,
         use_ssl=use_ssl,
+        verify_certs=not no_verify_ssl_certs,
     )
     try:
         client.start()

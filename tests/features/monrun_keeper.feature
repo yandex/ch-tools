@@ -55,7 +55,7 @@ Feature: keeper-monitoring tool
     Given a working keeper on clickhouse01
     When we execute command on clickhouse01
     """
-    keeper-monitoring alive
+    keeper-monitoring --no-verify-ssl-certs alive
     """
     Then we get response
     """
@@ -67,7 +67,7 @@ Feature: keeper-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    keeper-monitoring alive
+    keeper-monitoring --no-verify-ssl-certs alive
     """
     Then we get response
     """
