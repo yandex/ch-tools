@@ -2,15 +2,13 @@ import contextlib
 import json
 import logging
 import sys
-
 from datetime import datetime, timedelta, timezone
 from gzip import GzipFile
 from io import BufferedIOBase, TextIOWrapper
 from pathlib import Path
-from typing import Dict, Iterator, Optional, Union
+from typing import Dict, Iterator, List, Optional, Union
 
 import click
-
 from click import Context, group, option, pass_context
 
 from chtools.chadmin.internal.object_storage import (
@@ -30,7 +28,7 @@ STORAGE_POLICY_CONFIG_PATH = Path('/etc/clickhouse-server/config.d/storage_polic
 DEFAULT_GUARD_INTERVAL = '24h'
 
 
-def get_disk_metadata_paths(disk_name: str) -> list[Path]:
+def get_disk_metadata_paths(disk_name: str) -> List[Path]:
     return [
         Path(f'/var/lib/clickhouse/disks/{disk_name}/store'),  # Atomic database engine
         Path(f'/var/lib/clickhouse/disks/{disk_name}/data'),  # Ordinary database engine

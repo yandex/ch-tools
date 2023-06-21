@@ -21,6 +21,7 @@ PEERDIR(
     contrib/python/kazoo
     contrib/python/lxml
     contrib/python/setuptools
+    contrib/python/typing-extensions
 )
 
 END()

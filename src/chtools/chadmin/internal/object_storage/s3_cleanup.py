@@ -1,7 +1,6 @@
-from typing import Any, Iterator
+from typing import Any, Iterator, List
 
 import boto3
-
 from botocore.client import Config  # type: ignore[import]
 
 from chtools.chadmin.internal.object_storage.s3_disk_configuration import S3DiskConfiguration
@@ -28,6 +27,6 @@ def cleanup_s3_object_storage(disk: S3DiskConfiguration, keys: Iterator[str]) ->
     return deleted
 
 
-def _bulk_delete(bucket: Any, keys: list[str]) -> None:
+def _bulk_delete(bucket: Any, keys: List[str]) -> None:
     objects = [{'Key': key} for key in keys]
     bucket.delete_objects(Delete={'Objects': objects, 'Quiet': False})

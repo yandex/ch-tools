@@ -1,28 +1,32 @@
-import logging
-from functools import wraps
-import click
 import getpass
-import sys
+import logging
 import os
 import pwd
+import sys
+import warnings
+from functools import wraps
 
-from chtools.common.result import Status
-from chtools.monrun_checks.ch_replication_lag import replication_lag_command
-from chtools.monrun_checks.ch_system_queues import system_queues_command
-from chtools.monrun_checks.ch_tls import tls_command
-from chtools.monrun_checks.ch_core_dumps import core_dumps_command
-from chtools.monrun_checks.ch_dist_tables import dist_tables_command
-from chtools.monrun_checks.ch_resetup_state import resetup_state_command
-from chtools.monrun_checks.ch_ro_replica import ro_replica_command
-from chtools.monrun_checks.ch_geobase import geobase_command
-from chtools.monrun_checks.ch_log_errors import log_errors_command
-from chtools.monrun_checks.ch_ping import ping_command
-from chtools.monrun_checks.ch_s3_backup_orphaned import orphaned_backups_command
-from chtools.monrun_checks.ch_keeper import keeper_command
-from chtools.monrun_checks.ext_ip_dns import ext_ip_dns_command
-from chtools.monrun_checks.status import status_command
-from .ch_backup import backup_command
-from .exceptions import translate_to_status
+warnings.filterwarnings(action='ignore', message='Python 3.6 is no longer supported')
+
+import click  # noqa: E402
+
+from chtools.common.result import Status  # noqa: E402
+from chtools.monrun_checks.ch_backup import backup_command  # noqa: E402
+from chtools.monrun_checks.ch_core_dumps import core_dumps_command  # noqa: E402
+from chtools.monrun_checks.ch_dist_tables import dist_tables_command  # noqa: E402
+from chtools.monrun_checks.ch_geobase import geobase_command  # noqa: E402
+from chtools.monrun_checks.ch_keeper import keeper_command  # noqa: E402
+from chtools.monrun_checks.ch_log_errors import log_errors_command  # noqa: E402
+from chtools.monrun_checks.ch_ping import ping_command  # noqa: E402
+from chtools.monrun_checks.ch_replication_lag import replication_lag_command  # noqa: E402
+from chtools.monrun_checks.ch_resetup_state import resetup_state_command  # noqa: E402
+from chtools.monrun_checks.ch_ro_replica import ro_replica_command  # noqa: E402
+from chtools.monrun_checks.ch_s3_backup_orphaned import orphaned_backups_command  # noqa: E402
+from chtools.monrun_checks.ch_system_queues import system_queues_command  # noqa: E402
+from chtools.monrun_checks.ch_tls import tls_command  # noqa: E402
+from chtools.monrun_checks.exceptions import translate_to_status  # noqa: E402
+from chtools.monrun_checks.ext_ip_dns import ext_ip_dns_command  # noqa: E402
+from chtools.monrun_checks.status import status_command  # noqa: E402
 
 LOG_FILE = '/var/log/clickhouse-monitoring/clickhouse-monitoring.log'
 DEFAULT_USER = 'monitor'

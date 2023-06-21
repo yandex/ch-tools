@@ -1,11 +1,13 @@
-import click
-from chtools.common.result import Result
+import json
+import socket
+from functools import lru_cache
+from typing import List
 
-from functools import cache
+import click
 import dns.resolver
 import requests
-import socket
-import json
+
+from chtools.common.result import Result
 
 IP_METADATA_PATHS = {
     'public_v4': 'http://169.254.169.254/latest/meta-data/public-ipv4',
@@ -67,7 +69,7 @@ def _check_fqdn(target: _TargetRecord, ipv6: bool) -> list:
     return err
 
 
-@cache
+@lru_cache(maxsize=None)
 def _get_host_ip(addr_type: str) -> str:
     if _is_gcp():
         resp = requests.get(IP_METADATA_PATHS_GCP[addr_type], headers={'Metadata-Flavor': 'Google'})
@@ -77,14 +79,14 @@ def _get_host_ip(addr_type: str) -> str:
     return resp.text.strip()
 
 
-@cache
+@lru_cache(maxsize=None)
 def _is_gcp():
     with open('/etc/dbaas.conf') as f:
         vtype = json.load(f).get('flavor', {}).get('vtype', '')
         return vtype == 'gcp'
 
 
-def _get_host_dns(cluster: bool, private: bool) -> list[_TargetRecord]:
+def _get_host_dns(cluster: bool, private: bool) -> List[_TargetRecord]:
     fqdn = socket.getfqdn()
     host_id, cid, suffix = fqdn.split('.', 2)
 
