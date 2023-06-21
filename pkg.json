@@ -39,7 +39,7 @@
         {
             "source": {
                 "type": "ARCADIA",
-                "path": "cloud/mdb/clickhouse/tools/src/chtools/chadmin/completion.bash"
+                "path": "cloud/mdb/clickhouse/tools/resources/completion/chadmin-completion.bash"
             },
             "destination": {
                 "path": "/etc/bash_completion.d/chadmin"
@@ -86,7 +86,7 @@
         {
             "source": {
                 "type": "ARCADIA",
-                "path": "cloud/mdb/clickhouse/tools/src/chtools/monrun_checks/completion.bash"
+                "path": "cloud/mdb/clickhouse/tools/resources/completion/ch-monitoring-completion.bash"
             },
             "destination": {
                 "path": "/etc/bash_completion.d/ch-monitoring"
@@ -114,7 +114,7 @@
         {
             "source": {
                 "type": "ARCADIA",
-                "path": "cloud/mdb/clickhouse/tools/src/chtools/monrun_checks_keeper/completion.bash"
+                "path": "cloud/mdb/clickhouse/tools/resources/completion/keeper-monitoring-completion.bash"
             },
             "destination": {
                 "path": "/etc/bash_completion.d/keeper-monitoring"
@@ -123,7 +123,7 @@
         {
             "source": {
                 "type": "ARCADIA",
-                "path": "cloud/mdb/clickhouse/tools/src/chtools/chadmin/chadmin.logrotate"
+                "path": "cloud/mdb/clickhouse/tools/resources/logrotate/chadmin.logrotate"
             },
             "destination": {
                 "path": "/etc/logrotate.d/chadmin"
@@ -132,7 +132,7 @@
         {
             "source": {
                 "type": "ARCADIA",
-                "path": "cloud/mdb/clickhouse/tools/src/chtools/monrun_checks/clickhouse-monitoring.logrotate"
+                "path": "cloud/mdb/clickhouse/tools/resources/logrotate/clickhouse-monitoring.logrotate"
             },
             "destination": {
                 "path": "/etc/logrotate.d/clickhouse-monitoring"
@@ -141,7 +141,7 @@
         {
             "source": {
                 "type": "ARCADIA",
-                "path": "cloud/mdb/clickhouse/tools/src/chtools/monrun_checks_keeper/keeper-monitoring.logrotate"
+                "path": "cloud/mdb/clickhouse/tools/resources/logrotate/keeper-monitoring.logrotate"
             },
             "destination": {
                 "path": "/etc/logrotate.d/keeper-monitoring"
