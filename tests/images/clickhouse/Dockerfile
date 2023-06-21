@@ -57,6 +57,7 @@ RUN rm -rf /etc/supervisor && \
     ln -s /config/ch-backup.conf /etc/yandex/ch-backup/ch-backup.conf
 
 RUN mkdir -p /etc/clickhouse-server/ssl && \
+    openssl rand -writerand /root/.rnd && \
     openssl req -subj "/CN=localhost" -new -newkey rsa:2048 -days 365 -nodes -x509 \
         -keyout /etc/clickhouse-server/ssl/server.key \
         -addext "subjectAltName=DNS:clickhouse01,DNS:clickhouse02,DNS:clickhouse01.$NETWORK_NAME,DNS:clickhouse02.$NETWORK_NAME" \
