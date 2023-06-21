@@ -7,7 +7,7 @@ cloup
 deepdiff
 dnspython
 humanfriendly
-kazoo >= 2.6
+kazoo >= 2.9
 lxml
 psutil
 pyOpenSSL

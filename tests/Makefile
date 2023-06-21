@@ -27,7 +27,7 @@ lint: isort flake8 pylint mypy
 
 .PHONY: isort
 isort: venv
-	venv/bin/isort --recursive --check-only --ignore-whitespace --diff modules steps *.py
+	venv/bin/isort --check-only --ignore-whitespace --project modules --diff modules steps *.py
 
 .PHONY: flake8
 flake8: venv
@@ -43,7 +43,7 @@ mypy: venv
 
 .PHONY: format
 format: venv
-	venv/bin/isort --recursive --apply modules steps *.py
+	venv/bin/isort --project modules modules steps *.py
 
 .PHONY: test
 test: create_env

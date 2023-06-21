@@ -56,7 +56,7 @@ def step_get_response_contains(context):
 
 @then('we get response not contains {entry:w}')
 def step_get_response_not_contains(context, entry):
-    assert_that(context.response, is_not(contains_string(entry)))
+    assert_that(context.response, is_not(contains_string(entry)))  # type: ignore
 
 
 @when('we sleep for {seconds:d} seconds')

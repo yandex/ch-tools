@@ -8,7 +8,6 @@ import shlex
 import subprocess
 
 import docker
-
 import yaml
 
 from . import utils
@@ -22,13 +21,13 @@ def build_images(context: ContextT) -> None:
     """
     Build docker images.
     """
-    for image, props in context.conf['base_images'].items():
+    for _, props in context.conf['base_images'].items():
         try:
             DOCKER_API.images.build(network_mode="bridge", **props)
         except Exception as err:
-            raise RuntimeError('container {0} build failed: {1}'.format(str(props), err))
+            raise RuntimeError(f'container {props} build failed.') from err
 
-    for service_name, service in context.conf['services'].items():
+    for _, service in context.conf['services'].items():
         for cmd in service.get('prebuild_cmd', []):
             try:
                 proc = subprocess.run([cmd], shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -38,10 +37,10 @@ def build_images(context: ContextT) -> None:
                     print('Command stderr: ', str(proc.stderr, errors='replace', encoding='utf-8'))
             except subprocess.CalledProcessError as err:
                 raise RuntimeError(
-                    'prebuild command {cmd} failed: {err}\n'
-                    'stdout: {stdout}\n'
-                    'stderr: {stderr}'.format(cmd=cmd, err=err, stdout=err.stdout, stderr=err.stderr),
-                )
+                    f'prebuild command {cmd} failed.\n'
+                    f'stdout: {err.stdout}\n'
+                    f'stderr: {err.stderr}',
+                ) from err
 
     _call_compose(context.conf, 'build')
 
@@ -79,13 +78,13 @@ def _write_config(path: str, compose_conf: dict) -> None:
     catalog_name = os.path.dirname(path)
     os.makedirs(catalog_name, exist_ok=True)
     temp_file_path = f'{catalog_name}/.docker-compose-conftest-{random.randint(0, 100)}.yaml'
-    with open(temp_file_path, 'w') as conf_file:
+    with open(temp_file_path, 'w', encoding='utf-8') as conf_file:
         yaml.dump(compose_conf, stream=conf_file, default_flow_style=False, indent=4)
     try:
         _validate_config(temp_file_path)
         os.rename(temp_file_path, path)
     except subprocess.CalledProcessError as err:
-        raise RuntimeError(f'Unable to write config: validation failed with {err}')
+        raise RuntimeError('Unable to write config: validation failed.') from err
 
     # Remove config only if validated ok.
     try:
@@ -190,7 +189,7 @@ def _prepare_volumes(volumes: dict, local_basedir: str) -> list:
     for props in volumes.values():
         # "local" params are expected to be relative to docker-compose.yaml, so prepend its location.
         os.makedirs(f'{local_basedir}/{props["local"]}', exist_ok=True)
-        volume_list.append('{local}:{remote}:{mode}'.format(**props))
+        volume_list.append(f'{props["local"]}:{props["remote"]}:{props["mode"]}')
     return volume_list
 
 
