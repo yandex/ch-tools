@@ -14,15 +14,16 @@ def keeper_command(retries, timeout) -> Result:
     """
     Checks ClickHouse Keeper is alive.
     """
-    zk_port = ClickhouseKeeperConfig.load().port
-    if not zk_port:
+    keeper_port, use_ssl = ClickhouseKeeperConfig.load().port_pair
+    if not keeper_port:
         return Result(0, 'disabled')
 
     client = KazooClient(
-        f'127.0.0.1:{zk_port}',
+        f'127.0.0.1:{keeper_port}',
         connection_retry=retries,
         command_retry=retries,
         timeout=timeout,
+        use_ssl=use_ssl,
     )
     try:
         client.start()
