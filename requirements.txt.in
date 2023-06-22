@@ -1,0 +1,21 @@
+Jinja2
+PyYAML
+Pygments
+boto3
+click
+cloup
+deepdiff
+dnspython
+humanfriendly
+kazoo >= 2.9
+lxml
+psutil
+pyOpenSSL
+python-dateutil
+requests
+setuptools
+tabulate
+tenacity
+termcolor
+tqdm
+xmltodict

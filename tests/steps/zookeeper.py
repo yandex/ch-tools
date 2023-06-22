@@ -66,4 +66,4 @@ def _zk_client(context, instance_name='zookeeper01', port=2181, use_ssl=False):
     zk_container = get_container(context, instance_name)
     host, port = get_exposed_port(zk_container, port)
 
-    return KazooClient(f'{host}:{port}', use_ssl=use_ssl)
+    return KazooClient(f'{host}:{port}', use_ssl=use_ssl, verify_certs=False)

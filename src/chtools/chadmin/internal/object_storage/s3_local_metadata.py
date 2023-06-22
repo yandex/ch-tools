@@ -1,8 +1,9 @@
 import re
-
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Self
+from typing import List
+
+from typing_extensions import Self
 
 MAX_METADATA_FILE_SIZE = 10 * 1024
 
@@ -25,7 +26,7 @@ class S3ObjectLocalMetaData:
 
     version: int
     total_size: int
-    objects: list[S3ObjectLocalInfo]
+    objects: List[S3ObjectLocalInfo]
     ref_counter: int
     read_only: bool
 
@@ -46,7 +47,7 @@ class S3ObjectLocalMetaData:
         object_count, total_size = int(matches[1]), int(matches[2])
         idx += 1
 
-        objects: list[S3ObjectLocalInfo] = []
+        objects: List[S3ObjectLocalInfo] = []
         for i in range(object_count):
             matches = re.match(r'^(\d+)\s+(\S+)$', lines[idx])
             if not matches:

@@ -5,6 +5,7 @@ Check ClickHouse backups: its state, age and count.
 import json
 from datetime import datetime, timezone
 from os.path import exists
+from typing import Dict, List
 
 import click
 
@@ -110,7 +111,7 @@ def check_backup_age(ch_client, backups, age_threshold=1, crit=0):
     die(status, message)
 
 
-def check_backup_count(config: BackupConfig, backups: list[dict]) -> None:
+def check_backup_count(config: BackupConfig, backups: List[Dict]) -> None:
     """
     Check that the number of backups is not too large.
     """

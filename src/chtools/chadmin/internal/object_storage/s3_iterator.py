@@ -1,7 +1,6 @@
-from typing import Any, Iterator
+from typing import Any, Iterator, Tuple
 
 import boto3  # type: ignore[import]
-
 from botocore.client import Config  # type: ignore[import]
 
 from chtools.chadmin.internal.object_storage.s3_disk_configuration import S3DiskConfiguration
@@ -12,7 +11,7 @@ IGNORED_OBJECT_NAME_PREFIXES = ['operations', '.SCHEMA_VERSION']
 
 def s3_object_storage_iterator(
     disk: S3DiskConfiguration, object_name_prefix: str
-) -> Iterator[tuple[str, ObjectSummary]]:
+) -> Iterator[Tuple[str, ObjectSummary]]:
     s3 = boto3.resource(
         's3',
         endpoint_url=disk.endpoint_url,

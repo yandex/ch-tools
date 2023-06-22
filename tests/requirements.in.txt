@@ -17,4 +17,6 @@ docker
 docker-compose
 Jinja2
 humanfriendly
-kazoo >= 2.6
+kazoo >= 2.9
+types-requests
+types-PyYAML

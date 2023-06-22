@@ -1,13 +1,12 @@
 import logging
-
 from collections import defaultdict
 from itertools import chain
 from pathlib import Path
-from typing import Iterable
+from typing import Dict, Iterable
 
 from chtools.chadmin.internal.object_storage.s3_local_metadata import S3ObjectLocalMetaData
 
-ObjectKeyToMetadata = dict[str, dict[Path, S3ObjectLocalMetaData]]
+ObjectKeyToMetadata = Dict[str, Dict[Path, S3ObjectLocalMetaData]]
 
 
 def collect_metadata(paths: Iterable[Path]) -> ObjectKeyToMetadata:

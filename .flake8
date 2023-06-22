@@ -1,0 +1,4 @@
+[flake8]
+; ignoring the checks:
+;   E402 (module level import not at top of file) to set warning filtering before importing modules
+ignore = E402

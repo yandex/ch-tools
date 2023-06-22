@@ -1,0 +1,23 @@
+Source: mdb-ch-tools
+Section: database
+Priority: optional
+Maintainer: DBaaS team <mdb-admin@yandex-team.ru>
+Uploaders: Alexander Burmak <alex-burmak@yandex-team.ru>,
+ Dmitry Starov <dstaroff@yandex-team.ru>,
+ Anton Ivashkin <iantonspb@yandex-team.ru>,
+ Grigory Pervakov <pervakovg@yandex-team.ru>,
+ Petr Nuzhnov <petrnuzhnov@yandex-team.ru>,
+ Egor Medvedev <egor-medvedev@yandex-team.ru>,
+ Aleksei Filatov <alexfvk@yandex-team.ru>,
+ Evgenii Kopanev <ekopanev@yandex-team.ru>,
+ Mikhail Kot <myrrc@yandex-team.ru>
+Build-Depends: debhelper (>= 8.0.0), python3.6, python3.6-venv, python3-pip, python3-setuptools
+Standards-Version: 4.1.4
+Homepage: https://github.com/yandex/ch-tools
+Vcs-Browser: https://github.com/yandex/ch-tools.git
+Vcs-Git: git://github.com:yandex/ch-tools.git
+X-Python3-Version: >= 3.6
+
+Package: mdb-ch-tools
+Architecture: any
+Description: A set of tools for administration and diagnostics of ClickHouse DBMS.

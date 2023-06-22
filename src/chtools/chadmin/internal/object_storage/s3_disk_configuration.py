@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Self
 from urllib.parse import urlparse
 
 from lxml import etree  # type: ignore[import]
+from typing_extensions import Self
 
 BUCKET_NAME_PREFIX = 'cloud-storage-'
 
