@@ -1,7 +1,6 @@
 """
 Variables that influence testing behavior are defined here.
 """
-from modules.utils import generate_random_string
 
 
 def create():
@@ -53,12 +52,12 @@ def create():
         'network_name': network_name,
         's3': {
             'endpoint': 'http://minio01:9000',
-            'access_secret_key': generate_random_string(40),
-            'access_key_id': generate_random_string(20),
+            'access_secret_key': 'test_secret',
+            'access_key_id': 'test_key',
             'bucket': 'test',
         },
         'ch_backup': {
-            'encrypt_key': generate_random_string(32),
+            'encrypt_key': 'test_encrypt',
         },
         'services': services,
         'dbaas_conf': _dbaas_conf(services, network_name),
