@@ -9,7 +9,7 @@ ARG NETWORK_NAME
 
 COPY staging/tools/ /tmp/tools/
 COPY images/clickhouse/config/monitor-ch-backup /etc/sudoers.d/monitor-ch-backup
-COPY images/clickhouse/config/regions_names.txt /opt/geo/regions_names.txt
+COPY images/clickhouse/config/regions_names_ru.txt /opt/geo/regions_names_ru.txt
 COPY images/clickhouse/config/regions_hierarchy.txt /opt/geo/regions_hierarchy.txt
 
 RUN tar -x -f /tmp/tools/mdb-ch-tools.*.tar.gz -C / && \
