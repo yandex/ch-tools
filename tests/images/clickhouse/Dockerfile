@@ -1,6 +1,7 @@
 FROM clickhouse/clickhouse-server
 
-RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y supervisor && \
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+    apt-get install -y supervisor && \
     rm -rf /var/lib/apt/lists/* /var/cache/debconf && \
     apt-get clean
 
@@ -8,6 +9,8 @@ ARG NETWORK_NAME
 
 COPY staging/tools/ /tmp/tools/
 COPY images/clickhouse/config/monitor-ch-backup /etc/sudoers.d/monitor-ch-backup
+COPY images/clickhouse/config/regions_names.txt /opt/geo/regions_names.txt
+COPY images/clickhouse/config/regions_hierarchy.txt /opt/geo/regions_hierarchy.txt
 
 RUN tar -x -f /tmp/tools/mdb-ch-tools.*.tar.gz -C / && \
     \

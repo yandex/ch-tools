@@ -105,13 +105,13 @@ Feature: ch-monitoring tool
     """
     echo -e "
         <yandex>
-            <path_to_regions_hierarchy_file>/opt/yandex/clickhouse-geodb/regions_hierarchy.txt</path_to_regions_hierarchy_file>
-            <path_to_regions_names_files>/opt/yandex/clickhouse-geodb/</path_to_regions_names_files>
+            <path_to_regions_hierarchy_file>/opt/geo/regions_hierarchy.txt</path_to_regions_hierarchy_file>
+            <path_to_regions_names_files>/opt/geo/</path_to_regions_names_files>
         </yandex>
         " > /etc/clickhouse-server/config.d/geo.xml && \
     supervisorctl restart clickhouse-server
     """
-    And we sleep for 10 seconds
+    And we sleep for 5 seconds
     And we execute command on clickhouse01
     """
     ch-monitoring geobase
