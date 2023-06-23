@@ -1,19 +1,14 @@
-FROM ch-tools-tests-base
-
-ENV ZK_VERSION=3.4.8-1
-
+FROM ubuntu/zookeeper
 COPY staging/tools/ /tmp/tools/
+
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y supervisor && \
+    rm -rf /var/lib/apt/lists/* /var/cache/debconf && \
+    apt-get clean
+
 RUN tar -x -f /tmp/tools/mdb-ch-tools.*.tar.gz -C /
 
-RUN apt-get update -qq && apt-get install -y \
-        openjdk-8-jre-headless \
-        zookeeper=${ZK_VERSION} \
-        zookeeper-bin=${ZK_VERSION} \
-        libzookeeper-java=${ZK_VERSION}
-
-COPY images/zookeeper/config/zookeeper.conf /etc/supervisor/conf.d/zookeeper.conf
-COPY images/zookeeper/config/start_zk.sh /opt/yandex/start_zk.sh
+COPY images/zookeeper/config/zookeeper.conf /etc/supervisor/supervisord.conf
 COPY images/zookeeper/config/zoo.cfg /etc/zookeeper/conf/zoo.cfg
 COPY images/zookeeper/config/log4j.properties /etc/zookeeper/conf/log4j.properties
 
-EXPOSE 2181 2281
+ENTRYPOINT ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]

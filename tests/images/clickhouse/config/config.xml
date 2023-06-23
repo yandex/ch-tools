@@ -65,7 +65,6 @@
             </object_storage>
         </policies>
     </storage_configuration>
-{% if conf.services.clickhouse.keeper.enabled %}
     <keeper_server>
         <tcp_port_secure>2281</tcp_port_secure>
         <server_id>1</server_id>
@@ -85,7 +84,6 @@
             </server>
         </raft_configuration>
     </keeper_server>
-{% endif %}
     <macros>
         <replica>{{ instance_name }}.{{ conf.network_name }}</replica>
     </macros>

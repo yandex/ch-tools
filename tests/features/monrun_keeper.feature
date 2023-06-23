@@ -9,7 +9,7 @@ Feature: keeper-monitoring tool
   Scenario: Check Zookeeper alive with keeper monitoring
     When we execute command on zookeeper01
     """
-    keeper-monitoring alive
+    keeper-monitoring -n alive
     """
     Then we get response
     """
@@ -21,7 +21,7 @@ Feature: keeper-monitoring tool
     """
     When we execute command on zookeeper01
     """
-    keeper-monitoring alive
+    keeper-monitoring -n alive
     """
     Then we get response
     """
@@ -33,9 +33,9 @@ Feature: keeper-monitoring tool
     """
     keeper-monitoring version
     """
-    Then we get response
+    Then we get response contains
     """
-    0;3.4.8-1--1, built on Fri, 26 Feb 2016 14:51:43 +0100
+    0;
     """
     When we execute command on zookeeper01
     """
@@ -50,12 +50,11 @@ Feature: keeper-monitoring tool
     1;ConnectionRefusedError(111, 'Connection refused')
     """
 
-  @require_version_22.8
   Scenario: Check CH keeper alive with keeper monitoring
     Given a working keeper on clickhouse01
     When we execute command on clickhouse01
     """
-    keeper-monitoring --no-verify-ssl-certs alive
+    keeper-monitoring -n alive
     """
     Then we get response
     """
@@ -67,7 +66,7 @@ Feature: keeper-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    keeper-monitoring --no-verify-ssl-certs alive
+    keeper-monitoring -n alive
     """
     Then we get response
     """

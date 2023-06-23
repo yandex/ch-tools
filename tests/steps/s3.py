@@ -3,7 +3,6 @@ Steps for interacting with S3.
 """
 
 from behave import given
-
 from modules import minio
 
 

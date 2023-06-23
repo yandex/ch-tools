@@ -11,7 +11,7 @@ from modules.docker import get_container, get_exposed_port
 
 
 @given('a working zookeeper')
-@retry(wait=wait_fixed(0.5), stop=stop_after_attempt(360))
+@retry(wait=wait_fixed(0.5), stop=stop_after_attempt(40))
 def step_wait_for_zookeeper_alive(context):
     """
     Ensure that ZK is ready to accept incoming requests.
@@ -24,7 +24,7 @@ def step_wait_for_zookeeper_alive(context):
 
 
 @given('a working keeper on {node:w}')
-@retry(wait=wait_fixed(0.5), stop=stop_after_attempt(360))
+@retry(wait=wait_fixed(0.5), stop=stop_after_attempt(20))
 def step_wait_for_keeper_alive(context, node):
     """
     Wait until clickhouse keeper is ready to accept incoming requests.
