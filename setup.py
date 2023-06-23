@@ -3,38 +3,14 @@
 """
 Package configuration for ch-tools.
 """
-from typing import List
 
 from setuptools import find_packages, setup
 
-REQUIREMENTS = [
-    'Jinja2',
-    'PyYAML',
-    'Pygments',
-    'boto3',
-    'click',
-    'cloup',
-    'deepdiff',
-    'dnspython',
-    'humanfriendly',
-    'kazoo >= 2.6',
-    'lxml',
-    'psutil',
-    'pyOpenSSL',
-    'python-dateutil',
-    'requests',
-    'setuptools',
-    'tabulate',
-    'tenacity',
-    'termcolor',
-    'tqdm',
-    'xmltodict',
-]
-
+with open('requirements.txt') as f:
+    REQUIREMENTS = list(map(lambda l: l.strip('\n'), f.readlines()))
 
 with open('version.txt') as f:
     VERSION = f.read().strip()
-
 
 setup(
     name='ch-tools',
