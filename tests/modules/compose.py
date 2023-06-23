@@ -18,6 +18,9 @@ DOCKER_API = docker.from_env()
 
 @utils.env_stage('create', fail=True)
 def build_images(context: ContextT) -> None:
+    """
+    Build images from staging/ for testing
+    """
     for service in context.conf['services'].values():
         for cmd in service.get('prebuild_cmd', []):
             try:
