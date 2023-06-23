@@ -9,7 +9,7 @@ from modules.clickhouse import ClickhouseClient
 
 
 @given('a working clickhouse on {node:w}')
-@retry(wait=wait_fixed(0.5), stop=stop_after_attempt(360))
+@retry(wait=wait_fixed(0.5), stop=stop_after_attempt(40))
 def step_wait_for_clickhouse_alive(context, node):
     """
     Wait until clickhouse is ready to accept incoming requests.

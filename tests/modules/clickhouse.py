@@ -26,6 +26,7 @@ class ClickhouseClient:
         if getattr(context, 'ch_user', None) is not None:
             self._session.headers['X-ClickHouse-User'] = context.ch_user
         self._url = f'{protocol}://{host}:{exposed_port}'
+
         self._timeout = 30
 
     def ping(self) -> None:

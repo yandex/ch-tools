@@ -1,9 +1,4 @@
-"""
-Variables that influence testing behavior are defined here.
-"""
 import os
-import random
-
 from modules.utils import generate_random_string
 
 
@@ -11,8 +6,7 @@ def create():
     """
     Create test configuration (non-idempotent function).
     """
-    network_suffix = random.randint(0, 4096)
-    network_name = f'test_net_{network_suffix}'
+    network_name = 'ch_tools_test'
 
     version_parts = os.getenv("CLICKHOUSE_VERSION", "0.0").split('.')
     assert len(version_parts) >= 2, "Invalid version string"
@@ -25,7 +19,6 @@ def create():
             'expose': {
                 'http': 8123,
                 'clickhouse': 9000,
-                'ssh': 22,
                 'keeper': 2281,
             },
             'depends_on': ['zookeeper'],
@@ -52,17 +45,6 @@ def create():
             'expose': {
                 'http': 9000,
             },
-            'prebuild_cmd': [
-                'mkdir -p images/minio/bin',
-                '/usr/bin/s3cmd -c /etc/s3cmd.cfg get --skip-existing '
-                's3://dbaas-infra-test-cache/minio.RELEASE.2021-01-16T02-19-44Z.gz '
-                'bin/minio.gz',
-                'gunzip -f bin/minio.gz',
-                '/usr/bin/s3cmd -c /etc/s3cmd.cfg get --skip-existing '
-                's3://dbaas-infra-test-cache/mc.RELEASE.2021-01-16T02-45-34Z.gz '
-                'bin/mc.gz',
-                'gunzip -f bin/mc.gz',
-            ],
         },
         'http_mock': {
             'instances': ['http_mock01'],
@@ -86,12 +68,6 @@ def create():
             'encrypt_key': generate_random_string(32),
         },
         'services': services,
-        'base_images': {
-            'ch-tools-tests-base': {
-                'tag': 'ch-tools-tests-base',
-                'path': 'images/base',
-            },
-        },
         'dbaas_conf': _dbaas_conf(services, network_name),
     }
 

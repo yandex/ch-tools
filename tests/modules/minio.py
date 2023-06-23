@@ -61,7 +61,7 @@ def export_s3_data(context: ContextT, path: str) -> None:
     copy_container_dir(_container(context), '/export', local_dir)
 
 
-@retry(retry=retry_if_exception_type(MinioException), wait=wait_fixed(0.5), stop=stop_after_attempt(360))
+@retry(retry=retry_if_exception_type(MinioException), wait=wait_fixed(1), stop=stop_after_attempt(10))
 def _configure_s3_credentials(context: ContextT) -> None:
     """
     Configure S3 credentials in mc (Minio client).
@@ -90,8 +90,7 @@ def _mc_execute(context: ContextT, command: str) -> dict:
     """
     Execute mc (Minio client) command.
     """
-    output = _container(context).exec_run(f'mc --json {command}').output.decode()
-
+    output = _container(context).exec_run(f'mcli --json {command}').output.decode()
     response = json.loads(output)
     if response['status'] == 'success':
         return response

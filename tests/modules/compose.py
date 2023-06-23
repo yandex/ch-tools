@@ -18,16 +18,7 @@ DOCKER_API = docker.from_env()
 
 @utils.env_stage('create', fail=True)
 def build_images(context: ContextT) -> None:
-    """
-    Build docker images.
-    """
-    for _, props in context.conf['base_images'].items():
-        try:
-            DOCKER_API.images.build(network_mode="bridge", **props)
-        except Exception as err:
-            raise RuntimeError(f'container {props} build failed.') from err
-
-    for _, service in context.conf['services'].items():
+    for service in context.conf['services'].values():
         for cmd in service.get('prebuild_cmd', []):
             try:
                 proc = subprocess.run([cmd], shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
