@@ -50,7 +50,6 @@ Feature: keeper-monitoring tool
     1;ConnectionRefusedError(111, 'Connection refused')
     """
 
-  @require_version_22.8
   Scenario: Check CH keeper alive with keeper monitoring
     Given a working keeper on clickhouse01
     When we execute command on clickhouse01
