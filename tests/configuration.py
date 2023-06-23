@@ -1,8 +1,8 @@
+"""
+Variables that influence testing behavior are defined here.
+"""
 import os
 from modules.utils import generate_random_string
-"""
-Create test environment
-"""
 
 
 def create():
