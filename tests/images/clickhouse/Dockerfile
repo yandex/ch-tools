@@ -1,11 +1,12 @@
-FROM clickhouse/clickhouse-server
+ARG NETWORK_NAME
+ARG CLICKHOUSE_VERSION
+
+FROM clickhouse/clickhouse-server:$CLICKHOUSE_VERSION
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     apt-get install -y supervisor && \
     rm -rf /var/lib/apt/lists/* /var/cache/debconf && \
     apt-get clean
-
-ARG NETWORK_NAME
 
 COPY staging/tools/ /tmp/tools/
 COPY images/clickhouse/config/monitor-ch-backup /etc/sudoers.d/monitor-ch-backup

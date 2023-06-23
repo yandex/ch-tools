@@ -5,7 +5,6 @@ import logging
 import os
 
 import env_control
-
 from modules.logs import save_logs
 
 REQUIRE_VERSION_PREFIX_LEN = len("require_version_")
@@ -69,7 +68,9 @@ def _check_tags(scenario):
         assert len(req_ver_parts) == 2, "Invalid required version"
         maj_req_ver, min_req_ver = int(req_ver_parts[0]), int(req_ver_parts[1])
 
-        version_parts = os.getenv("CLICKHOUSE_VERSION", "0.0").split('.')
+        version_parts = os.getenv("CLICKHOUSE_VERSION", "latest").split('.')
+        if version_parts[0] == "latest":
+            return
         assert len(version_parts) >= 2, "Invalid version string"
         maj_ver, min_ver = int(version_parts[0]), int(version_parts[1])
 

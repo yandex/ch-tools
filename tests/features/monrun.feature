@@ -34,9 +34,8 @@ Feature: ch-monitoring tool
     """
     When we execute command on zookeeper01
     """
-    kill 1
+    supervisorctl stop zookeeper
     """
-    And we sleep for 10 seconds
     And we execute command on clickhouse01
     """
     ch-monitoring ro-replica
@@ -255,7 +254,6 @@ Feature: ch-monitoring tool
     """
 
     # TODO Wait till ch-backup is opensourced
-    # @require_version_21.3
     # Scenario: Check Orphaned Backups
     #   When we execute command on clickhouse01
     #    """
@@ -352,7 +350,6 @@ Feature: ch-monitoring tool
     #   2;No valid backups found
     #   """
 
-  @require_version_21.8
   Scenario: Check CH Keeper alive
     Given a working keeper on clickhouse01
     When we execute command on clickhouse01

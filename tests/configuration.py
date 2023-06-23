@@ -1,7 +1,6 @@
 """
 Variables that influence testing behavior are defined here.
 """
-import os
 from modules.utils import generate_random_string
 
 
@@ -10,12 +9,6 @@ def create():
     Create test configuration (non-idempotent function).
     """
     network_name = 'ch_tools_test'
-
-    version_parts = os.getenv("CLICKHOUSE_VERSION", "0.0").split('.')
-    assert len(version_parts) >= 2, "Invalid version string"
-    maj_ver, min_ver = int(version_parts[0]), int(version_parts[1])
-    keeper_supported = maj_ver > 21 or (maj_ver == 21 and min_ver >= 8)
-
     services: dict = {
         'clickhouse': {
             'instances': ['clickhouse01', 'clickhouse02'],
@@ -32,9 +25,6 @@ def create():
             'db': {
                 'user': 'reader',
                 'password': 'reader_password',
-            },
-            'keeper': {
-                'enabled': keeper_supported,
             },
         },
         'zookeeper': {
