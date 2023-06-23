@@ -2,9 +2,9 @@ ARG CLICKHOUSE_VERSION
 FROM clickhouse/clickhouse-server:$CLICKHOUSE_VERSION
 ARG NETWORK_NAME
 
-# Clickhouse changed deb package url so old builds' paths yield an error on update
-RUN DEBIAN_FRONTEND=noninteractive rm /etc/apt/sources.list.d/clickhouse.list && \
-    apt-get update && \
+# Clickhouse changed deb package url so old builds' paths (e.g 21.8.15.7) yield an error on update
+RUN rm /etc/apt/sources.list.d/clickhouse.list || true
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     apt-get install -y supervisor && \
     rm -rf /var/lib/apt/lists/* /var/cache/debconf && \
     apt-get clean
