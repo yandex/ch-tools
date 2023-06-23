@@ -354,7 +354,7 @@ Feature: ch-monitoring tool
     Given a working keeper on clickhouse01
     When we execute command on clickhouse01
      """
-     ch-monitoring -n keeper
+     ch-monitoring keeper -n
      """
     Then we get response
      """
@@ -366,7 +366,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """"
-    ch-monitoring -n keeper
+    ch-monitoring keeper -n
     """
     Then we get response contains
     """

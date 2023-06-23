@@ -1,21 +1,17 @@
-ARG NETWORK_NAME
 ARG CLICKHOUSE_VERSION
-
 FROM clickhouse/clickhouse-server:$CLICKHOUSE_VERSION
+ARG NETWORK_NAME
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     apt-get install -y supervisor && \
     rm -rf /var/lib/apt/lists/* /var/cache/debconf && \
     apt-get clean
 
-COPY staging/tools/ /tmp/tools/
 COPY images/clickhouse/config/monitor-ch-backup /etc/sudoers.d/monitor-ch-backup
 COPY images/clickhouse/config/regions_names_ru.txt /opt/geo/regions_names_ru.txt
 COPY images/clickhouse/config/regions_hierarchy.txt /opt/geo/regions_hierarchy.txt
 
-RUN tar -x -f /tmp/tools/mdb-ch-tools.*.tar.gz -C / && \
-    \
-    rm -rf /etc/supervisor && \
+RUN rm -rf /etc/supervisor && \
     ln -s /config/supervisor /etc/supervisor && \
     mkdir /var/log/monrun && \
     ln -s /config/dbaas.conf /etc/dbaas.conf && \
@@ -34,7 +30,6 @@ RUN tar -x -f /tmp/tools/mdb-ch-tools.*.tar.gz -C / && \
     ln -s /etc/clickhouse-server/ssl/server.crt /etc/clickhouse-server/ssl/allCAs.pem && \
     \
     groupadd monitor && useradd -g monitor -G monitor,clickhouse monitor && \
-    chown monitor:monitor -R /var/log/clickhouse-monitoring && \
     chmod 755 /var/lib/clickhouse && \
     chmod 777 /etc && \
     chmod 755 /etc/clickhouse-server && \
@@ -42,5 +37,9 @@ RUN tar -x -f /tmp/tools/mdb-ch-tools.*.tar.gz -C / && \
     chmod 640 /etc/clickhouse-server/ssl/server.crt && \
     chmod 640 /etc/clickhouse-server/ssl/allCAs.pem && \
     chown -R clickhouse:clickhouse /etc/clickhouse-server/ /usr/bin/clickhouse
+
+COPY staging/tools/ /tmp/tools/
+RUN tar -x -f /tmp/tools/mdb-ch-tools.*.tar.gz -C / && \
+    chown monitor:monitor -R /var/log/clickhouse-monitoring
 
 ENTRYPOINT ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]
