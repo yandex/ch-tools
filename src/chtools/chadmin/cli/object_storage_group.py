@@ -44,7 +44,6 @@ def get_disk_metadata_paths(disk_name: str) -> List[Path]:
     type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=Path),
     default=STORAGE_POLICY_CONFIG_PATH,
     help='ClickHouse storage policy config',
-    show_default=True,
 )
 @option(
     '-d',
@@ -52,7 +51,6 @@ def get_disk_metadata_paths(disk_name: str) -> List[Path]:
     'disk_name',
     default='object_storage',
     help='S3 disk name',
-    show_default=True,
 )
 @pass_context
 def object_storage_group(ctx: Context, config_path: Path, disk_name: str) -> None:
@@ -113,7 +111,6 @@ def object_storage_group(ctx: Context, config_path: Path, disk_name: str) -> Non
     '--guard-interval',
     'guard_interval',
     default=DEFAULT_GUARD_INTERVAL,
-    show_default=True,
     type=TimeSpanParamType(),
     help=(
         'Guard interval in human-friendly format.'
