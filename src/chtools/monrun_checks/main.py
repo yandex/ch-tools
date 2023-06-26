@@ -87,6 +87,8 @@ def cli(no_user_check):
 
 
 CLI_COMMANDS = [
+    ping_command,
+    log_errors_command,
     replication_lag_command,
     system_queues_command,
     core_dumps_command,
@@ -94,8 +96,6 @@ CLI_COMMANDS = [
     resetup_state_command,
     ro_replica_command,
     geobase_command,
-    log_errors_command,
-    ping_command,
     backup_command,
     orphaned_backups_command,
     tls_command,

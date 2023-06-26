@@ -37,7 +37,7 @@ def keeper_command(retries, timeout, no_verify_ssl_certs) -> Result:
     """
     keeper_port, use_ssl = ClickhouseKeeperConfig.load().port_pair
     if not keeper_port:
-        return Result(0, 'disabled')
+        return Result(0, 'Disabled')
 
     client = KazooClient(
         f'127.0.0.1:{keeper_port}',
