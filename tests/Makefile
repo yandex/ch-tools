@@ -15,9 +15,13 @@ ENV=env -i \
 .PHONY: build
 build: staging/tools/
 
-staging/tools/:
+staging/tools/: build-deb-package
 	mkdir -p staging/tools/
-	cd staging/tools/ && ya package --target-platform linux ../../../pkg.json
+	cp ../../mdb-ch-tools_*.deb staging/tools/mdb-ch-tools.deb
+
+.PHONY: build-deb-package
+build-deb-package:
+	cd ../ && make build-deb-package
 
 .PHONY: all
 all: build lint test
@@ -74,6 +78,7 @@ stop_env:
 .PHONY: clean_env
 clean_env: stop_env
 	rm -rf staging ${SESSION_FILE}
+	cd ../ && make clean uninstall
 
 venv:
 	python3 -m venv venv

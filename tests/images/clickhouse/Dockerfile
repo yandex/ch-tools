@@ -41,7 +41,7 @@ RUN rm -rf /etc/supervisor && \
     chown -R clickhouse:clickhouse /etc/clickhouse-server/ /usr/bin/clickhouse
 
 COPY staging/tools/ /tmp/tools/
-RUN tar -x -f /tmp/tools/mdb-ch-tools.*.tar.gz -C / && \
+RUN dpkg -i /tmp/tools/mdb-ch-tools.deb && \
     chown monitor:monitor -R /var/log/clickhouse-monitoring
 
 ENTRYPOINT ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]
