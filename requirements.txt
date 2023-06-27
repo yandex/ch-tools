@@ -1,3 +1,4 @@
+<<<<<<< trunk: fix
 Jinja2 >= 3.0.0
 PyYAML >= 5.4.0
 Pygments >= 2.14.0
@@ -19,3 +20,4 @@ tenacity >= 8.2.0
 termcolor >= 1.1.0
 tqdm >= 4.64.0
 xmltodict >= 0.13.0
+file_read_backwards>=3.0.0

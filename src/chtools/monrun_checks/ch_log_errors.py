@@ -1,7 +1,7 @@
 import click
-import subprocess
 import re
-import time
+import datetime
+from file_read_backwards import FileReadBackwards
 
 from chtools.common.result import Result
 
@@ -26,16 +26,18 @@ def validate_exclude(ctx, param, value):
     '-f', '--logfile', 'logfile', default='/var/log/clickhouse-server/clickhouse-server.err.log', help='Log file path.'
 )
 def log_errors_command(crit, warn, watch_seconds, exclude, logfile):
-    time_start_bound = time.time() - watch_seconds
-
+    datetime_start = datetime.now() - datetime.timedelta(seconds=watch_seconds)
     errors = 0
 
-    while True:
-        line = tail.stdout.readline()
-        if not line:
-            break
-        line_str = line.decode("utf-8")
-        if not exclude.search(exclude, line_str) and re.('<Error>', line_str):
+    with FileReadBackwards(logfile, encoding="utf-8") as f:
+        for line in f:
+            if exclude.search(line):
+                continue
+            match = regex.match(line)
+            if match is None:
+                continue
+            if datetime.strptime(match.group(0), "%Y.%m.%d %H:%M:%S") < datetime_start:
+                break
             errors += 1
 
     msg = f'{errors} errors for last {watch_seconds} seconds'
