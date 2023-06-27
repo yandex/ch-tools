@@ -91,7 +91,7 @@ uninstall-logrotate:
 
 .PHONY: prepare-changelog
 prepare-changelog: prepare-version
-	@dch --force-bad-version --distribution stable -v `cat version.txt` Autobuild
+	dch --force-bad-version --distribution stable -v `cat version.txt` Autobuild
 
 
 .PHONY: prepare-version
@@ -107,21 +107,49 @@ version.txt:
 build-deb-package: prepare-changelog
 	@echo 'Building debian package'
 
-	@rm -f pyproject.toml  # for forcing usage of setup.py
-	@cd debian && \
-		debuild --check-dirname-level 0 --no-tgz-check --preserve-env -uc -us
+	rm -f pyproject.toml  # for forcing usage of setup.py
+	cd debian && \
+		debuild --check-dirname-level 0 --preserve-env --no-lintian --no-tgz-check -uc -us
 
 
 .PHONY: clean
 clean:
 	@echo 'Cleaning up'
 
-	@rm -f version.txt
-	@rm -rf venv
-	@rm -rf build
-	@rm -rf dist
-	@rm -rf *.egg-info
-	@rm -f debian/files
-	@rm -rf debian/mdb-ch-tools*
-	@rm -f ../mdb-ch-tools_*
-	@find . -name __pycache__ -type d -exec rm -rf {} +
+	rm -f version.txt
+	rm -rf venv
+	rm -rf build
+	rm -rf dist
+	rm -rf *.egg-info
+	rm -f debian/files
+	rm -rf debian/mdb-ch-tools*
+	rm -f ../mdb-ch-tools_*
+	find . -name __pycache__ -type d -exec rm -rf {} +
+
+
+.PHONY: help
+help:
+	@echo "Base targets:"
+	@echo "  prepare-changelog 			Add an autobuild version entity to changelog"
+	@echo "  prepare-version 			Update version based on latest commit"
+	@echo "  build-deb-package 			Build 'mdb-ch-tools' debian package"
+	@echo "  clean 						Clean up after building debian package"
+	@echo ""
+	@echo "--------------------------------------------------------------------------------"
+	@echo ""
+	@echo "Debian package build targets:"
+	@echo "  install					Install 'mdb-ch-tools' debian package"
+	@echo "  uninstall					Uninstall 'mdb-ch-tools' debian package"
+	@echo ""
+	@echo "  install-python-package 	Install 'ch-tools' python package"
+	@echo "  uninstall-python-package	Uninstall 'ch-tools' python package"
+	@echo "  install-symlinks			Install symlinks to /usr/bin/"
+	@echo "  uninstall-symlinks			Uninstall symlinks from /usr/bin/"
+	@echo "  install-bash-completions	Install to /etc/bash_completion.d/"
+	@echo "  uninstall-bash-completions	Uninstall from /etc/bash_completion.d/"
+	@echo "  install-logrotate 			Install log rotation rules to /etc/logrotate.d/"
+	@echo "  uninstall-logrotate 		Uninstall log rotation rules from /etc/logrotate.d/"
+	@echo ""
+	@echo "--------------------------------------------------------------------------------"
+	@echo ""
+	@echo "  help                       Show this help message."

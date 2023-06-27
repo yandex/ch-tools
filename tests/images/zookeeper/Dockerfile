@@ -5,7 +5,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y supervis
     rm -rf /var/lib/apt/lists/* /var/cache/debconf && \
     apt-get clean
 
-RUN tar -x -f /tmp/tools/mdb-ch-tools.*.tar.gz -C /
+RUN dpkg -i /tmp/tools/mdb-ch-tools.deb
 
 COPY images/zookeeper/config/zookeeper.conf /etc/supervisor/supervisord.conf
 COPY images/zookeeper/config/zoo.cfg /etc/zookeeper/conf/zoo.cfg
