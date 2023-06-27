@@ -1,4 +1,3 @@
-<<<<<<< trunk: fix
 Jinja2 >= 3.0.0
 PyYAML >= 5.4.0
 Pygments >= 2.14.0
