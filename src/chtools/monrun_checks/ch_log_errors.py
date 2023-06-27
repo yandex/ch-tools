@@ -1,22 +1,20 @@
 import click
 import subprocess
 import re
+import time
 
 from chtools.common.result import Result
 
 
-regex = re.compile(r'^([0-9]{4}\.[0-9]{2}\.[0-9]{2}\ [0-9]{2}\:[0-9]{2}\:[0-9]{2})')
+regex = re.compile(r'^([0-9]{4}\.[0-9]{2}\.[0-9]{2}\ [0-9]{2}\:[0-9]{2}\:[0-9]{2}).*?<(Error|Fatal)>')
 default_exclude = r'e\.displayText\(\) = No message received'
 
 
 def validate_exclude(ctx, param, value):
-    if not value:
-        return default_exclude
     try:
-        re.compile(value)
+        return re.compile(value if value is not None else default_exclude)
     except re.error:
         raise click.BadParameter('Value should be a valid regular expression.')
-    return value
 
 
 @click.command('log-errors')
@@ -28,15 +26,7 @@ def validate_exclude(ctx, param, value):
     '-f', '--logfile', 'logfile', default='/var/log/clickhouse-server/clickhouse-server.err.log', help='Log file path.'
 )
 def log_errors_command(crit, warn, watch_seconds, exclude, logfile):
-    """
-    Check errors in clickhouse log.
-    """
-
-    tail = subprocess.Popen(
-        ['timetail', '-n', f'{watch_seconds}', '-r', f'{regex}', f'{logfile}'],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-    )
+    time_start_bound = time.time() - watch_seconds
 
     errors = 0
 
@@ -45,11 +35,12 @@ def log_errors_command(crit, warn, watch_seconds, exclude, logfile):
         if not line:
             break
         line_str = line.decode("utf-8")
-        if not re.search(exclude, line_str) and re.search('<Error>', line_str):
+        if not exclude.search(exclude, line_str) and re.('<Error>', line_str):
             errors += 1
 
+    msg = f'{errors} errors for last {watch_seconds} seconds'
     if errors >= crit:
-        return Result(2, f'{errors} errors for last {watch_seconds} seconds')
+        return Result(2, msg)
     if errors >= warn:
-        return Result(1, f'{errors} errors for last {watch_seconds} seconds')
-    return Result(0, f'OK, {errors} errors for last {watch_seconds} seconds')
+        return Result(1, msg)
+    return Result(0, 'OK, ' + msg)
