@@ -1,66 +1,48 @@
 import click
-import subprocess
 import re
+import datetime
+from file_read_backwards import FileReadBackwards
 
 from chtools.common.result import Result
 
 
-default_regex = r'([0-9]{4}\.[0-9]{2}\.[0-9]{2}\ [0-9]{2}\:[0-9]{2}\:[0-9]{2})'
+regex = re.compile(r'^([0-9]{4}\.[0-9]{2}\.[0-9]{2}\ [0-9]{2}\:[0-9]{2}\:[0-9]{2}).*?<(Error|Fatal)>')
 default_exclude = r'e\.displayText\(\) = No message received'
 
 
-def validate_regex(ctx, param, value):
-    if not value:
-        return default_regex
-    try:
-        re.compile(value)
-    except re.error:
-        raise click.BadParameter('Value should be a valid regular expression.')
-    return value
-
-
 def validate_exclude(ctx, param, value):
-    if not value:
-        return default_exclude
     try:
-        re.compile(value)
+        return re.compile(value if value is not None else default_exclude)
     except re.error:
         raise click.BadParameter('Value should be a valid regular expression.')
-    return value
 
 
 @click.command('log-errors')
 @click.option('-c', '--critical', 'crit', type=int, default=60, help='Critical threshold.')
 @click.option('-w', '--warning', 'warn', type=int, default=6, help='Warning threshold.')
 @click.option('-n', '--watch-seconds', 'watch_seconds', type=int, default=600, help='Watch seconds.')
-@click.option('-r', '--regex', 'regex', default=default_regex, callback=validate_regex, help='Regular expresson.')
 @click.option('-e', '--exclude', 'exclude', default=default_exclude, callback=validate_exclude, help='Excluded error.')
 @click.option(
     '-f', '--logfile', 'logfile', default='/var/log/clickhouse-server/clickhouse-server.err.log', help='Log file path.'
 )
-def log_errors_command(crit, warn, watch_seconds, regex, exclude, logfile):
-    """
-    Check errors in clickhouse log.
-    """
-
-    tail = subprocess.Popen(
-        ['timetail', '-n', f'{watch_seconds}', '-r', f'{regex}', f'{logfile}'],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-    )
-
+def log_errors_command(crit, warn, watch_seconds, exclude, logfile):
+    datetime_start = datetime.now() - datetime.timedelta(seconds=watch_seconds)
     errors = 0
 
-    while True:
-        line = tail.stdout.readline()
-        if not line:
-            break
-        line_str = line.decode("utf-8")
-        if not re.search(exclude, line_str) and re.search('<Error>', line_str):
+    with FileReadBackwards(logfile, encoding="utf-8") as f:
+        for line in f:
+            if exclude.search(line):
+                continue
+            match = regex.match(line)
+            if match is None:
+                continue
+            if datetime.strptime(match.group(0), "%Y.%m.%d %H:%M:%S") < datetime_start:
+                break
             errors += 1
 
+    msg = f'{errors} errors for last {watch_seconds} seconds'
     if errors >= crit:
-        return Result(2, f'{errors} errors for last {watch_seconds} seconds')
+        return Result(2, msg)
     if errors >= warn:
-        return Result(1, f'{errors} errors for last {watch_seconds} seconds')
-    return Result(0, f'OK, {errors} errors for last {watch_seconds} seconds')
+        return Result(1, msg)
+    return Result(0, 'OK, ' + msg)

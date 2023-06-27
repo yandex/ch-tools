@@ -80,7 +80,7 @@ clean_env: stop_env
 	rm -rf staging ${SESSION_FILE}
 	cd ../ && make clean uninstall
 
-venv:
+venv: requirements.txt
 	python3 -m venv venv
 	venv/bin/pip install --no-cache-dir --disable-pip-version-check -r requirements.txt
 
