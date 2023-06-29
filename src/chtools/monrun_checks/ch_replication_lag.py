@@ -32,7 +32,7 @@ from chtools.common.result import Result
 @click.option('-v', '--verbose', 'verbose', type=int, count=True, default=0, help='Show details about lag.')
 def replication_lag_command(xcrit, crit, warn, mwarn, mcrit, verbose):
     """
-    Check for replication lag between replicas.
+    Check for replication lag across replicas.
     Should be: lag >= lag_with_errors, lag >= max_execution
     """
     lag, lag_with_errors, max_execution, max_merges, chart = get_replication_lag()

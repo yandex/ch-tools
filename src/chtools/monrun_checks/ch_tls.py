@@ -26,7 +26,7 @@ CERTIFICATE_PATH = '/etc/clickhouse-server/ssl/server.crt'
 )
 def tls_command(crit: int, warn: int, ports: Optional[str]) -> Result:
     """
-    Checks TLS certificate for expiration and that actual cert from fs used.
+    Check TLS certificate for expiration and that actual cert from fs used.
     """
     file_certificate, _ = read_cert_file()
 

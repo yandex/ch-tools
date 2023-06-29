@@ -10,7 +10,7 @@ from chtools.common.result import Result
 @click.command('geobase')
 def geobase_command():
     """
-    Check is ya.geobase present.
+    Check that embedded geobase is configured.
     """
     ch_client = ClickhouseClient()
 

@@ -35,7 +35,7 @@ class _TargetRecord:
 @click.option('--ipv6', 'ipv6', is_flag=True, help='Check AAAA DNS records')
 def ext_ip_dns_command(cluster: bool, private: bool, ipv6: bool) -> Result:
     """
-    Checks that all DNS records consistent in DC.
+    Check that all DNS records consistent.
     """
     err = []
     for record in _get_host_dns(cluster, private):
