@@ -18,10 +18,8 @@ setup(
     description='A set of tools for administration and diagnostics of ClickHouse DBMS.',
     license='MIT',
     url='https://github.com/yandex/ch-tools',
-    author='MDB team',
-    author_email='mdb-admin@yandex-team.ru',
-    maintainer='MDB team',
-    maintainer_email='mdb-admin@yandex-team.ru',
+    author='Yandex LLC',
+    author_email='opensource@yandex-team.ru',
     zip_safe=False,
     classifiers=[
         "Development Status :: 5 - Production/Stable",
