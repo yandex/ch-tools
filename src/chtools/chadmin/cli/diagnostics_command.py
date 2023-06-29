@@ -5,7 +5,7 @@ from click import pass_context
 from chtools.common.cli.parameters import env_var_help
 
 
-@cloup.command('diagnostics', help='Perform diagnostics on ClickHouse.')
+@cloup.command('diagnostics')
 @cloup.option(
     '-o',
     '--format',
@@ -27,4 +27,7 @@ from chtools.common.cli.parameters import env_var_help
 )
 @pass_context
 def diagnostics_command(ctx, output_format: str, normalize_queries: bool):
+    """
+    Collect diagnostics data.
+    """
     diagnose(ctx, output_format, normalize_queries)

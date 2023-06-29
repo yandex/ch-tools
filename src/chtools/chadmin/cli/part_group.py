@@ -23,7 +23,7 @@ FIELD_FORMATTERS = {
 @group('part')
 def part_group():
     """
-    Commands to manage parts.
+    Commands to manage data parts.
     """
     pass
 
