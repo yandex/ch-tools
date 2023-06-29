@@ -1,7 +1,7 @@
 Source: mdb-ch-tools
 Section: database
 Priority: optional
-Maintainer: DBaaS team <mdb-admin@yandex-team.ru>
+Maintainer: Yandex LLC
 Uploaders: Alexander Burmak <alex-burmak@yandex-team.ru>,
  Dmitry Starov <dstaroff@yandex-team.ru>,
  Anton Ivashkin <iantonspb@yandex-team.ru>,
