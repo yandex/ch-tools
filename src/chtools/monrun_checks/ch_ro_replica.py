@@ -7,7 +7,7 @@ from chtools.common.result import Result
 @click.command('ro-replica')
 def ro_replica_command():
     """
-    Check for readonly replic tables.
+    Check for readonly replicated tables.
     """
     ch_client = ClickhouseClient()
 

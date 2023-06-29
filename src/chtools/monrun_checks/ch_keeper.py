@@ -33,7 +33,7 @@ from chtools.common.result import Result
 )
 def keeper_command(retries, timeout, no_verify_ssl_certs) -> Result:
     """
-    Checks ClickHouse Keeper is alive.
+    Check ClickHouse Keeper is alive.
     """
     keeper_port, use_ssl = ClickhouseKeeperConfig.load().port_pair
     if not keeper_port:

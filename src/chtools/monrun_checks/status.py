@@ -15,7 +15,7 @@ def status_command(commands):
     @click.pass_context
     def status_impl(ctx):
         """
-        Prints status of all checks.
+        Perform all checks.
         """
         checks_status = []
         ctx.obj = {'status_mode': True}

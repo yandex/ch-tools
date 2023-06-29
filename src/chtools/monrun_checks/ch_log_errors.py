@@ -26,6 +26,9 @@ def validate_exclude(ctx, param, value):
     '-f', '--logfile', 'logfile', default='/var/log/clickhouse-server/clickhouse-server.err.log', help='Log file path.'
 )
 def log_errors_command(crit, warn, watch_seconds, exclude, logfile):
+    """
+    Check errors in ClickHouse server logs.
+    """
     datetime_start = datetime.now() - datetime.timedelta(seconds=watch_seconds)
     errors = 0
 

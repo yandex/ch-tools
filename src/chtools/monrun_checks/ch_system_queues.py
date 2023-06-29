@@ -12,7 +12,7 @@ from chtools.common.result import Result
 @click.option('-f', '--config_file', 'conf', help='Config file with theshholds per each table.')
 def system_queues_command(crit, warn, conf):
     """
-    Perform the check.
+    Check system queues.
     """
     config = {'triggers': {'default': {'crit': crit, 'warn': warn}}}
     if conf is not None:
