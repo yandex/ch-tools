@@ -7,7 +7,7 @@ from chtools.chadmin.internal.zookeeper import delete_zk_node
 from chtools.common.cli.parameters import TimeSpanParamType
 
 
-@group('replication-queue')
+@group("replication-queue")
 def replication_queue_group():
     """
     Commands to manage replication queue.
@@ -15,112 +15,146 @@ def replication_queue_group():
     pass
 
 
-@replication_queue_group.command('list')
-@option('--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Get records from all hosts in the cluster.')
-@option('--failed', is_flag=True, help='Output only failed replication queue tasks (tasks with non-empty exception).')
+@replication_queue_group.command("list")
 @option(
-    '--error',
-    '--exception',
-    'exception',
-    help='Filter replication queue tasks to output by the specified exception.',
+    "--cluster",
+    "--on-cluster",
+    "on_cluster",
+    is_flag=True,
+    help="Get records from all hosts in the cluster.",
 )
-@option('--executing', is_flag=True, help='Output only executing replication queue tasks.')
 @option(
-    '--age',
-    '--min-age',
-    'min_age',
+    "--failed",
+    is_flag=True,
+    help="Output only failed replication queue tasks (tasks with non-empty exception).",
+)
+@option(
+    "--error",
+    "--exception",
+    "exception",
+    help="Filter replication queue tasks to output by the specified exception.",
+)
+@option(
+    "--executing", is_flag=True, help="Output only executing replication queue tasks."
+)
+@option(
+    "--age",
+    "--min-age",
+    "min_age",
     type=TimeSpanParamType(),
-    help='Output only replication queue tasks that were created at least the specified amount of time ago.',
+    help="Output only replication queue tasks that were created at least the specified amount of time ago.",
 )
 @option(
-    '--type',
-    help='Filter replication queue tasks to output by the specified type.'
-    ' Multiple values can be specified through a comma.',
+    "--type",
+    help="Filter replication queue tasks to output by the specified type."
+    " Multiple values can be specified through a comma.",
 )
 @option(
-    '--exclude-type',
-    help='Filter replication queue tasks to not output by the specified type.'
-    ' Multiple values can be specified through a comma.',
+    "--exclude-type",
+    help="Filter replication queue tasks to not output by the specified type."
+    " Multiple values can be specified through a comma.",
 )
 @option(
-    '-d',
-    '--database',
-    help='Filter replication queue tasks to output by the specified database.'
-    ' Multiple values can be specified through a comma.',
+    "-d",
+    "--database",
+    help="Filter replication queue tasks to output by the specified database."
+    " Multiple values can be specified through a comma.",
 )
 @option(
-    '-t',
-    '--table',
-    help='Filter replication queue tasks to output by the specified table.'
-    ' Multiple values can be specified through a comma.',
+    "-t",
+    "--table",
+    help="Filter replication queue tasks to output by the specified table."
+    " Multiple values can be specified through a comma.",
 )
-@option('-v', '--verbose', is_flag=True, help='Verbose mode.')
-@option('-l', '--limit', type=int, help='Limit the max number of objects in the output.')
+@option("-v", "--verbose", is_flag=True, help="Verbose mode.")
+@option(
+    "-l", "--limit", type=int, help="Limit the max number of objects in the output."
+)
 @pass_context
 def list_replication_queue_command(ctx, **kwargs):
     """
     List replication queue tasks.
     """
-    print(get_replication_queue_tasks(ctx, **kwargs, format_='Vertical'))
+    print(get_replication_queue_tasks(ctx, **kwargs, format_="Vertical"))
 
 
-@replication_queue_group.command('delete')
-@option('--failed', is_flag=True, help='Delete only failed replication queue tasks (tasks with non-empty exception).')
+@replication_queue_group.command("delete")
 @option(
-    '--error',
-    '--exception',
-    'exception',
-    help='Filter replication queue tasks to delete by the specified exception.',
+    "--failed",
+    is_flag=True,
+    help="Delete only failed replication queue tasks (tasks with non-empty exception).",
 )
-@option('--executing', is_flag=True, help='Delete only executing replication queue tasks.')
 @option(
-    '--age',
-    '--min-age',
-    'min_age',
+    "--error",
+    "--exception",
+    "exception",
+    help="Filter replication queue tasks to delete by the specified exception.",
+)
+@option(
+    "--executing", is_flag=True, help="Delete only executing replication queue tasks."
+)
+@option(
+    "--age",
+    "--min-age",
+    "min_age",
     type=TimeSpanParamType(),
-    help='Delete only replication queue tasks that were created at least the specified amount of time ago.',
+    help="Delete only replication queue tasks that were created at least the specified amount of time ago.",
 )
 @option(
-    '--type',
-    help='Filter replication queue tasks to delete by the specified type.'
-    ' Multiple values can be specified through a comma.',
+    "--type",
+    help="Filter replication queue tasks to delete by the specified type."
+    " Multiple values can be specified through a comma.",
 )
 @option(
-    '--exclude-type',
-    help='Filter replication queue tasks to not delete by the specified type.'
-    ' Multiple values can be specified through a comma.',
+    "--exclude-type",
+    help="Filter replication queue tasks to not delete by the specified type."
+    " Multiple values can be specified through a comma.",
 )
 @option(
-    '-d',
-    '--database',
-    help='Filter replication queue tasks to delete by the specified database.'
-    ' Multiple values can be specified through a comma.',
+    "-d",
+    "--database",
+    help="Filter replication queue tasks to delete by the specified database."
+    " Multiple values can be specified through a comma.",
 )
 @option(
-    '-t',
-    '--table',
-    help='Filter replication queue tasks to delete by the specified table.'
-    ' Multiple values can be specified through a comma.',
+    "-t",
+    "--table",
+    help="Filter replication queue tasks to delete by the specified table."
+    " Multiple values can be specified through a comma.",
 )
 @pass_context
 def delete_command(ctx, **kwargs):
     """
     Delete replication queue tasks.
     """
-    tasks = get_replication_queue_tasks(ctx, **kwargs, verbose=True, format_='JSON')['data']
+    tasks = get_replication_queue_tasks(ctx, **kwargs, verbose=True, format_="JSON")[
+        "data"
+    ]
     for table, tasks in group_tasks_by_table(tasks).items():
         database, table = table
 
-        print(f'Detaching table `{database}`.`{table}`')
-        execute_query(ctx, f"""DETACH TABLE `{database}`.`{table}`""", timeout=300, echo=True, format_=None)
+        print(f"Detaching table `{database}`.`{table}`")
+        execute_query(
+            ctx,
+            f"""DETACH TABLE `{database}`.`{table}`""",
+            timeout=300,
+            echo=True,
+            format_=None,
+        )
 
         for task in tasks:
-            zk_path = task['zk_path']
-            print(f'Deleting task from ZooKeeper: {zk_path}')
+            zk_path = task["zk_path"]
+            print(f"Deleting task from ZooKeeper: {zk_path}")
             delete_zk_node(ctx, zk_path)
 
-        print(f'Attaching table `{database}`.`{table}`')
-        execute_query(ctx, f"""ATTACH TABLE `{database}`.`{table}`""", timeout=300, echo=True, format_=None)
+        print(f"Attaching table `{database}`.`{table}`")
+        execute_query(
+            ctx,
+            f"""ATTACH TABLE `{database}`.`{table}`""",
+            timeout=300,
+            echo=True,
+            format_=None,
+        )
 
 
 def get_replication_queue_tasks(
@@ -220,5 +254,5 @@ def get_replication_queue_tasks(
 def group_tasks_by_table(tasks):
     result = defaultdict(list)
     for task in tasks:
-        result[(task['database'], task['table'])].append(task)
+        result[(task["database"], task["table"])].append(task)
     return result

@@ -20,9 +20,9 @@ class ListParamType(click.ParamType):
     Command-line parameter type for lists. It supports reading from file and stdin.
     """
 
-    name = 'list'
+    name = "list"
 
-    def __init__(self, type=None, separator=r'[,\s]+'):
+    def __init__(self, type=None, separator=r"[,\s]+"):
         self.type = type
         self.separator = separator
 
@@ -44,7 +44,7 @@ class StringParamType(click.ParamType):
     Command-line parameter type for string values. It supports reading from file and stdin.
     """
 
-    name = 'string'
+    name = "string"
 
     def convert(self, value, param, ctx):
         return _preprocess_value(value)
@@ -55,13 +55,15 @@ class TimeSpanParamType(click.ParamType):
     Command-line parameter type for times span values.
     """
 
-    name = 'timespan'
+    name = "timespan"
 
     def convert(self, value, param, ctx):
         try:
             return parse_timespan(value)
         except humanfriendly.InvalidTimespan as e:
-            raise ClickException(f'Invalid timespan value for the parameter "{param.name}": {str(e)}')
+            raise ClickException(
+                f'Invalid timespan value for the parameter "{param.name}": {str(e)}'
+            )
 
 
 class BytesParamType(click.ParamType):
@@ -69,12 +71,12 @@ class BytesParamType(click.ParamType):
     Command-line parameter type for bytes values.
     """
 
-    name = 'bytes'
+    name = "bytes"
 
     def convert(self, value, param, ctx):
         if isinstance(value, str):
             value = value.strip()
-            if value.startswith('-'):
+            if value.startswith("-"):
                 value = value[1:]
                 multiplier = -1
             else:
@@ -89,10 +91,10 @@ def _preprocess_value(value):
     """
     Preprocess command-line parameter value. It adds support of reading from file and stdin.
     """
-    if value == '-':
+    if value == "-":
         return sys.stdin.read()
 
-    if value.startswith('@'):
+    if value.startswith("@"):
         with open(os.path.expanduser(value[1:])) as f:
             return f.read()
 

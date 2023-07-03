@@ -2,10 +2,10 @@ from chtools.common.clickhouse.config import ClickhouseConfig
 
 
 def get_config(ctx, try_preprocessed=True) -> ClickhouseConfig:
-    if 'clickhouse_config' not in ctx.obj:
-        ctx.obj['clickhouse_config'] = ClickhouseConfig.load(try_preprocessed)
+    if "clickhouse_config" not in ctx.obj:
+        ctx.obj["clickhouse_config"] = ClickhouseConfig.load(try_preprocessed)
 
-    return ctx.obj['clickhouse_config']
+    return ctx.obj["clickhouse_config"]
 
 
 def get_macros(ctx):

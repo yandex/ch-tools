@@ -7,7 +7,7 @@ from .error import ClickhouseError
 from .query_output_format import OutputFormat
 
 __all__ = [
-    'ClickhouseClient',
-    'ClickhouseError',
-    'OutputFormat',
+    "ClickhouseClient",
+    "ClickhouseError",
+    "OutputFormat",
 ]

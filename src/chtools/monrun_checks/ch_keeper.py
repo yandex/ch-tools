@@ -6,30 +6,30 @@ from chtools.common.clickhouse.config import ClickhouseKeeperConfig
 from chtools.common.result import Result
 
 
-@cloup.command('keeper')
+@cloup.command("keeper")
 @cloup.option(
-    '-r',
-    '--retries',
-    'retries',
+    "-r",
+    "--retries",
+    "retries",
     type=int,
     default=3,
-    help='Connection retries',
+    help="Connection retries",
 )
 @cloup.option(
-    '-t',
-    '--timeout',
-    'timeout',
+    "-t",
+    "--timeout",
+    "timeout",
     type=int,
     default=10,
-    help='Connection timeout (s)',
+    help="Connection timeout (s)",
 )
 @cloup.option(
-    '-n',
-    '--no-verify-ssl-certs',
-    'no_verify_ssl_certs',
+    "-n",
+    "--no-verify-ssl-certs",
+    "no_verify_ssl_certs",
     is_flag=True,
     default=False,
-    help='Allow unverified SSL certificates, e.g. self-signed ones',
+    help="Allow unverified SSL certificates, e.g. self-signed ones",
 )
 def keeper_command(retries, timeout, no_verify_ssl_certs) -> Result:
     """
@@ -37,10 +37,10 @@ def keeper_command(retries, timeout, no_verify_ssl_certs) -> Result:
     """
     keeper_port, use_ssl = ClickhouseKeeperConfig.load().port_pair
     if not keeper_port:
-        return Result(0, 'Disabled')
+        return Result(0, "Disabled")
 
     client = KazooClient(
-        f'127.0.0.1:{keeper_port}',
+        f"127.0.0.1:{keeper_port}",
         connection_retry=retries,
         command_retry=retries,
         timeout=timeout,
@@ -49,7 +49,7 @@ def keeper_command(retries, timeout, no_verify_ssl_certs) -> Result:
     )
     try:
         client.start()
-        client.get('/')
+        client.get("/")
         client.stop()
     except (KazooException, KazooTimeoutError) as e:
         return Result(2, repr(e))

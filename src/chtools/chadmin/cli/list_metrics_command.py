@@ -3,7 +3,7 @@ from click import command, pass_context
 from chtools.chadmin.internal.utils import execute_query
 
 
-@command('metrics')
+@command("metrics")
 @pass_context
 def list_metrics_command(ctx):
     """

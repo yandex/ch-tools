@@ -24,9 +24,9 @@ def list_parts(
     List data parts.
     """
     order_by = {
-        'size': 'bytes_on_disk DESC',
-        'rows': 'rows DESC',
-        None: 'database, table, name',
+        "size": "bytes_on_disk DESC",
+        "rows": "rows DESC",
+        None: "database, table, name",
     }[order_by]
 
     query = """
@@ -130,8 +130,8 @@ def list_parts(
         active=active,
         order_by=order_by,
         limit=limit,
-        format_='JSON',
-    )['data']
+        format_="JSON",
+    )["data"]
 
 
 def list_detached_parts(
@@ -220,8 +220,8 @@ def list_detached_parts(
         max_level=max_level,
         reason=reason,
         limit=limit,
-        format_='JSON',
-    )['data']
+        format_="JSON",
+    )["data"]
 
 
 def attach_part(ctx, database, table, part_name, dry_run=False):
@@ -252,7 +252,7 @@ def drop_part(ctx, database, table, part_name, dry_run=False):
     """
     Drop the specified data part.
     """
-    query = f'ALTER TABLE `{database}`.`{table}` DROP PART \'{part_name}\''
+    query = f"ALTER TABLE `{database}`.`{table}` DROP PART '{part_name}'"
     execute_query(ctx, query, timeout=300, format_=None, echo=True, dry_run=dry_run)
 
 
@@ -260,7 +260,7 @@ def drop_detached_part(ctx, database, table, part_name, dry_run=False):
     """
     Drop the specified detached data part.
     """
-    query = f'ALTER TABLE `{database}`.`{table}` DROP DETACHED PART \'{part_name}\''
+    query = f"ALTER TABLE `{database}`.`{table}` DROP DETACHED PART '{part_name}'"
     execute_query(ctx, query, timeout=300, format_=None, echo=True, dry_run=dry_run)
 
 
@@ -278,11 +278,11 @@ def list_part_log(
     limit=None,
 ):
     order_by = {
-        'size': 'size_in_bytes DESC',
-        'rows': 'rows DESC',
-        'peak_memory_usage': 'peak_memory_usage DESC',
-        'time': 'event_time DESC',
-        None: 'event_time DESC',
+        "size": "size_in_bytes DESC",
+        "rows": "rows DESC",
+        "peak_memory_usage": "peak_memory_usage DESC",
+        "time": "event_time DESC",
+        None: "event_time DESC",
     }[order_by]
 
     query = """
@@ -360,5 +360,5 @@ def list_part_log(
         max_time=max_time,
         order_by=order_by,
         limit=limit,
-        format_='JSON',
-    )['data']
+        format_="JSON",
+    )["data"]

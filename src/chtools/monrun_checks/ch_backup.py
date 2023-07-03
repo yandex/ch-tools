@@ -14,15 +14,25 @@ from chtools.common.clickhouse.client import ClickhouseClient
 from chtools.common.dbaas import DbaasConfig
 from chtools.monrun_checks.exceptions import die
 
-DATE_FORMAT = '%Y-%m-%d %H:%M:%S %z'
-FULL_DATE_FORMAT = '%Y-%m-%dT%H:%M:%S.%f%z'
-RESTORE_CONTEXT_PATH = '/tmp/ch_backup_restore_state.json'
+DATE_FORMAT = "%Y-%m-%d %H:%M:%S %z"
+FULL_DATE_FORMAT = "%Y-%m-%dT%H:%M:%S.%f%z"
+RESTORE_CONTEXT_PATH = "/tmp/ch_backup_restore_state.json"
 FAILED_PARTS_THRESHOLD = 10
 
 
-@click.command('backup')
-@click.option('--critical-failed', 'crit_failed', default=3, help='Critical threshold for failed backupd.')
-@click.option('--critical-absent', 'crit_absent', default=0, help='Critical threshold for absent backupd')
+@click.command("backup")
+@click.option(
+    "--critical-failed",
+    "crit_failed",
+    default=3,
+    help="Critical threshold for failed backupd.",
+)
+@click.option(
+    "--critical-absent",
+    "crit_absent",
+    default=0,
+    help="Critical threshold for absent backupd",
+)
 def backup_command(crit_failed, crit_absent):
     """
     Check ClickHouse backups: its state, age and count.
@@ -50,10 +60,10 @@ def check_valid_backups_exist(backups):
     Check that valid backups exist.
     """
     for backup in backups:
-        if backup['state'] == 'created':
+        if backup["state"] == "created":
             return
 
-    die(2, 'No valid backups found')
+    die(2, "No valid backups found")
 
 
 def check_last_backup_not_failed(backups, crit=3):
@@ -62,12 +72,12 @@ def check_last_backup_not_failed(backups, crit=3):
     """
     counter = 0
     for i, backup in enumerate(backups):
-        state = backup['state']
+        state = backup["state"]
 
-        if state == 'created':
+        if state == "created":
             break
 
-        if state == 'failed' or (state == 'creating' and i > 0):
+        if state == "failed" or (state == "creating" and i > 0):
             counter += 1
 
     if counter == 0:
@@ -75,9 +85,9 @@ def check_last_backup_not_failed(backups, crit=3):
 
     status = 2 if crit > 0 and counter >= crit else 1
     if counter > 1:
-        message = f'Last {counter} backups failed'
+        message = f"Last {counter} backups failed"
     else:
-        message = 'Last backup failed'
+        message = "Last backup failed"
     die(status, message)
 
 
@@ -92,8 +102,8 @@ def check_backup_age(ch_client, backups, age_threshold=1, crit=0):
 
     checking_backup = None
     for i, backup in enumerate(backups):
-        state = backup['state']
-        if state == 'created' or (state == 'creating' and i == 0):
+        state = backup["state"]
+        if state == "created" or (state == "creating" and i == 0):
             checking_backup = backup
             break
 
@@ -101,10 +111,10 @@ def check_backup_age(ch_client, backups, age_threshold=1, crit=0):
     if backup_age.days < age_threshold:
         return
 
-    if checking_backup['state'] == 'creating':
-        message = f'Last backup was started {backup_age.days} days ago'
+    if checking_backup["state"] == "creating":
+        message = f"Last backup was started {backup_age.days} days ago"
     else:
-        message = f'Last backup was created {backup_age.days} days ago'
+        message = f"Last backup was created {backup_age.days} days ago"
     status = 1
     if crit > 0 and uptime >= crit and backup_age.days >= crit:
         status = 2
@@ -115,11 +125,15 @@ def check_backup_count(config: BackupConfig, backups: List[Dict]) -> None:
     """
     Check that the number of backups is not too large.
     """
-    max_count = config.retain_count + config.deduplication_age_limit.days + 2  # backup-service backup retention delay
+    max_count = (
+        config.retain_count + config.deduplication_age_limit.days + 2
+    )  # backup-service backup retention delay
 
-    count = sum(1 for backup in backups if backup.get('labels', {}).get('user_initiator'))
+    count = sum(
+        1 for backup in backups if backup.get("labels", {}).get("user_initiator")
+    )
     if count > max_count:
-        die(1, f'Too many backups exist: {count} > {max_count}')
+        die(1, f"Too many backups exist: {count} > {max_count}")
 
 
 def check_restored_parts() -> None:
@@ -127,19 +141,22 @@ def check_restored_parts() -> None:
     Check count of failed parts on restore
     """
     if exists(RESTORE_CONTEXT_PATH):
-        with open(RESTORE_CONTEXT_PATH, 'r') as f:
+        with open(RESTORE_CONTEXT_PATH, "r") as f:
             context = json.load(f)
             failed = sum(
                 sum(len(table) for table in tables.values())
-                for tables in context.get('failed', {}).get('failed_parts', {}).values()
+                for tables in context.get("failed", {}).get("failed_parts", {}).values()
             )
-            restored = sum(sum(len(table) for table in tables.values()) for tables in context['databases'].values())
+            restored = sum(
+                sum(len(table) for table in tables.values())
+                for tables in context["databases"].values()
+            )
             if failed == 0:
                 return
             failed_percent = int((failed / (failed + restored)) * 100)
             die(
                 1 if failed_percent < FAILED_PARTS_THRESHOLD else 2,
-                f'Some parts restore failed: {failed}({failed_percent}%)',
+                f"Some parts restore failed: {failed}({failed_percent}%)",
             )
 
 
@@ -147,7 +164,7 @@ def get_backup_age(backup):
     """
     Calculate and return age of ClickHouse backup.
     """
-    backup_time = datetime.strptime(backup['start_time'], DATE_FORMAT)
+    backup_time = datetime.strptime(backup["start_time"], DATE_FORMAT)
     return datetime.now(timezone.utc) - backup_time
 
 

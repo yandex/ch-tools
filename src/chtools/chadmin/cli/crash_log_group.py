@@ -4,7 +4,7 @@ from chtools.chadmin.cli import get_cluster_name
 from chtools.chadmin.internal.utils import execute_query
 
 
-@group('crash-log')
+@group("crash-log")
 def crash_log_group():
     """
     Commands for retrieving information from system.crash_log.
@@ -12,8 +12,14 @@ def crash_log_group():
     pass
 
 
-@crash_log_group.command('list')
-@option('--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Get log records from all hosts in the cluster.')
+@crash_log_group.command("list")
+@option(
+    "--cluster",
+    "--on-cluster",
+    "on_cluster",
+    is_flag=True,
+    help="Get log records from all hosts in the cluster.",
+)
 @pass_context
 def list_crashes_command(ctx, on_cluster):
     cluster = get_cluster_name(ctx) if on_cluster else None
@@ -35,4 +41,4 @@ def list_crashes_command(ctx, on_cluster):
         {% endif %}
         ORDER BY event_time DESC
         """
-    print(execute_query(ctx, query_str, cluster=cluster, format_='Vertical'))
+    print(execute_query(ctx, query_str, cluster=cluster, format_="Vertical"))

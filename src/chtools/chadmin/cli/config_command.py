@@ -4,7 +4,7 @@ from chtools.common.clickhouse.config import ClickhouseConfig
 from chtools.common.cli.formatting import print_response
 
 
-@command('config')
+@command("config")
 @pass_context
 def config_command(ctx):
     """

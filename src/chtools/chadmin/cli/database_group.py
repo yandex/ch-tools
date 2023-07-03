@@ -3,53 +3,84 @@ from click import argument, group, option, pass_context
 from chtools.chadmin.internal.utils import execute_query
 
 
-@group('database')
+@group("database")
 def database_group():
     """Commands to manage databases."""
     pass
 
 
-@database_group.command('get')
-@argument('database')
-@option('--active', '--active-parts', 'active_parts', is_flag=True, help='Account only active data parts.')
+@database_group.command("get")
+@argument("database")
+@option(
+    "--active",
+    "--active-parts",
+    "active_parts",
+    is_flag=True,
+    help="Account only active data parts.",
+)
 @pass_context
 def get_database_command(ctx, database, active_parts):
-    print(get_databases(ctx, database=database, active_parts=active_parts, format_='Vertical'))
+    print(
+        get_databases(
+            ctx, database=database, active_parts=active_parts, format_="Vertical"
+        )
+    )
 
 
-@database_group.command('list')
-@option('-d', '--database')
-@option('--exclude-database')
-@option('--active', '--active-parts', 'active_parts', is_flag=True, help='Account only active data parts.')
+@database_group.command("list")
+@option("-d", "--database")
+@option("--exclude-database")
+@option(
+    "--active",
+    "--active-parts",
+    "active_parts",
+    is_flag=True,
+    help="Account only active data parts.",
+)
 @pass_context
 def list_databases_command(ctx, **kwargs):
-    print(get_databases(ctx, **kwargs, format_='PrettyCompact'))
+    print(get_databases(ctx, **kwargs, format_="PrettyCompact"))
 
 
-@database_group.command('delete')
+@database_group.command("delete")
 @pass_context
-@option('-d', '--database')
-@option('--exclude-database')
-@option('-a', '--all', is_flag=True, help='Delete all databases.')
-@option('--cluster')
+@option("-d", "--database")
+@option("--exclude-database")
+@option("-a", "--all", is_flag=True, help="Delete all databases.")
+@option("--cluster")
 @option(
-    '-n', '--dry-run', is_flag=True, default=False, help='Enable dry run mode and do not perform any modifying actions.'
+    "-n",
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Enable dry run mode and do not perform any modifying actions.",
 )
 def delete_databases_command(ctx, dry_run, all, database, exclude_database, cluster):
     if not any((all, database)):
-        ctx.fail('At least one of --all, --database options must be specified.')
+        ctx.fail("At least one of --all, --database options must be specified.")
 
-    for d in get_databases(ctx, database=database, exclude_database=exclude_database, format_='JSON')['data']:
+    for d in get_databases(
+        ctx, database=database, exclude_database=exclude_database, format_="JSON"
+    )["data"]:
         query = """
             DROP DATABASE `{{ database }}`
             {% if cluster %}
             ON CLUSTER '{{ cluster }}'
             {% endif %}
             """
-        execute_query(ctx, query, database=d['database'], cluster=cluster, echo=True, dry_run=dry_run)
+        execute_query(
+            ctx,
+            query,
+            database=d["database"],
+            cluster=cluster,
+            echo=True,
+            dry_run=dry_run,
+        )
 
 
-def get_databases(ctx, database=None, exclude_database=None, active_parts=None, format_=None):
+def get_databases(
+    ctx, database=None, exclude_database=None, active_parts=None, format_=None
+):
     query = """
         SELECT
             database,
@@ -108,5 +139,10 @@ def get_databases(ctx, database=None, exclude_database=None, active_parts=None, 
         ORDER BY database
         """
     return execute_query(
-        ctx, query, database=database, exclude_database=exclude_database, active_parts=active_parts, format_=format_
+        ctx,
+        query,
+        database=database,
+        exclude_database=exclude_database,
+        active_parts=active_parts,
+        format_=format_,
     )

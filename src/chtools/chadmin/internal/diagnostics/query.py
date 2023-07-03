@@ -1,26 +1,26 @@
 SELECT_SYSTEM_TABLES = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SELECT name
 FROM system.tables
 WHERE database = 'system'
-'''
+"""
 )
 
 SELECT_DATABASE_ENGINES = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SELECT
     engine,
     count() AS count
 FROM system.databases
 GROUP BY engine
-'''
+"""
 )
 
 SELECT_DATABASES = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SELECT
     name,
     engine,
@@ -44,24 +44,24 @@ LEFT JOIN
 ON db.name = db_stats.database
 ORDER BY bytes_on_disk DESC
 LIMIT 10
-'''
+"""
 )
 
 SELECT_TABLE_ENGINES = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SELECT
     engine,
     count() AS count
 FROM system.tables
 WHERE database NOT IN ('system', 'INFORMATION_SCHEMA')
 GROUP BY engine
-'''
+"""
 )
 
 SELECT_DICTIONARIES = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SELECT
     source,
     type,
@@ -70,26 +70,26 @@ SELECT
 FROM system.dictionaries
 GROUP BY source, type, status
 ORDER BY status DESC, source
-'''
+"""
 )
 
 SELECT_ACCESS = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SHOW ACCESS
-'''
+"""
 )
 
 SELECT_QUOTA_USAGE = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SHOW QUOTA
-'''
+"""
 )
 
 SELECT_REPLICAS = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SELECT
     database,
     table,
@@ -102,12 +102,12 @@ SELECT
 FROM system.replicas
 ORDER BY absolute_delay DESC
 LIMIT 10
-'''
+"""
 )
 
 SELECT_REPLICATION_QUEUE = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SELECT
     database,
     table,
@@ -129,12 +129,12 @@ SELECT
 FROM system.replication_queue
 ORDER BY create_time
 LIMIT 20
-'''
+"""
 )
 
 SELECT_REPLICATED_FETCHES = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SELECT
     database,
     table,
@@ -152,12 +152,12 @@ SELECT
     to_detached,
     thread_id
 FROM system.replicated_fetches
-'''
+"""
 )
 
 SELECT_PARTS_PER_TABLE = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SELECT
     database,
     table,
@@ -178,12 +178,12 @@ FROM
 GROUP BY database, table
 ORDER BY max_parts_per_partition DESC
 LIMIT 10
-'''
+"""
 )
 
 SELECT_MERGES = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SELECT
     database,
     table,
@@ -201,12 +201,12 @@ SELECT
     formatReadableSize(memory_usage) AS memory_usage,
     thread_id
 FROM system.merges
-'''
+"""
 )
 
 SELECT_MUTATIONS = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SELECT
     database,
     table,
@@ -222,12 +222,12 @@ SELECT
 FROM system.mutations
 WHERE NOT is_done
 ORDER BY create_time DESC
-'''
+"""
 )
 
 SELECT_RECENT_DATA_PARTS = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SELECT
     database,
     table,
@@ -258,12 +258,12 @@ SELECT
 FROM system.parts
 WHERE modification_time > now() - INTERVAL 3 MINUTE
 ORDER BY modification_time DESC
-'''
+"""
 )
 
 SELECT_DETACHED_DATA_PARTS = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SELECT
     database,
     table,
@@ -275,12 +275,12 @@ SELECT
     max_block_number,
     level
 FROM system.detached_parts
-'''
+"""
 )
 
 SELECT_PROCESSES = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SELECT
     elapsed,
     query_id,
@@ -309,12 +309,12 @@ SELECT
     {% endif -%}
 FROM system.processes
 ORDER BY elapsed DESC
-'''
+"""
 )
 
 SELECT_TOP_QUERIES_BY_DURATION = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SELECT
     type,
     query_start_time,
@@ -369,12 +369,12 @@ WHERE type != 'QueryStart'
   AND event_time >= now() - INTERVAL 1 DAY
 ORDER BY query_duration_ms DESC
 LIMIT 10
-'''
+"""
 )
 
 SELECT_TOP_QUERIES_BY_MEMORY_USAGE = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SELECT
     type,
     query_start_time,
@@ -429,12 +429,12 @@ WHERE type != 'QueryStart'
   AND event_time >= now() - INTERVAL 1 DAY
 ORDER BY memory_usage DESC
 LIMIT 10
-'''
+"""
 )
 
 SELECT_FAILED_QUERIES = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SELECT
     type,
     query_start_time,
@@ -490,12 +490,12 @@ WHERE type != 'QueryStart'
   AND exception != ''
 ORDER BY query_start_time DESC
 LIMIT 10
-'''
+"""
 )
 
 SELECT_STACK_TRACES = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SELECT
     {% if version_ge('21.8') -%}
     thread_name,
@@ -516,12 +516,12 @@ GROUP BY
     {% endif -%}
     trace
 ORDER BY min_thread_id
-'''
+"""
 )
 
 SELECT_CRASH_LOG = str.strip(
     # language=clickhouse
-    r'''
+    r"""
 SELECT
     event_time,
     signal,
@@ -531,5 +531,5 @@ SELECT
     version
 FROM system.crash_log
 ORDER BY event_time DESC
-'''
+"""
 )

@@ -3,8 +3,8 @@ from click import command, option, pass_context
 from chtools.chadmin.internal.utils import execute_query
 
 
-@command('functions')
-@option('--name')
+@command("functions")
+@option("--name")
 @pass_context
 def list_functions_command(ctx, name):
     """

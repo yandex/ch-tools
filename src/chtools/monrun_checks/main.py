@@ -6,7 +6,7 @@ import sys
 import warnings
 from functools import wraps
 
-warnings.filterwarnings(action='ignore', message='Python 3.6 is no longer supported')
+warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
 
 import click  # noqa: E402
 
@@ -18,18 +18,22 @@ from chtools.monrun_checks.ch_geobase import geobase_command  # noqa: E402
 from chtools.monrun_checks.ch_keeper import keeper_command  # noqa: E402
 from chtools.monrun_checks.ch_log_errors import log_errors_command  # noqa: E402
 from chtools.monrun_checks.ch_ping import ping_command  # noqa: E402
-from chtools.monrun_checks.ch_replication_lag import replication_lag_command  # noqa: E402
+from chtools.monrun_checks.ch_replication_lag import (
+    replication_lag_command,
+)  # noqa: E402
 from chtools.monrun_checks.ch_resetup_state import resetup_state_command  # noqa: E402
 from chtools.monrun_checks.ch_ro_replica import ro_replica_command  # noqa: E402
-from chtools.monrun_checks.ch_s3_backup_orphaned import orphaned_backups_command  # noqa: E402
+from chtools.monrun_checks.ch_s3_backup_orphaned import (
+    orphaned_backups_command,
+)  # noqa: E402
 from chtools.monrun_checks.ch_system_queues import system_queues_command  # noqa: E402
 from chtools.monrun_checks.ch_tls import tls_command  # noqa: E402
 from chtools.monrun_checks.exceptions import translate_to_status  # noqa: E402
 from chtools.monrun_checks.ext_ip_dns import ext_ip_dns_command  # noqa: E402
 from chtools.monrun_checks.status import status_command  # noqa: E402
 
-LOG_FILE = '/var/log/clickhouse-monitoring/clickhouse-monitoring.log'
-DEFAULT_USER = 'monitor'
+LOG_FILE = "/var/log/clickhouse-monitoring/clickhouse-monitoring.log"
+DEFAULT_USER = "monitor"
 
 
 class MonrunChecks(click.Group):
@@ -42,11 +46,11 @@ class MonrunChecks(click.Group):
             logging.basicConfig(
                 filename=LOG_FILE,
                 level=logging.DEBUG,
-                format=f'%(asctime)s %(process)-5d [%(levelname)s] {cmd.name}: %(message)s',
+                format=f"%(asctime)s %(process)-5d [%(levelname)s] {cmd.name}: %(message)s",
             )
-            logging.getLogger('urllib3.connectionpool').setLevel(logging.CRITICAL)
+            logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
 
-            logging.debug('Start executing')
+            logging.debug("Start executing")
 
             status = Status()
             try:
@@ -58,14 +62,16 @@ class MonrunChecks(click.Group):
                         status.add_verbose(result.verbose)
             except Exception as exc:
                 if not isinstance(exc, UserWarning):
-                    logging.exception('Got error %s', repr(exc))
+                    logging.exception("Got error %s", repr(exc))
                 status = translate_to_status(exc, status)
 
-            log_message = f'Completed with {status.code};{status.message}'
-            log_level = {0: logging.DEBUG, 1: logging.WARNING}.get(status.code, logging.ERROR)
+            log_message = f"Completed with {status.code};{status.message}"
+            log_level = {0: logging.DEBUG, 1: logging.WARNING}.get(
+                status.code, logging.ERROR
+            )
             logging.log(log_level, log_message)
 
-            if ctx.obj and ctx.obj.get('status_mode', False):
+            if ctx.obj and ctx.obj.get("status_mode", False):
                 return status
             status.report()
 
@@ -76,11 +82,17 @@ class MonrunChecks(click.Group):
 @click.group(
     cls=MonrunChecks,
     context_settings={
-        'help_option_names': ['-h', '--help'],
-        'terminal_width': 120,
+        "help_option_names": ["-h", "--help"],
+        "terminal_width": 120,
     },
 )
-@click.option('--no-user-check', 'no_user_check', is_flag=True, default=False, help="Do not check current user.")
+@click.option(
+    "--no-user-check",
+    "no_user_check",
+    is_flag=True,
+    default=False,
+    help="Do not check current user.",
+)
 def cli(no_user_check):
     if not no_user_check:
         check_current_user()
@@ -117,7 +129,7 @@ def check_current_user():
     user = getpass.getuser()
     if user != DEFAULT_USER:
         if os.geteuid() != 0:
-            print(f'Wrong current user: {user}', file=sys.stderr)
+            print(f"Wrong current user: {user}", file=sys.stderr)
             sys.exit(1)
         else:
             try:

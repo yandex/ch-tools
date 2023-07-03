@@ -3,9 +3,9 @@ from click import command, option, pass_context
 from chtools.chadmin.internal.utils import execute_query
 
 
-@command('settings')
-@option('--name')
-@option('--changed', is_flag=True)
+@command("settings")
+@option("--name")
+@option("--changed", is_flag=True)
 @pass_context
 def list_settings_command(ctx, name, changed):
     """

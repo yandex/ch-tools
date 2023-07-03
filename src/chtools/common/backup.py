@@ -6,7 +6,7 @@ from typing import List
 
 import yaml
 
-CHS3_BACKUPS_DIRECTORY = '/var/lib/clickhouse/disks/object_storage/shadow/'
+CHS3_BACKUPS_DIRECTORY = "/var/lib/clickhouse/disks/object_storage/shadow/"
 
 
 class BackupConfig:
@@ -19,15 +19,15 @@ class BackupConfig:
 
     @property
     def deduplication_age_limit(self):
-        return timedelta(**self._config['backup']['deduplication_age_limit'])
+        return timedelta(**self._config["backup"]["deduplication_age_limit"])
 
     @property
     def retain_count(self):
-        return self._config['backup']['retain_count']
+        return self._config["backup"]["retain_count"]
 
     @staticmethod
     def load():
-        with open('/etc/yandex/ch-backup/ch-backup.conf', 'r') as file:
+        with open("/etc/yandex/ch-backup/ch-backup.conf", "r") as file:
             return BackupConfig(yaml.safe_load(file))
 
 
@@ -35,7 +35,7 @@ def get_backups() -> List[dict]:
     """
     Get ClickHouse backups.
     """
-    return json.loads(run('sudo ch-backup list -a -v --format json'))
+    return json.loads(run("sudo ch-backup list -a -v --format json"))
 
 
 def get_chs3_backups() -> List[str]:
@@ -48,7 +48,7 @@ def get_chs3_backups() -> List[str]:
 def get_orphaned_chs3_backups() -> List[str]:
     backups = get_backups()
     chs3_backups = get_chs3_backups()
-    return list(set(chs3_backups) - set(backup['name'] for backup in backups))
+    return list(set(chs3_backups) - set(backup["name"] for backup in backups))
 
 
 def run(command, data=None):

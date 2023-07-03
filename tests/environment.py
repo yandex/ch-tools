@@ -17,7 +17,7 @@ def before_all(context):
     """
     Prepare environment for tests.
     """
-    if not context.config.userdata.getbool('skip_setup'):
+    if not context.config.userdata.getbool("skip_setup"):
         env_control.create(context)
 
 
@@ -25,7 +25,7 @@ def before_feature(context, _feature):
     """
     Cleanup function executing per feature.
     """
-    if 'dependent-scenarios' in _feature.tags:
+    if "dependent-scenarios" in _feature.tags:
         env_control.restart(context)
 
 
@@ -33,7 +33,7 @@ def before_scenario(context, _scenario):
     """
     Cleanup function executing per scenario.
     """
-    if 'dependent-scenarios' not in context.feature.tags:
+    if "dependent-scenarios" not in context.feature.tags:
         env_control.restart(context)
 
 
@@ -41,9 +41,9 @@ def after_step(context, step):
     """
     Save logs after failed step.
     """
-    if step.status == 'failed':
+    if step.status == "failed":
         save_logs(context)
-        if context.config.userdata.getbool('debug'):
+        if context.config.userdata.getbool("debug"):
             pdb.post_mortem(step.exc_traceback)
 
 
@@ -52,6 +52,6 @@ def after_all(context):
     Clean up.
     """
     if context.failed and not context.aborted:
-        logging.warning('Remember to run `make clean` after you done')
+        logging.warning("Remember to run `make clean` after you done")
         return
     env_control.stop(context)

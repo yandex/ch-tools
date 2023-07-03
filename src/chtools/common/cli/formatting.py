@@ -29,15 +29,15 @@ from .yaml import dump_yaml
 
 class FormatStyle(Style):
     styles = {
-        Token.Name.Tag: 'bold ansibrightblue',
-        Token.Punctuation: 'bold ansiwhite',
-        Token.String: 'ansigreen',
+        Token.Name.Tag: "bold ansibrightblue",
+        Token.Punctuation: "bold ansiwhite",
+        Token.String: "ansigreen",
     }
 
 
 def print_header(header):
     print(header)
-    print('-' * len(header))
+    print("-" * len(header))
 
 
 def print_response(
@@ -56,18 +56,18 @@ def print_response(
 ):
     if format_ is None:
         # command-line parameter
-        format_ = ctx.obj.get('format')
+        format_ = ctx.obj.get("format")
     if format_ is None:
         # `default_format` function parameter
         format_ = default_format
     if format_ is None:
         # config file parameter
-        format_ = ctx.obj.get('config', {}).get('default_format', 'json')
+        format_ = ctx.obj.get("config", {}).get("default_format", "json")
 
     if separator is None:
-        separator = ','
+        separator = ","
     else:
-        separator = separator.replace(r'\n', '\n')
+        separator = separator.replace(r"\n", "\n")
 
     value = _purify_value(
         ctx,
@@ -83,7 +83,7 @@ def print_response(
 
     if quiet:
         if id_key is None:
-            id_key = 'id'
+            id_key = "id"
 
         if isinstance(value, list):
             result = separator.join(item[id_key] for item in value)
@@ -93,16 +93,16 @@ def print_response(
         print(result)
         return
 
-    if format_ in ('table', 'csv'):
+    if format_ in ("table", "csv"):
         if table_formatter:
             value = [table_formatter(v) for v in value]
 
-        if format_ == 'table':
+        if format_ == "table":
             print_table(value)
         else:
             print_csv(value)
 
-    elif format_ == 'yaml':
+    elif format_ == "yaml":
         print_yaml(ctx, value)
 
     else:
@@ -129,7 +129,11 @@ def _purify_value(
             item = value[key]
 
             formatter = field_formatters.get(key) if field_formatters else None
-            item = formatter(item) if formatter else _purify_value(ctx, item, formatters=formatters)
+            item = (
+                formatter(item)
+                if formatter
+                else _purify_value(ctx, item, formatters=formatters)
+            )
 
             result[key] = item
 
@@ -163,7 +167,7 @@ def _purify_value(
     return value
 
 
-def print_diff(diff, key_separator='.'):
+def print_diff(diff, key_separator="."):
     """
     Print structural diff between 2 values.
     """
@@ -171,25 +175,25 @@ def print_diff(diff, key_separator='.'):
         return
 
     items = chain.from_iterable(diff.values())
-    for item in sorted(items, key=lambda i: i.path(output_format='list')):
+    for item in sorted(items, key=lambda i: i.path(output_format="list")):
         _print_diff_item(item, key_separator=key_separator)
 
 
 def _print_diff_item(item, key_separator):
-    item_path = item.path(output_format='list')
+    item_path = item.path(output_format="list")
     if item_path:
-        print('@ ' + key_separator.join(str(value) for value in item_path))
+        print("@ " + key_separator.join(str(value) for value in item_path))
 
     if item.t1 is not notpresent:
-        _print_diff_item_value(item.t1, '- ', 'red')
+        _print_diff_item_value(item.t1, "- ", "red")
 
     if item.t2 is not notpresent:
-        _print_diff_item_value(item.t2, '+ ', 'green')
+        _print_diff_item_value(item.t2, "+ ", "green")
 
 
 def _print_diff_item_value(value, prefix, color):
     value = json.dumps(value, indent=2, ensure_ascii=False)
-    value = '\n'.join(f'{prefix}{line}' for line in value.splitlines())
+    value = "\n".join(f"{prefix}{line}" for line in value.splitlines())
     if sys.stdout.isatty():
         value = colored(value, color=color)
     print(value)
@@ -203,7 +207,7 @@ def print_json(ctx, value):
     if _color(ctx):
         print(
             highlight(json_dump, JsonLexer(), Terminal256Formatter(style=FormatStyle)),
-            end='',
+            end="",
         )
     else:
         print(json_dump)
@@ -217,14 +221,14 @@ def print_yaml(ctx, value):
     if _color(ctx):
         print(
             highlight(yaml_dump, YamlLexer(), Terminal256Formatter(style=FormatStyle)),
-            end='',
+            end="",
         )
     else:
         print(yaml_dump)
 
 
 def print_table(value):
-    print(tabulate(value, headers='keys'))
+    print(tabulate(value, headers="keys"))
 
 
 def print_csv(value):
@@ -235,7 +239,7 @@ def print_csv(value):
 
 
 def format_list(value):
-    return ','.join(value)
+    return ",".join(value)
 
 
 def format_bytes(value):
@@ -248,9 +252,9 @@ def format_bytes(value):
     if value > 0:
         return humanfriendly.format_size(value, binary=True)
     elif value < 0:
-        return '-{0}'.format(humanfriendly.format_size(-value, binary=True))
+        return "-{0}".format(humanfriendly.format_size(-value, binary=True))
     else:
-        return '0'
+        return "0"
 
 
 def format_bytes_per_second(value):
@@ -258,19 +262,19 @@ def format_bytes_per_second(value):
         return None
 
     if value != 0:
-        return f'{format_bytes(value)}/s'
+        return f"{format_bytes(value)}/s"
     else:
-        return '0'
+        return "0"
 
 
 def format_date(value):
-    return value.strftime('%Y-%m-%d')
+    return value.strftime("%Y-%m-%d")
 
 
 def format_timestamp(ctx, value):
     value = value.astimezone(get_timezone(ctx))
-    result = value.strftime('%Y-%m-%d %H:%M:%S')
-    result += f'.{int(value.microsecond / 1000):03d}'
+    result = value.strftime("%Y-%m-%d %H:%M:%S")
+    result += f".{int(value.microsecond / 1000):03d}"
     return result
 
 
@@ -279,7 +283,7 @@ def format_duration(value):
 
 
 def format_percents(value):
-    return f'{round(100 * value, 2)} %'
+    return f"{round(100 * value, 2)} %"
 
 
 def format_float(value):
@@ -290,24 +294,24 @@ def register_formatter(ctx, formatter):
     """
     Register output formatter.
     """
-    if 'formatters' not in ctx.obj:
-        ctx.obj['formatters'] = []
+    if "formatters" not in ctx.obj:
+        ctx.obj["formatters"] = []
 
-    ctx.obj['formatters'].append(formatter)
+    ctx.obj["formatters"].append(formatter)
 
 
 def get_formatters(ctx):
     """
     Return list of registered output formatters.
     """
-    return ctx.obj.get('formatters', [])
+    return ctx.obj.get("formatters", [])
 
 
 def _color(ctx):
     """
     Return True if output should be colored, or False otherwise.
     """
-    color = ctx.obj.get('color')
+    color = ctx.obj.get("color")
     if color is not None:
         return color
 
@@ -319,7 +323,12 @@ def format_var(var_name: str) -> str:
 
 
 def format_code(code: str, padding: bool = True) -> str:
-    return style(f' {code} ' if padding else code, fg=Color.bright_green, bg=Color.bright_black, bold=True)
+    return style(
+        f" {code} " if padding else code,
+        fg=Color.bright_green,
+        bg=Color.bright_black,
+        bold=True,
+    )
 
 
 def format_db_name(name: str) -> str:
