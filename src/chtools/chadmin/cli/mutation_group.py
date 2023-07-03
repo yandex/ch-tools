@@ -4,7 +4,7 @@ from chtools.chadmin.cli import get_cluster_name
 from chtools.chadmin.internal.utils import execute_query
 
 
-@group('mutation')
+@group("mutation")
 def mutation_group():
     """
     Commands to manage mutations.
@@ -12,14 +12,14 @@ def mutation_group():
     pass
 
 
-@mutation_group.command(name='get')
-@argument('mutation', required=False)
-@option('--last', is_flag=True)
+@mutation_group.command(name="get")
+@argument("mutation", required=False)
+@option("--last", is_flag=True)
 @pass_context
 def get_mutation(ctx, mutation, last):
     """Get mutation."""
     if bool(mutation) == bool(last):
-        ctx.fail('Mutation must be specified.')
+        ctx.fail("Mutation must be specified.")
 
     query = """
         SELECT *
@@ -31,13 +31,28 @@ def get_mutation(ctx, mutation, last):
         LIMIT 1
         {% endif %}
         """
-    print(execute_query(ctx, query, mutation=mutation, format_='Vertical'))
+    print(execute_query(ctx, query, mutation=mutation, format_="Vertical"))
 
 
-@mutation_group.command(name='list')
-@option('--completed/--incompleted', 'is_done', default=None, help='Output only completed / incompleted mutations.')
-@option('--command', 'command_pattern', help='Filter mutations to output by command pattern.')
-@option('--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Get mutations from all hosts in the cluster.')
+@mutation_group.command(name="list")
+@option(
+    "--completed/--incompleted",
+    "is_done",
+    default=None,
+    help="Output only completed / incompleted mutations.",
+)
+@option(
+    "--command",
+    "command_pattern",
+    help="Filter mutations to output by command pattern.",
+)
+@option(
+    "--cluster",
+    "--on-cluster",
+    "on_cluster",
+    is_flag=True,
+    help="Get mutations from all hosts in the cluster.",
+)
 @pass_context
 def list_mutations(ctx, is_done, command_pattern, on_cluster):
     """List mutations."""
@@ -73,12 +88,17 @@ def list_mutations(ctx, is_done, command_pattern, on_cluster):
         {% endif %}
         """
     response = execute_query(
-        ctx, query, is_done=is_done, command_pattern=command_pattern, cluster=cluster, format_='Vertical'
+        ctx,
+        query,
+        is_done=is_done,
+        command_pattern=command_pattern,
+        cluster=cluster,
+        format_="Vertical",
     )
     print(response)
 
 
-@mutation_group.command(name='kill')
+@mutation_group.command(name="kill")
 @pass_context
 def kill_mutation(ctx):
     """Kill one or several mutations."""
@@ -86,4 +106,4 @@ def kill_mutation(ctx):
         KILL MUTATION
         WHERE NOT is_done
         """
-    print(execute_query(ctx, query, format_='PrettyCompact'))
+    print(execute_query(ctx, query, format_="PrettyCompact"))

@@ -3,10 +3,12 @@ from click import ClickException
 
 
 def get_table(ctx, database, table, active_parts=None):
-    tables = list_tables(ctx, database=database, table=table, active_parts=active_parts, verbose=True)
+    tables = list_tables(
+        ctx, database=database, table=table, active_parts=active_parts, verbose=True
+    )
 
     if not tables:
-        raise ClickException(f'Table `{database}`.`{table}` not found.')
+        raise ClickException(f"Table `{database}`.`{table}` not found.")
 
     return tables[0]
 
@@ -24,10 +26,10 @@ def list_tables(
     limit=None,
 ):
     order_by = {
-        'size': 'bytes_on_disk DESC',
-        'parts': 'parts DESC',
-        'rows': 'rows DESC',
-        None: 'database, table',
+        "size": "bytes_on_disk DESC",
+        "parts": "parts DESC",
+        "rows": "rows DESC",
+        None: "database, table",
     }[order_by]
     query = """
         SELECT
@@ -97,8 +99,8 @@ def list_tables(
         verbose=verbose,
         order_by=order_by,
         limit=limit,
-        format_='JSON',
-    )['data']
+        format_="JSON",
+    )["data"]
 
 
 def detach_table(ctx, database, table, *, cluster=None, echo=False, dry_run=False):
@@ -112,7 +114,16 @@ def detach_table(ctx, database, table, *, cluster=None, echo=False, dry_run=Fals
         {%- endif %}
         NO DELAY
         """
-    execute_query(ctx, query, database=database, table=table, cluster=cluster, echo=echo, dry_run=dry_run, format_=None)
+    execute_query(
+        ctx,
+        query,
+        database=database,
+        table=table,
+        cluster=cluster,
+        echo=echo,
+        dry_run=dry_run,
+        format_=None,
+    )
 
 
 def attach_table(ctx, database, table, *, cluster=None, echo=False, dry_run=False):
@@ -125,7 +136,16 @@ def attach_table(ctx, database, table, *, cluster=None, echo=False, dry_run=Fals
         ON CLUSTER '{{ cluster }}'
         {%- endif %}
         """
-    execute_query(ctx, query, database=database, table=table, cluster=cluster, echo=echo, dry_run=dry_run, format_=None)
+    execute_query(
+        ctx,
+        query,
+        database=database,
+        table=table,
+        cluster=cluster,
+        echo=echo,
+        dry_run=dry_run,
+        format_=None,
+    )
 
 
 def delete_table(ctx, database, table, *, cluster=None, echo=False, dry_run=False):
@@ -139,12 +159,21 @@ def delete_table(ctx, database, table, *, cluster=None, echo=False, dry_run=Fals
         {%- endif %}
         NO DELAY
         """
-    execute_query(ctx, query, database=database, table=table, cluster=cluster, echo=echo, dry_run=dry_run, format_=None)
+    execute_query(
+        ctx,
+        query,
+        database=database,
+        table=table,
+        cluster=cluster,
+        echo=echo,
+        dry_run=dry_run,
+        format_=None,
+    )
 
 
 def materialize_ttl(ctx, database, table, echo=False, dry_run=False):
     """
     Materialize TTL for the specified table.
     """
-    query = f'ALTER TABLE `{database}`.`{table}` MATERIALIZE TTL'
+    query = f"ALTER TABLE `{database}`.`{table}` MATERIALIZE TTL"
     execute_query(ctx, query, timeout=300, echo=echo, dry_run=dry_run, format_=None)

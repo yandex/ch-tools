@@ -1,11 +1,11 @@
 from cloup import Context, HelpFormatter, HelpTheme
 
 __all__ = [
-    'CONTEXT_SETTINGS',
+    "CONTEXT_SETTINGS",
 ]
 
 CONTEXT_SETTINGS = Context.settings(
-    help_option_names=['-h', '--help'],
+    help_option_names=["-h", "--help"],
     terminal_width=120,
     align_option_groups=False,
     align_sections=True,

@@ -22,7 +22,7 @@ class ClickhouseClient:
         *,
         host=socket.getfqdn(),
         port=None,
-        user='_admin',
+        user="_admin",
         settings=None,
         timeout=None,
         insecure=False,
@@ -35,7 +35,7 @@ class ClickhouseClient:
             settings = {}
 
         self._session = self._create_session(user=user, insecure=insecure)
-        self._url = f'https://{host}:{port}'
+        self._url = f"https://{host}:{port}"
         self._settings = settings
         self._timeout = timeout
         self._ch_version = None
@@ -45,7 +45,7 @@ class ClickhouseClient:
         Get ClickHouse server version.
         """
         if self._ch_version is None:
-            self._ch_version = self.query('SELECT version()')
+            self._ch_version = self.query("SELECT version()")
 
         return self._ch_version
 
@@ -53,7 +53,7 @@ class ClickhouseClient:
         """
         Get uptime of ClickHouse server.
         """
-        seconds = int(self.query('SELECT uptime()'))
+        seconds = int(self.query("SELECT uptime()"))
         return timedelta(seconds=seconds)
 
     @retry(requests.exceptions.ConnectionError)
@@ -74,23 +74,23 @@ class ClickhouseClient:
             query = self.render_query(query, **query_args)
 
         if format_:
-            query += f' FORMAT {format_}'
+            query += f" FORMAT {format_}"
 
         if echo:
-            print(query, '\n')
+            print(query, "\n")
 
         if dry_run:
             return None
 
         timeout = max(self._timeout, timeout or 0)
 
-        logging.debug('Executing query: %s', query)
+        logging.debug("Executing query: %s", query)
         try:
             response = self._session.post(
                 self._url,
                 params={
                     **self._settings,
-                    'query': query,
+                    "query": query,
                 },
                 json=post_data,
                 timeout=timeout,
@@ -98,7 +98,7 @@ class ClickhouseClient:
 
             response.raise_for_status()
 
-            if format_ in ('JSON', 'JSONCompact'):
+            if format_ in ("JSON", "JSONCompact"):
                 return response.json()
 
             return response.text.strip()
@@ -108,9 +108,11 @@ class ClickhouseClient:
     def render_query(self, query, **kwargs):
         env = Environment()
 
-        env.globals['version_ge'] = lambda version: version_ge(self.get_clickhouse_version(), version)
-        env.globals['format_str_match'] = _format_str_match
-        env.globals['format_str_imatch'] = _format_str_imatch
+        env.globals["version_ge"] = lambda version: version_ge(
+            self.get_clickhouse_version(), version
+        )
+        env.globals["format_str_match"] = _format_str_match
+        env.globals["format_str_imatch"] = _format_str_imatch
 
         template = env.from_string(query)
         return template.render(kwargs)
@@ -119,9 +121,9 @@ class ClickhouseClient:
     def _create_session(user, insecure):
         session = requests.Session()
 
-        session.verify = False if insecure else '/etc/clickhouse-server/ssl/allCAs.pem'
+        session.verify = False if insecure else "/etc/clickhouse-server/ssl/allCAs.pem"
 
         if user:
-            session.headers['X-ClickHouse-User'] = user
+            session.headers["X-ClickHouse-User"] = user
 
         return session

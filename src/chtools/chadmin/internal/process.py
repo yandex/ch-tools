@@ -9,7 +9,7 @@ def get_process(ctx, query_id):
     processes = list_processes(ctx, query_id=query_id, verbose=True)
 
     if not processes:
-        raise ClickException(f'Process {query_id} not found.')
+        raise ClickException(f"Process {query_id} not found.")
 
     return processes[0]
 
@@ -22,7 +22,7 @@ def list_processes(
     query_pattern=None,
     cluster=None,
     limit=None,
-    order_by='elapsed',
+    order_by="elapsed",
     verbose=False,
 ):
     """
@@ -96,8 +96,8 @@ def list_processes(
         limit=limit,
         verbose=verbose,
         order_by=order_by,
-        format_='JSON',
-    )['data']
+        format_="JSON",
+    )["data"]
 
 
 def kill_process(ctx, query_id=None, user=None, exclude_user=None):
@@ -117,10 +117,16 @@ def kill_process(ctx, query_id=None, user=None, exclude_user=None):
           AND query_id = '{{ query_id }}'
         {% endif %}
         """
-    print(execute_query(ctx, query_str, query_id=query_id, user=user, exclude_user=exclude_user))
+    print(
+        execute_query(
+            ctx, query_str, query_id=query_id, user=user, exclude_user=exclude_user
+        )
+    )
 
 
-def list_merges(ctx, *, database=None, table=None, is_mutation=None, cluster=None, limit=None):
+def list_merges(
+    ctx, *, database=None, table=None, is_mutation=None, cluster=None, limit=None
+):
     """
     Get list of executing merges from system.merges table.
     """
@@ -180,11 +186,13 @@ def list_merges(ctx, *, database=None, table=None, is_mutation=None, cluster=Non
         is_mutation=is_mutation,
         cluster=cluster,
         limit=limit,
-        format_='JSON',
-    )['data']
+        format_="JSON",
+    )["data"]
 
 
-def list_replicated_fetches(ctx, *, database=None, table=None, cluster=None, limit=None):
+def list_replicated_fetches(
+    ctx, *, database=None, table=None, cluster=None, limit=None
+):
     """
     Get list of executing fetches from system.replicated_fetches table.
     """
@@ -232,15 +240,15 @@ def list_replicated_fetches(ctx, *, database=None, table=None, cluster=None, lim
         table=table,
         cluster=cluster,
         limit=limit,
-        format_='JSON',
-    )['data']
+        format_="JSON",
+    )["data"]
 
 
 def stop_merges(ctx, database, table, dry_run=False):
     """
     Stop merges for the specified table.
     """
-    query = f'SYSTEM STOP MERGES `{database}`.`{table}`'
+    query = f"SYSTEM STOP MERGES `{database}`.`{table}`"
     execute_query(ctx, query, timeout=300, format_=None, echo=True, dry_run=dry_run)
 
 
@@ -248,5 +256,5 @@ def start_merges(ctx, database, table, dry_run=False):
     """
     Start merges for the specified table.
     """
-    query = f'SYSTEM START MERGES `{database}`.`{table}`'
+    query = f"SYSTEM START MERGES `{database}`.`{table}`"
     execute_query(ctx, query, timeout=300, format_=None, echo=True, dry_run=dry_run)

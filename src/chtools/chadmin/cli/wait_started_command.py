@@ -13,19 +13,19 @@ LOCAL_PART_LOAD_SPEED = 10  # in data parts per second
 S3_PART_LOAD_SPEED = 0.5  # in data parts per second
 
 
-@command('wait-started')
+@command("wait-started")
 @option(
-    '--timeout',
+    "--timeout",
     type=int,
-    help='Max amount of time to wait, in seconds. If not set, the timeout is determined dynamically'
-    ' based on data part count.',
+    help="Max amount of time to wait, in seconds. If not set, the timeout is determined dynamically"
+    " based on data part count.",
 )
-@option('-q', '--quiet', is_flag=True, default=False, help='Quiet mode.')
+@option("-q", "--quiet", is_flag=True, default=False, help="Quiet mode.")
 @pass_context
 def wait_started_command(ctx, timeout, quiet):
     """Wait for ClickHouse server to start up."""
     if not quiet:
-        logging.basicConfig(level='INFO', format='%(message)s')
+        logging.basicConfig(level="INFO", format="%(message)s")
 
     if not timeout:
         timeout = get_timeout()
@@ -43,7 +43,7 @@ def wait_started_command(ctx, timeout, quiet):
         warmup_system_users(ctx)
         sys.exit(0)
 
-    logging.error('ClickHouse is dead')
+    logging.error("ClickHouse is dead")
     sys.exit(1)
 
 
@@ -61,18 +61,26 @@ def get_local_data_part_count():
     """
     Return approximate number of data parts stored locally.
     """
-    return int(execute('find -L /var/lib/clickhouse/data -mindepth 3 -maxdepth 3 -type d | wc -l'))
+    return int(
+        execute(
+            "find -L /var/lib/clickhouse/data -mindepth 3 -maxdepth 3 -type d | wc -l"
+        )
+    )
 
 
 def get_s3_data_part_count():
     """
     Return approximate number of data parts stored in S3.
     """
-    s3_metadata_store_path = '/var/lib/clickhouse/disks/object_storage/store'
+    s3_metadata_store_path = "/var/lib/clickhouse/disks/object_storage/store"
     if not os.path.exists(s3_metadata_store_path):
         return 0
 
-    return int(execute(f'find -L {s3_metadata_store_path} -mindepth 3 -maxdepth 3 -type d | wc -l'))
+    return int(
+        execute(
+            f"find -L {s3_metadata_store_path} -mindepth 3 -maxdepth 3 -type d | wc -l"
+        )
+    )
 
 
 def is_clickhouse_alive():
@@ -80,16 +88,16 @@ def is_clickhouse_alive():
     Check if ClickHouse server is alive or not.
     """
     try:
-        os.chdir('/')
-        output = execute('timeout 5 sudo -u monitor /usr/bin/ch-monitoring ping')
-        if output == '0;OK\n':
+        os.chdir("/")
+        output = execute("timeout 5 sudo -u monitor /usr/bin/ch-monitoring ping")
+        if output == "0;OK\n":
             return True
 
     except Exception as e:
-        logging.error('Failed to perform ch_ping check: %s', repr(e))
+        logging.error("Failed to perform ch_ping check: %s", repr(e))
 
     return False
 
 
 def warmup_system_users(ctx):
-    execute_query(ctx, 'SELECT count() FROM system.users', timeout=300)
+    execute_query(ctx, "SELECT count() FROM system.users", timeout=300)

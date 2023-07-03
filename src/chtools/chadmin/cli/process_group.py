@@ -5,11 +5,11 @@ from chtools.chadmin.internal.process import get_process, list_processes, kill_p
 from chtools.chadmin.internal.utils import format_query
 
 FIELD_FORMATTERS = {
-    'query': format_query,
+    "query": format_query,
 }
 
 
-@group('process')
+@group("process")
 def process_group():
     """
     Commands to manage processes.
@@ -17,27 +17,44 @@ def process_group():
     pass
 
 
-@process_group.command('get')
-@argument('query_id')
+@process_group.command("get")
+@argument("query_id")
 @pass_context
 def get_process_command(ctx, query_id):
     """
     Get process.
     """
     process = get_process(ctx, query_id)
-    print_response(ctx, process, default_format='yaml', field_formatters=FIELD_FORMATTERS)
+    print_response(
+        ctx, process, default_format="yaml", field_formatters=FIELD_FORMATTERS
+    )
 
 
-@process_group.command('list')
-@option('-u', '--user')
-@option('-U', '--exclude-user')
-@option('--query')
-@option('-v', '--verbose', is_flag=True, help='Verbose mode.')
-@option('--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Get records from all hosts in the cluster.')
-@option('--order-by', type=Choice(['elapsed', 'memory_usage']), default='elapsed', help='Sorting order.')
-@option('-l', '--limit', type=int, help='Limit the max number of objects in the output.')
+@process_group.command("list")
+@option("-u", "--user")
+@option("-U", "--exclude-user")
+@option("--query")
+@option("-v", "--verbose", is_flag=True, help="Verbose mode.")
+@option(
+    "--cluster",
+    "--on-cluster",
+    "on_cluster",
+    is_flag=True,
+    help="Get records from all hosts in the cluster.",
+)
+@option(
+    "--order-by",
+    type=Choice(["elapsed", "memory_usage"]),
+    default="elapsed",
+    help="Sorting order.",
+)
+@option(
+    "-l", "--limit", type=int, help="Limit the max number of objects in the output."
+)
 @pass_context
-def list_processes_command(ctx, user, exclude_user, query, verbose, on_cluster, order_by, limit):
+def list_processes_command(
+    ctx, user, exclude_user, query, verbose, on_cluster, order_by, limit
+):
     """
     List processes.
     """
@@ -54,20 +71,22 @@ def list_processes_command(ctx, user, exclude_user, query, verbose, on_cluster, 
         verbose=verbose,
     )
 
-    print_response(ctx, processes, default_format='yaml', field_formatters=FIELD_FORMATTERS)
+    print_response(
+        ctx, processes, default_format="yaml", field_formatters=FIELD_FORMATTERS
+    )
 
 
-@process_group.command('kill')
-@argument('query_id', required=False)
-@option('-u', '--user')
-@option('-U', '--exclude-user')
-@option('-a', '--all', is_flag=True, help='Kill all processes.')
+@process_group.command("kill")
+@argument("query_id", required=False)
+@option("-u", "--user")
+@option("-U", "--exclude-user")
+@option("-a", "--all", is_flag=True, help="Kill all processes.")
 @pass_context
 def kill_process_command(ctx, query_id, all, user, exclude_user):
     """
     Kill one or several processes using "KILL QUERY" query.
     """
     if not any((query_id, all, user)):
-        ctx.fail('At least one of QUERY_ID, --all, --user options must be specified.')
+        ctx.fail("At least one of QUERY_ID, --all, --user options must be specified.")
 
     kill_process(ctx, query_id=query_id, user=user, exclude_user=exclude_user)

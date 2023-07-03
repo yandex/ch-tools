@@ -43,8 +43,8 @@ def list_zk_nodes(ctx, path, verbose=False):
                 pass
 
         return {
-            'path': node,
-            'nodes': descendants_count,
+            "path": node,
+            "nodes": descendants_count,
         }
 
     with zk_client(ctx) as zk:
@@ -58,7 +58,7 @@ def create_zk_nodes(ctx, paths, value=None, make_parents=False):
     if isinstance(value, str):
         value = value.encode()
     else:
-        value = b''
+        value = b""
 
     with zk_client(ctx) as zk:
         for path in paths:
@@ -87,13 +87,13 @@ def delete_zk_nodes(ctx, paths):
     with zk_client(ctx) as zk:
         for path in paths:
             path = _format_path(ctx, path)
-            print(f'Deleting ZooKeeper node {path}')
+            print(f"Deleting ZooKeeper node {path}")
             zk.delete(path, recursive=True)
 
 
 def _format_path(ctx, path):
-    args = ctx.obj.get('zk_client_args', {})
-    no_ch_config = args.get('no_ch_config', False)
+    args = ctx.obj.get("zk_client_args", {})
+    no_ch_config = args.get("no_ch_config", False)
     if no_ch_config:
         return path
     return path.format_map(get_macros(ctx))
@@ -113,24 +113,25 @@ def _get_zk_client(ctx):
     """
     Create and return KazooClient.
     """
-    args = ctx.obj.get('zk_client_args', {})
-    host = args.get('host')
-    port = args.get('port', 2181)
-    timeout = args.get('timeout', 10)
-    zkcli_identity = args.get('zkcli_identity')
-    no_chroot = args.get('no_chroot', False)
-    no_ch_config = args.get('no_ch_config', False)
+    args = ctx.obj.get("zk_client_args", {})
+    host = args.get("host")
+    port = args.get("port", 2181)
+    timeout = args.get("timeout", 10)
+    zkcli_identity = args.get("zkcli_identity")
+    no_chroot = args.get("no_chroot", False)
+    no_ch_config = args.get("no_ch_config", False)
 
     if no_ch_config:
         if not host:
-            host = 'localhost'
-        connect_str = f'{host}:{port}'
+            host = "localhost"
+        connect_str = f"{host}:{port}"
     else:
         # Intentionally don't try to load preprocessed.
         # We are not sure here if zookeeper-servers's changes already have been reloaded by CH.
         zk_config = get_config(ctx, try_preprocessed=False).zookeeper
-        connect_str = ','.join(
-            f'{host if host else node["host"]}:{port if port else node["port"]}' for node in zk_config.nodes
+        connect_str = ",".join(
+            f'{host if host else node["host"]}:{port if port else node["port"]}'
+            for node in zk_config.nodes
         )
         if not no_chroot and zk_config.root is not None:
             connect_str += zk_config.root
@@ -142,4 +143,6 @@ def _get_zk_client(ctx):
     if zkcli_identity is not None:
         auth_data = [("digest", zkcli_identity)]
 
-    return KazooClient(connect_str, auth_data=auth_data, timeout=timeout, logger=logging.getLogger())
+    return KazooClient(
+        connect_str, auth_data=auth_data, timeout=timeout, logger=logging.getLogger()
+    )

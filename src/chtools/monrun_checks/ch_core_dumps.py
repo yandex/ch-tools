@@ -6,15 +6,21 @@ from datetime import datetime
 from chtools.common.result import Result
 
 
-@click.command('core-dumps')
-@click.option('-t', '--core-directory', 'core_directory', default='/var/cores/', help='Core dump directory.')
+@click.command("core-dumps")
 @click.option(
-    '-n',
-    '--crit-interval-seconds',
-    'crit_seconds',
+    "-t",
+    "--core-directory",
+    "core_directory",
+    default="/var/cores/",
+    help="Core dump directory.",
+)
+@click.option(
+    "-n",
+    "--crit-interval-seconds",
+    "crit_seconds",
     type=int,
     default=60 * 10,
-    help='Time interval to check in seconds.',
+    help="Time interval to check in seconds.",
 )
 def core_dumps_command(core_directory, crit_seconds):
     """
@@ -32,11 +38,11 @@ def core_dumps_command(core_directory, crit_seconds):
             dumps = get_core_dumps(core_dir)
             if dumps:
                 status = 1
-        message = ';'.join([f'{f} [{dt}]' for f, dt in dumps])
+        message = ";".join([f"{f} [{dt}]" for f, dt in dumps])
     else:
         status = 1
-        message = f'Core dump directory does not exist: {core_dir}'
-    return Result(status, message or 'OK')
+        message = f"Core dump directory does not exist: {core_dir}"
+    return Result(status, message or "OK")
 
 
 def get_core_dumps(core_dir, interval_seconds=None):
@@ -45,7 +51,7 @@ def get_core_dumps(core_dir, interval_seconds=None):
     """
     result = []
     for f in core_dir.iterdir():
-        if not (f.is_file() and f.owner() == 'clickhouse'):
+        if not (f.is_file() and f.owner() == "clickhouse"):
             continue
         ctime = f.stat().st_ctime
         dt = datetime.fromtimestamp(ctime)

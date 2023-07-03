@@ -8,7 +8,7 @@ class ClickhouseZookeeperConfig:
 
     @property
     def nodes(self):
-        value = self._config['node']
+        value = self._config["node"]
         if isinstance(value, list):
             return value
 
@@ -16,8 +16,8 @@ class ClickhouseZookeeperConfig:
 
     @property
     def root(self):
-        return self._config.get('root')
+        return self._config.get("root")
 
     @property
     def identity(self):
-        return self._config.get('identity')
+        return self._config.get("identity")

@@ -6,24 +6,46 @@ from file_read_backwards import FileReadBackwards
 from chtools.common.result import Result
 
 
-regex = re.compile(r'^([0-9]{4}\.[0-9]{2}\.[0-9]{2}\ [0-9]{2}\:[0-9]{2}\:[0-9]{2}).*?<(Error|Fatal)>')
-default_exclude = r'e\.displayText\(\) = No message received'
+regex = re.compile(
+    r"^([0-9]{4}\.[0-9]{2}\.[0-9]{2}\ [0-9]{2}\:[0-9]{2}\:[0-9]{2}).*?<(Error|Fatal)>"
+)
+default_exclude = r"e\.displayText\(\) = No message received"
 
 
 def validate_exclude(ctx, param, value):
     try:
         return re.compile(value if value is not None else default_exclude)
     except re.error:
-        raise click.BadParameter('Value should be a valid regular expression.')
+        raise click.BadParameter("Value should be a valid regular expression.")
 
 
-@click.command('log-errors')
-@click.option('-c', '--critical', 'crit', type=int, default=60, help='Critical threshold.')
-@click.option('-w', '--warning', 'warn', type=int, default=6, help='Warning threshold.')
-@click.option('-n', '--watch-seconds', 'watch_seconds', type=int, default=600, help='Watch seconds.')
-@click.option('-e', '--exclude', 'exclude', default=default_exclude, callback=validate_exclude, help='Excluded error.')
+@click.command("log-errors")
 @click.option(
-    '-f', '--logfile', 'logfile', default='/var/log/clickhouse-server/clickhouse-server.err.log', help='Log file path.'
+    "-c", "--critical", "crit", type=int, default=60, help="Critical threshold."
+)
+@click.option("-w", "--warning", "warn", type=int, default=6, help="Warning threshold.")
+@click.option(
+    "-n",
+    "--watch-seconds",
+    "watch_seconds",
+    type=int,
+    default=600,
+    help="Watch seconds.",
+)
+@click.option(
+    "-e",
+    "--exclude",
+    "exclude",
+    default=default_exclude,
+    callback=validate_exclude,
+    help="Excluded error.",
+)
+@click.option(
+    "-f",
+    "--logfile",
+    "logfile",
+    default="/var/log/clickhouse-server/clickhouse-server.err.log",
+    help="Log file path.",
 )
 def log_errors_command(crit, warn, watch_seconds, exclude, logfile):
     """
@@ -43,9 +65,9 @@ def log_errors_command(crit, warn, watch_seconds, exclude, logfile):
                 break
             errors += 1
 
-    msg = f'{errors} errors for last {watch_seconds} seconds'
+    msg = f"{errors} errors for last {watch_seconds} seconds"
     if errors >= crit:
         return Result(2, msg)
     if errors >= warn:
         return Result(1, msg)
-    return Result(0, 'OK, ' + msg)
+    return Result(0, "OK, " + msg)

@@ -22,11 +22,11 @@ def now(ctx):
 
 
 def get_timezone(ctx):
-    if 'timezone' not in ctx.obj:
-        config = ctx.obj['config']
-        ctx.obj['timezone'] = gettz(config.get('timezone', 'UTC'))
+    if "timezone" not in ctx.obj:
+        config = ctx.obj["config"]
+        ctx.obj["timezone"] = gettz(config.get("timezone", "UTC"))
 
-    return ctx.obj['timezone']
+    return ctx.obj["timezone"]
 
 
 def diff_objects(value1, value2):
@@ -38,7 +38,7 @@ def diff_objects(value1, value2):
         value1,
         value2,
         verbose_level=2,
-        view='tree',
+        view="tree",
         ignore_type_in_groups=ignore_type_in_groups,
     )
 

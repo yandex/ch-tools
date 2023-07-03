@@ -8,7 +8,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 from modules.clickhouse import ClickhouseClient
 
 
-@given('a working clickhouse on {node:w}')
+@given("a working clickhouse on {node:w}")
 @retry(wait=wait_fixed(0.5), stop=stop_after_attempt(40))
 def step_wait_for_clickhouse_alive(context, node):
     """
@@ -17,18 +17,18 @@ def step_wait_for_clickhouse_alive(context, node):
     ClickhouseClient(context, node).ping()
 
 
-@given('we have executed query on {node:w}')
-@when('we execute query on {node:w}')
+@given("we have executed query on {node:w}")
+@when("we execute query on {node:w}")
 def step_clickhouse_query(context, node):
     ch_client = ClickhouseClient(context, node)
     context.ret_code, context.response = ch_client.get_response(context.text)
 
 
-@given('we have executed queries on {node:w}')
-@when('we execute queries on {node:w}')
+@given("we have executed queries on {node:w}")
+@when("we execute queries on {node:w}")
 def step_clickhouse_queries(context, node):
     queries = []
-    for string in context.text.split(';'):
+    for string in context.text.split(";"):
         string = string.strip()
         if string:
             queries.append(string)
@@ -38,13 +38,13 @@ def step_clickhouse_queries(context, node):
         ch_client.execute(query)
 
 
-@given('we get reponse code {code:d}')
-@then('we get reponse code {code:d}')
+@given("we get reponse code {code:d}")
+@then("we get reponse code {code:d}")
 def step_clickhouse_reponse(context, code):
     assert_that(code, equal_to(context.ret_code))
 
 
-@then('{node1:w} has the same schema as {node2:w}')
+@then("{node1:w} has the same schema as {node2:w}")
 def step_has_same_schema(context, node1, node2):
     def _get_schema(node):
         ch_client = ClickhouseClient(context, node)
@@ -53,7 +53,7 @@ def step_has_same_schema(context, node1, node2):
     assert_that(_get_schema(node1), equal_to(_get_schema(node2)))
 
 
-@then('{node1:w} has the same data as {node2:w}')
+@then("{node1:w} has the same data as {node2:w}")
 def step_same_clickhouse_data(context, node1, node2):
     def _get_data(node):
         ch_client = ClickhouseClient(context, node)

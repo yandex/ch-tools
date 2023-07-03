@@ -9,7 +9,7 @@ def get_table_replica(ctx, database, table):
     replicas = list_table_replicas(ctx, database=database, table=table)
 
     if not replicas:
-        raise ClickException(f'Replicated table `{database}`.`{table}` not found.')
+        raise ClickException(f"Replicated table `{database}`.`{table}` not found.")
 
     return replicas[0]
 
@@ -61,8 +61,8 @@ def list_table_replicas(ctx, *, database=None, table=None, limit=None):
         database=database,
         table=table,
         limit=limit,
-        format_='JSON',
-    )['data']
+        format_="JSON",
+    )["data"]
 
 
 def restart_table_replica(ctx, database, table, *, cluster=None):

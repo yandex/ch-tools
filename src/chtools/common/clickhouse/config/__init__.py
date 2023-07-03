@@ -4,8 +4,8 @@ from .users import ClickhouseUsersConfig
 from .zookeeper import ClickhouseZookeeperConfig
 
 __all__ = [
-    'ClickhouseConfig',
-    'ClickhouseKeeperConfig',
-    'ClickhouseUsersConfig',
-    'ClickhouseZookeeperConfig',
+    "ClickhouseConfig",
+    "ClickhouseKeeperConfig",
+    "ClickhouseUsersConfig",
+    "ClickhouseZookeeperConfig",
 ]

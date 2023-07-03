@@ -3,7 +3,7 @@ from click import command, pass_context
 from chtools.chadmin.internal.utils import execute_query
 
 
-@command('async-metrics')
+@command("async-metrics")
 @pass_context
 def list_async_metrics_command(ctx):
     """

@@ -9,12 +9,12 @@ def _mask_secrets(config):
         for key, value in list(config.items()):
             if isinstance(value, MutableMapping):
                 _mask_secrets(config[key])
-            elif key in ('password', 'secret_access_key', 'header', 'identity'):
-                config[key] = '*****'
+            elif key in ("password", "secret_access_key", "header", "identity"):
+                config[key] = "*****"
 
 
 def _load_config(config_path):
-    with open(config_path, 'r') as file:
+    with open(config_path, "r") as file:
         return xmltodict.parse(file.read())
 
 

@@ -3,7 +3,7 @@ from click import argument, group, option, pass_context
 from chtools.chadmin.internal.utils import execute_query
 
 
-@group('thread-log')
+@group("thread-log")
 def thread_log_group():
     """
     Commands for retrieving information from system.query_thread_log.
@@ -11,16 +11,18 @@ def thread_log_group():
     pass
 
 
-@thread_log_group.command('list')
-@argument('query_id')
-@option('--date')
-@option('--min-date')
-@option('--max-date')
-@option('--min-time')
-@option('--max-time')
-@option('-v', '--verbose', is_flag=True, help='Verbose mode.')
+@thread_log_group.command("list")
+@argument("query_id")
+@option("--date")
+@option("--min-date")
+@option("--max-date")
+@option("--min-time")
+@option("--max-time")
+@option("-v", "--verbose", is_flag=True, help="Verbose mode.")
 @pass_context
-def list_threads_command(ctx, query_id, date, min_date, max_date, min_time, max_time, verbose):
+def list_threads_command(
+    ctx, query_id, date, min_date, max_date, min_time, max_time, verbose
+):
     min_date = min_date or date
     max_date = max_date or date
     print(
@@ -36,7 +38,15 @@ def list_threads_command(ctx, query_id, date, min_date, max_date, min_time, max_
     )
 
 
-def get_threads(ctx, query_id=None, min_date=None, max_date=None, min_time=None, max_time=None, verbose=False):
+def get_threads(
+    ctx,
+    query_id=None,
+    min_date=None,
+    max_date=None,
+    min_time=None,
+    max_time=None,
+    verbose=False,
+):
     query_str = """
         SELECT
              query_id,
@@ -82,19 +92,21 @@ def get_threads(ctx, query_id=None, min_date=None, max_date=None, min_time=None,
         min_time=min_time,
         max_time=max_time,
         verbose=verbose,
-        format_='Vertical',
+        format_="Vertical",
     )
 
 
-@thread_log_group.command('get-metrics')
-@argument('query_id')
-@option('--date')
-@option('--min-date')
-@option('--max-date')
-@option('--min-time')
-@option('--max-time')
+@thread_log_group.command("get-metrics")
+@argument("query_id")
+@option("--date")
+@option("--min-date")
+@option("--max-date")
+@option("--min-time")
+@option("--max-time")
 @pass_context
-def get_thread_metrics_command(ctx, query_id, date, min_date, max_date, min_time, max_time):
+def get_thread_metrics_command(
+    ctx, query_id, date, min_date, max_date, min_time, max_time
+):
     min_date = min_date or date
     max_date = max_date or date
     query_str = """

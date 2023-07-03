@@ -16,27 +16,27 @@ class DiagnosticsData:
     def __init__(self, host: str, normalize_queries: bool):
         self.host = host
         self.normalize_queries = normalize_queries
-        self._sections = [{'section': None, 'data': {}}]
+        self._sections = [{"section": None, "data": {}}]
 
     @delayed
     def add_string(self, name, value, section=None):
         self._section(section)[name] = {
-            'type': 'string',
-            'value': value,
+            "type": "string",
+            "value": value,
         }
 
     @delayed
     def add_url(self, name, value, section=None):
         self._section(section)[name] = {
-            'type': 'url',
-            'value': value,
+            "type": "url",
+            "value": value,
         }
 
     @delayed
     def add_xml_document(self, name, document, section=None):
         self._section(section)[name] = {
-            'type': 'xml',
-            'value': document,
+            "type": "xml",
+            "value": document,
         }
 
     @delayed
@@ -45,9 +45,9 @@ class DiagnosticsData:
 
     def add_query_sync(self, name, query, result, section=None):
         self._section(section)[name] = {
-            'type': 'query',
-            'query': query,
-            'result': result,
+            "type": "query",
+            "query": query,
+            "result": result,
         }
 
     @delayed
@@ -56,30 +56,30 @@ class DiagnosticsData:
 
     def add_command_sync(self, name, command, result, section=None):
         self._section(section)[name] = {
-            'type': 'command',
-            'command': command,
-            'result': result,
+            "type": "command",
+            "command": command,
+            "result": result,
         }
 
     def dump(self, format_):
-        if format_.startswith('json'):
+        if format_.startswith("json"):
             result = self._dump_json()
-        elif format_.startswith('yaml'):
+        elif format_.startswith("yaml"):
             result = self._dump_yaml()
         else:
             result = self._dump_wiki()
 
-        if format_.endswith('.gz'):
-            compressor = gzip.GzipFile(mode='wb', fileobj=sys.stdout.buffer)
+        if format_.endswith(".gz"):
+            compressor = gzip.GzipFile(mode="wb", fileobj=sys.stdout.buffer)
             compressor.write(result.encode())
         else:
             print(result)
 
     def _section(self, name=None):
-        if self._sections[-1]['section'] != name:
-            self._sections.append({'section': name, 'data': {}})
+        if self._sections[-1]["section"] != name:
+            self._sections.append({"section": name, "data": {}})
 
-        return self._sections[-1]['data']
+        return self._sections[-1]["data"]
 
     def _dump_json(self):
         """
@@ -99,92 +99,92 @@ class DiagnosticsData:
         """
 
         def _write_title(buffer_, value):
-            buffer_.write(f'===+ {value}\n')
+            buffer_.write(f"===+ {value}\n")
 
         def _write_subtitle(buffer_, value):
-            buffer_.write(f'====+ {value}\n')
+            buffer_.write(f"====+ {value}\n")
 
         def _write_string_item(buffer_, name_, item_):
-            value = item_['value']
-            if value != '':
-                value = f'**{value}**'
-            buffer_.write(f'{name_}: {value}\n')
+            value = item_["value"]
+            if value != "":
+                value = f"**{value}**"
+            buffer_.write(f"{name_}: {value}\n")
 
         def _write_url_item(buffer_, name_, item_):
-            value = item_['value']
-            buffer_.write(f'**{name_}**\n{value}\n')
+            value = item_["value"]
+            buffer_.write(f"**{name_}**\n{value}\n")
 
         def _write_xml_item(buffer_, section_name_, name_, item_):
             if section_name_:
-                buffer_.write(f'=====+ {name_}\n')
+                buffer_.write(f"=====+ {name_}\n")
             else:
                 _write_subtitle(buffer_, name_)
 
-            _write_result(buffer_, item_['value'], format_='XML')
+            _write_result(buffer_, item_["value"], format_="XML")
 
         def _write_query_item(buffer_, section_name_, name_, item_):
             if section_name_:
-                buffer_.write(f'=====+ {name_}\n')
+                buffer_.write(f"=====+ {name_}\n")
             else:
                 _write_subtitle(buffer_, name_)
 
-            _write_query(buffer_, item_['query'])
-            _write_result(buffer_, item_['result'])
+            _write_query(buffer_, item_["query"])
+            _write_result(buffer_, item_["result"])
 
         def _write_command_item(buffer_, section_name_, name_, item_):
             if section_name_:
-                buffer_.write(f'=====+ {name_}\n')
+                buffer_.write(f"=====+ {name_}\n")
             else:
                 _write_subtitle(buffer_, name_)
 
-            _write_command(buffer_, item_['command'])
-            _write_result(buffer_, item_['result'])
+            _write_command(buffer_, item_["command"])
+            _write_result(buffer_, item_["result"])
 
         def _write_unknown_item(buffer_, section_name_, name_, item_):
             if section_name_:
-                buffer_.write(f'**{name_}**\n')
+                buffer_.write(f"**{name_}**\n")
             else:
                 _write_subtitle(buffer_, name_)
 
             json.dump(item_, buffer_, indent=2)
 
         def _write_query(buffer_, query):
-            buffer_.write('<{ query\n')
-            buffer_.write('%%(SQL)\n')
+            buffer_.write("<{ query\n")
+            buffer_.write("%%(SQL)\n")
             buffer_.write(query)
-            buffer_.write('\n%%\n')
-            buffer_.write('}>\n\n')
+            buffer_.write("\n%%\n")
+            buffer_.write("}>\n\n")
 
         def _write_command(buffer_, command):
-            buffer_.write('<{ command\n')
-            buffer_.write('%%\n')
+            buffer_.write("<{ command\n")
+            buffer_.write("%%\n")
             buffer_.write(command)
-            buffer_.write('\n%%\n')
-            buffer_.write('}>\n\n')
+            buffer_.write("\n%%\n")
+            buffer_.write("}>\n\n")
 
         def _write_result(buffer_, result, format_=None):
-            buffer_.write(f'%%({format_})\n' if format_ else '%%\n')
+            buffer_.write(f"%%({format_})\n" if format_ else "%%\n")
             buffer_.write(result)
-            buffer_.write('\n%%\n')
+            buffer_.write("\n%%\n")
 
         buffer = io.StringIO()
 
-        _write_title(buffer, f'Diagnostics data for host {self.host}')
+        _write_title(buffer, f"Diagnostics data for host {self.host}")
         for section in self._sections:
-            section_name = section['section']
+            section_name = section["section"]
             if section_name:
                 _write_subtitle(buffer, section_name)
 
-            for name, item in section['data'].items():
-                if item['type'] == 'string':
+            for name, item in section["data"].items():
+                if item["type"] == "string":
                     _write_string_item(buffer, name, item)
-                elif item['type'] == 'url':
+                elif item["type"] == "url":
                     _write_url_item(buffer, name, item)
-                elif item['type'] == 'query':
+                elif item["type"] == "query":
                     _write_query_item(buffer, section_name, name, item)
-                elif item['type'] == 'command':
+                elif item["type"] == "command":
                     _write_command_item(buffer, section_name, name, item)
-                elif item['type'] == 'xml':
+                elif item["type"] == "xml":
                     _write_xml_item(buffer, section_name, name, item)
                 else:
                     _write_unknown_item(buffer, section_name, name, item)
@@ -195,7 +195,7 @@ class DiagnosticsData:
 @delayed
 def add_query(diagnostics, name, client, query, format_: OutputFormat, section=None):
     query_args = {
-        'normalize_queries': diagnostics.normalize_queries,
+        "normalize_queries": diagnostics.normalize_queries,
     }
     query = client.render_query(query, **query_args)
     diagnostics.add_query_sync(
@@ -206,7 +206,9 @@ def add_query(diagnostics, name, client, query, format_: OutputFormat, section=N
     )
 
 
-def execute_query(client, query, render_query=True, format_: OutputFormat = OutputFormat.Default):
+def execute_query(
+    client, query, render_query=True, format_: OutputFormat = OutputFormat.Default
+):
     if render_query:
         query = client.render_query(query)
 
@@ -218,7 +220,9 @@ def execute_query(client, query, render_query=True, format_: OutputFormat = Outp
 
 @delayed
 def add_command(diagnostics, name, command, section=None):
-    diagnostics.add_command_sync(name=name, command=command, result=_execute_command(command), section=section)
+    diagnostics.add_command_sync(
+        name=name, command=command, result=_execute_command(command), section=section
+    )
 
 
 def _execute_command(command, input_=None):
@@ -236,6 +240,6 @@ def _execute_command(command, input_=None):
     stdout, stderr = proc.communicate(input=input_)
 
     if proc.returncode:
-        return f'failed with exit code {proc.returncode}\n{stderr.decode()}'
+        return f"failed with exit code {proc.returncode}\n{stderr.decode()}"
 
     return stdout.decode()

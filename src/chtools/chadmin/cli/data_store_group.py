@@ -4,11 +4,11 @@ import subprocess
 import shutil
 
 
-CLICKHOUSE_PATH = '/var/lib/clickhouse'
-CLICKHOUSE_STORE_PATH = CLICKHOUSE_PATH + '/store'
+CLICKHOUSE_PATH = "/var/lib/clickhouse"
+CLICKHOUSE_STORE_PATH = CLICKHOUSE_PATH + "/store"
 
 
-@group('data-store')
+@group("data-store")
 def data_store_group():
     """
     Commands for manipulating data stored by ClickHouse.
@@ -16,23 +16,28 @@ def data_store_group():
     pass
 
 
-@data_store_group.command('clean-orphaned-tables')
+@data_store_group.command("clean-orphaned-tables")
 @option(
-    '--column',
-    'column',
-    default='',
-    help='Additional check: specified COLUMN name should exists in data to be removed. Example: `initial_query_start_time_microseconds.bin` for `query_log`-table.',
+    "--column",
+    "column",
+    default="",
+    help="Additional check: specified COLUMN name should exists in data to be removed. Example: `initial_query_start_time_microseconds.bin` for `query_log`-table.",
 )
-@option('--remove', is_flag=True, default=False, help='Flag to REMOVE data from store subdirectories.')
+@option(
+    "--remove",
+    is_flag=True,
+    default=False,
+    help="Flag to REMOVE data from store subdirectories.",
+)
 def clean_orphaned_tables_command(column, remove):
     for prefix in os.listdir(CLICKHOUSE_STORE_PATH):
-        path = CLICKHOUSE_STORE_PATH + '/' + prefix
+        path = CLICKHOUSE_STORE_PATH + "/" + prefix
 
         process_path(path, prefix, column, remove)
 
 
 def process_path(path: str, prefix: str, column: str, remove: bool):
-    print(f'Processing path {path} with prefix {prefix}:')
+    print(f"Processing path {path} with prefix {prefix}:")
 
     file = prefix_exists_in_metadata(prefix)
     if file:
@@ -42,12 +47,12 @@ def process_path(path: str, prefix: str, column: str, remove: bool):
     print(f'\tPrefix "{prefix}" is NOT used in any metadata file')
 
     if not additional_check_successed(column, path):
-        print('\t\tAdditional check for column-parameter not passed')
+        print("\t\tAdditional check for column-parameter not passed")
         return
 
     size = du(path)
 
-    print(f'\t\tSize of path {path}: {size}')
+    print(f"\t\tSize of path {path}: {size}")
 
     if remove:
         print(f'\t\tTrying to remove path "{path}"...')
@@ -55,7 +60,9 @@ def process_path(path: str, prefix: str, column: str, remove: bool):
         remove_data(path)
         return
 
-    print(f'\t\tPath "{path}" is not removed because of remove-parameter is not specified')
+    print(
+        f'\t\tPath "{path}" is not removed because of remove-parameter is not specified'
+    )
 
 
 def prefix_exists_in_metadata(prefix: str):
@@ -64,11 +71,11 @@ def prefix_exists_in_metadata(prefix: str):
         filenames = w[2]
 
         for file in filenames:
-            if not file.endswith('.sql'):
+            if not file.endswith(".sql"):
                 continue
 
-            with open(dirName + '/' + file) as f:
-                if f'\'{prefix}' in f.read():
+            with open(dirName + "/" + file) as f:
+                if f"'{prefix}" in f.read():
                     return file
 
     return None
@@ -89,13 +96,13 @@ def additional_check_successed(column: str, path: str):
 
 
 def du(path: str):
-    return subprocess.check_output(['du', '-sh', path]).split()[0].decode('utf-8')
+    return subprocess.check_output(["du", "-sh", path]).split()[0].decode("utf-8")
 
 
 def remove_data(path: str):
     def onerror(*args):
         errors = [x for x in args]
 
-        print(f'\t\t\tERROR! {errors}')
+        print(f"\t\t\tERROR! {errors}")
 
     shutil.rmtree(path=path, onerror=onerror)

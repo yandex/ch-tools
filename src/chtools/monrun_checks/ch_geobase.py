@@ -7,7 +7,7 @@ from chtools.monrun_checks.clickhouse_client import ClickhouseClient
 from chtools.common.result import Result
 
 
-@click.command('geobase')
+@click.command("geobase")
 def geobase_command():
     """
     Check that embedded geobase is configured.
@@ -15,11 +15,13 @@ def geobase_command():
     ch_client = ClickhouseClient()
 
     try:
-        response = ch_client.execute('SELECT regionToName(CAST(1 AS UInt32))')[0][0]
-        expected = u'Москва и Московская область'
+        response = ch_client.execute("SELECT regionToName(CAST(1 AS UInt32))")[0][0]
+        expected = "Москва и Московская область"
         if response != expected:
-            return Result(2, f'Geobase error, expected ({expected}), but got ({response})')
+            return Result(
+                2, f"Geobase error, expected ({expected}), but got ({response})"
+            )
     except requests.exceptions.HTTPError as exc:
         return Result(2, repr(exc))
 
-    return Result(0, 'OK')
+    return Result(0, "OK")

@@ -18,14 +18,16 @@ class ClickhouseClient:
     """
 
     def __init__(self, context: ContextT, node_name: str) -> None:
-        protocol = 'http'
-        port = context.conf['services']['clickhouse']['expose'][protocol]
-        host, exposed_port = docker.get_exposed_port(docker.get_container(context, node_name), port)
+        protocol = "http"
+        port = context.conf["services"]["clickhouse"]["expose"][protocol]
+        host, exposed_port = docker.get_exposed_port(
+            docker.get_container(context, node_name), port
+        )
 
         self._session = Session()
-        if getattr(context, 'ch_user', None) is not None:
-            self._session.headers['X-ClickHouse-User'] = context.ch_user
-        self._url = f'{protocol}://{host}:{exposed_port}'
+        if getattr(context, "ch_user", None) is not None:
+            self._session.headers["X-ClickHouse-User"] = context.ch_user
+        self._url = f"{protocol}://{host}:{exposed_port}"
 
         self._timeout = 30
 
@@ -33,20 +35,20 @@ class ClickhouseClient:
         """
         Ping ClickHouse server.
         """
-        self._query('GET', url='ping', params={})
+        self._query("GET", url="ping", params={})
 
     def execute(self, query: str) -> None:
         """
         Execute arbitrary query.
         """
-        self._query('POST', query=query)
+        self._query("POST", query=query)
 
     def get_response(self, query: str) -> Tuple[int, str]:
         """
         Execute arbitrary query and return result
         """
         try:
-            return 200, str(self._query('POST', query=query))
+            return 200, str(self._query("POST", query=query))
         except HTTPError as e:
             return e.response.status_code, e.response.text
 
@@ -54,7 +56,7 @@ class ClickhouseClient:
         """
         Get ClickHouse version.
         """
-        return self._query('GET', 'SELECT version()')
+        return self._query("GET", "SELECT version()")
 
     def get_all_user_data(self) -> Tuple[int, dict]:
         """
@@ -69,9 +71,9 @@ class ClickhouseClient:
                 ORDER BY {','.join(columns)}
                 FORMAT JSONCompact
                 """
-            table_data = self._query('GET', query)
-            user_data['.'.join([db_name, table_name])] = table_data['data']
-            rows_count += table_data['rows']
+            table_data = self._query("GET", query)
+            user_data[".".join([db_name, table_name])] = table_data["data"]
+            rows_count += table_data["rows"]
         return rows_count, user_data
 
     def get_all_user_schemas(self) -> dict:
@@ -84,8 +86,8 @@ class ClickhouseClient:
                 DESCRIBE `{db_name}`.`{table_name}`
                 FORMAT JSONCompact
                 """
-            table_data = self._query('GET', query)
-            all_tables_desc[(db_name, table_name)] = table_data['data']
+            table_data = self._query("GET", query)
+            all_tables_desc[(db_name, table_name)] = table_data["data"]
         return all_tables_desc
 
     def get_all_user_databases(self) -> Sequence[str]:
@@ -99,14 +101,14 @@ class ClickhouseClient:
             FORMAT JSONCompact
             """
 
-        databases = self._query('GET', query)['data']
+        databases = self._query("GET", query)["data"]
         return [db[0] for db in databases]
 
     def drop_database(self, db_name: str) -> None:
         """
         Drop database.
         """
-        self._query('POST', f'DROP DATABASE {db_name}')
+        self._query("POST", f"DROP DATABASE {db_name}")
 
     def _get_all_user_tables(self) -> dict:
         query = """
@@ -120,7 +122,7 @@ class ClickhouseClient:
             ORDER BY database, table
             FORMAT JSONCompact
             """
-        return self._query('GET', query)['data']
+        return self._query("GET", query)["data"]
 
     def _query(
         self,
@@ -140,19 +142,21 @@ class ClickhouseClient:
 
         if params is None:
             params = {
-                'wait_end_of_query': 1,
+                "wait_end_of_query": 1,
             }
 
         if query:
-            params['query'] = query
+            params["query"] = query
 
         try:
-            logging.debug('Executing ClickHouse query: %s', query)
-            response = self._session.request(method, url, params=params, data=data, timeout=self._timeout)
+            logging.debug("Executing ClickHouse query: %s", query)
+            response = self._session.request(
+                method, url, params=params, data=data, timeout=self._timeout
+            )
 
             response.raise_for_status()
         except HTTPError as e:
-            logging.critical('Error while performing request: %s', e.response.text)
+            logging.critical("Error while performing request: %s", e.response.text)
             raise
 
         try:

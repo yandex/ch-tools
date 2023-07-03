@@ -6,7 +6,7 @@ from chtools.chadmin.cli import get_cluster_name
 from chtools.chadmin.internal.utils import execute_query
 
 
-@group('query-log')
+@group("query-log")
 def query_log_group():
     """
     Commands for retrieving information from system.query_log.
@@ -14,46 +14,79 @@ def query_log_group():
     pass
 
 
-@query_log_group.command('get')
-@argument('query_id')
+@query_log_group.command("get")
+@argument("query_id")
 @option(
-    '--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Search for log record on all hosts of the cluster.'
+    "--cluster",
+    "--on-cluster",
+    "on_cluster",
+    is_flag=True,
+    help="Search for log record on all hosts of the cluster.",
 )
 @pass_context
 def get_query_command(ctx, **kwargs):
     print(get_queries(ctx, **kwargs, verbose=True))
-    print('\nProfileEvents:')
+    print("\nProfileEvents:")
     print(get_query_metrics(ctx, **kwargs))
-    print('\nSettings:')
+    print("\nSettings:")
     print(get_query_settings(ctx, **kwargs))
 
 
-@query_log_group.command('list')
-@option('-u', '--user', help='Filter log records to output by user.')
-@option('-U', '--exclude-user', help='Filter log records to not output by user.')
-@option('--query', 'query_pattern', help='Filter log records to output by query pattern.')
-@option('--exclude-query', 'exclude_query_pattern', help='Filter log records to not output by query pattern.')
-@option('--error')
-@option('--date')
-@option('--min-date')
-@option('--max-date')
-@option('--min-time')
-@option('--max-time')
-@option('--time')
-@option('--client')
-@option('--failed', is_flag=True)
-@option('--completed', is_flag=True)
-@option('--is-initial-query', '--initial', 'is_initial_query', type=bool)
-@option('-v', '--verbose', is_flag=True, help='Verbose mode.')
-@option('--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Get log records from all hosts in the cluster.')
+@query_log_group.command("list")
+@option("-u", "--user", help="Filter log records to output by user.")
+@option("-U", "--exclude-user", help="Filter log records to not output by user.")
 @option(
-    '--order-by',
-    type=Choice(['query_start_time', 'query_duration_ms', 'memory_usage', 'read_rows', 'written_rows', 'result_rows']),
-    default='query_start_time',
+    "--query", "query_pattern", help="Filter log records to output by query pattern."
 )
-@option('-l', '--limit', type=int, default=10, help='Limit the max number of objects in the output.')
+@option(
+    "--exclude-query",
+    "exclude_query_pattern",
+    help="Filter log records to not output by query pattern.",
+)
+@option("--error")
+@option("--date")
+@option("--min-date")
+@option("--max-date")
+@option("--min-time")
+@option("--max-time")
+@option("--time")
+@option("--client")
+@option("--failed", is_flag=True)
+@option("--completed", is_flag=True)
+@option("--is-initial-query", "--initial", "is_initial_query", type=bool)
+@option("-v", "--verbose", is_flag=True, help="Verbose mode.")
+@option(
+    "--cluster",
+    "--on-cluster",
+    "on_cluster",
+    is_flag=True,
+    help="Get log records from all hosts in the cluster.",
+)
+@option(
+    "--order-by",
+    type=Choice(
+        [
+            "query_start_time",
+            "query_duration_ms",
+            "memory_usage",
+            "read_rows",
+            "written_rows",
+            "result_rows",
+        ]
+    ),
+    default="query_start_time",
+)
+@option(
+    "-l",
+    "--limit",
+    type=int,
+    default=10,
+    help="Limit the max number of objects in the output.",
+)
 @pass_context
-def list_queries_command(ctx, date, min_date, max_date, min_time, max_time, time, **kwargs):
+def list_queries_command(
+    ctx, date, min_date, max_date, min_time, max_time, time, **kwargs
+):
     if not any((date, min_date, max_date, time, min_time, max_time)):
         date = datetime.date.today().isoformat()
 
@@ -61,24 +94,44 @@ def list_queries_command(ctx, date, min_date, max_date, min_time, max_time, time
     max_date = max_date or date
     min_time = min_time or time
     max_time = max_time or time
-    print(get_queries(ctx, min_date=min_date, max_date=max_date, min_time=min_time, max_time=max_time, **kwargs))
+    print(
+        get_queries(
+            ctx,
+            min_date=min_date,
+            max_date=max_date,
+            min_time=min_time,
+            max_time=max_time,
+            **kwargs
+        )
+    )
 
 
-@query_log_group.command('get-statistics')
-@option('-u', '--user')
-@option('-U', '--exclude-user')
-@option('--query', 'query_pattern')
-@option('--error')
-@option('--date')
-@option('--min-date')
-@option('--max-date')
-@option('--min-time')
-@option('--max-time')
-@option('--time')
-@option('--failed', is_flag=True)
+@query_log_group.command("get-statistics")
+@option("-u", "--user")
+@option("-U", "--exclude-user")
+@option("--query", "query_pattern")
+@option("--error")
+@option("--date")
+@option("--min-date")
+@option("--max-date")
+@option("--min-time")
+@option("--max-time")
+@option("--time")
+@option("--failed", is_flag=True)
 @pass_context
 def get_statistics_command(
-    ctx, user, exclude_user, query_pattern, error, date, min_date, max_date, min_time, max_time, time, failed
+    ctx,
+    user,
+    exclude_user,
+    query_pattern,
+    error,
+    date,
+    min_date,
+    max_date,
+    min_time,
+    max_time,
+    time,
+    failed,
 ):
     min_date = min_date or date
     max_date = max_date or date
@@ -148,15 +201,19 @@ def get_statistics_command(
             min_time=min_time,
             max_time=max_time,
             failed=failed,
-            format_='Vertical',
+            format_="Vertical",
         )
     )
 
 
-@query_log_group.command('get-settings')
-@argument('query_id')
+@query_log_group.command("get-settings")
+@argument("query_id")
 @option(
-    '--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Search for log record on all hosts of the cluster.'
+    "--cluster",
+    "--on-cluster",
+    "on_cluster",
+    is_flag=True,
+    help="Search for log record on all hosts of the cluster.",
 )
 @pass_context
 def get_query_settings_command(ctx, query_id, on_cluster):
@@ -177,10 +234,14 @@ def get_query_settings_command(ctx, query_id, on_cluster):
     print(execute_query(ctx, query_str, query_id=query_id, cluster=cluster))
 
 
-@query_log_group.command('get-metrics')
-@argument('query_id')
+@query_log_group.command("get-metrics")
+@argument("query_id")
 @option(
-    '--cluster', '--on-cluster', 'on_cluster', is_flag=True, help='Search for log record on all hosts of the cluster.'
+    "--cluster",
+    "--on-cluster",
+    "on_cluster",
+    is_flag=True,
+    help="Search for log record on all hosts of the cluster.",
 )
 @pass_context
 def get_query_metrics_command(ctx, query_id, on_cluster):
@@ -220,7 +281,7 @@ def get_queries(
     is_initial_query=None,
     on_cluster=False,
     limit=10,
-    order_by='query_start_time',
+    order_by="query_start_time",
     verbose=False,
 ):
     cluster = get_cluster_name(ctx) if on_cluster else None
@@ -335,7 +396,7 @@ def get_queries(
         limit=limit,
         verbose=verbose,
         order_by=order_by,
-        format_='Vertical',
+        format_="Vertical",
     )
 
 
