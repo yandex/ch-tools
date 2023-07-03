@@ -25,7 +25,7 @@ def check_s3_metadata_command(path, cleanup):
 
 def check_dir(path, cleanup):
     corrupted_dirs = []
-    for (dirpath, _, filenames) in os.walk(path):
+    for dirpath, _, filenames in os.walk(path):
         for filename in filenames:
             if not check_file(f"{dirpath}/{filename}"):
                 print(f"{dirpath}/{filename}")

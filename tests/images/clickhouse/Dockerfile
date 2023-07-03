@@ -5,7 +5,7 @@ ARG NETWORK_NAME
 # Clickhouse changed deb package url so old builds' paths (e.g 21.8.15.7) yield an error on update
 RUN rm /etc/apt/sources.list.d/clickhouse.list || true
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
-    apt-get install -y supervisor && \
+    apt-get install -y supervisor python3-pip && \
     rm -rf /var/lib/apt/lists/* /var/cache/debconf && \
     apt-get clean
 
@@ -32,6 +32,10 @@ RUN rm -rf /etc/supervisor && \
     ln -s /etc/clickhouse-server/ssl/server.crt /etc/clickhouse-server/ssl/allCAs.pem && \
     \
     groupadd monitor && useradd -g monitor -G monitor,clickhouse monitor && \
+    mkdir /var/log/clickhouse-monitoring && \
+    chown monitor:monitor -R /var/log/clickhouse-monitoring && \
+    mkdir /var/log/keeper-monitoring && \
+    chown monitor:monitor -R /var/log/keeper-monitoring && \
     chmod 755 /var/lib/clickhouse && \
     chmod 777 /etc && \
     chmod 755 /etc/clickhouse-server && \
@@ -40,8 +44,7 @@ RUN rm -rf /etc/supervisor && \
     chmod 640 /etc/clickhouse-server/ssl/allCAs.pem && \
     chown -R clickhouse:clickhouse /etc/clickhouse-server/ /usr/bin/clickhouse
 
-COPY staging/tools/ /tmp/tools/
-RUN dpkg -i /tmp/tools/mdb-ch-tools.deb && \
-    chown monitor:monitor -R /var/log/clickhouse-monitoring
+COPY *.whl /
+RUN pip3 install *.whl
 
 ENTRYPOINT ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]
