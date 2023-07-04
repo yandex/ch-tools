@@ -30,6 +30,8 @@ setup(
         "Operating System :: POSIX :: BSD",
         "Operating System :: POSIX :: Linux",
         "Operating System :: Unix",
+        "Environment :: Console",
+        "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
