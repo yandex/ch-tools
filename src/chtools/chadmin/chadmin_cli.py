@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import logging
 import warnings
+import os
 
 warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
 
@@ -83,6 +84,7 @@ LOG_FILE = "/var/log/chadmin/chadmin.log"
 def cli(ctx, format_, settings, timeout, port, debug):
     """ClickHouse administration tool."""
 
+    os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
     handlers = [logging.FileHandler(LOG_FILE)]
     if debug:
         handlers.append(logging.StreamHandler())
