@@ -1,14 +1,15 @@
-import click
-import socket
 import json
 import os
-import requests
+import socket
 import subprocess
+
+import click
 import psutil
+import requests
 
 from chtools.common.clickhouse.config.path import CLICKHOUSE_RESETUP_CONFIG_PATH
-from chtools.monrun_checks.exceptions import die
 from chtools.common.result import Result
+from chtools.monrun_checks.exceptions import die
 
 
 @click.command("resetup-state")

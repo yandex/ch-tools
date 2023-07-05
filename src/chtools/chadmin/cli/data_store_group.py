@@ -1,8 +1,8 @@
-from click import group, option
 import os
-import subprocess
 import shutil
+import subprocess
 
+from click import group, option
 
 CLICKHOUSE_PATH = "/var/lib/clickhouse"
 CLICKHOUSE_STORE_PATH = CLICKHOUSE_PATH + "/store"

@@ -1,9 +1,10 @@
-import requests
+import json
 import socket
 import subprocess
-import json
 import xml.etree.ElementTree as xml
 from enum import Enum
+
+import requests
 
 from chtools.monrun_checks.exceptions import die
 

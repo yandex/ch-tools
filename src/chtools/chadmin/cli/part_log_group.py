@@ -1,8 +1,9 @@
 from collections import OrderedDict
 
 from click import Choice, group, option, pass_context
-from chtools.common.cli.formatting import format_bytes, print_response
+
 from chtools.chadmin.internal.part import list_part_log
+from chtools.common.cli.formatting import format_bytes, print_response
 
 FIELD_FORMATTERS = {
     "size_in_bytes": format_bytes,

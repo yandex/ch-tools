@@ -1,5 +1,6 @@
-from chtools.chadmin.internal.utils import clickhouse_client
 from pkg_resources import parse_version
+
+from chtools.chadmin.internal.utils import clickhouse_client
 
 
 def get_version(ctx):

@@ -1,14 +1,14 @@
-import click
 import socket
 import ssl
 import subprocess
-
 from datetime import datetime
 from typing import List, Optional, Tuple
-from OpenSSL.crypto import dump_certificate, load_certificate, FILETYPE_PEM
 
-from chtools.monrun_checks.clickhouse_client import ClickhouseClient, ClickhousePort
+import click
+from OpenSSL.crypto import FILETYPE_PEM, dump_certificate, load_certificate
+
 from chtools.common.result import Result
+from chtools.monrun_checks.clickhouse_client import ClickhouseClient, ClickhousePort
 
 CERTIFICATE_PATH = "/etc/clickhouse-server/ssl/server.crt"
 

@@ -1,7 +1,8 @@
-import click
 import pathlib
 import time
 from datetime import datetime
+
+import click
 
 from chtools.common.result import Result
 

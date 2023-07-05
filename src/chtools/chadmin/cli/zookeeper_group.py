@@ -1,14 +1,9 @@
-from click import argument, group, option, pass_context
 import re
 import sys
 
+from click import argument, group, option, pass_context
 from kazoo.security import make_digest_acl
 
-from chtools.common.cli.formatting import (
-    print_response,
-    print_json,
-)
-from chtools.common.cli.parameters import ListParamType, StringParamType
 from chtools.chadmin.internal.table_replica import get_table_replica
 from chtools.chadmin.internal.zookeeper import (
     check_zk_node,
@@ -17,9 +12,11 @@ from chtools.chadmin.internal.zookeeper import (
     get_zk_node,
     get_zk_node_acls,
     list_zk_nodes,
-    update_zk_nodes,
     update_acls_zk_node,
+    update_zk_nodes,
 )
+from chtools.common.cli.formatting import print_json, print_response
+from chtools.common.cli.parameters import ListParamType, StringParamType
 
 
 @group("zookeeper")

@@ -7,7 +7,6 @@ import requests
 import yaml
 from behave import given, then, when
 from hamcrest import assert_that, contains_string, equal_to, is_not
-
 from modules import docker
 from modules.utils import merge
 

@@ -1,5 +1,6 @@
-from chtools.chadmin.internal.utils import execute_query
 from click import ClickException
+
+from chtools.chadmin.internal.utils import execute_query
 
 
 def get_process(ctx, query_id):

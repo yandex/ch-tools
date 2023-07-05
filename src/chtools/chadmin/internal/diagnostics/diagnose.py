@@ -13,8 +13,8 @@ from chtools.common.clickhouse.config import (
 from chtools.common.dbaas import DbaasConfig
 from chtools.common.utils import version_ge
 
-from .data import DiagnosticsData, add_command, add_query, execute_query
 from ..utils import clickhouse_client
+from .data import DiagnosticsData, add_command, add_query, execute_query
 
 
 def diagnose(ctx, output_format: str, normalize_queries: bool):

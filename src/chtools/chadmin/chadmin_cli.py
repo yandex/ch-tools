@@ -14,18 +14,18 @@ from chtools.chadmin.cli.database_group import database_group  # noqa: E402
 from chtools.chadmin.cli.diagnostics_command import diagnostics_command  # noqa: E402
 from chtools.chadmin.cli.dictionary_group import dictionary_group  # noqa: E402
 from chtools.chadmin.cli.disk_group import disks_group  # noqa: E402
-from chtools.chadmin.cli.list_async_metrics_command import (
+from chtools.chadmin.cli.list_async_metrics_command import (  # noqa: E402
     list_async_metrics_command,
-)  # noqa: E402
+)
 from chtools.chadmin.cli.list_events_command import list_events_command  # noqa: E402
-from chtools.chadmin.cli.list_functions_command import (
+from chtools.chadmin.cli.list_functions_command import (  # noqa: E402
     list_functions_command,
-)  # noqa: E402
+)
 from chtools.chadmin.cli.list_macros_command import list_macros_command  # noqa: E402
 from chtools.chadmin.cli.list_metrics_command import list_metrics_command  # noqa: E402
-from chtools.chadmin.cli.list_settings_command import (
+from chtools.chadmin.cli.list_settings_command import (  # noqa: E402
     list_settings_command,
-)  # noqa: E402
+)
 from chtools.chadmin.cli.merge_group import merge_group  # noqa: E402
 from chtools.chadmin.cli.mutation_group import mutation_group  # noqa: E402
 from chtools.chadmin.cli.object_storage_group import object_storage_group  # noqa: E402
@@ -34,15 +34,15 @@ from chtools.chadmin.cli.part_log_group import part_log_group  # noqa: E402
 from chtools.chadmin.cli.partition_group import partition_group  # noqa: E402
 from chtools.chadmin.cli.process_group import process_group  # noqa: E402
 from chtools.chadmin.cli.query_log_group import query_log_group  # noqa: E402
-from chtools.chadmin.cli.replicated_fetch_group import (
+from chtools.chadmin.cli.replicated_fetch_group import (  # noqa: E402
     replicated_fetch_group,
-)  # noqa: E402
-from chtools.chadmin.cli.replication_queue_group import (
+)
+from chtools.chadmin.cli.replication_queue_group import (  # noqa: E402
     replication_queue_group,
-)  # noqa: E402
-from chtools.chadmin.cli.restore_replica_command import (
+)
+from chtools.chadmin.cli.restore_replica_command import (  # noqa: E402
     restore_replica_command,
-)  # noqa: E402
+)
 from chtools.chadmin.cli.stack_trace_command import stack_trace_command  # noqa: E402
 from chtools.chadmin.cli.table_group import table_group  # noqa: E402
 from chtools.chadmin.cli.table_replica_group import table_replica_group  # noqa: E402

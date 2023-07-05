@@ -1,21 +1,22 @@
-import click
-from functools import wraps
 import logging
+from functools import wraps
 
+import click
 from click import group, option, pass_context
+
 from chtools.common.result import Status
-from chtools.monrun_checks_keeper.status import status_command
 from chtools.monrun_checks_keeper.keeper_commands import (
     alive_command,
     avg_latency_command,
-    min_latency_command,
-    max_latency_command,
-    queue_command,
+    check_last_null_pointer_exc,
+    check_snapshots,
     descriptors_command,
     get_version_command,
-    check_snapshots,
-    check_last_null_pointer_exc,
+    max_latency_command,
+    min_latency_command,
+    queue_command,
 )
+from chtools.monrun_checks_keeper.status import status_command
 
 LOG_FILE = "/var/log/keeper-monitoring/keeper-monitoring.log"
 

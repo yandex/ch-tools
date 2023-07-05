@@ -1,10 +1,11 @@
-import click
 import pathlib
 import time
 from urllib.parse import quote
 
-from chtools.monrun_checks.clickhouse_client import ClickhouseClient
+import click
+
 from chtools.common.result import Result
+from chtools.monrun_checks.clickhouse_client import ClickhouseClient
 
 
 @click.command("dist-tables")

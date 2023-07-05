@@ -1,5 +1,6 @@
-from chtools.chadmin.internal.utils import execute_query
 from click import command, pass_context
+
+from chtools.chadmin.internal.utils import execute_query
 
 
 @command("stack-trace")
