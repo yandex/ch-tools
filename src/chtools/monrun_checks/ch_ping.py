@@ -1,9 +1,10 @@
-import click
 import logging
 import time
 
-from chtools.monrun_checks.clickhouse_client import ClickhouseClient, ClickhousePort
+import click
+
 from chtools.common.result import Result
+from chtools.monrun_checks.clickhouse_client import ClickhouseClient, ClickhousePort
 
 
 @click.command("ping")

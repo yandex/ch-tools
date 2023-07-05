@@ -1,7 +1,7 @@
 from click import command, pass_context
 
-from chtools.common.clickhouse.config import ClickhouseConfig
 from chtools.common.cli.formatting import print_response
+from chtools.common.clickhouse.config import ClickhouseConfig
 
 
 @command("config")

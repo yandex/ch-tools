@@ -5,9 +5,8 @@ import os
 
 from behave import given
 from kazoo.client import KazooClient
-from tenacity import retry, stop_after_attempt, wait_fixed
-
 from modules.docker import get_container, get_exposed_port
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 
 @given("a working zookeeper")

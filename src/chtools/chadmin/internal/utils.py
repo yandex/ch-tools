@@ -2,7 +2,6 @@
 Utility functions.
 """
 import re
-
 from itertools import islice
 from typing import Iterable, Iterator
 

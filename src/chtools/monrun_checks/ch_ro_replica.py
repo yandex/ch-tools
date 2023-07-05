@@ -1,7 +1,7 @@
 import click
 
-from chtools.monrun_checks.clickhouse_client import ClickhouseClient
 from chtools.common.result import Result
+from chtools.monrun_checks.clickhouse_client import ClickhouseClient
 
 
 @click.command("ro-replica")

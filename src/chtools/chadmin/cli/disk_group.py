@@ -1,7 +1,8 @@
-from click import group, option
 import os
 import re
 import shutil
+
+from click import group, option
 
 
 @group("disks")

@@ -2,9 +2,8 @@ import logging
 import os
 from contextlib import contextmanager
 
-from kazoo.exceptions import NoNodeError
-
 from kazoo.client import KazooClient
+from kazoo.exceptions import NoNodeError
 
 from chtools.chadmin.cli import get_config, get_macros
 

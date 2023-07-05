@@ -1,8 +1,9 @@
 from click import Choice, argument, group, option, pass_context
-from chtools.common.cli.formatting import print_response
+
 from chtools.chadmin.cli import get_cluster_name
-from chtools.chadmin.internal.process import get_process, list_processes, kill_process
+from chtools.chadmin.internal.process import get_process, kill_process, list_processes
 from chtools.chadmin.internal.utils import format_query
+from chtools.common.cli.formatting import print_response
 
 FIELD_FORMATTERS = {
     "query": format_query,

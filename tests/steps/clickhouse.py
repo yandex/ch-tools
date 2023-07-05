@@ -3,9 +3,8 @@ Steps for interacting with ClickHouse DBMS.
 """
 from behave import given, then, when
 from hamcrest import assert_that, equal_to
-from tenacity import retry, stop_after_attempt, wait_fixed
-
 from modules.clickhouse import ClickhouseClient
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 
 @given("a working clickhouse on {node:w}")

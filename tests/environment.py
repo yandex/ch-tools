@@ -2,6 +2,7 @@
 Behave entry point.
 """
 import logging
+
 import env_control
 from modules.logs import save_logs
 

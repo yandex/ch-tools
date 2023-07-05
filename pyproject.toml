@@ -121,3 +121,6 @@ chadmin = "chtools.chadmin.chadmin_cli:main"
 ch-monitoring = "chtools.monrun_checks.main:main"
 keeper-monitoring = "chtools.monrun_checks_keeper.main:main"
 ch-s3-credentials = "chtools.s3_credentials.main:main"
+
+[tool.isort]
+profile = "black"

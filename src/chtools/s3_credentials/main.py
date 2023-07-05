@@ -5,12 +5,13 @@ Manage default ClickHouse s3 credentials.
 
 import argparse
 import json
-import requests
-import time
-import random
-from datetime import timedelta
 import os.path
+import random
+import time
+from datetime import timedelta
 from xml.dom import minidom
+
+import requests
 
 from chtools.common.clickhouse.config.path import (
     CLICKHOUSE_RESETUP_CONFIG_PATH,

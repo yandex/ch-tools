@@ -18,14 +18,14 @@ from chtools.monrun_checks.ch_geobase import geobase_command  # noqa: E402
 from chtools.monrun_checks.ch_keeper import keeper_command  # noqa: E402
 from chtools.monrun_checks.ch_log_errors import log_errors_command  # noqa: E402
 from chtools.monrun_checks.ch_ping import ping_command  # noqa: E402
-from chtools.monrun_checks.ch_replication_lag import (
+from chtools.monrun_checks.ch_replication_lag import (  # noqa: E402
     replication_lag_command,
-)  # noqa: E402
+)
 from chtools.monrun_checks.ch_resetup_state import resetup_state_command  # noqa: E402
 from chtools.monrun_checks.ch_ro_replica import ro_replica_command  # noqa: E402
-from chtools.monrun_checks.ch_s3_backup_orphaned import (
+from chtools.monrun_checks.ch_s3_backup_orphaned import (  # noqa: E402
     orphaned_backups_command,
-)  # noqa: E402
+)
 from chtools.monrun_checks.ch_system_queues import system_queues_command  # noqa: E402
 from chtools.monrun_checks.ch_tls import tls_command  # noqa: E402
 from chtools.monrun_checks.exceptions import translate_to_status  # noqa: E402
