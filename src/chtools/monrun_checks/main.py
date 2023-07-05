@@ -43,6 +43,7 @@ class MonrunChecks(click.Group):
         @wraps(cmd_callback)
         @click.pass_context
         def callback_wrapper(ctx, *args, **kwargs):
+            os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
             logging.basicConfig(
                 filename=LOG_FILE,
                 level=logging.DEBUG,

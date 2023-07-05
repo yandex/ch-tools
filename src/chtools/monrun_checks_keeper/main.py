@@ -1,6 +1,7 @@
 import logging
 from functools import wraps
 
+import os
 import click
 from click import group, option, pass_context
 
@@ -28,6 +29,7 @@ class KeeperChecks(click.Group):
         @wraps(cmd_callback)
         @click.pass_context
         def wrapper(ctx, *a, **kw):
+            os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
             logging.basicConfig(
                 filename=LOG_FILE,
                 level=logging.DEBUG,
