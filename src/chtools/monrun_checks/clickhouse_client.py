@@ -3,6 +3,7 @@ import socket
 import subprocess
 import xml.etree.ElementTree as xml
 from enum import Enum
+from typing import Dict
 
 import requests
 
@@ -35,7 +36,7 @@ class ClickhousePortHelper:
 
 
 class ClickhouseClient:
-    port_settings = {}
+    port_settings: Dict[str, str] = {}
     cert_path = "/etc/clickhouse-server/ssl/allCAs.pem"
 
     def __init__(self):
@@ -121,19 +122,19 @@ class ClickhouseClient:
         return 0
 
     def __get_settings(self):
-        result = {}
+        result: Dict[str, str] = {}
         try:
             root = xml.parse("/var/lib/clickhouse/preprocessed_configs/config.xml")
             for setting in ClickhousePortHelper.list():
                 node = root.find(setting)
                 if node is not None:
-                    result[ClickhousePortHelper.get(setting)] = node.text
+                    result[ClickhousePortHelper.get(setting)] = str(node.text)
             self.port_settings = result
             if not result:
                 die(2, "Can't find any port in clickhouse-server config")
             node = root.find("./openSSL/server/caConfig")
             if node is not None:
-                self.cert_path = node.text
+                self.cert_path = str(node.text)
 
         except FileNotFoundError as e:
             die(2, f"clickhouse-server config not found: {e.filename}")

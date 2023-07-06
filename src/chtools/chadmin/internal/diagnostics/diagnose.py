@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from click import Context
+
 import chtools.chadmin.internal.diagnostics.formatter as formatter
 import chtools.chadmin.internal.diagnostics.query as query
 from chtools.common.cli.formatting import format_duration
@@ -17,7 +19,7 @@ from ..utils import clickhouse_client
 from .data import DiagnosticsData, add_command, add_query, execute_query
 
 
-def diagnose(ctx, output_format: str, normalize_queries: bool):
+def diagnose(ctx: Context, output_format: str, normalize_queries: bool) -> None:
     timestamp = datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")
     client = clickhouse_client(ctx)
     dbaas_config = DbaasConfig.load()

@@ -4,7 +4,7 @@ import logging
 import sys
 from datetime import datetime, timedelta, timezone
 from gzip import GzipFile
-from io import BufferedIOBase, TextIOWrapper
+from io import IOBase, TextIOWrapper
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Union
 
@@ -173,7 +173,7 @@ def list_objects(
     help="Input stream is compressed using GZIP format",
 )
 @pass_context
-def clean_object_storage(ctx: Context, file: BufferedIOBase, compressed: bool) -> None:
+def clean_object_storage(ctx, file, compressed):
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
 
     if compressed:
@@ -189,14 +189,10 @@ def clean_object_storage(ctx: Context, file: BufferedIOBase, compressed: bool) -
 
 
 @contextlib.contextmanager
-def dump_writer(
-    compressed: bool, file_path: Optional[Path] = None
-) -> Iterator[Union[BufferedIOBase, GzipFile]]:
+def dump_writer(compressed, file_path=None):
     writer = open(file_path, "wb") if file_path is not None else sys.stdout.buffer
-    if compressed:
-        writer = GzipFile(mode="wb", fileobj=writer)
     try:
-        yield writer
+        yield GzipFile(mode="wb", fileobj=writer) if compressed else writer
     finally:
         if file_path is not None or compressed:
             writer.close()

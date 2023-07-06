@@ -3,6 +3,7 @@ Module responsible for template rendering.
 """
 import json
 import os
+from typing import Optional
 
 from jinja2 import BaseLoader, Environment, FileSystemLoader, StrictUndefined
 
@@ -56,7 +57,7 @@ def _render_file(context: ContextT, directory: str, basename: str) -> None:
     os.rename(temp_file_path, path)
 
 
-def _environment(context: ContextT, loader: BaseLoader = None) -> Environment:
+def _environment(context: ContextT, loader: Optional[BaseLoader] = None) -> Environment:
     """
     Create Environment object.
     """

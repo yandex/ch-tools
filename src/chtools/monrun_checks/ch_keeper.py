@@ -31,7 +31,7 @@ from chtools.common.result import Result
     default=False,
     help="Allow unverified SSL certificates, e.g. self-signed ones",
 )
-def keeper_command(retries, timeout, no_verify_ssl_certs) -> Result:
+def keeper_command(retries: int, timeout: int, no_verify_ssl_certs: bool) -> Result:
     """
     Check ClickHouse Keeper is alive.
     """

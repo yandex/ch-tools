@@ -3,6 +3,7 @@ import re
 import socket
 import ssl
 import time
+from typing import Dict
 
 from click import command, pass_context
 from kazoo.client import KazooClient
@@ -168,9 +169,11 @@ def get_snapshot_files(snapshots_dir):
     ]
 
 
-def read_zookeeper_config():
-    """Read Zookeeper configuration file and return content as dict"""
-    config = {}
+def read_zookeeper_config() -> Dict[str, str]:
+    """
+    Read Zookeeper configuration file and return content as dict
+    """
+    config: Dict[str, str] = {}
     if not os.path.exists(ZOOKEEPER_CFG_FILE):
         return config
     with open(ZOOKEEPER_CFG_FILE) as f:

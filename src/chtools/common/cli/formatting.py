@@ -41,7 +41,7 @@ def print_header(header):
 
 
 def print_response(
-    ctx: Context,
+    ctx,
     value,
     format_=None,
     default_format=None,

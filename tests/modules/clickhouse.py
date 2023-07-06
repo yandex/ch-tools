@@ -3,7 +3,7 @@ ClickHouse client.
 """
 
 import logging
-from typing import Any, Sequence, Tuple, Union
+from typing import Any, Optional, Sequence, Tuple, Union
 from urllib.parse import urljoin
 
 from requests import HTTPError, Session
@@ -127,10 +127,10 @@ class ClickhouseClient:
     def _query(
         self,
         method: str,
-        query: str = None,
-        url: str = None,
-        params: dict = None,
-        data: Union[bytes, str] = None,
+        query: Optional[str] = None,
+        url: Optional[str] = None,
+        params: Optional[dict] = None,
+        data: Union[None, bytes, str] = None,
     ) -> Any:
         if url:
             url = urljoin(self._url, url)

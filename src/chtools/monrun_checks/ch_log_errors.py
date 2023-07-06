@@ -1,5 +1,5 @@
-import datetime
 import re
+from datetime import datetime, timedelta
 
 import click
 from file_read_backwards import FileReadBackwards
@@ -51,7 +51,7 @@ def log_errors_command(crit, warn, watch_seconds, exclude, logfile):
     """
     Check errors in ClickHouse server logs.
     """
-    datetime_start = datetime.now() - datetime.timedelta(seconds=watch_seconds)
+    datetime_start = datetime.now() - timedelta(seconds=watch_seconds)
     errors = 0
 
     with FileReadBackwards(logfile, encoding="utf-8") as f:
