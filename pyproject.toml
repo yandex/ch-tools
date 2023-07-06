@@ -81,7 +81,8 @@ dependencies = [
     "tenacity",
     "termcolor",
     "tqdm",
-    "xmltodict"
+    "xmltodict",
+    "typing-extensions"
 ]
 
 [project.urls]

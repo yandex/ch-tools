@@ -150,89 +150,88 @@ Feature: ch-monitoring tool
     0;OK
     """
 
-# TODO ORION-1000
-#  Scenario: Check Log errors
-#    When we sleep for 30 seconds
-#    And we execute command on clickhouse01
-#    """
-#    ch-monitoring log-errors -n 20
-#    """
-#    Then we get response
-#    """
-#    0;OK, 0 errors for last 20 seconds
-#    """
-#    When we execute query on clickhouse01
-#    """
-#    SELECT 1;
-#    """
-#    And we sleep for 5 seconds
-#    And we execute command on clickhouse01
-#    """
-#    ch-monitoring log-errors -n 20
-#    """
-#    Then we get response
-#    """
-#    0;OK, 0 errors for last 20 seconds
-#    """
-#    When we execute query on clickhouse01
-#    """
-#    FOOBAR INCORRECT REQUEST;
-#    """
-#    And we sleep for 5 seconds
-#    And we execute command on clickhouse01
-#    """
-#    ch-monitoring log-errors -n 20
-#    """
-#    Then we get response
-#    """
-#    0;OK, 2 errors for last 20 seconds
-#    """
-#    When we execute query on clickhouse01
-#    """
-#    FOOBAR INCORRECT REQUEST;
-#    """
-#    And we execute query on clickhouse01
-#    """
-#    FOOBAR INCORRECT REQUEST;
-#    """
-#    And we execute query on clickhouse01
-#    """
-#    FOOBAR INCORRECT REQUEST;
-#    """
-#    And we execute query on clickhouse01
-#    """
-#    FOOBAR INCORRECT REQUEST;
-#    """
-#    And we sleep for 5 seconds
-#    And we execute command on clickhouse01
-#    """
-#    ch-monitoring log-errors -n 20
-#    """
-#    Then we get response
-#    """
-#    1;10 errors for last 20 seconds
-#    """
-#    When we sleep for 30 seconds
-#    And we execute command on clickhouse01
-#    """
-#    ch-monitoring log-errors -n 20
-#    """
-#    Then we get response
-#    """
-#    0;OK, 0 errors for last 20 seconds
-#    """
-#
-#  Scenario: Check Log errors with timetail stderr output
-#    When we execute command on clickhouse01
-#    """
-#    echo 2000.01.01 00:00:00 test line > /tmp/test.log
-#    for j in {1..2000}; do echo junk line >> /tmp/test.log; done
-#    ch-monitoring log-errors -n 20 -f /tmp/test.log
-#    """
-#    Then we get response
-#    """
-#    0;OK, 0 errors for last 20 seconds
-#    """
+  Scenario: Check Log errors
+    When we sleep for 20 seconds
+    And we execute command on clickhouse01
+    """
+    ch-monitoring log-errors -n 10
+    """
+    Then we get response
+    """
+    0;OK, 0 errors for last 10 seconds
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT 1;
+    """
+    And we sleep for 5 seconds
+    And we execute command on clickhouse01
+    """
+    ch-monitoring log-errors -n 20
+    """
+    Then we get response
+    """
+    0;OK, 0 errors for last 20 seconds
+    """
+    When we execute query on clickhouse01
+    """
+    FOOBAR INCORRECT REQUEST;
+    """
+    And we sleep for 5 seconds
+    And we execute command on clickhouse01
+    """
+    ch-monitoring log-errors -n 20
+    """
+    Then we get response
+    """
+    0;OK, 2 errors for last 20 seconds
+    """
+    When we execute query on clickhouse01
+    """
+    FOOBAR INCORRECT REQUEST;
+    """
+    And we execute query on clickhouse01
+    """
+    FOOBAR INCORRECT REQUEST;
+    """
+    And we execute query on clickhouse01
+    """
+    FOOBAR INCORRECT REQUEST;
+    """
+    And we execute query on clickhouse01
+    """
+    FOOBAR INCORRECT REQUEST;
+    """
+    And we sleep for 5 seconds
+    And we execute command on clickhouse01
+    """
+    ch-monitoring log-errors -n 20
+    """
+    Then we get response
+    """
+    1;10 errors for last 20 seconds
+    """
+    When we sleep for 21 seconds
+    And we execute command on clickhouse01
+    """
+    ch-monitoring log-errors -n 20
+    """
+    Then we get response
+    """
+    0;OK, 0 errors for last 20 seconds
+    """
+
+  Scenario: Check Log errors with some random test log
+    When we execute command on clickhouse01
+    """
+    echo 2000.01.01 00:00:00 test line > /tmp/test.log
+    for j in {1..2000}; do echo junk line >> /tmp/test.log; done
+    ch-monitoring log-errors -n 20 -f /tmp/test.log
+    """
+    Then we get response
+    """
+    0;OK, 0 errors for last 20 seconds
+    """
 
   Scenario: Check Ping
     When we execute command on clickhouse01
