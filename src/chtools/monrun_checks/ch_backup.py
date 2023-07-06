@@ -3,7 +3,7 @@ Check ClickHouse backups: its state, age and count.
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from os.path import exists
 from typing import Dict, List, Optional
 
@@ -30,7 +30,7 @@ FAILED_PARTS_THRESHOLD = 10
 @click.option(
     "--critical-absent",
     "crit_absent",
-    default=0,
+    default=timedelta(days=2),
     help="Critical threshold for absent backupd",
 )
 def backup_command(crit_failed, crit_absent):
@@ -91,12 +91,12 @@ def check_last_backup_not_failed(backups, crit=3):
     die(status, message)
 
 
-def check_backup_age(ch_client, backups, age_threshold=1, crit=0):
+def check_backup_age(ch_client, backups, age_threshold=timedelta(days=1), crit=None):
     """
     Check that the last backup is not too old.
     """
     # To avoid false warnings the check is skipped if ClickHouse uptime is less then age threshold.
-    uptime = ch_client.get_uptime().days
+    uptime = ch_client.get_uptime()
     if uptime < age_threshold:
         return
 
@@ -111,7 +111,7 @@ def check_backup_age(ch_client, backups, age_threshold=1, crit=0):
         die(2, "Didn't find a backup to check")
 
     backup_age = get_backup_age(checking_backup)
-    if backup_age.days < age_threshold:
+    if backup_age < age_threshold:
         return
 
     if checking_backup["state"] == "creating":
@@ -119,7 +119,7 @@ def check_backup_age(ch_client, backups, age_threshold=1, crit=0):
     else:
         message = f"Last backup was created {backup_age.days} days ago"
     status = 1
-    if crit > 0 and uptime >= crit and backup_age.days >= crit:
+    if crit is not None and uptime >= crit and backup_age >= crit:
         status = 2
     die(status, message)
 
