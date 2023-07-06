@@ -1,43 +1,62 @@
-name: on push
+name: main
 on:
   push: { branches: [main] }
   pull_request: { branches: [main] }
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  lint: # fail-fast on linting
+  lint:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - name: set up python ${{ matrix.target.python }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.11"
-        cache: pip
-
-    - {name: "lint: prepare", run: make install-deps }
-    - {name: "lint: black", run: make black }
-    - {name: "lint: isort", run: make isort }
-
+    - uses: actions/setup-python@v4
+      with: { python-version: "3.11", cache: pip }
+    - run: pip install .[test]
+    - {name: "lint: black", run: black --check --diff . }
+    - {name: "lint: isort", run: isort --check --diff . }
     # Temporarily disabled due to bugs in typing in click library
     # https://github.com/pallets/click/pull/2559
     # https://github.com/python/mypy/issues/13250
     # https://github.com/python/mypy/issues/13449
     #- {name: "lint: mypy", run: make mypy }
 
+  push_to_dockerhub:
+    runs-on: ubuntu-latest
+    env:
+      CLICKHOUSE_VERSIONS: "21.8.15.7, 22.3.20.29, 22.8.19.10, 23.3.4.17, 23.4.4.16, 23.5.3.24, latest"
+    if: ${{ github.event_name == 'push' }}
+    steps:
+    - uses: actions/checkout@v3
+    - name: login to dockerhub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    - name: build and push base images
+      uses: docker/bake-action@v3
+      with:
+        files: tests/bake.hcl
+        push: true
+
   build:
+    needs: lint
     strategy:
       matrix:
         target:
           - {python: "3.6.15", ubuntu: "20.04"}
           - {python: "3.10.12", ubuntu: "latest"}
+        # a copy-paste of the above as github CI can't use env context in matrices
         clickhouse:
-        - "21.8.15.7"
-        - "22.3.20.29"
-        - "22.8.19.10"
-        - "23.3.4.17"
-        - "23.4.4.16"
-        - "23.5.3.24"
-        - "latest"
+          - "21.8.15.7"
+          - "22.3.20.29"
+          - "22.8.19.10"
+          - "23.3.4.17"
+          - "23.4.4.16"
+          - "23.5.3.24"
+          - "latest"
+
     runs-on: ubuntu-${{ matrix.target.ubuntu }}
     steps:
     - uses: actions/checkout@v3
@@ -47,11 +66,12 @@ jobs:
         python-version: ${{ matrix.target.python }}
         cache: pip
 
-    - run: make install-deps
-    - run: make build-python-package
+    - {name: install dependencies, run: "pip install .[test]" }
+    - {name: build project, run: flit build --no-use-vcs }
 
     - name: upload wheel
       uses: actions/upload-artifact@v3
+      if: ${{ matrix.clickhouse == 'latest' }}
       with:
         name: chtools-py${{ matrix.target.python }}.whl
         path: dist/*.whl
@@ -59,17 +79,17 @@ jobs:
 
     - name: upload sdist
       uses: actions/upload-artifact@v3
+      if: ${{ matrix.clickhouse == 'latest' }}
       with:
         name: chtools-py${{ matrix.target.python }}.tar.gz
         path: dist/*.tar.gz
         if-no-files-found: error
 
-    - name: run unit tests
-      run: make test-unit
+    - {name: run unit tests, run: pytest}
 
     - name: prepare docker images for integration tests
       run: CLICKHOUSE_VERSION=${{ matrix.clickhouse }} make test-integration-prepare
-
+        
     - name: run integration tests
       run: make test-integration
 
@@ -78,3 +98,4 @@ jobs:
       if: always()
       with:
         report_paths: 'tests/reports/*.xml'
+
