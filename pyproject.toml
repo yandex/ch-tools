@@ -7,33 +7,33 @@ name = "chtools"
 version = "1.0.0"
 description = "A set of tools for administration and diagnostics of ClickHouse DBMS."
 license = { file = "LICENSE" }
+
 authors = [
     {name = "Alexander Burmak", email = "alex-burmak@yandex-team.ru"},
-    #{name = "Dmitry Starov<dstaroff@yandex-team.ru>",
-    #{name = "Anton Ivashkin <iantonspb@yandex-team.ru>",
-    #{name = "Grigory Pervakov <pervakovg@yandex-team.ru>",
-    #{name = "Petr Nuzhnov <petrnuzhnov@yandex-team.ru>",
-    #{name = "Egor Medvedev <egor-medvedev@yandex-team.ru>",
-    #{name = "Aleksei Filatov <alexfvk@yandex-team.ru>",
-    #{name = "Evgeny Dyukov <secwall@yandex-team.ru>",
-    #{name = "Evgeny Strizhnev <estrizhnev@yandex-team.ru>",
-    #{name = "Vadim Volodin <vadim-volodin@yandex-team.ru>",
-    #{name = "Anton Chaporgin <chapson@yandex-team.ru>",
-    #{name = "Evgenii Kopanev <ekopanev@yandex-team.ru>",
-    #{name = "Mikhail Kot <myrrc@yandex-team.ru>",
+    {name = "Dmitry Starov", email="dstaroff@yandex-team.ru"},
+    {name = "Anton Ivashkin", email="iantonspb@yandex-team.ru"},
+    {name = "Grigory Pervakov", email="pervakovg@yandex-team.ru"},
+    {name = "Petr Nuzhnov", email="petrnuzhnov@yandex-team.ru"},
+    {name = "Egor Medvedev", email="egor-medvedev@yandex-team.ru"},
+    {name = "Aleksei Filatov", email="alexfvk@yandex-team.ru>"},
+    {name = "Evgeny Dyukov", email="secwall@yandex-team.ru"},
+    {name = "Evgeny Strizhnev", email="estrizhnev@yandex-team.ru"},
+    {name = "Vadim Volodin", email="vadim-volodin@yandex-team.ru"},
+    {name = "Anton Chaporgin", email="chapson@yandex-team.ru"},
+    {name = "Evgenii Kopanev", email="ekopanev@yandex-team.ru"},
+    {name = "Mikhail Kot", email="myrrc@yandex-team.ru"},
 ]
 
 maintainers = [
     {name = "Alexander Burmak", email = "alex-burmak@yandex-team.ru"},
-    #"Alexander Burmak <alex-burmak@yandex-team.ru>",
-    #"Dmitry Starov <dstaroff@yandex-team.ru>",
-    #"Anton Ivashkin <iantonspb@yandex-team.ru>",
-    #"Grigory Pervakov <pervakovg@yandex-team.ru>",
-    #"Petr Nuzhnov <petrnuzhnov@yandex-team.ru>",
-    #"Egor Medvedev <egor-medvedev@yandex-team.ru>",
-    #"Aleksei Filatov <alexfvk@yandex-team.ru>",
-    #"Evgenii Kopanev <ekopanev@yandex-team.ru>",
-    #"Mikhail Kot <myrrc@yandex-team.ru>",
+    {name = "Dmitry Starov", email="dstaroff@yandex-team.ru"},
+    {name = "Anton Ivashkin", email="iantonspb@yandex-team.ru"},
+    {name = "Grigory Pervakov", email="pervakovg@yandex-team.ru"},
+    {name = "Petr Nuzhnov", email="petrnuzhnov@yandex-team.ru"},
+    {name = "Egor Medvedev", email="egor-medvedev@yandex-team.ru"},
+    {name = "Aleksei Filatov", email="alexfvk@yandex-team.ru>"},
+    {name = "Evgenii Kopanev", email="ekopanev@yandex-team.ru"},
+    {name = "Mikhail Kot", email="myrrc@yandex-team.ru"},
 ]
 
 readme = "README.md"

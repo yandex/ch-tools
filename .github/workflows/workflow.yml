@@ -48,12 +48,14 @@ jobs:
     - name: upload wheel
       uses: actions/upload-artifact@v3
       with:
+        name: chtools-py${{ matrix.target.python }}.whl
         path: dist/*.whl
         if-no-files-found: error
 
     - name: upload sdist
       uses: actions/upload-artifact@v3
       with:
+        name: chtools-py${{ matrix.target.python }}.tar.gz
         path: dist/*.tar.gz
         if-no-files-found: error
 
