@@ -2,7 +2,7 @@
 <yandex>
     <profiles>
         <default>
-            <distributed_ddl_task_timeout>5</distributed_ddl_task_timeout>
+            <distributed_ddl_task_timeout>20</distributed_ddl_task_timeout>
         </default>
     </profiles>
 

@@ -1,14 +1,14 @@
 FROM ubuntu/zookeeper
-COPY staging/tools/ /tmp/tools/
 
-RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y supervisor && \
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y supervisor python3-pip && \
     rm -rf /var/lib/apt/lists/* /var/cache/debconf && \
     apt-get clean
-
-RUN dpkg -i /tmp/tools/mdb-ch-tools.deb
 
 COPY images/zookeeper/config/zookeeper.conf /etc/supervisor/supervisord.conf
 COPY images/zookeeper/config/zoo.cfg /etc/zookeeper/conf/zoo.cfg
 COPY images/zookeeper/config/log4j.properties /etc/zookeeper/conf/log4j.properties
+
+COPY *.whl /
+RUN python3 -m pip install *.whl
 
 ENTRYPOINT ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]

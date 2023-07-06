@@ -102,22 +102,42 @@ prepare-version: version.txt
 version.txt:
 	@echo "2.$$(git rev-list HEAD --count).$$(git rev-parse --short HEAD | perl -ne 'print hex $$_')" > $@
 
+install-deps:
+	pip install flit
+	pip install ".[test]"
 
-.PHONY: build-deb-package
-build-deb-package: prepare-changelog
-	@echo 'Building debian package'
+lint: black isort #pylint mypy bandit
 
-	rm -f pyproject.toml  # for forcing usage of setup.py
-	cd debian && \
-		debuild --check-dirname-level 0 --preserve-env --no-lintian --no-tgz-check -uc -us
+black: install-deps
+	black --check src/ tests/
+isort: install-deps
+	isort src/ tests/
 
+build-python-package: install-deps $(dist/*)
+	flit build --no-use-vcs
+
+build-deb-package: install-deps prepare-changelog
+	cd debian && debuild --check-dirname-level 0 --preserve-env --no-lintian --no-tgz-check -uc -us
+
+test-unit: install-deps
+	pytest tests/unit
+
+export CLICKHOUSE_VERSION?=latest
+
+test-integration-prepare: install-deps build-python-package
+	cp dist/*.whl tests/ && \
+	cd tests && \
+		CLICKHOUSE_VERSION=${CLICKHOUSE_VERSION} python3 -m env_control create
+
+test-integration: test-integration-prepare
+	cd tests && \
+		behave --show-timings -D skip_setup --junit
 
 .PHONY: clean
 clean:
 	@echo 'Cleaning up'
 
 	rm -f version.txt
-	rm -rf venv
 	rm -rf build
 	rm -rf dist
 	rm -rf *.egg-info

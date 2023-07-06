@@ -74,7 +74,7 @@ def list_part_log_command(
         max_date=max_date,
         min_time=min_time,
         max_time=max_time,
-        **kwargs
+        **kwargs,
     )
 
     print_response(
