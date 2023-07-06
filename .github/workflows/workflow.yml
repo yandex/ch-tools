@@ -12,12 +12,10 @@ jobs:
         python-version: "3.11"
         cache: pip
 
-    - run: make install-deps
-
-    - name: "lint: black"
-      run: make black
-    - name: "lint: isort"
-      run: make isort
+    - {name: "lint: prepare", run: make install-deps }
+    - {name: "lint: black", run: make black }
+    - {name: "lint: isort", run: make isort }
+    - {name: "lint: mypy", run: make mypy }
 
   build:
     strategy:

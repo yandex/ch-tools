@@ -15,7 +15,7 @@ authors = [
     {name = "Grigory Pervakov", email="pervakovg@yandex-team.ru"},
     {name = "Petr Nuzhnov", email="petrnuzhnov@yandex-team.ru"},
     {name = "Egor Medvedev", email="egor-medvedev@yandex-team.ru"},
-    {name = "Aleksei Filatov", email="alexfvk@yandex-team.ru>"},
+    {name = "Aleksei Filatov", email="alexfvk@yandex-team.ru"},
     {name = "Evgeny Dyukov", email="secwall@yandex-team.ru"},
     {name = "Evgeny Strizhnev", email="estrizhnev@yandex-team.ru"},
     {name = "Vadim Volodin", email="vadim-volodin@yandex-team.ru"},
@@ -31,7 +31,7 @@ maintainers = [
     {name = "Grigory Pervakov", email="pervakovg@yandex-team.ru"},
     {name = "Petr Nuzhnov", email="petrnuzhnov@yandex-team.ru"},
     {name = "Egor Medvedev", email="egor-medvedev@yandex-team.ru"},
-    {name = "Aleksei Filatov", email="alexfvk@yandex-team.ru>"},
+    {name = "Aleksei Filatov", email="alexfvk@yandex-team.ru"},
     {name = "Evgenii Kopanev", email="ekopanev@yandex-team.ru"},
     {name = "Mikhail Kot", email="myrrc@yandex-team.ru"},
 ]

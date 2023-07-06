@@ -106,12 +106,14 @@ install-deps:
 	pip install flit
 	pip install ".[test]"
 
-lint: black isort #pylint mypy bandit
+lint: black isort mypy #pylint bandit
 
-black: install-deps
+black:
 	black --check src/ tests/
-isort: install-deps
+isort:
 	isort src/ tests/
+mypy:
+	mypy src/ tests/ --exclude tests/staging
 
 build-python-package: install-deps $(dist/*)
 	flit build --no-use-vcs
