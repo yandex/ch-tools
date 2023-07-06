@@ -67,9 +67,7 @@ def cleanup_backups(ctx, dry_run, keep_going):
     )
 
 
-def delete_chs3_backups(
-    ctx, chs3_backups, *, keep_going=False, dry_run=False
-):
+def delete_chs3_backups(ctx, chs3_backups, *, keep_going=False, dry_run=False):
     """
     Delete CHS3 backups.
     """
