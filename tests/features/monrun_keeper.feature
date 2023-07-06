@@ -72,3 +72,13 @@ Feature: keeper-monitoring tool
     """
     2;KazooTimeoutError('Connection time-out')
     """
+    # check that keeper-monitoring works fine without CH configs
+    When we execute command on clickhouse01
+    """
+    rm -fr /etc/clickhouse*
+    keeper-monitoring -n alive
+    """
+    Then we get response
+    """
+    2;KazooTimeoutError('Connection time-out')
+    """
