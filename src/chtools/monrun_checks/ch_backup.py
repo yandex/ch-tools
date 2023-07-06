@@ -5,7 +5,7 @@ Check ClickHouse backups: its state, age and count.
 import json
 from datetime import datetime, timezone
 from os.path import exists
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import click
 
@@ -100,12 +100,15 @@ def check_backup_age(ch_client, backups, age_threshold=1, crit=0):
     if uptime < age_threshold:
         return
 
-    checking_backup = None
+    checking_backup: Dict[str, str] = {}
     for i, backup in enumerate(backups):
         state = backup["state"]
         if state == "created" or (state == "creating" and i == 0):
             checking_backup = backup
             break
+
+    if len(checking_backup) == 0:
+        die(2, "Didn't find a backup to check")
 
     backup_age = get_backup_age(checking_backup)
     if backup_age.days < age_threshold:
@@ -168,7 +171,7 @@ def get_backup_age(backup):
     return datetime.now(timezone.utc) - backup_time
 
 
-def parse_str_datetime(input: str) -> datetime:
+def parse_str_datetime(input: str) -> Optional[datetime]:
     """
     Parse input string to datetime.
     """
@@ -181,7 +184,9 @@ def parse_str_datetime(input: str) -> datetime:
         return None
 
 
-def check_now_pass_threshold(date_time: datetime, hours_threshold: int = 25) -> bool:
+def check_now_pass_threshold(
+    date_time: Optional[datetime], hours_threshold: int = 25
+) -> bool:
     """
     Check that hours threshold is passed since input date
     """

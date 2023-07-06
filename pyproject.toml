@@ -91,10 +91,14 @@ Source = "https://github.com/yandex/ch-tools"
 test = [
     "black",
     "isort",
+    "mypy",
+    "types-pyyaml",
+    "types-requests",
+    "types-python-dateutil",
+    "types-tabulate",
+    "types-pyOpenSSL",
+    "types-setuptools",
 #pylint = "^2.13"
-#mypy = "^0.971"
-#types-pyyaml = "*"
-#types-requests = "*"
 #bandit = "*"
     "behave",
     "docker",

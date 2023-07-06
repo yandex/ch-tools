@@ -100,7 +100,7 @@ def _update_config(args):
         file.write(doc.toprettyxml(indent=4 * " ", encoding="utf-8"))
 
 
-def _delta_to_hours(delta: timedelta):
+def _delta_to_hours(delta: timedelta) -> str:
     return f"{(delta.total_seconds() / 3600):.2f}"
 
 

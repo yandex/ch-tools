@@ -1,6 +1,7 @@
 import os
 import shutil
 import subprocess
+from typing import Optional
 
 from click import group, option
 
@@ -36,7 +37,7 @@ def clean_orphaned_tables_command(column, remove):
         process_path(path, prefix, column, remove)
 
 
-def process_path(path: str, prefix: str, column: str, remove: bool):
+def process_path(path: str, prefix: str, column: str, remove: bool) -> None:
     print(f"Processing path {path} with prefix {prefix}:")
 
     file = prefix_exists_in_metadata(prefix)
@@ -65,7 +66,7 @@ def process_path(path: str, prefix: str, column: str, remove: bool):
     )
 
 
-def prefix_exists_in_metadata(prefix: str):
+def prefix_exists_in_metadata(prefix: str) -> Optional[str]:
     for w in os.walk(CLICKHOUSE_PATH):
         dirName = w[0]
         filenames = w[2]
@@ -81,7 +82,7 @@ def prefix_exists_in_metadata(prefix: str):
     return None
 
 
-def additional_check_successed(column: str, path: str):
+def additional_check_successed(column: str, path: str) -> bool:
     if not column:
         return False
 
@@ -95,11 +96,11 @@ def additional_check_successed(column: str, path: str):
     return False
 
 
-def du(path: str):
+def du(path: str) -> str:
     return subprocess.check_output(["du", "-sh", path]).split()[0].decode("utf-8")
 
 
-def remove_data(path: str):
+def remove_data(path: str) -> None:
     def onerror(*args):
         errors = [x for x in args]
 

@@ -4,7 +4,7 @@ import logging
 import sys
 from datetime import datetime, timedelta, timezone
 from gzip import GzipFile
-from io import BufferedIOBase, TextIOWrapper
+from io import BufferedIOBase, IOBase, TextIOWrapper
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Union
 
@@ -173,7 +173,7 @@ def list_objects(
     help="Input stream is compressed using GZIP format",
 )
 @pass_context
-def clean_object_storage(ctx: Context, file: BufferedIOBase, compressed: bool) -> None:
+def clean_object_storage(ctx: Context, file: IOBase, compressed: bool) -> None:
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
 
     if compressed:

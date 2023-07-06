@@ -1,10 +1,11 @@
 import logging
 import socket
 from datetime import timedelta
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import requests
 from jinja2 import Environment
+from typing_extensions import Self
 
 from chtools.common.utils import version_ge
 
@@ -59,14 +60,14 @@ class ClickhouseClient:
 
     @retry(requests.exceptions.ConnectionError)
     def query(
-        self,
+        self: Self,
         query: str,
-        query_args: Dict[str, Any] = None,
-        format_=None,
+        query_args: Optional[Dict[str, Any]] = None,
+        format_: Optional[str] = None,
         post_data=None,
-        timeout=None,
-        echo=False,
-        dry_run=False,
+        timeout: Optional[int] = None,
+        echo: bool = False,
+        dry_run: bool = False,
     ):
         """
         Execute query.

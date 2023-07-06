@@ -1,7 +1,8 @@
 import os
+from typing import List
 
 import requests
-from click import ClickException, argument, group, option, pass_context
+from click import ClickException, Context, argument, group, option, pass_context
 
 from chtools.chadmin.internal.backup import unfreeze_backup, unfreeze_table
 from chtools.chadmin.internal.system import match_ch_version
@@ -66,7 +67,9 @@ def cleanup_backups(ctx, dry_run, keep_going):
     )
 
 
-def delete_chs3_backups(ctx, chs3_backups: [str], *, keep_going=False, dry_run=False):
+def delete_chs3_backups(
+    ctx: Context, chs3_backups: List[str], *, keep_going=False, dry_run=False
+) -> None:
     """
     Delete CHS3 backups.
     """

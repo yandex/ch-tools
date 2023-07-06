@@ -2,7 +2,6 @@ import logging
 import os
 from functools import wraps
 
-import os
 import click
 from click import group, option, pass_context
 

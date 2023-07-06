@@ -1,5 +1,5 @@
 import cloup
-from click import pass_context
+from click import Context, pass_context
 
 from chtools.chadmin.internal.diagnostics.diagnose import diagnose
 from chtools.common.cli.parameters import env_var_help
@@ -28,7 +28,9 @@ from chtools.common.cli.parameters import env_var_help
     + env_var_help("CHADMIN_DIAGNOSTICS_NORMALIZE_QUERIES"),
 )
 @pass_context
-def diagnostics_command(ctx, output_format: str, normalize_queries: bool):
+def diagnostics_command(
+    ctx: Context, output_format: str, normalize_queries: bool
+) -> None:
     """
     Collect diagnostics data.
     """

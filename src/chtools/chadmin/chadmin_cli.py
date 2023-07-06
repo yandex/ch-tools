@@ -2,7 +2,7 @@
 import logging
 import os
 import warnings
-import os
+from typing import Any, List
 
 warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
 
@@ -86,16 +86,15 @@ def cli(ctx, format_, settings, timeout, port, debug):
     """ClickHouse administration tool."""
 
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
-    handlers = [logging.FileHandler(LOG_FILE)]
+    handlers: List[logging.Handler] = [logging.FileHandler(LOG_FILE)]
     if debug:
         handlers.append(logging.StreamHandler())
 
-    log_config = {
-        "level": logging.DEBUG if debug else logging.INFO,
-        "format": "%(asctime)s [%(levelname)s]:%(message)s",
-        "handlers": handlers,
-    }
-    logging.basicConfig(**log_config)
+    logging.basicConfig(
+        level=logging.DEBUG if debug else logging.INFO,
+        format="%(asctime)s [%(levelname)s]:%(message)s",
+        handlers=handlers,
+    )
 
     timeout_seconds = timeout.total_seconds() if timeout else None
     settings = {item[0]: item[1] for item in settings}
@@ -105,7 +104,7 @@ def cli(ctx, format_, settings, timeout, port, debug):
     ctx.obj = dict(chcli_conf=ch_cli_conf, format=format_, debug=debug)
 
 
-commands = [
+commands: List[Any] = [
     config_command,
     diagnostics_command,
     list_async_metrics_command,
@@ -119,7 +118,7 @@ commands = [
     wait_started_command,
 ]
 
-groups = [
+groups: List[Any] = [
     chs3_backup_group,
     crash_log_group,
     data_store_group,

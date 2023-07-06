@@ -40,7 +40,7 @@ class IEnum(IntEnum):
 )
 def test_typed_enum(
     inputs: Sequence[TypedEnum], stringified_expected: Sequence[str], summed_expected: T
-):
+) -> None:
     stringified: Sequence[str] = [str(i) for i in inputs]
     assert_that(stringified, equal_to(stringified_expected))
 

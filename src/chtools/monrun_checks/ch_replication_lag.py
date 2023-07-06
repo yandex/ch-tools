@@ -1,4 +1,5 @@
 import logging
+from typing import Any, Dict
 
 import click
 from tabulate import tabulate
@@ -184,7 +185,7 @@ def get_replication_lag():
     """
 
     tables = get_tables_with_replication_delay()
-    chart = {}
+    chart: Dict[str, Dict[str, Any]] = {}
     for t in tables:
         key = "{database}.{table}".format(database=t["database"], table=t["table"])
         chart[key] = {}

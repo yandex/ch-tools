@@ -36,9 +36,9 @@ def tls_command(crit: int, warn: int, ports: Optional[str]) -> Result:
 
     for port in get_ports(ports):
         try:
-            certificate, days_to_expire = load_certificate_info(
-                ssl.get_server_certificate((socket.getfqdn(), port))
-            )
+            addr: Tuple[str, int] = socket.getfqdn(), int(port)
+            cert: str = ssl.get_server_certificate(addr)
+            certificate, days_to_expire = load_certificate_info(str.encode(cert))
         except Exception as e:
             return Result(1, f"Failed to get certificate: {repr(e)}")
 
@@ -67,9 +67,12 @@ def read_cert_file() -> Tuple[str, int]:
     return load_certificate_info(stdout)
 
 
-def load_certificate_info(certificate) -> Tuple[str, int]:
+def load_certificate_info(certificate: bytes) -> Tuple[str, int]:
     x509 = load_certificate(FILETYPE_PEM, certificate)
-    expire_date = datetime.strptime(
-        x509.get_notAfter().decode("ascii"), "%Y%m%d%H%M%SZ"
+    x509_not_after: Optional[bytes] = x509.get_notAfter()
+    assert x509_not_after is not None
+    expire_date = datetime.strptime(x509_not_after.decode("ascii"), "%Y%m%d%H%M%SZ")
+    return (
+        dump_certificate(FILETYPE_PEM, x509).decode(),
+        (expire_date - datetime.now()).days,
     )
-    return dump_certificate(FILETYPE_PEM, x509), (expire_date - datetime.now()).days

@@ -3,6 +3,7 @@ import io
 import json
 import subprocess
 import sys
+from typing import Any, Dict, List
 
 import yaml
 from requests.exceptions import RequestException
@@ -16,7 +17,7 @@ class DiagnosticsData:
     def __init__(self, host: str, normalize_queries: bool):
         self.host = host
         self.normalize_queries = normalize_queries
-        self._sections = [{"section": None, "data": {}}]
+        self._sections: List[Dict[str, Any]] = [{"section": None, "data": {}}]
 
     @delayed
     def add_string(self, name, value, section=None):
@@ -193,7 +194,9 @@ class DiagnosticsData:
 
 
 @delayed
-def add_query(diagnostics, name, client, query, format_: OutputFormat, section=None):
+def add_query(
+    diagnostics, name, client, query, format_: OutputFormat, section=None
+) -> None:
     query_args = {
         "normalize_queries": diagnostics.normalize_queries,
     }
@@ -207,8 +210,11 @@ def add_query(diagnostics, name, client, query, format_: OutputFormat, section=N
 
 
 def execute_query(
-    client, query, render_query=True, format_: OutputFormat = OutputFormat.Default
-):
+    client: ClickHouseClient,
+    query: str,
+    render_query: bool = True,
+    format_: OutputFormat = OutputFormat.Default,
+) -> Any:
     if render_query:
         query = client.render_query(query)
 
