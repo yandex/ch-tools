@@ -68,8 +68,8 @@ def cleanup_backups(ctx, dry_run, keep_going):
 
 
 def delete_chs3_backups(
-    ctx: Context, chs3_backups: List[str], *, keep_going=False, dry_run=False
-) -> None:
+    ctx, chs3_backups, *, keep_going=False, dry_run=False
+):
     """
     Delete CHS3 backups.
     """

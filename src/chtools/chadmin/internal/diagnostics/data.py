@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 import yaml
 from requests.exceptions import RequestException
 
-from chtools.common.clickhouse.client import OutputFormat
+from chtools.common.clickhouse.client import OutputFormat, ClickhouseClient
 
 from .utils import delayed
 
@@ -195,8 +195,8 @@ class DiagnosticsData:
 
 @delayed
 def add_query(
-    diagnostics, name, client, query, format_: OutputFormat, section=None
-) -> None:
+    diagnostics, name, client, query, format_, section=None
+):
     query_args = {
         "normalize_queries": diagnostics.normalize_queries,
     }
@@ -210,7 +210,7 @@ def add_query(
 
 
 def execute_query(
-    client: ClickHouseClient,
+    client: ClickhouseClient,
     query: str,
     render_query: bool = True,
     format_: OutputFormat = OutputFormat.Default,

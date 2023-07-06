@@ -44,5 +44,5 @@ def test_typed_enum(
     stringified: Sequence[str] = [str(i) for i in inputs]
     assert_that(stringified, equal_to(stringified_expected))
 
-    summed = reduce(lambda a, b: a + b, inputs)
+    summed = reduce(lambda a, b: a + b, inputs)  # type: ignore
     assert_that(summed, equal_to(summed_expected))

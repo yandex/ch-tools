@@ -64,11 +64,11 @@ class ClickhouseClient:
         query: str,
         query_args: Optional[Dict[str, Any]] = None,
         format_: Optional[str] = None,
-        post_data=None,
+        post_data: Any = None,
         timeout: Optional[int] = None,
         echo: bool = False,
         dry_run: bool = False,
-    ):
+    ) -> Any:
         """
         Execute query.
         """
