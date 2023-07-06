@@ -61,7 +61,8 @@ def log_errors_command(crit, warn, watch_seconds, exclude, logfile):
             match = regex.match(line)
             if match is None:
                 continue
-            if datetime.strptime(match.group(0), "%Y.%m.%d %H:%M:%S") < datetime_start:
+            date = match.group(1)
+            if datetime.strptime(date, "%Y.%m.%d %H:%M:%S") < datetime_start:
                 break
             errors += 1
 
