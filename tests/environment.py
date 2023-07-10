@@ -52,7 +52,7 @@ def after_all(context):
     """
     Clean up.
     """
-    if context.failed and not context.aborted:
-        logging.warning("Remember to run `make clean` after you done")
+    if (context.failed and not context.aborted) and context.config.userdata.getbool("no_stop_on_fail"):
+        logging.info("Not stopping containers on failure as requested")
         return
     env_control.stop(context)

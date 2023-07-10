@@ -87,15 +87,20 @@ jobs:
 
     - {name: run unit tests, run: pytest}
 
-    - name: prepare docker images for integration tests
-      run: CLICKHOUSE_VERSION=${{ matrix.clickhouse }} make test-integration-prepare
-        
+    - name: prepare integration tests
+      run: |
+        cd tests
+        CLICKHOUSE_VERSION=${{ matrix.clickhouse }} python3 -m env_control create
+        cd ..
+
     - name: run integration tests
-      run: make test-integration
+      run: |
+        cd tests
+        behave --show-timings --junit -D skip_setup
+        cd ..
 
     - name: publish test report
       uses: mikepenz/action-junit-report@v3
       if: always()
       with:
         report_paths: 'tests/reports/*.xml'
-
