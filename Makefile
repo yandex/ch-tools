@@ -4,35 +4,15 @@ PREFIX=/opt/yandex/mdb-ch-tools
 INSTALL_DIR=$(DESTDIR)$(PREFIX)
 
 .PHONY: install
-install: install-python-package install-symlinks install-bash-completions install-logrotate ;
+install: install-symlinks install-bash-completions install-logrotate ;
 
 .PHONY: uninstall
 uninstall: uninstall-python-package uninstall-symlinks uninstall-bash-completions uninstall-logrotate ;
 
-
-.PHONY: install-python-package
-install-python-package:
-	@echo 'Installing mdb-ch-tools'
-
-	python3 -m venv $(INSTALL_DIR)
-	rm -rf $(INSTALL_DIR)/bin/activate*
-
-	$(INSTALL_DIR)/bin/pip install -U pip
-	$(INSTALL_DIR)/bin/pip install -U -r requirements.txt
-	$(INSTALL_DIR)/bin/pip install -U --no-compile .
-
-	find $(INSTALL_DIR) -name __pycache__ -type d -exec rm -rf {} +
-	test -n '$(DESTDIR)' \
-	    && grep -l -r -F '#!$(INSTALL_DIR)' $(INSTALL_DIR) \
-	        | xargs sed -i -e 's|$(INSTALL_DIR)|$(PREFIX)|' \
-	    || true
-
 .PHONY: uninstall-python-package
 uninstall-python-package:
 	@echo 'Uninstalling mdb-ch-tools'
-
 	rm -rf $(INSTALL_DIR)
-
 
 .PHONY: install-symlinks
 install-symlinks:
@@ -68,7 +48,6 @@ uninstall-bash-completions:
 		rm -f $(DESTDIR)/etc/bash_completion.d/$(bin) ; \
 	)
 
-
 .PHONY: install-logrotate
 install-logrotate:
 	@echo 'Creating log rotation rules'
@@ -93,61 +72,24 @@ uninstall-logrotate:
 prepare-changelog: prepare-version
 	dch --force-bad-version --distribution stable -v `cat version.txt` Autobuild
 
-
 .PHONY: prepare-version
 prepare-version: version.txt
 	@echo "Version: `cat version.txt`"
 
-
 version.txt:
 	@echo "2.$$(git rev-list HEAD --count).$$(git rev-parse --short HEAD | perl -ne 'print hex $$_')" > $@
 
-install-deps:
-	pip install flit
-	pip install ".[test]"
-
-lint: black isort mypy #pylint bandit
-
-black:
-	black --check src/ tests/
-isort:
-	isort src/ tests/
-mypy:
-	mypy src/ tests/ --exclude tests/staging
-
-build-python-package: install-deps $(dist/*)
-	flit build --no-use-vcs
-
-build-deb-package: install-deps prepare-changelog
+build-deb-package: prepare-changelog
 	cd debian && debuild --check-dirname-level 0 --preserve-env --no-lintian --no-tgz-check -uc -us
-
-test-unit: install-deps
-	pytest tests/unit
 
 export CLICKHOUSE_VERSION?=latest
 
-test-integration-prepare: install-deps build-python-package
-	cp dist/*.whl tests/ && \
-	cd tests && \
-		CLICKHOUSE_VERSION=${CLICKHOUSE_VERSION} python3 -m env_control create
+test-integration-prepare:
+	cp dist/*.whl tests/
+	cd tests && CLICKHOUSE_VERSION=${CLICKHOUSE_VERSION} python3 -m env_control create
 
-test-integration: test-integration-prepare
-	cd tests && \
-		behave --show-timings -D skip_setup --junit
-
-.PHONY: clean
-clean:
-	@echo 'Cleaning up'
-
-	rm -f version.txt
-	rm -rf build
-	rm -rf dist
-	rm -rf *.egg-info
-	rm -f debian/files
-	rm -rf debian/mdb-ch-tools*
-	rm -f ../mdb-ch-tools_*
-	find . -name __pycache__ -type d -exec rm -rf {} +
-
+test-integration:
+	cd tests && behave --show-timings -D skip_setup --junit
 
 .PHONY: help
 help:
@@ -155,7 +97,6 @@ help:
 	@echo "  prepare-changelog          Add an autobuild version entity to changelog"
 	@echo "  prepare-version            Update version based on latest commit"
 	@echo "  build-deb-package          Build 'mdb-ch-tools' debian package"
-	@echo "  clean                      Clean up after building debian package"
 	@echo ""
 	@echo "--------------------------------------------------------------------------------"
 	@echo ""
@@ -163,7 +104,6 @@ help:
 	@echo "  install                    Install 'mdb-ch-tools' debian package"
 	@echo "  uninstall                  Uninstall 'mdb-ch-tools' debian package"
 	@echo ""
-	@echo "  install-python-package     Install 'ch-tools' python package"
 	@echo "  uninstall-python-package   Uninstall 'ch-tools' python package"
 	@echo "  install-symlinks           Install symlinks to /usr/bin/"
 	@echo "  uninstall-symlinks         Uninstall symlinks from /usr/bin/"

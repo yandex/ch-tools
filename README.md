@@ -4,7 +4,7 @@
 
 ## Tools
 
-**ch-tools** consists of following components:
+**ch-tools** consist of following components:
 - [chadmin](./src/chtools/chadmin/README.md) - ClickHouse administration tool
 - [ch-monitoring](./src/chtools/monrun_checks/README.md) - ClickHouse monitoring tool
 - [keeper-monitoring](./src/chtools/monrun_checks_keeper/README.md) - ClickHouse Keeper / ZooKeeper monitoring tool
@@ -12,25 +12,22 @@
 
 All of these tools must be run on the same host as ClickHouse server is running.
 
-## Installation
-
-TBD
-
-## Testing
+## Local development (using venv)
 
 ```bash
-cd tests
-make venv
+python3 -m venv venv
 source venv/bin/activate
-make test
-```
+pip install .[test]
+flit install
+flit build --no-use-vcs
 
-If you don't have access to dbaas infra build cache: replace `prebuild_cmd` in `configuration.py`
+# lint
+black .
+isort .
 
-```python
-'prebuild_cmd': [
-    'mkdir -p images/minio/bin',
-    'wget -N https://dl.min.io/server/minio/release/linux-amd64/minio -O bin/minio',
-    'wget -N https://dl.min.io/client/mc/release/linux-amd64/mc -O bin/mc',
-],
+# run tests
+pytest
+
+CLICKHOUSE_VERSION="1.2.3.4" make test-integration-prepare
+make test-integration
 ```

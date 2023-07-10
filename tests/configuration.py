@@ -19,7 +19,6 @@ def create():
             "depends_on": ["zookeeper"],
             "args": {
                 "CLICKHOUSE_VERSION": "$CLICKHOUSE_VERSION",
-                "NETWORK_NAME": network_name,
             },
             "db": {
                 "user": "reader",

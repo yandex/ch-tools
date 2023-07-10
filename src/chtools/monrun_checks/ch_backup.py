@@ -3,7 +3,7 @@ Check ClickHouse backups: its state, age and count.
 """
 
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from os.path import exists
 from typing import Dict, List, Optional
 
