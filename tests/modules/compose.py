@@ -148,7 +148,7 @@ def _generate_service_config(
     All paths are relative to the location of compose-config.yaml
     (which is ./staging/compose-config.yaml by default)
     """
-    staging_dir = config["staging_dir"]
+    staging_dir = "tests/" + config["staging_dir"]
     network_name = config["network_name"]
 
     volumes = [f"./images/{instance_name}/config:/config:rw"]
@@ -164,7 +164,7 @@ def _generate_service_config(
 
     service = {
         "build": {
-            "context": "..",
+            "context": "../..",
             "dockerfile": f"{staging_dir}/images/{instance_name}/Dockerfile",
             "args": instance_config.get("args", []),
         },

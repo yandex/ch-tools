@@ -14,20 +14,43 @@ All of these tools must be run on the same host as ClickHouse server is running.
 
 ## Local development (using venv)
 
-```bash
+```sh
 python3 -m venv venv
 source venv/bin/activate
 pip install .[test]
-flit install
 flit build --no-use-vcs
+flit install
 
 # lint
 black .
 isort .
 
-# run tests
+# unit tests
 pytest
 
-CLICKHOUSE_VERSION="1.2.3.4" make test-integration-prepare
-make test-integration
+# integration tests (rebuild docker images using a .whl file)
+cd tests; behave
+
+# integration tests (do not rebuild docker images)
+# useful when you didn't change source code
+cd tests; behave -D skip_setup
+
+# integration tests (supply a custom ClickHouse version to test against)
+cd tests; CLICKHOUSE_VERSION="1.2.3.4" behave
+
+# If you want to have containers running on failure, supply a flag:
+# behave -D no_stop_on_fail
+```
+
+Please note: base images for tests are pulled from [chtools Dockerhub](https://hub.docker.com/u/chtools).
+If you want to build base images locally, run
+
+```sh
+docker buildx bake -f tests/bake.hcl
+```
+
+If you want to build base images for multiple versions of ClickHouse, run:
+
+```sh
+CLICKHOUSE_VERSIONS='1.2.3.4, 5.6.7.8, latest' docker buildx bake -f tests/bake.hcl
 ```

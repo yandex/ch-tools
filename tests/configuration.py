@@ -18,7 +18,7 @@ def create():
             },
             "depends_on": ["zookeeper"],
             "args": {
-                "CLICKHOUSE_VERSION": "$CLICKHOUSE_VERSION",
+                "CLICKHOUSE_VERSION": "${CLICKHOUSE_VERSION:-latest}",
             },
             "db": {
                 "user": "reader",

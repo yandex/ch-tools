@@ -1,4 +1,4 @@
 FROM chtools/test-zookeeper
 
-COPY *.whl /
+COPY dist/*.whl /
 RUN python3 -m pip install *.whl

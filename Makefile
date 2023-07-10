@@ -82,15 +82,6 @@ version.txt:
 build-deb-package: prepare-changelog
 	cd debian && debuild --check-dirname-level 0 --preserve-env --no-lintian --no-tgz-check -uc -us
 
-export CLICKHOUSE_VERSION?=latest
-
-test-integration-prepare:
-	cp dist/*.whl tests/
-	cd tests && CLICKHOUSE_VERSION=${CLICKHOUSE_VERSION} python3 -m env_control create
-
-test-integration:
-	cd tests && behave --show-timings -D skip_setup --junit
-
 .PHONY: help
 help:
 	@echo "Base targets:"
