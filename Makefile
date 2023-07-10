@@ -4,7 +4,7 @@ PREFIX=/opt/yandex/mdb-ch-tools
 INSTALL_DIR=$(DESTDIR)$(PREFIX)
 
 .PHONY: install
-install: install-python-package install-symlinks install-bash-completions install-logrotate ;
+install: install-symlinks install-bash-completions install-logrotate ;
 
 .PHONY: uninstall
 uninstall: uninstall-python-package uninstall-symlinks uninstall-bash-completions uninstall-logrotate ;
@@ -97,7 +97,6 @@ help:
 	@echo "  prepare-changelog          Add an autobuild version entity to changelog"
 	@echo "  prepare-version            Update version based on latest commit"
 	@echo "  build-deb-package          Build 'mdb-ch-tools' debian package"
-	@echo "  clean                      Clean up after building debian package"
 	@echo ""
 	@echo "--------------------------------------------------------------------------------"
 	@echo ""
@@ -105,7 +104,6 @@ help:
 	@echo "  install                    Install 'mdb-ch-tools' debian package"
 	@echo "  uninstall                  Uninstall 'mdb-ch-tools' debian package"
 	@echo ""
-	@echo "  install-python-package     Install 'ch-tools' python package"
 	@echo "  uninstall-python-package   Uninstall 'ch-tools' python package"
 	@echo "  install-symlinks           Install symlinks to /usr/bin/"
 	@echo "  uninstall-symlinks         Uninstall symlinks from /usr/bin/"
