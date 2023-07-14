@@ -115,15 +115,20 @@ jobs:
       with:
         report_paths: 'tests/reports/*.xml'
 
-    - name: build debian package
+    - name: prepare build deb
+      if: ${{ matrix.clickhouse == 'latest' }}
+      uses: awalsh128/cache-apt-pkgs-action@latest
+      with: { packages: "python3-venv debhelper devscripts" }
+
+    - name: build deb
+      if: ${{ matrix.clickhouse == 'latest' }}
       # language=sh
       run: |
-        sudo apt-get update -q -y
-        sudo apt-get install -q -y git python3 python3-venv python3-pip debhelper devscripts
         cp dist/*.tar.gz chtools.tar.gz
         sudo make clean build-deb-package
 
-    - name: test debian package
+    - name: test deb
+      if: ${{ matrix.clickhouse == 'latest' }}
       # language=sh
       run: |
         sudo make uninstall
