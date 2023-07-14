@@ -36,7 +36,7 @@ def tls_command(crit: int, warn: int, ports: Optional[str]) -> Result:
 
     for port in get_ports(ports):
         try:
-            addr: Tuple[str, int] = socket.getfqdn(), int(port)
+            addr: Tuple[str, int] = (socket.getfqdn(), int(port))
             cert: str = ssl.get_server_certificate(addr)
             certificate, days_to_expire = load_certificate_info(str.encode(cert))
         except Exception as e:
