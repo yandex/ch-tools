@@ -66,14 +66,22 @@ jobs:
         python-version: ${{ matrix.target.python }}
         cache: pip
 
-    - {name: install dependencies, run: "pip install .[test]" }
-    - {name: build project, run: flit build --no-use-vcs }
+    - name: install dependencies
+      # language=sh
+      run: |
+        pip install '.[test]'
+
+    - name: build project
+      # language=sh
+      run: |
+        make prepare-version
+        flit build --no-use-vcs
 
     - name: upload wheel
       uses: actions/upload-artifact@v3
       if: ${{ matrix.clickhouse == 'latest' }}
       with:
-        name: chtools-py${{ matrix.target.python }}.whl
+        name: chtools_py${{ matrix.target.python }}.whl
         path: dist/*.whl
         if-no-files-found: error
 
@@ -81,19 +89,21 @@ jobs:
       uses: actions/upload-artifact@v3
       if: ${{ matrix.clickhouse == 'latest' }}
       with:
-        name: chtools-py${{ matrix.target.python }}.tar.gz
+        name: chtools_py${{ matrix.target.python }}.tar.gz
         path: dist/*.tar.gz
         if-no-files-found: error
 
     - {name: run unit tests, run: pytest}
 
     - name: prepare integration tests
+      # language=sh
       run: |
         cd tests
         CLICKHOUSE_VERSION=${{ matrix.clickhouse }} python3 -m env_control create
         cd ..
 
     - name: run integration tests
+      # language=sh
       run: |
         cd tests
         behave --show-timings --junit -D skip_setup
@@ -104,3 +114,34 @@ jobs:
       if: always()
       with:
         report_paths: 'tests/reports/*.xml'
+
+    - name: prepare build deb
+      if: ${{ matrix.clickhouse == 'latest' }}
+      uses: awalsh128/cache-apt-pkgs-action@latest
+      with: { packages: "python3-venv debhelper devscripts" }
+
+    - name: build deb
+      if: ${{ matrix.clickhouse == 'latest' }}
+      # language=sh
+      run: |
+        cp dist/*.tar.gz chtools.tar.gz
+        sudo make clean build-deb-package
+
+    - name: test deb
+      if: ${{ matrix.clickhouse == 'latest' }}
+      # language=sh
+      run: |
+        sudo make uninstall
+        sudo apt-get install -q -y ./out/ch-tools*.deb
+        sudo chadmin --help
+        sudo ch-monitoring --no-user-check --help
+        sudo keeper-monitoring --help
+        sudo ch-s3-credentials --help
+
+    - name: upload deb package artifact
+      uses: actions/upload-artifact@v3
+      if: ${{ matrix.clickhouse == 'latest' }}
+      with:
+        name: ch-tools_py-${{ matrix.target.python }}_ubuntu-${{ matrix.target.ubuntu }}.deb
+        path: out/ch-tools*.deb
+        if-no-files-found: error

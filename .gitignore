@@ -11,3 +11,4 @@ cython_debug/
 tests/staging/
 tests/reports/
 .session_conf.sav
+version.txt

@@ -4,9 +4,8 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "chtools"
-version = "1.0.0"
-description = "A set of tools for administration and diagnostics of ClickHouse DBMS."
 license = { file = "LICENSE" }
+dynamic = ["version", "description"]
 
 authors = [
     {name = "Alexander Burmak", email = "alex-burmak@yandex-team.ru"},
