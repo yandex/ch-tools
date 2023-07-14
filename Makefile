@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 
-PREFIX=/opt/yandex/mdb-ch-tools
+PREFIX=/opt/yandex/ch-tools
 INSTALL_DIR=$(DESTDIR)$(PREFIX)
 
 .PHONY: install
@@ -11,7 +11,7 @@ uninstall: uninstall-python-package uninstall-symlinks uninstall-bash-completion
 
 .PHONY: install-python-package
 install-python-package: build-python-package
-	@echo 'Installing mdb-ch-tools'
+	@echo 'Installing ch-tools'
 
 	python3 -m venv $(INSTALL_DIR)
 	rm -f $(INSTALL_DIR)/bin/activate*
@@ -47,7 +47,7 @@ venv/bin/python3:
 
 .PHONY: uninstall-python-package
 uninstall-python-package:
-	@echo 'Uninstalling mdb-ch-tools'
+	@echo 'Uninstalling ch-tools'
 	rm -rf $(INSTALL_DIR)
 
 .PHONY: install-symlinks
@@ -120,7 +120,7 @@ version.txt:
 .PHONY: build-deb-package
 build-deb-package: prepare-changelog
 	cd debian && debuild --check-dirname-level 0 --preserve-env --no-lintian --no-tgz-check -uc -us
-	mkdir out && mv ../mdb-ch-tools* out/
+	mkdir out && mv ../ch-tools*.deb out/
 
 .PHONY: clean
 clean:
@@ -128,7 +128,7 @@ clean:
 
 	rm -rf build
 	rm -rf debian/files debian/.debhelper
-	rm -rf debian/mdb-ch-tools*
+	rm -rf debian/ch-tools*
 
 .PHONY: help
 help:
@@ -136,14 +136,14 @@ help:
 	@echo "  prepare-changelog          Add an autobuild version entity to changelog"
 	@echo "  prepare-version            Update version based on latest commit"
 	@echo "  build-python-package       Build 'ch-tools' Python package"
-	@echo "  build-deb-package          Build 'mdb-ch-tools' debian package"
+	@echo "  build-deb-package          Build 'ch-tools' debian package"
 	@echo "  clean                      Clean up after building debian package"
 	@echo ""
 	@echo "--------------------------------------------------------------------------------"
 	@echo ""
 	@echo "Debian package build targets:"
-	@echo "  install                    Install 'mdb-ch-tools' debian package"
-	@echo "  uninstall                  Uninstall 'mdb-ch-tools' debian package"
+	@echo "  install                    Install 'ch-tools' debian package"
+	@echo "  uninstall                  Uninstall 'ch-tools' debian package"
 	@echo ""
 	@echo "  install-python-package     Install 'ch-tools' python package"
 	@echo "  uninstall-python-package   Uninstall 'ch-tools' python package"
