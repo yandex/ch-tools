@@ -4,7 +4,7 @@ from typing import Sequence, TypeVar
 from hamcrest import assert_that, equal_to
 from pytest import mark
 
-from chtools.common.type.typed_enum import IntEnum, StrEnum, TypedEnum
+from ch_tools.common.type.typed_enum import IntEnum, StrEnum, TypedEnum
 
 T = TypeVar("T", int, str)
 
