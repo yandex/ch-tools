@@ -1,7 +1,5 @@
 name: release
-on:
-  workflow_dispatch: []
-
+#on: workflow_dispatch
 #if: github.ref == 'refs/heads/master'
 jobs:
   publish:
@@ -20,8 +18,9 @@ jobs:
         generate_release_notes: true
         fail_on_unmatched_files: true
         files: |
-          dist/*.whl
-          dist/*.tar.gz
+          *.whl
+          *.tar.gz
+          ch-tools*.deb
 
     - name: publish to pypi
       run: flit publish --no-use-vcs
