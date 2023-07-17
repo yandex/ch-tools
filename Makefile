@@ -17,7 +17,7 @@ install-python-package: build-python-package
 	rm -f $(INSTALL_DIR)/bin/activate*
 	$(INSTALL_DIR)/bin/pip install -U pip
 
-	$(INSTALL_DIR)/bin/pip install --no-compile chtools.tar.gz
+	$(INSTALL_DIR)/bin/pip install --no-compile ch_tools.tar.gz
 
 	find $(INSTALL_DIR) -name __pycache__ -type d -exec rm -rf {} +
 	test -n '$(DESTDIR)' \
@@ -26,11 +26,11 @@ install-python-package: build-python-package
 		|| true
 
 .PHONY: build-python-package
-build-python-package: chtools.tar.gz ;
+build-python-package: ch_tools.tar.gz ;
 	@echo 'Cleaning up residuals from building of Python package'
 	rm -rf venv dist
 
-chtools.tar.gz: venv-build prepare-version
+ch_tools.tar.gz: venv-build prepare-version
 	@echo 'Building Python package'
 
 	venv/bin/flit build --no-use-vcs
@@ -115,7 +115,7 @@ prepare-version: version.txt
 version.txt:
 	@echo "2.$$(git rev-list HEAD --count).$$(git rev-parse --short HEAD | perl -ne 'print hex $$_')" > $@
 	@# Replace version in pyproject.toml
-	sed -ie "s/__version__ = \"[0-9\.]\+\"/__version__ = \"`cat $@`\"/" src/chtools/__init__.py
+	sed -ie "s/__version__ = \"[0-9\.]\+\"/__version__ = \"`cat $@`\"/" src/ch_tools/__init__.py
 
 .PHONY: build-deb-package
 build-deb-package: prepare-changelog

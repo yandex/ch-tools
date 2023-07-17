@@ -81,7 +81,7 @@ jobs:
       uses: actions/upload-artifact@v3
       if: ${{ matrix.clickhouse == 'latest' }}
       with:
-        name: chtools_py${{ matrix.target.python }}.whl
+        name: ch_tools_py${{ matrix.target.python }}.whl
         path: dist/*.whl
         if-no-files-found: error
 
@@ -89,7 +89,7 @@ jobs:
       uses: actions/upload-artifact@v3
       if: ${{ matrix.clickhouse == 'latest' }}
       with:
-        name: chtools_py${{ matrix.target.python }}.tar.gz
+        name: ch_tools_py${{ matrix.target.python }}.tar.gz
         path: dist/*.tar.gz
         if-no-files-found: error
 
@@ -124,8 +124,8 @@ jobs:
       # language=sh
       run: |
         # deb building implicitly cleans dist/
-        cp dist/*.tar.gz chtools.tar.gz
-        cp dist/*.whl chtools.whl
+        cp dist/*.tar.gz ch_tools.tar.gz
+        cp dist/*.whl ch_tools.whl
         echo "force-unsafe-io" | sudo tee /etc/dpkg/dpkg.cfg.d/force-unsafe-io
         sudo make build-deb-package
 
