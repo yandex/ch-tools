@@ -45,16 +45,16 @@ jobs:
     strategy:
       matrix:
         target:
-          #  - {python: "3.6.15", ubuntu: "20.04"}
+          - {python: "3.6.15", ubuntu: "20.04"}
           - {python: "3.10.12", ubuntu: "latest"}
         # a copy-paste of the above as github CI can't use env context in matrices
         clickhouse:
-          #- "21.8.15.7"
-          #- "22.3.20.29"
-          #- "22.8.19.10"
-          #- "23.3.4.17"
-          #- "23.4.4.16"
-          #- "23.5.3.24"
+          - "21.8.15.7"
+          - "22.3.20.29"
+          - "22.8.19.10"
+          - "23.3.4.17"
+          - "23.4.4.16"
+          - "23.5.3.24"
           - "latest"
 
     runs-on: ubuntu-${{ matrix.target.ubuntu }}
@@ -95,19 +95,19 @@ jobs:
 
     - {name: run unit tests, run: pytest}
 
-      #- name: prepare integration tests
-      #  # language=sh
-      #  run: |
-      #    cd tests
-      #    CLICKHOUSE_VERSION=${{ matrix.clickhouse }} python3 -m env_control create
-      #    cd ..
+    - name: prepare integration tests
+      # language=sh
+      run: |
+        cd tests
+        CLICKHOUSE_VERSION=${{ matrix.clickhouse }} python3 -m env_control create
+        cd ..
 
-      #- name: run integration tests
-      #  # language=sh
-      #  run: |
-      #    cd tests
-      #    behave --show-timings --junit -D skip_setup
-      #    cd ..
+    - name: run integration tests
+      # language=sh
+      run: |
+        cd tests
+        behave --show-timings --junit -D skip_setup
+        cd ..
 
     - name: publish test report
       uses: mikepenz/action-junit-report@v3
@@ -150,20 +150,17 @@ jobs:
 
     - name: create a release
       uses: softprops/action-gh-release@v1
-      if: ${{ matrix.clickhouse == 'latest' && matrix.target.ubuntu == 'latest' }}
-      #if: && startsWith(github.ref, 'refs/tags/') }}
+      if: ${{ matrix.clickhouse == 'latest' && matrix.target.ubuntu == 'latest' && startsWith(github.ref, 'refs/tags/') }}
       with:
         generate_release_notes: true
         fail_on_unmatched_files: true
-        tag_name: 0.0.0
         files: |
           *.whl
           *.tar.gz
           out/ch-tools*.deb
 
     - name: publish to pypi
-      if: ${{ matrix.clickhouse == 'latest' && matrix.target.ubuntu == 'latest' }}
-      #if: && startsWith(github.ref, 'refs/tags/') }}
+      if: ${{ matrix.clickhouse == 'latest' && matrix.target.ubuntu == 'latest' && startsWith(github.ref, 'refs/tags/') }}
       run: flit publish --no-use-vcs
       env:
         FLIT_USERNAME: "__token__"
