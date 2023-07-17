@@ -115,20 +115,10 @@ jobs:
       with:
         report_paths: 'tests/reports/*.xml'
 
-    - name: create a release
-      if: ${{ startsWith(github.ref, 'refs/tags/') && matrix.clickhouse == 'latest' && matrix.target.ubuntu == 'latest' }}
-      uses: softprops/action-gh-release@v1
-      with:
-<<<<<<< HEAD
-        report_paths: 'tests/reports/*.xml'
-
     - name: prepare build deb
       if: ${{ matrix.clickhouse == 'latest' }}
-      uses: awalsh128/cache-apt-pkgs-action@v1.3.0
-      with:
-        packages: "python3-venv debhelper devscripts"
-        version: 1
-        execute_install_scripts: true
+      uses: awalsh128/cache-apt-pkgs-action@latest
+      with: { packages: "python3-venv debhelper devscripts" }
 
     - name: build deb
       if: ${{ matrix.clickhouse == 'latest' }}
@@ -155,17 +145,3 @@ jobs:
         name: ch-tools_py-${{ matrix.target.python }}_ubuntu-${{ matrix.target.ubuntu }}.deb
         path: out/ch-tools*.deb
         if-no-files-found: error
-=======
-        generate_release_notes: true
-        fail_on_unmatched_files: true
-        files: |
-          dist/*.whl
-          dist/*.tar.gz
-
-    - name: publish to pypi
-      if: ${{ startsWith(github.ref, 'refs/tags/') && matrix.clickhouse == 'latest' && matrix.target.ubuntu == 'latest' }}
-      run: flit publish --no-use-vcs
-      env:
-        FLIT_USERNAME: "__token__"
-        FLIT_PASSWORD: "${{ secrets.PYPI_TOKEN }}"
->>>>>>> 8cd027f (testing initial)

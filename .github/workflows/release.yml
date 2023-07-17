@@ -1,0 +1,30 @@
+name: release
+on:
+  workflow_dispatch: []
+
+#if: github.ref == 'refs/heads/master'
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/download-artifact@v3
+
+    - name: create tag
+      uses: rickstaa/action-create-tag@v1
+      with:
+        tag: "latest"
+
+    - name: create a release
+      uses: softprops/action-gh-release@v1
+      with:
+        generate_release_notes: true
+        fail_on_unmatched_files: true
+        files: |
+          dist/*.whl
+          dist/*.tar.gz
+
+    - name: publish to pypi
+      run: flit publish --no-use-vcs
+      env:
+        FLIT_USERNAME: "__token__"
+        FLIT_PASSWORD: "${{ secrets.PYPI_TOKEN }}"
