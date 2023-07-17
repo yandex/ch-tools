@@ -1,6 +1,5 @@
-from click import ClickException
-
 from chtools.chadmin.internal.utils import execute_query
+from click import ClickException
 
 
 def get_table_replica(ctx, database, table):

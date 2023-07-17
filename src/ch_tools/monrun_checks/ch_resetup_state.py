@@ -6,7 +6,6 @@ import subprocess
 import click
 import psutil
 import requests
-
 from chtools.common.clickhouse.config.path import CLICKHOUSE_RESETUP_CONFIG_PATH
 from chtools.common.result import Result
 from chtools.monrun_checks.exceptions import die

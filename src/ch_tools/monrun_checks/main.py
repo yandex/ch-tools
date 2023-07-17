@@ -9,7 +9,6 @@ from functools import wraps
 warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
 
 import click  # noqa: E402
-
 from chtools.common.result import Status  # noqa: E402
 from chtools.monrun_checks.ch_backup import backup_command  # noqa: E402
 from chtools.monrun_checks.ch_core_dumps import core_dumps_command  # noqa: E402

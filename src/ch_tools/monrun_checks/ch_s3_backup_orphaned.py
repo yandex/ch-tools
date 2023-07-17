@@ -1,5 +1,4 @@
 import click
-
 from chtools.common.backup import get_orphaned_chs3_backups
 from chtools.common.result import Result
 

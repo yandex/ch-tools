@@ -3,7 +3,6 @@ import time
 from urllib.parse import quote
 
 import click
-
 from chtools.common.result import Result
 from chtools.monrun_checks.clickhouse_client import ClickhouseClient
 

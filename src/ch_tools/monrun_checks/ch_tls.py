@@ -5,10 +5,9 @@ from datetime import datetime
 from typing import List, Optional, Tuple
 
 import click
-from OpenSSL.crypto import FILETYPE_PEM, dump_certificate, load_certificate
-
 from chtools.common.result import Result
 from chtools.monrun_checks.clickhouse_client import ClickhouseClient, ClickhousePort
+from OpenSSL.crypto import FILETYPE_PEM, dump_certificate, load_certificate
 
 CERTIFICATE_PATH = "/etc/clickhouse-server/ssl/server.crt"
 

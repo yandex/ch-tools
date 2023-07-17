@@ -1,7 +1,5 @@
 from collections import OrderedDict
 
-from click import group, option, pass_context
-
 from chtools.chadmin.cli import get_cluster_name
 from chtools.chadmin.internal.process import list_replicated_fetches
 from chtools.common.cli.formatting import (
@@ -10,6 +8,7 @@ from chtools.common.cli.formatting import (
     format_percents,
     print_response,
 )
+from click import group, option, pass_context
 
 FIELD_FORMATTERS = {
     "total_size_bytes_compressed": format_bytes,

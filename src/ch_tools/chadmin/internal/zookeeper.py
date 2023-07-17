@@ -2,10 +2,9 @@ import logging
 import os
 from contextlib import contextmanager
 
+from chtools.chadmin.cli import get_config, get_macros
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError
-
-from chtools.chadmin.cli import get_config, get_macros
 
 
 def get_zk_node(ctx, path, binary=False):

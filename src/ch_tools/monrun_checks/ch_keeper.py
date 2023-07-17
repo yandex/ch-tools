@@ -1,9 +1,8 @@
 import cloup
-from kazoo.client import KazooClient, KazooException
-from kazoo.handlers.threading import KazooTimeoutError
-
 from chtools.common.clickhouse.config import ClickhouseKeeperConfig
 from chtools.common.result import Result
+from kazoo.client import KazooClient, KazooException
+from kazoo.handlers.threading import KazooTimeoutError
 
 
 @cloup.command("keeper")

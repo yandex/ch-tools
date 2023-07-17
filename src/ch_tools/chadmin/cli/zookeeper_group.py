@@ -1,9 +1,6 @@
 import re
 import sys
 
-from click import argument, group, option, pass_context
-from kazoo.security import make_digest_acl
-
 from chtools.chadmin.internal.table_replica import get_table_replica
 from chtools.chadmin.internal.zookeeper import (
     check_zk_node,
@@ -17,6 +14,8 @@ from chtools.chadmin.internal.zookeeper import (
 )
 from chtools.common.cli.formatting import print_json, print_response
 from chtools.common.cli.parameters import ListParamType, StringParamType
+from click import argument, group, option, pass_context
+from kazoo.security import make_digest_acl
 
 
 @group("zookeeper")

@@ -6,9 +6,8 @@ import sys
 from typing import Any, Dict, List
 
 import yaml
-from requests.exceptions import RequestException
-
 from chtools.common.clickhouse.client import ClickhouseClient, OutputFormat
+from requests.exceptions import RequestException
 
 from .utils import delayed
 

@@ -2,7 +2,6 @@ from typing import Any, Iterator, List
 
 import boto3
 from botocore.client import Config  # type: ignore[import]
-
 from chtools.chadmin.internal.object_storage.s3_disk_configuration import (
     S3DiskConfiguration,
 )

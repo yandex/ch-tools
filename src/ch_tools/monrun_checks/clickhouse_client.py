@@ -6,7 +6,6 @@ from enum import Enum
 from typing import Dict
 
 import requests
-
 from chtools.monrun_checks.exceptions import die
 
 

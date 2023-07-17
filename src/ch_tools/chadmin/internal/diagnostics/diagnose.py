@@ -1,7 +1,5 @@
 from datetime import datetime
 
-from click import Context
-
 import chtools.chadmin.internal.diagnostics.formatter as formatter
 import chtools.chadmin.internal.diagnostics.query as query
 from chtools.common.cli.formatting import format_duration
@@ -14,6 +12,7 @@ from chtools.common.clickhouse.config import (
 )
 from chtools.common.dbaas import DbaasConfig
 from chtools.common.utils import version_ge
+from click import Context
 
 from ..utils import clickhouse_client
 from .data import DiagnosticsData, add_command, add_query, execute_query

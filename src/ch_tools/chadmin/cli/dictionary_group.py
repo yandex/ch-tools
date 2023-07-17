@@ -1,7 +1,6 @@
-from click import group, option, pass_context
-
 from chtools.chadmin.internal.dictionary import list_dictionaries, reload_dictionary
 from chtools.common.cli.formatting import print_response
+from click import group, option, pass_context
 
 
 @group("dictionary")

@@ -1,10 +1,9 @@
-from click import argument, group, pass_context
-
 from chtools.chadmin.internal.table_replica import (
     get_table_replica,
     restart_table_replica,
 )
 from chtools.common.cli.formatting import print_response
+from click import argument, group, pass_context
 
 
 @group("table-replica")

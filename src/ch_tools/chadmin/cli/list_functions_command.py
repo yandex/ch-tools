@@ -1,6 +1,5 @@
-from click import command, option, pass_context
-
 from chtools.chadmin.internal.utils import execute_query
+from click import command, option, pass_context
 
 
 @command("functions")

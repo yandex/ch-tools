@@ -2,8 +2,6 @@ import os
 from typing import List
 
 import requests
-from click import ClickException, Context, argument, group, option, pass_context
-
 from chtools.chadmin.internal.backup import unfreeze_backup, unfreeze_table
 from chtools.chadmin.internal.system import match_ch_version
 from chtools.chadmin.internal.table import list_tables
@@ -13,6 +11,7 @@ from chtools.common.backup import (
     get_orphaned_chs3_backups,
 )
 from chtools.common.utils import clear_empty_directories_recursively
+from click import ClickException, Context, argument, group, option, pass_context
 
 
 @group("chs3-backup")

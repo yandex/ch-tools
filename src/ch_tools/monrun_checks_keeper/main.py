@@ -3,8 +3,6 @@ import os
 from functools import wraps
 
 import click
-from click import group, option, pass_context
-
 from chtools.common.result import Status
 from chtools.monrun_checks_keeper.keeper_commands import (
     alive_command,
@@ -18,6 +16,7 @@ from chtools.monrun_checks_keeper.keeper_commands import (
     queue_command,
 )
 from chtools.monrun_checks_keeper.status import status_command
+from click import group, option, pass_context
 
 LOG_FILE = "/var/log/keeper-monitoring/keeper-monitoring.log"
 

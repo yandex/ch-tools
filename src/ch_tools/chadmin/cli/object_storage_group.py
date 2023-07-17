@@ -9,8 +9,6 @@ from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Union
 
 import click
-from click import Context, group, option, pass_context
-
 from chtools.chadmin.internal.object_storage import (
     ObjectSummary,
     S3DiskConfiguration,
@@ -20,6 +18,7 @@ from chtools.chadmin.internal.object_storage import (
     s3_object_storage_iterator,
 )
 from chtools.common.cli.parameters import TimeSpanParamType
+from click import Context, group, option, pass_context
 
 STORAGE_POLICY_CONFIG_PATH = Path("/etc/clickhouse-server/config.d/storage_policy.xml")
 # The guard interval is used for S3 objects for which metadata is not found.

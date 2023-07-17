@@ -4,10 +4,9 @@ from datetime import timedelta
 from typing import Any, Dict, Optional
 
 import requests
+from chtools.common.utils import version_ge
 from jinja2 import Environment
 from typing_extensions import Self
-
-from chtools.common.utils import version_ge
 
 from .error import ClickhouseError
 from .retry import retry

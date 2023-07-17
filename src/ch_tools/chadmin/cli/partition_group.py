@@ -1,5 +1,3 @@
-from click import Choice, group, option, pass_context
-
 from chtools.chadmin.internal.partition import (
     attach_partition,
     detach_partition,
@@ -9,6 +7,7 @@ from chtools.chadmin.internal.partition import (
 )
 from chtools.chadmin.internal.utils import execute_query
 from chtools.common.cli.parameters import BytesParamType
+from click import Choice, group, option, pass_context
 
 
 @group("partition")

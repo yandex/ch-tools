@@ -1,7 +1,5 @@
 from collections import OrderedDict
 
-from click import Choice, group, option, pass_context
-
 from chtools.chadmin.internal.part import (
     attach_part,
     detach_part,
@@ -14,6 +12,7 @@ from chtools.chadmin.internal.part import (
 from chtools.chadmin.internal.system import match_ch_version
 from chtools.common.cli.formatting import format_bytes, print_response
 from chtools.common.cli.parameters import BytesParamType
+from click import Choice, group, option, pass_context
 
 FIELD_FORMATTERS = {
     "bytes_on_disk": format_bytes,

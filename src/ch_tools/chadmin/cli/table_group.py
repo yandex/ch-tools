@@ -1,5 +1,3 @@
-from click import Choice, argument, group, option, pass_context
-
 from chtools.chadmin.cli import get_cluster_name
 from chtools.chadmin.internal.table import (
     attach_table,
@@ -11,6 +9,7 @@ from chtools.chadmin.internal.table import (
 )
 from chtools.chadmin.internal.utils import execute_query
 from chtools.common.cli.formatting import print_response
+from click import Choice, argument, group, option, pass_context
 
 
 @group("table")

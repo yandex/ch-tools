@@ -8,7 +8,6 @@ from os.path import exists
 from typing import Dict, List, Optional
 
 import click
-
 from chtools.common.backup import BackupConfig, get_backups
 from chtools.common.clickhouse.client import ClickhouseClient
 from chtools.common.dbaas import DbaasConfig

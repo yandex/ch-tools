@@ -12,7 +12,6 @@ from datetime import timedelta
 from xml.dom import minidom
 
 import requests
-
 from chtools.common.clickhouse.config.path import (
     CLICKHOUSE_RESETUP_CONFIG_PATH,
     CLICKHOUSE_S3_CREDENTIALS_CONFIG_PATH,

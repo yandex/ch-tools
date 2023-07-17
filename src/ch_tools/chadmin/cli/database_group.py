@@ -1,6 +1,5 @@
-from click import argument, group, option, pass_context
-
 from chtools.chadmin.internal.utils import execute_query
+from click import argument, group, option, pass_context
 
 
 @group("database")

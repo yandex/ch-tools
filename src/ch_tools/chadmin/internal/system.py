@@ -1,7 +1,6 @@
+from chtools.chadmin.internal.utils import clickhouse_client
 from click import Context
 from pkg_resources import parse_version
-
-from chtools.chadmin.internal.utils import clickhouse_client
 
 
 def get_version(ctx: Context) -> str:

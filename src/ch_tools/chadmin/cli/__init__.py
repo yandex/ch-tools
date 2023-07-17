@@ -1,6 +1,5 @@
-from click import Context
-
 from chtools.common.clickhouse.config import ClickhouseConfig
+from click import Context
 
 
 def get_config(ctx: Context, try_preprocessed: bool = True) -> ClickhouseConfig:

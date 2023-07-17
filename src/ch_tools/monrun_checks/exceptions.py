@@ -1,6 +1,5 @@
-from requests import RequestException
-
 from chtools.common.result import Status
+from requests import RequestException
 
 
 def user_warning(exc: UserWarning, status: Status) -> Status:

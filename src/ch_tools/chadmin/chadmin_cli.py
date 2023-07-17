@@ -7,7 +7,6 @@ from typing import Any, List
 warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
 
 import cloup  # noqa: E402
-
 from chtools.chadmin.cli.chs3_backup_group import chs3_backup_group  # noqa: E402
 from chtools.chadmin.cli.config_command import config_command  # noqa: E402
 from chtools.chadmin.cli.crash_log_group import crash_log_group  # noqa: E402

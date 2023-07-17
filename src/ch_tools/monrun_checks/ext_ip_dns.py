@@ -6,7 +6,6 @@ from typing import List
 import click
 import dns.resolver
 import requests
-
 from chtools.common.result import Result
 
 IP_METADATA_PATHS = {
