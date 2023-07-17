@@ -123,7 +123,10 @@ jobs:
       if: ${{ matrix.clickhouse == 'latest' }}
       # language=sh
       run: |
+        # deb building implicitly cleans dist/
         cp dist/*.tar.gz chtools.tar.gz
+        cp dist/*.whl chtools.whl
+        echo "force-unsafe-io" > /etc/dpkg/dpkg.cfg.d/force-unsafe-io
         sudo make build-deb-package
 
     - name: test deb
@@ -154,8 +157,8 @@ jobs:
         fail_on_unmatched_files: true
         tag_name: 0.0.0
         files: |
-          dist/*.whl
-          dist/*.tar.gz
+          *.whl
+          *.tar.gz
           out/ch-tools*.deb
 
     - name: publish to pypi
