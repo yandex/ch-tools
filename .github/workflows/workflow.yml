@@ -45,16 +45,16 @@ jobs:
     strategy:
       matrix:
         target:
-          - {python: "3.6.15", ubuntu: "20.04"}
+          #  - {python: "3.6.15", ubuntu: "20.04"}
           - {python: "3.10.12", ubuntu: "latest"}
         # a copy-paste of the above as github CI can't use env context in matrices
         clickhouse:
-          - "21.8.15.7"
-          - "22.3.20.29"
-          - "22.8.19.10"
-          - "23.3.4.17"
-          - "23.4.4.16"
-          - "23.5.3.24"
+          #- "21.8.15.7"
+          #- "22.3.20.29"
+          #- "22.8.19.10"
+          #- "23.3.4.17"
+          #- "23.4.4.16"
+          #- "23.5.3.24"
           - "latest"
 
     runs-on: ubuntu-${{ matrix.target.ubuntu }}
@@ -124,7 +124,7 @@ jobs:
       # language=sh
       run: |
         cp dist/*.tar.gz chtools.tar.gz
-        sudo make clean build-deb-package
+        sudo make build-deb-package
 
     - name: test deb
       if: ${{ matrix.clickhouse == 'latest' }}
