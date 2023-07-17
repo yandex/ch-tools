@@ -116,6 +116,7 @@ jobs:
         report_paths: 'tests/reports/*.xml'
 
     - name: prepare build deb
+      if: ${{ matrix.clickhouse == 'latest' }}
       run: sudo apt install python3-venv debhelper devscripts
 
     - name: build deb
