@@ -117,8 +117,7 @@ jobs:
 
     - name: prepare build deb
       if: ${{ matrix.clickhouse == 'latest' }}
-      uses: awalsh128/cache-apt-pkgs-action@latest
-      with: { packages: "python3-venv debhelper devscripts" }
+      run: sudo apt install python3-venv debhelper devscripts
 
     - name: build deb
       if: ${{ matrix.clickhouse == 'latest' }}
