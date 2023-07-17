@@ -1,7 +1,8 @@
 import cloup
-from chtools.chadmin.internal.diagnostics.diagnose import diagnose
-from chtools.common.cli.parameters import env_var_help
 from click import Context, pass_context
+
+from ch_tools.chadmin.internal.diagnostics.diagnose import diagnose
+from ch_tools.common.cli.parameters import env_var_help
 
 
 @cloup.command("diagnostics")

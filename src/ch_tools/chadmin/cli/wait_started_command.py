@@ -3,9 +3,10 @@ import os
 import sys
 import time
 
-from chtools.chadmin.internal.utils import execute_query
-from chtools.common.utils import execute
 from click import command, option, pass_context
+
+from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common.utils import execute
 
 BASE_TIMEOUT = 600
 LOCAL_PART_LOAD_SPEED = 10  # in data parts per second

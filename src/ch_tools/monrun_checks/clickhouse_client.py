@@ -6,7 +6,8 @@ from enum import Enum
 from typing import Dict
 
 import requests
-from chtools.monrun_checks.exceptions import die
+
+from ch_tools.monrun_checks.exceptions import die
 
 
 class ClickhousePort(Enum):

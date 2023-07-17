@@ -1,5 +1,7 @@
-from chtools.chadmin.cli import get_cluster_name
-from chtools.chadmin.internal.table import (
+from click import Choice, argument, group, option, pass_context
+
+from ch_tools.chadmin.cli import get_cluster_name
+from ch_tools.chadmin.internal.table import (
     attach_table,
     delete_table,
     detach_table,
@@ -7,9 +9,8 @@ from chtools.chadmin.internal.table import (
     list_tables,
     materialize_ttl,
 )
-from chtools.chadmin.internal.utils import execute_query
-from chtools.common.cli.formatting import print_response
-from click import Choice, argument, group, option, pass_context
+from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common.cli.formatting import print_response
 
 
 @group("table")

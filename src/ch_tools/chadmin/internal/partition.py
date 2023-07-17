@@ -1,4 +1,4 @@
-from chtools.chadmin.internal.utils import execute_query
+from ch_tools.chadmin.internal.utils import execute_query
 
 
 def attach_partition(ctx, database, table, partition_id, dry_run=False):

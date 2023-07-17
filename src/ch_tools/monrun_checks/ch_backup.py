@@ -8,10 +8,11 @@ from os.path import exists
 from typing import Dict, List, Optional
 
 import click
-from chtools.common.backup import BackupConfig, get_backups
-from chtools.common.clickhouse.client import ClickhouseClient
-from chtools.common.dbaas import DbaasConfig
-from chtools.monrun_checks.exceptions import die
+
+from ch_tools.common.backup import BackupConfig, get_backups
+from ch_tools.common.clickhouse.client import ClickhouseClient
+from ch_tools.common.dbaas import DbaasConfig
+from ch_tools.monrun_checks.exceptions import die
 
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S %z"
 FULL_DATE_FORMAT = "%Y-%m-%dT%H:%M:%S.%f%z"

@@ -5,7 +5,7 @@ import re
 from itertools import islice
 from typing import Iterable, Iterator
 
-from chtools.common.clickhouse.client import ClickhouseClient
+from ch_tools.common.clickhouse.client import ClickhouseClient
 
 
 def clickhouse_client(ctx):

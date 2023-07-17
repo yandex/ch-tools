@@ -6,7 +6,8 @@ from typing import List
 import click
 import dns.resolver
 import requests
-from chtools.common.result import Result
+
+from ch_tools.common.result import Result
 
 IP_METADATA_PATHS = {
     "public_v4": "http://169.254.169.254/latest/meta-data/public-ipv4",

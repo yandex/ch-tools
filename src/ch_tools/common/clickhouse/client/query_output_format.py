@@ -3,7 +3,7 @@ Query output format enumeration.
 https://clickhouse.com/docs/en/interfaces/formats
 """
 
-from chtools.common.type import StrEnum
+from ch_tools.common.type import StrEnum
 
 
 class OutputFormat(StrEnum):

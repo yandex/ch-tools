@@ -1,8 +1,9 @@
 import click
 import yaml
-from chtools.common.result import Result
-from chtools.monrun_checks.clickhouse_client import ClickhouseClient
-from chtools.monrun_checks.clickhouse_info import ClickhouseInfo
+
+from ch_tools.common.result import Result
+from ch_tools.monrun_checks.clickhouse_client import ClickhouseClient
+from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
 
 @click.command("system-queues")

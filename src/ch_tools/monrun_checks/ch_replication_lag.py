@@ -2,10 +2,11 @@ import logging
 from typing import Any, Dict
 
 import click
-from chtools.common.result import Result
-from chtools.monrun_checks.clickhouse_client import ClickhouseClient
-from chtools.monrun_checks.clickhouse_info import ClickhouseInfo
 from tabulate import tabulate
+
+from ch_tools.common.result import Result
+from ch_tools.monrun_checks.clickhouse_client import ClickhouseClient
+from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
 
 @click.command("replication-lag")

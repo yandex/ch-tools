@@ -1,5 +1,6 @@
-from chtools.chadmin.internal.utils import execute_query
 from click import ClickException
+
+from ch_tools.chadmin.internal.utils import execute_query
 
 
 def get_table(ctx, database, table, active_parts=None):

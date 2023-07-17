@@ -1,4 +1,4 @@
-from chtools.chadmin.internal.utils import execute_query
+from ch_tools.chadmin.internal.utils import execute_query
 
 
 def unfreeze_table(ctx, database, table, backup_name, dry_run=False):

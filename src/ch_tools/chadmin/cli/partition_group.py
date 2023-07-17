@@ -1,13 +1,14 @@
-from chtools.chadmin.internal.partition import (
+from click import Choice, group, option, pass_context
+
+from ch_tools.chadmin.internal.partition import (
     attach_partition,
     detach_partition,
     drop_partition,
     materialize_ttl_in_partition,
     optimize_partition,
 )
-from chtools.chadmin.internal.utils import execute_query
-from chtools.common.cli.parameters import BytesParamType
-from click import Choice, group, option, pass_context
+from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common.cli.parameters import BytesParamType
 
 
 @group("partition")

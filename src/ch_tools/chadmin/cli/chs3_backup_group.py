@@ -2,16 +2,17 @@ import os
 from typing import List
 
 import requests
-from chtools.chadmin.internal.backup import unfreeze_backup, unfreeze_table
-from chtools.chadmin.internal.system import match_ch_version
-from chtools.chadmin.internal.table import list_tables
-from chtools.common.backup import (
+from click import ClickException, Context, argument, group, option, pass_context
+
+from ch_tools.chadmin.internal.backup import unfreeze_backup, unfreeze_table
+from ch_tools.chadmin.internal.system import match_ch_version
+from ch_tools.chadmin.internal.table import list_tables
+from ch_tools.common.backup import (
     CHS3_BACKUPS_DIRECTORY,
     get_chs3_backups,
     get_orphaned_chs3_backups,
 )
-from chtools.common.utils import clear_empty_directories_recursively
-from click import ClickException, Context, argument, group, option, pass_context
+from ch_tools.common.utils import clear_empty_directories_recursively
 
 
 @group("chs3-backup")

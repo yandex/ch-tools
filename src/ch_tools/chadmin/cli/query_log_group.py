@@ -1,8 +1,9 @@
 import datetime
 
-from chtools.chadmin.cli import get_cluster_name
-from chtools.chadmin.internal.utils import execute_query
 from click import Choice, argument, group, option, pass_context
+
+from ch_tools.chadmin.cli import get_cluster_name
+from ch_tools.chadmin.internal.utils import execute_query
 
 
 @group("query-log")

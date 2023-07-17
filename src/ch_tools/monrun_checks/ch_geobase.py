@@ -2,8 +2,9 @@
 
 import click
 import requests
-from chtools.common.result import Result
-from chtools.monrun_checks.clickhouse_client import ClickhouseClient
+
+from ch_tools.common.result import Result
+from ch_tools.monrun_checks.clickhouse_client import ClickhouseClient
 
 
 @click.command("geobase")

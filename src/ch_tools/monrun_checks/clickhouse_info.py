@@ -1,6 +1,6 @@
 import functools
 
-from chtools.monrun_checks.clickhouse_client import ClickhouseClient, ClickhousePort
+from ch_tools.monrun_checks.clickhouse_client import ClickhouseClient, ClickhousePort
 
 
 class ClickhouseInfo(object):

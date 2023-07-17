@@ -4,7 +4,7 @@ from itertools import chain
 from pathlib import Path
 from typing import Dict, Iterable
 
-from chtools.chadmin.internal.object_storage.s3_local_metadata import (
+from ch_tools.chadmin.internal.object_storage.s3_local_metadata import (
     S3ObjectLocalMetaData,
 )
 

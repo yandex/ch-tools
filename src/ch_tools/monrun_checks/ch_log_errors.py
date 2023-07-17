@@ -2,8 +2,9 @@ import re
 from datetime import datetime, timedelta
 
 import click
-from chtools.common.result import Result
 from file_read_backwards import FileReadBackwards
+
+from ch_tools.common.result import Result
 
 regex = re.compile(
     r"^([0-9]{4}\.[0-9]{2}\.[0-9]{2}\ [0-9]{2}\:[0-9]{2}\:[0-9]{2}).*?<(Error|Fatal)>"

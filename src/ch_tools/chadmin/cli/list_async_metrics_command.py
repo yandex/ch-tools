@@ -1,5 +1,6 @@
-from chtools.chadmin.internal.utils import execute_query
 from click import command, pass_context
+
+from ch_tools.chadmin.internal.utils import execute_query
 
 
 @command("async-metrics")

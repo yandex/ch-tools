@@ -1,6 +1,7 @@
 import click
-from chtools.common.backup import get_orphaned_chs3_backups
-from chtools.common.result import Result
+
+from ch_tools.common.backup import get_orphaned_chs3_backups
+from ch_tools.common.result import Result
 
 
 @click.command("orphaned-backups")

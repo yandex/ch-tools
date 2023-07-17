@@ -3,7 +3,8 @@ import time
 from datetime import datetime
 
 import click
-from chtools.common.result import Result
+
+from ch_tools.common.result import Result
 
 
 @click.command("core-dumps")

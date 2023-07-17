@@ -2,10 +2,11 @@ from typing import Any, Iterator, List
 
 import boto3
 from botocore.client import Config  # type: ignore[import]
-from chtools.chadmin.internal.object_storage.s3_disk_configuration import (
+
+from ch_tools.chadmin.internal.object_storage.s3_disk_configuration import (
     S3DiskConfiguration,
 )
-from chtools.chadmin.internal.utils import chunked
+from ch_tools.chadmin.internal.utils import chunked
 
 BULK_DELETE_CHUNK_SIZE = 1000
 

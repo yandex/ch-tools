@@ -3,8 +3,10 @@ import os
 from functools import wraps
 
 import click
-from chtools.common.result import Status
-from chtools.monrun_checks_keeper.keeper_commands import (
+from click import group, option, pass_context
+
+from ch_tools.common.result import Status
+from ch_tools.monrun_checks_keeper.keeper_commands import (
     alive_command,
     avg_latency_command,
     check_last_null_pointer_exc,
@@ -15,8 +17,7 @@ from chtools.monrun_checks_keeper.keeper_commands import (
     min_latency_command,
     queue_command,
 )
-from chtools.monrun_checks_keeper.status import status_command
-from click import group, option, pass_context
+from ch_tools.monrun_checks_keeper.status import status_command
 
 LOG_FILE = "/var/log/keeper-monitoring/keeper-monitoring.log"
 

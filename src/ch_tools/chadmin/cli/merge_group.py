@@ -1,14 +1,15 @@
 from collections import OrderedDict
 
-from chtools.chadmin.cli import get_cluster_name
-from chtools.chadmin.internal.process import list_merges
-from chtools.common.cli.formatting import (
+from click import group, option, pass_context
+
+from ch_tools.chadmin.cli import get_cluster_name
+from ch_tools.chadmin.internal.process import list_merges
+from ch_tools.common.cli.formatting import (
     format_bytes,
     format_float,
     format_percents,
     print_response,
 )
-from click import group, option, pass_context
 
 FIELD_FORMATTERS = {
     "total_size_bytes_compressed": format_bytes,

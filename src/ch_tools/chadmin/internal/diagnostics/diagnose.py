@@ -1,18 +1,19 @@
 from datetime import datetime
 
-import chtools.chadmin.internal.diagnostics.formatter as formatter
-import chtools.chadmin.internal.diagnostics.query as query
-from chtools.common.cli.formatting import format_duration
-from chtools.common.cli.progress_bar import progress
-from chtools.common.clickhouse.client import OutputFormat
-from chtools.common.clickhouse.config import (
+from click import Context
+
+import ch_tools.chadmin.internal.diagnostics.formatter as formatter
+import ch_tools.chadmin.internal.diagnostics.query as query
+from ch_tools.common.cli.formatting import format_duration
+from ch_tools.common.cli.progress_bar import progress
+from ch_tools.common.clickhouse.client import OutputFormat
+from ch_tools.common.clickhouse.config import (
     ClickhouseConfig,
     ClickhouseKeeperConfig,
     ClickhouseUsersConfig,
 )
-from chtools.common.dbaas import DbaasConfig
-from chtools.common.utils import version_ge
-from click import Context
+from ch_tools.common.dbaas import DbaasConfig
+from ch_tools.common.utils import version_ge
 
 from ..utils import clickhouse_client
 from .data import DiagnosticsData, add_command, add_query, execute_query

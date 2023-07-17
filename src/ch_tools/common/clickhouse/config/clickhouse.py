@@ -1,6 +1,6 @@
 import os.path
 
-from chtools.common.utils import deep_merge
+from ch_tools.common.utils import deep_merge
 
 from .path import (
     CLICKHOUSE_SERVER_CLUSTER_CONFIG_PATH,

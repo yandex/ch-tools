@@ -5,10 +5,11 @@ import ssl
 import time
 from typing import Dict
 
-from chtools.common.clickhouse.config import ClickhouseKeeperConfig
-from chtools.common.result import Result
 from click import command, pass_context
 from kazoo.client import KazooClient
+
+from ch_tools.common.clickhouse.config import ClickhouseKeeperConfig
+from ch_tools.common.result import Result
 
 ZOOKEEPER_CFG_FILE = "/etc/zookeeper/conf/zoo.cfg"
 DEFAULT_ZOOKEEPER_DATA_DIR = "/var/lib/zookeeper"
