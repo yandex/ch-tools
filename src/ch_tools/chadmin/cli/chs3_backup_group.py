@@ -1,8 +1,7 @@
 import os
-from typing import List
 
 import requests
-from click import ClickException, Context, argument, group, option, pass_context
+from click import ClickException, argument, group, option, pass_context
 
 from ch_tools.chadmin.internal.backup import unfreeze_backup, unfreeze_table
 from ch_tools.chadmin.internal.system import match_ch_version

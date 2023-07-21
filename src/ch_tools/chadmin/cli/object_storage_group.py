@@ -4,9 +4,9 @@ import logging
 import sys
 from datetime import datetime, timedelta, timezone
 from gzip import GzipFile
-from io import IOBase, TextIOWrapper
+from io import TextIOWrapper
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Union
+from typing import Dict, List, Optional
 
 import click
 from click import Context, group, option, pass_context
