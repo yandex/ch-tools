@@ -1,4 +1,10 @@
 [flake8]
-; ignoring the checks:
-;   E402 (module level import not at top of file) to set warning filtering before importing modules
-ignore = E402
+; Disabling the checks that conflict with "black":
+;   E122 "continuation line missing indentation or outdented"
+;   E126 "continuation line over-indented for hanging indent"
+;   E131 "continuation line unaligned for hanging indent"
+;   E203 "whitespace before ':'"
+;   E501 "line too long (129 > 120 characters)"
+;   W503 "line break before binary operator"
+select = E,F,W,C,S
+ignore = E122,E126,E131,E203,E501,W503

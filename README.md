@@ -22,8 +22,7 @@ flit build --no-use-vcs
 flit install
 
 # lint
-black .
-isort .
+make lint
 
 # unit tests
 pytest

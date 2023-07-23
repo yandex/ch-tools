@@ -13,7 +13,7 @@ from typing import Mapping
 
 import humanfriendly
 from click import style
-from cloup import Color, Context
+from cloup import Color
 from deepdiff.helper import notpresent
 from pygments import highlight
 from pygments.formatters.terminal256 import Terminal256Formatter
