@@ -1,6 +1,6 @@
 name: main
 on:
-  push: 
+  push:
     branches: [main]
     tags: "v*"
   pull_request:
@@ -18,7 +18,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3                
+    - uses: actions/checkout@v3
     - uses: ./.github/actions/setup_dependencies
       with:
         python-version: "3.10"
@@ -32,12 +32,12 @@ jobs:
       run: make pylint
     - name: "lint: mypy"
       run: make mypy
-  
+
   tests:
     needs: lint
     runs-on: ubuntu-${{ matrix.target.ubuntu }}
     env:
-      CLICKHOUSE_VERSION: ${{ matrix.clickhouse }}        
+      CLICKHOUSE_VERSION: ${{ matrix.clickhouse }}
     strategy:
       fail-fast: false
       matrix:
@@ -49,11 +49,9 @@ jobs:
           - "22.3.20.29"
           - "22.8.19.10"
           - "23.3.4.17"
-          - "23.4.4.16"
-          - "23.5.3.24"
-          - "latest"    
+          - "latest"
     steps:
-      - uses: actions/checkout@v3                
+      - uses: actions/checkout@v3
       - uses: ./.github/actions/setup_dependencies
         with:
           python-version: ${{ matrix.target.python }}
@@ -71,7 +69,7 @@ jobs:
   push_to_dockerhub:
     runs-on: ubuntu-latest
     env:
-      CLICKHOUSE_VERSIONS: "21.8.15.7, 22.3.20.29, 22.8.19.10, 23.3.4.17, 23.4.4.16, 23.5.3.24, latest"
+      CLICKHOUSE_VERSIONS: "21.8.15.7, 22.3.20.29, 22.8.19.10, 23.3.4.17, latest"
     if: ${{ github.event_name == 'push' }}
     steps:
     - uses: actions/checkout@v3
@@ -125,7 +123,7 @@ jobs:
       run: sudo make prepare-build-deb
 
     - name: build DEB package
-      run: |      
+      run: |
         # Speedup Debian package building
         echo "force-unsafe-io" | sudo tee /etc/dpkg/dpkg.cfg.d/force-unsafe-io
         make build-deb-package
