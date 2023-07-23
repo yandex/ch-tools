@@ -27,7 +27,7 @@ yaml.add_representer(str, str_representer)
 
 
 def load_yaml(file_path):
-    with open(os.path.expanduser(file_path), "r") as f:
+    with open(os.path.expanduser(file_path), "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -37,7 +37,7 @@ def dump_yaml(data, file_path=None):
             data, default_flow_style=False, allow_unicode=True, width=sys.maxsize
         )
 
-    with open(os.path.expanduser(file_path), "w") as f:
+    with open(os.path.expanduser(file_path), "w", encoding="utf-8") as f:
         yaml.dump(
             data, f, default_flow_style=False, allow_unicode=True, width=sys.maxsize
         )

@@ -3,7 +3,7 @@ def _format_str_match(value):
         return None
 
     if value.find(",") < 0:
-        return "LIKE '{0}'".format(value)
+        return f"LIKE '{value}'"
 
     return "IN ({0})".format(
         ",".join("'{0}'".format(item.strip()) for item in value.split(","))

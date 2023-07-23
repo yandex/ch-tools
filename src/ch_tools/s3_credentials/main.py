@@ -7,6 +7,7 @@ import argparse
 import json
 import os.path
 import random
+import sys
 import time
 from datetime import timedelta
 from xml.dom import minidom
@@ -60,6 +61,7 @@ def _parse_args():
 
 
 def _request_token(endpoint):
+    # pylint: disable=missing-timeout
     return requests.get(
         f"http://{endpoint}/computeMetadata/v1/instance/service-accounts/default/token",
         headers={"Metadata-Flavor": "Google"},
@@ -69,10 +71,10 @@ def _request_token(endpoint):
 def _get_token(endpoint):
     response = _request_token(endpoint)
     if response.status_code != 200:
-        exit(1)
+        sys.exit(1)
     data = json.loads(response.content)
     if data["token_type"] != "Bearer":
-        exit(1)
+        sys.exit(1)
     return data["access_token"]
 
 
@@ -105,6 +107,7 @@ def _delta_to_hours(delta: timedelta) -> str:
 
 
 def _check_config(args):
+    # pylint: disable=missing-timeout
     if not args.present:
         if os.path.exists(CLICKHOUSE_S3_CREDENTIALS_CONFIG_PATH):
             result(2, "S3 default config present, but shouldn't")
@@ -149,10 +152,13 @@ def _check_config(args):
 
 def result(code, msg):
     print(f"{code};{msg}")
-    exit(0)
+    sys.exit(0)
 
 
 def main():
+    """
+    Program entry point.
+    """
     args = _parse_args()
     args.func(args)
 

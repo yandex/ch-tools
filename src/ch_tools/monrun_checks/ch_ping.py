@@ -19,63 +19,68 @@ def ping_command(number, crit, warn):
     """
     Ping all available ClickHouse ports.
     """
+    # pylint: disable=too-many-branches
+
     ch_client = ClickhouseClient()
 
     fails = {
-        ClickhousePort.tcp: 0,
-        ClickhousePort.tcps: 0,
-        ClickhousePort.http: 0,
-        ClickhousePort.https: 0,
+        ClickhousePort.TCP: 0,
+        ClickhousePort.TCP_SECURE: 0,
+        ClickhousePort.HTTP: 0,
+        ClickhousePort.HTTPS: 0,
     }
 
     has_fails = False
 
-    for n in range(number):
+    for _ in range(number):
         try:
-            if ch_client.execute("SELECT 1", port=ClickhousePort.tcp)[0][0] != 1:
-                fails[ClickhousePort.tcp] += 1
+            if ch_client.execute("SELECT 1", port=ClickhousePort.TCP)[0][0] != 1:
+                fails[ClickhousePort.TCP] += 1
                 has_fails = True
         except Exception as e:
             logging.debug("Error on tcp port: %s", repr(e))
-            fails[ClickhousePort.tcp] += 1
+            fails[ClickhousePort.TCP] += 1
             has_fails = True
 
         try:
-            if ch_client.check_port(ClickhousePort.tcps):
-                if ch_client.execute("SELECT 1", port=ClickhousePort.tcps)[0][0] != 1:
-                    fails[ClickhousePort.tcps] += 1
+            if ch_client.check_port(ClickhousePort.TCP_SECURE):
+                if (
+                    ch_client.execute("SELECT 1", port=ClickhousePort.TCP_SECURE)[0][0]
+                    != 1
+                ):
+                    fails[ClickhousePort.TCP_SECURE] += 1
                     has_fails = True
         except Exception as e:
             logging.debug("Error on tcps port: %s", repr(e))
-            fails[ClickhousePort.tcps] += 1
+            fails[ClickhousePort.TCP_SECURE] += 1
             has_fails = True
 
         try:
-            if ch_client.check_port(ClickhousePort.http):
+            if ch_client.check_port(ClickhousePort.HTTP):
                 if (
-                    ch_client.ping(ClickhousePort.http) != "Ok."
-                    or ch_client.execute("SELECT 1", port=ClickhousePort.http)[0][0]
+                    ch_client.ping(ClickhousePort.HTTP) != "Ok."
+                    or ch_client.execute("SELECT 1", port=ClickhousePort.HTTP)[0][0]
                     != 1
                 ):
-                    fails[ClickhousePort.http] += 1
+                    fails[ClickhousePort.HTTP] += 1
                     has_fails = True
         except Exception as e:
             logging.debug("Error on http port: %s", repr(e))
-            fails[ClickhousePort.http] += 1
+            fails[ClickhousePort.HTTP] += 1
             has_fails = True
 
         try:
-            if ch_client.check_port(ClickhousePort.https):
+            if ch_client.check_port(ClickhousePort.HTTPS):
                 if (
-                    ch_client.ping(ClickhousePort.https) != "Ok."
-                    or ch_client.execute("SELECT 1", port=ClickhousePort.https)[0][0]
+                    ch_client.ping(ClickhousePort.HTTPS) != "Ok."
+                    or ch_client.execute("SELECT 1", port=ClickhousePort.HTTPS)[0][0]
                     != 1
                 ):
-                    fails[ClickhousePort.https] += 1
+                    fails[ClickhousePort.HTTPS] += 1
                     has_fails = True
         except Exception as e:
             logging.debug("Error on https port: %s", repr(e))
-            fails[ClickhousePort.https] += 1
+            fails[ClickhousePort.HTTPS] += 1
             has_fails = True
 
         if not has_fails:  # when all ports are ok on first time
@@ -98,7 +103,8 @@ def ping_command(number, crit, warn):
 
     if state == 2:
         return Result(2, f"ClickHouse is dead ({error})")
-    elif state == 1:
+
+    if state == 1:
         return Result(1, f"ClickHouse is sick ({error})")
-    else:
-        return Result(0, f"OK ({error})")
+
+    return Result(0, f"OK ({error})")

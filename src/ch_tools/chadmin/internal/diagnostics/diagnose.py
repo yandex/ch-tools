@@ -2,8 +2,7 @@ from datetime import datetime
 
 from click import Context
 
-import ch_tools.chadmin.internal.diagnostics.formatter as formatter
-import ch_tools.chadmin.internal.diagnostics.query as query
+from ch_tools.chadmin.internal.diagnostics import formatter, query
 from ch_tools.common.cli.formatting import format_duration
 from ch_tools.common.cli.progress_bar import progress
 from ch_tools.common.clickhouse.client import OutputFormat

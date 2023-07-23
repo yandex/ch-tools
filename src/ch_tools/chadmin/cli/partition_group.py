@@ -110,7 +110,7 @@ def list_partitions_command(ctx, **kwargs):
 )
 @option("--min-partition", "min_partition_id")
 @option("--max-partition", "max_partition_id")
-@option("-a", "--all", is_flag=True, help="Attach all partitions.")
+@option("-a", "--all", "all_", is_flag=True, help="Attach all partitions.")
 @option(
     "-n",
     "--dry-run",
@@ -119,9 +119,9 @@ def list_partitions_command(ctx, **kwargs):
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 @pass_context
-def attach_partitions_command(ctx, dry_run, all, database, table, **kwargs):
+def attach_partitions_command(ctx, dry_run, all_, database, table, **kwargs):
     """Attach one or several partitions."""
-    if not any((all, database, table)):
+    if not any((all_, database, table)):
         ctx.fail(
             "At least one of --all, --database, --table, --partition options must be specified."
         )
@@ -158,7 +158,7 @@ def attach_partitions_command(ctx, dry_run, all, database, table, **kwargs):
 @option(
     "--disk", "disk_name", help="Filter in partitions to detach by the specified disk."
 )
-@option("-a", "--all", is_flag=True, help="Detach all partitions.")
+@option("-a", "--all", "all_", is_flag=True, help="Detach all partitions.")
 @option(
     "-n",
     "--dry-run",
@@ -168,10 +168,10 @@ def attach_partitions_command(ctx, dry_run, all, database, table, **kwargs):
 )
 @pass_context
 def detach_partitions_command(
-    ctx, dry_run, all, database, table, partition_id, disk_name
+    ctx, dry_run, all_, database, table, partition_id, disk_name
 ):
     """Detach one or several partitions."""
-    if not any((all, database, table, partition_id)):
+    if not any((all_, database, table, partition_id)):
         ctx.fail(
             "At least one of --all, --database, --table, --partition options must be specified."
         )
@@ -227,7 +227,7 @@ def detach_partitions_command(
     is_flag=True,
     help="Reattach only those partitions that have mutating data parts.",
 )
-@option("-a", "--all", is_flag=True, help="Reattach all partitions.")
+@option("-a", "--all", "all_", is_flag=True, help="Reattach all partitions.")
 @option(
     "-l",
     "--limit",
@@ -245,7 +245,7 @@ def detach_partitions_command(
 def reattach_partitions_command(
     ctx,
     dry_run,
-    all,
+    all_,
     database,
     table,
     partition_id,
@@ -257,7 +257,7 @@ def reattach_partitions_command(
     limit,
 ):
     """Perform sequential attach and detach of one or several partitions."""
-    if not any((all, merging, mutating, database, table, partition_id)):
+    if not any((all_, merging, mutating, database, table, partition_id)):
         ctx.fail(
             "At least one of --all, --database, --table, --partition, --min-partition, --max-partition,"
             " --merging, --mutating options must be specified."

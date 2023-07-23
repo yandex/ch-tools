@@ -81,13 +81,13 @@ def list_processes_command(
 @argument("query_id", required=False)
 @option("-u", "--user")
 @option("-U", "--exclude-user")
-@option("-a", "--all", is_flag=True, help="Kill all processes.")
+@option("-a", "--all", "all_", is_flag=True, help="Kill all processes.")
 @pass_context
-def kill_process_command(ctx, query_id, all, user, exclude_user):
+def kill_process_command(ctx, query_id, all_, user, exclude_user):
     """
     Kill one or several processes using "KILL QUERY" query.
     """
-    if not any((query_id, all, user)):
+    if not any((query_id, all_, user)):
         ctx.fail("At least one of QUERY_ID, --all, --user options must be specified.")
 
     kill_process(ctx, query_id=query_id, user=user, exclude_user=exclude_user)

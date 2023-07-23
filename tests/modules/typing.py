@@ -6,4 +6,4 @@ from typing import Union
 
 from behave.runner import Context
 
-ContextT = Union[Context, SimpleNamespace]
+ContextT = Union[Context, SimpleNamespace]  # pylint: disable=invalid-name

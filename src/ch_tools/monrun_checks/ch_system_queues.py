@@ -20,19 +20,20 @@ def system_queues_command(crit, warn, conf):
     """
     Check system queues.
     """
-    config = {"triggers": {"default": {"crit": crit, "warn": warn}}}
     if conf is not None:
-        get_config(conf)
+        config = get_config(conf)
+    else:
+        config = {"triggers": {"default": {"crit": crit, "warn": warn}}}
 
     metrics = get_metrics()
-    return check_metrics(metrics, crit, warn, config)
+    return check_metrics(metrics, config)
 
 
 def get_config(conf):
     """
     Return config.
     """
-    with open(conf, "r") as f:
+    with open(conf, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -47,7 +48,7 @@ def get_metrics():
     return ClickhouseClient().execute(query, compact=False)
 
 
-def check_metrics(metrics, crit, warn, config):
+def check_metrics(metrics, config):
     """
     Check that metrics are within acceptable levels.
     """

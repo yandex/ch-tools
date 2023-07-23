@@ -70,6 +70,8 @@ def check_last_backup_not_failed(backups, crit=3):
     """
     Check that the last backup is not failed. Its status must be 'created' or 'creating'.
     """
+    # pylint: disable=chained-comparison
+
     counter = 0
     for i, backup in enumerate(backups):
         state = backup["state"]
@@ -144,7 +146,7 @@ def check_restored_parts() -> None:
     Check count of failed parts on restore
     """
     if exists(RESTORE_CONTEXT_PATH):
-        with open(RESTORE_CONTEXT_PATH, "r") as f:
+        with open(RESTORE_CONTEXT_PATH, "r", encoding="utf-8") as f:
             context = json.load(f)
             failed = sum(
                 sum(len(table) for table in tables.values())
@@ -171,15 +173,15 @@ def get_backup_age(backup):
     return datetime.now(timezone.utc) - backup_time
 
 
-def parse_str_datetime(input: str) -> Optional[datetime]:
+def parse_str_datetime(value: str) -> Optional[datetime]:
     """
     Parse input string to datetime.
     """
-    if input is None:
+    if value is None:
         return None
 
     try:
-        return datetime.strptime(input, FULL_DATE_FORMAT)
+        return datetime.strptime(value, FULL_DATE_FORMAT)
     except Exception:
         return None
 

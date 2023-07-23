@@ -99,8 +99,8 @@ COMMANDS = [
 
 cli.add_command(status_command(COMMANDS))
 
-for cmd in COMMANDS:
-    cli.add_command(cmd)
+for command in COMMANDS:
+    cli.add_command(command)
 cli.add_command(check_last_null_pointer_exc)
 
 
@@ -108,4 +108,5 @@ def main():
     """
     Program entry point.
     """
+    # pylint: disable=no-value-for-parameter
     cli()

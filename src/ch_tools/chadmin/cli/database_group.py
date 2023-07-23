@@ -46,7 +46,7 @@ def list_databases_command(ctx, **kwargs):
 @pass_context
 @option("-d", "--database")
 @option("--exclude-database")
-@option("-a", "--all", is_flag=True, help="Delete all databases.")
+@option("-a", "--all", "all_", is_flag=True, help="Delete all databases.")
 @option("--cluster")
 @option(
     "-n",
@@ -55,8 +55,8 @@ def list_databases_command(ctx, **kwargs):
     default=False,
     help="Enable dry run mode and do not perform any modifying actions.",
 )
-def delete_databases_command(ctx, dry_run, all, database, exclude_database, cluster):
-    if not any((all, database)):
+def delete_databases_command(ctx, dry_run, all_, database, exclude_database, cluster):
+    if not any((all_, database)):
         ctx.fail("At least one of --all, --database options must be specified.")
 
     for d in get_databases(

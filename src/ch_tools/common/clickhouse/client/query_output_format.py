@@ -5,6 +5,8 @@ https://clickhouse.com/docs/en/interfaces/formats
 
 from ch_tools.common.type import StrEnum
 
+# pylint: disable=invalid-name
+
 
 class OutputFormat(StrEnum):
     Default = "PrettyCompact"

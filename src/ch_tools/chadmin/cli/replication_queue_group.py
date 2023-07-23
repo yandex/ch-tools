@@ -103,6 +103,7 @@ def list_replication_queue_command(ctx, **kwargs):
 )
 @option(
     "--type",
+    "type_",
     help="Filter replication queue tasks to delete by the specified type."
     " Multiple values can be specified through a comma.",
 )
@@ -166,7 +167,7 @@ def get_replication_queue_tasks(
     exception=None,
     executing=None,
     min_age=None,
-    type=None,
+    type_=None,
     exclude_type=None,
     database=None,
     table=None,
@@ -244,7 +245,7 @@ def get_replication_queue_tasks(
         exception=exception,
         executing=executing,
         min_age=min_age.total_seconds() if min_age else None,
-        type=type,
+        type=type_,
         exclude_type=exclude_type,
         verbose=verbose,
         limit=limit,

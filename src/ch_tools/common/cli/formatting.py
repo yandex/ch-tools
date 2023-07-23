@@ -251,27 +251,34 @@ def format_bytes(value):
 
     if value > 0:
         return humanfriendly.format_size(value, binary=True)
-    elif value < 0:
+
+    if value < 0:
         return "-{0}".format(humanfriendly.format_size(-value, binary=True))
-    else:
-        return "0"
+
+    return "0"
 
 
 def format_bytes_per_second(value):
     if value is None:
         return None
 
-    if value != 0:
-        return f"{format_bytes(value)}/s"
-    else:
+    if value == 0:
         return "0"
+
+    return f"{format_bytes(value)}/s"
 
 
 def format_date(value):
+    """
+    Format date value.
+    """
     return value.strftime("%Y-%m-%d")
 
 
 def format_timestamp(ctx, value):
+    """
+    Format timestamp value.
+    """
     value = value.astimezone(get_timezone(ctx))
     result = value.strftime("%Y-%m-%d %H:%M:%S")
     result += f".{int(value.microsecond / 1000):03d}"
@@ -287,6 +294,9 @@ def format_percents(value):
 
 
 def format_float(value):
+    """
+    Format float value.
+    """
     return round(value, 3)
 
 

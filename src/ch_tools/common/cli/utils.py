@@ -18,6 +18,9 @@ def parse_timespan(value):
 
 
 def now(ctx):
+    """
+    Like `datetime.now`, but with timezone information.
+    """
     return datetime.now(get_timezone(ctx))
 
 
@@ -44,6 +47,11 @@ def diff_objects(value1, value2):
 
 
 class Nullable:
+    """
+    Nullable wrapper type. It helps to distinguish the cases when a value is not specified vs.
+    it's specified None value.
+    """
+
     def __init__(self, value=None):
         self.value = value
 
@@ -59,6 +67,9 @@ def flatten_nullable(value):
 
 
 def is_not_null(value):
+    """
+    Return True if the value is not null.
+    """
     if isinstance(value, Nullable):
         value = value.value
 

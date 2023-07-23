@@ -119,7 +119,7 @@ def columns_command(ctx, database, table):
 @option(
     "--exclude-table", help="Filter out tables to delete by the specified table name."
 )
-@option("-a", "--all", is_flag=True, help="Delete all tables.")
+@option("-a", "--all", "all_", is_flag=True, help="Delete all tables.")
 @option("--cluster")
 @option(
     "-n",
@@ -128,11 +128,11 @@ def columns_command(ctx, database, table):
     default=False,
     help="Enable dry run mode and do not perform any modifying actions.",
 )
-def delete_command(ctx, dry_run, all, database, table, exclude_table, cluster):
+def delete_command(ctx, dry_run, all_, database, table, exclude_table, cluster):
     """
     Delete one or several tables.
     """
-    if not any((all, database, table)):
+    if not any((all_, database, table)):
         ctx.fail(
             "At least one of --all, --database, --table options must be specified."
         )
@@ -163,7 +163,7 @@ def delete_command(ctx, dry_run, all, database, table, exclude_table, cluster):
 @option(
     "--exclude-table", help="Filter out tables to recreate by the specified table name."
 )
-@option("-a", "--all", is_flag=True, help="Recreate all tables.")
+@option("-a", "--all", "all_", is_flag=True, help="Recreate all tables.")
 @option(
     "-n",
     "--dry-run",
@@ -171,11 +171,11 @@ def delete_command(ctx, dry_run, all, database, table, exclude_table, cluster):
     default=False,
     help="Enable dry run mode and do not perform any modifying actions.",
 )
-def recreate_command(ctx, dry_run, all, database, table, exclude_table):
+def recreate_command(ctx, dry_run, all_, database, table, exclude_table):
     """
     Recreate one or several tables.
     """
-    if not any((all, database, table)):
+    if not any((all_, database, table)):
         ctx.fail(
             "At least one of --all, --database, --table options must be specified."
         )
@@ -203,7 +203,7 @@ def recreate_command(ctx, dry_run, all, database, table, exclude_table):
     "--exclude-table", help="Filter out tables to reattach by the specified table name."
 )
 @option("--engine", help="Filter tables to detach by the specified engine.")
-@option("-a", "--all", is_flag=True, help="Detach all tables.")
+@option("-a", "--all", "all_", is_flag=True, help="Detach all tables.")
 @option(
     "--cluster",
     "--on-cluster",
@@ -219,12 +219,12 @@ def recreate_command(ctx, dry_run, all, database, table, exclude_table):
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 def detach_command(
-    ctx, dry_run, all, database, table, engine, exclude_table, on_cluster
+    ctx, dry_run, all_, database, table, engine, exclude_table, on_cluster
 ):
     """
     Detach one or several tables.
     """
-    if not any((all, database, table)):
+    if not any((all_, database, table)):
         ctx.fail(
             "At least one of --all, --database, --table options must be specified."
         )
@@ -258,7 +258,7 @@ def detach_command(
     "--exclude-table", help="Filter out tables to reattach by the specified table name."
 )
 @option("--engine", help="Filter tables to reattach by the specified engine.")
-@option("-a", "--all", is_flag=True, help="Reattach all tables.")
+@option("-a", "--all", "all_", is_flag=True, help="Reattach all tables.")
 @option(
     "--cluster",
     "--on-cluster",
@@ -274,12 +274,12 @@ def detach_command(
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 def reattach_command(
-    ctx, dry_run, all, database, table, engine, exclude_table, on_cluster
+    ctx, dry_run, all_, database, table, engine, exclude_table, on_cluster
 ):
     """
     Reattach one or several tables.
     """
-    if not any((all, database, table)):
+    if not any((all_, database, table)):
         ctx.fail(
             "At least one of --all, --database, --table options must be specified."
         )
@@ -323,7 +323,7 @@ def reattach_command(
     "--exclude-table",
     help="Filter out tables to materialize TTL by the specified table name.",
 )
-@option("-a", "--all", is_flag=True, help="Materialize TTL for all tables.")
+@option("-a", "--all", "all_", is_flag=True, help="Materialize TTL for all tables.")
 @option(
     "-n",
     "--dry-run",
@@ -331,11 +331,11 @@ def reattach_command(
     default=False,
     help="Enable dry run mode and do not perform any modifying actions.",
 )
-def materialize_ttl_command(ctx, dry_run, all, database, table, exclude_table):
+def materialize_ttl_command(ctx, dry_run, all_, database, table, exclude_table):
     """
     Materialize TTL for one or several tables.
     """
-    if not any((all, database, table)):
+    if not any((all_, database, table)):
         ctx.fail(
             "At least one of --all, --database, --table options must be specified."
         )

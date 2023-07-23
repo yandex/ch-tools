@@ -58,7 +58,10 @@ def get_ports(ports: Optional[str]) -> List[str]:
     if ports:
         return ports.split(",")
     client = ClickhouseClient()
-    return [client.get_port(ClickhousePort.https), client.get_port(ClickhousePort.tcps)]
+    return [
+        client.get_port(ClickhousePort.HTTPS),
+        client.get_port(ClickhousePort.TCP_SECURE),
+    ]
 
 
 def read_cert_file() -> Tuple[str, int]:

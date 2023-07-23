@@ -59,6 +59,8 @@ def replication_lag_command(xcrit, crit, warn, mwarn, mcrit, verbose):
     Check for replication lag across replicas.
     Should be: lag >= lag_with_errors, lag >= max_execution
     """
+    # pylint: disable=too-many-branches,too-many-locals
+
     lag, lag_with_errors, max_execution, max_merges, chart = get_replication_lag()
 
     msg_verbose = ""
@@ -76,23 +78,23 @@ def replication_lag_command(xcrit, crit, warn, mwarn, mcrit, verbose):
             "Has user fault errors",
             "Merges with 1000+ tries",
         ]
-        for t in chart:
-            if chart[t].get("multi_replicas", False):
+        for key, item in chart.items():
+            if item.get("multi_replicas", False):
                 tabletab = [
-                    t,
-                    chart[t].get("delay", 0),
-                    chart[t].get("tasks", 0),
-                    chart[t].get("max_execution", 0),
-                    chart[t].get("errors", 0),
-                    chart[t].get("user_fault", False),
-                    chart[t].get("retried_merges", 0),
+                    key,
+                    item.get("delay", 0),
+                    item.get("tasks", 0),
+                    item.get("max_execution", 0),
+                    item.get("errors", 0),
+                    item.get("user_fault", False),
+                    item.get("retried_merges", 0),
                 ]
                 verbtab.append(tabletab)
                 if verbose >= 2:
                     exceptions_retrayable = ""
                     exceptions_non_retrayable = ""
                     exceptions_ignored = ""
-                    for exception in chart[t].get("exceptions", []):
+                    for exception in item.get("exceptions", []):
                         if exception:
                             if is_userfault_exception(exception):
                                 exceptions_ignored += "\t" + exception[5:] + "\n"
@@ -101,8 +103,8 @@ def replication_lag_command(xcrit, crit, warn, mwarn, mcrit, verbose):
                             else:
                                 exceptions_non_retrayable += "\t" + exception[5:] + "\n"
                     max_execution_part = (
-                        chart[t].get("max_execution_part", "")
-                        if chart[t].get("max_execution", 0)
+                        item.get("max_execution_part", "")
+                        if item.get("max_execution", 0)
                         else 0
                     )
                     if (
@@ -111,7 +113,7 @@ def replication_lag_command(xcrit, crit, warn, mwarn, mcrit, verbose):
                         or exceptions_ignored
                         or max_execution_part
                     ):
-                        msg_verbose_2 = msg_verbose_2 + t + ":\n"
+                        msg_verbose_2 = msg_verbose_2 + key + ":\n"
                     if exceptions_non_retrayable:
                         msg_verbose_2 = (
                             msg_verbose_2
@@ -141,18 +143,14 @@ def replication_lag_command(xcrit, crit, warn, mwarn, mcrit, verbose):
         if verbose >= 2:
             msg_verbose = msg_verbose + msg_verbose_2
 
-    max_replicated_merges_in_queue_warn = 1
-    max_replicated_merges_in_queue_crit = 1
+    max_merges_warn_threshold = 1
+    max_merges_crit_threshold = 1
     if max_merges > 0:
         max_replicated_merges_in_queue = get_max_replicated_merges_in_queue()
-        max_replicated_merges_in_queue_warn = int(
-            max_replicated_merges_in_queue * mwarn / 100.0
-        )
-        max_replicated_merges_in_queue_crit = int(
-            max_replicated_merges_in_queue * mcrit / 100.0
-        )
+        max_merges_warn_threshold = int(max_replicated_merges_in_queue * mwarn / 100.0)
+        max_merges_crit_threshold = int(max_replicated_merges_in_queue * mcrit / 100.0)
 
-    if lag < warn and max_merges < max_replicated_merges_in_queue_warn:
+    if lag < warn and max_merges < max_merges_warn_threshold:
         return Result(code=0, message="OK", verbose=msg_verbose)
 
     msg = "Max {0} seconds, with errors {1} seconds, max task execution {2} seconds, max merges in queue {3}".format(
@@ -172,7 +170,7 @@ def replication_lag_command(xcrit, crit, warn, mwarn, mcrit, verbose):
     if (
         lag_with_errors < crit
         and max_execution < xcrit
-        and max_merges < max_replicated_merges_in_queue_crit
+        and max_merges < max_merges_crit_threshold
     ):
         return Result(code=1, message=msg, verbose=msg_verbose)
 
@@ -214,18 +212,18 @@ def get_replication_lag():
     lag = 0
     lag_with_errors = 0
     max_execution = 0
-    for t in chart:
-        if chart[t].get("multi_replicas", False):
-            delay = chart[t].get("delay", 0)
+    for key, item in chart.items():
+        if item.get("multi_replicas", False):
+            delay = item.get("delay", 0)
             if delay > lag:
                 lag = delay
             if (
                 delay > lag_with_errors
-                and chart[t].get("errors", 0) > 0
-                and not chart[t].get("userfault", False)
+                and item.get("errors", 0) > 0
+                and not item.get("userfault", False)
             ):
                 lag_with_errors = delay
-            execution = chart[t].get("max_execution", 0)
+            execution = item.get("max_execution", 0)
             if execution > max_execution:
                 max_execution = execution
 

@@ -14,7 +14,7 @@ def _mask_secrets(config):
 
 
 def _load_config(config_path):
-    with open(config_path, "r") as file:
+    with open(config_path, "r", encoding="utf-8") as file:
         return xmltodict.parse(file.read())
 
 

@@ -30,7 +30,7 @@ class S3DiskConfiguration:
         secret_access_key = disk.find("secret_access_key").text
         endpoint: str = disk.find("endpoint").text
 
-        host, bucket_name, prefix, endpoint_url = _parse_endpoint(endpoint)
+        _host, bucket_name, prefix, endpoint_url = _parse_endpoint(endpoint)
 
         return cls(
             name=disk_name,
