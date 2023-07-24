@@ -47,6 +47,7 @@ jobs:
   build:
     needs: lint
     strategy:
+      fail-fast: false
       matrix:
         target:
           - {python: "3.6.15", ubuntu: "20.04"}
