@@ -50,7 +50,7 @@ class S3ObjectLocalMetaData:
         idx += 1
 
         objects: List[S3ObjectLocalInfo] = []
-        for i in range(object_count):
+        for _ in range(object_count):
             matches = re.match(r"^(\d+)\s+(\S+)$", lines[idx])
             if not matches:
                 raise ValueError(

@@ -118,7 +118,7 @@ def check_last_null_pointer_exc():
     )
     latest = None
     for file in files:
-        with open(file) as f:
+        with open(file, encoding="utf-8") as f:
             for line in f:
                 if "java.lang.NullPointerException" in line:
                     latest = prev_line.split("[")[0].strip()
@@ -176,7 +176,7 @@ def read_zookeeper_config() -> Dict[str, str]:
     config: Dict[str, str] = {}
     if not os.path.exists(ZOOKEEPER_CFG_FILE):
         return config
-    with open(ZOOKEEPER_CFG_FILE) as f:
+    with open(ZOOKEEPER_CFG_FILE, encoding="utf-8") as f:
         for line in f:
             conf_line = line.split("=")
             if len(conf_line) > 1:
@@ -195,7 +195,7 @@ def get_keeper_port_pair():
         return 2181, False
 
 
-def keeper_command(command, timeout, verify_ssl_certs):
+def keeper_command(cmd, timeout, verify_ssl_certs):
     """
     Execute (Zoo)Keeper 4-letter command.
     """
@@ -210,11 +210,11 @@ def keeper_command(command, timeout, verify_ssl_certs):
                 context.verify_mode = ssl.CERT_NONE
             with context.wrap_socket(sock, server_hostname="localhost") as ssock:
                 ssock.connect(("localhost", port))
-                ssock.sendall(command.encode())
+                ssock.sendall(cmd.encode())
                 return ssock.makefile().read(-1)
         else:
             sock.connect(("localhost", port))
-            sock.sendall(command.encode())
+            sock.sendall(cmd.encode())
             return sock.makefile().read(-1)
 
 

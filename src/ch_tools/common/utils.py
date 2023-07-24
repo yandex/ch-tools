@@ -45,6 +45,8 @@ def execute(command):
     """
     Execute the specified command, check return code and return its output on success.
     """
+    # pylint: disable=consider-using-with
+
     proc = subprocess.Popen(
         command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )

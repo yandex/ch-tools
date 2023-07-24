@@ -68,14 +68,14 @@ def process_path(path: str, prefix: str, column: str, remove: bool) -> None:
 
 def prefix_exists_in_metadata(prefix: str) -> Optional[str]:
     for w in os.walk(CLICKHOUSE_PATH):
-        dirName = w[0]
+        dir_name = w[0]
         filenames = w[2]
 
         for file in filenames:
             if not file.endswith(".sql"):
                 continue
 
-            with open(dirName + "/" + file) as f:
+            with open(dir_name + "/" + file, encoding="utf-8") as f:
                 if f"'{prefix}" in f.read():
                     return file
 
@@ -102,8 +102,7 @@ def du(path: str) -> str:
 
 def remove_data(path: str) -> None:
     def onerror(*args):
-        errors = [x for x in args]
-
+        errors = list(args)
         print(f"\t\t\tERROR! {errors}")
 
     shutil.rmtree(path=path, onerror=onerror)

@@ -6,15 +6,15 @@ from file_read_backwards import FileReadBackwards
 
 from ch_tools.common.result import Result
 
-regex = re.compile(
+REGEXP = re.compile(
     r"^([0-9]{4}\.[0-9]{2}\.[0-9]{2}\ [0-9]{2}\:[0-9]{2}\:[0-9]{2}).*?<(Error|Fatal)>"
 )
-default_exclude = r"e\.displayText\(\) = No message received"
+DEFAULT_EXCLUDE = r"e\.displayText\(\) = No message received"
 
 
-def validate_exclude(ctx, param, value):
+def validate_exclude(ctx, param, value):  # pylint: disable=unused-argument
     try:
-        return re.compile(value if value is not None else default_exclude)
+        return re.compile(value if value is not None else DEFAULT_EXCLUDE)
     except re.error:
         raise click.BadParameter("Value should be a valid regular expression.")
 
@@ -36,7 +36,7 @@ def validate_exclude(ctx, param, value):
     "-e",
     "--exclude",
     "exclude",
-    default=default_exclude,
+    default=DEFAULT_EXCLUDE,
     callback=validate_exclude,
     help="Excluded error.",
 )
@@ -58,7 +58,7 @@ def log_errors_command(crit, warn, watch_seconds, exclude, logfile):
         for line in f:
             if exclude.search(line):
                 continue
-            match = regex.match(line)
+            match = REGEXP.match(line)
             if match is None:
                 continue
             date = match.group(1)

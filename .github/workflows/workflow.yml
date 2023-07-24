@@ -20,6 +20,8 @@ jobs:
       run: make black
     - name: "lint: flake8"
       run: make flake8
+    - name: "lint: pylint"
+      run: make pylint
     # Temporarily disabled due to bugs in typing in click library
     # https://github.com/pallets/click/pull/2559
     # https://github.com/python/mypy/issues/13250

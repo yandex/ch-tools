@@ -41,9 +41,10 @@ def reload_command(ctx, name, status):
 
 
 def _full_name(dictionary):
-    database = dictionary["database"]
-    name = dictionary["name"]
-    if database:
-        return f"`{database}`.`{name}`"
-    else:
-        return f"`{name}`"
+    db_name = dictionary["database"]
+    dict_name = dictionary["name"]
+
+    if db_name:
+        return f"`{db_name}`.`{dict_name}`"
+
+    return f"`{dict_name}`"

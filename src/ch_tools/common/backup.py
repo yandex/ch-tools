@@ -27,7 +27,9 @@ class BackupConfig:
 
     @staticmethod
     def load():
-        with open("/etc/yandex/ch-backup/ch-backup.conf", "r") as file:
+        with open(
+            "/etc/yandex/ch-backup/ch-backup.conf", "r", encoding="utf-8"
+        ) as file:
             return BackupConfig(yaml.safe_load(file))
 
 
@@ -41,8 +43,8 @@ def get_backups() -> List[dict]:
 def get_chs3_backups() -> List[str]:
     if os.path.exists(CHS3_BACKUPS_DIRECTORY):
         return os.listdir(CHS3_BACKUPS_DIRECTORY)
-    else:
-        return []
+
+    return []
 
 
 def get_orphaned_chs3_backups() -> List[str]:
@@ -55,6 +57,8 @@ def run(command, data=None):
     """
     Run the command and return its output.
     """
+    # pylint: disable=consider-using-with
+
     proc = subprocess.Popen(
         command,
         shell=True,
@@ -65,7 +69,7 @@ def run(command, data=None):
 
     encoded_data = data.encode() if data else None
 
-    stdout, stderr = proc.communicate(input=encoded_data)
+    stdout, _stderr = proc.communicate(input=encoded_data)
 
     if proc.returncode:
         raise RuntimeError(f'Command "{command}" failed with code {proc.returncode}')

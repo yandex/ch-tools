@@ -97,5 +97,5 @@ class DbaasConfig:
 
     @staticmethod
     def load():
-        with open("/etc/dbaas.conf", "r") as file:
+        with open("/etc/dbaas.conf", "r", encoding="utf-8") as file:
             return DbaasConfig(json.load(file))

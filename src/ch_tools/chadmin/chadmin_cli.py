@@ -6,53 +6,43 @@ from typing import Any, List
 
 warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
 
-import cloup  # noqa: E402
+# pylint: disable=wrong-import-position
 
-from ch_tools.chadmin.cli.chs3_backup_group import chs3_backup_group  # noqa: E402
-from ch_tools.chadmin.cli.config_command import config_command  # noqa: E402
-from ch_tools.chadmin.cli.crash_log_group import crash_log_group  # noqa: E402
-from ch_tools.chadmin.cli.data_store_group import data_store_group  # noqa: E402
-from ch_tools.chadmin.cli.database_group import database_group  # noqa: E402
-from ch_tools.chadmin.cli.diagnostics_command import diagnostics_command  # noqa: E402
-from ch_tools.chadmin.cli.dictionary_group import dictionary_group  # noqa: E402
-from ch_tools.chadmin.cli.disk_group import disks_group  # noqa: E402
-from ch_tools.chadmin.cli.list_async_metrics_command import (  # noqa: E402
-    list_async_metrics_command,
-)
-from ch_tools.chadmin.cli.list_events_command import list_events_command  # noqa: E402
-from ch_tools.chadmin.cli.list_functions_command import (  # noqa: E402
-    list_functions_command,
-)
-from ch_tools.chadmin.cli.list_macros_command import list_macros_command  # noqa: E402
-from ch_tools.chadmin.cli.list_metrics_command import list_metrics_command  # noqa: E402
-from ch_tools.chadmin.cli.list_settings_command import (  # noqa: E402
-    list_settings_command,
-)
-from ch_tools.chadmin.cli.merge_group import merge_group  # noqa: E402
-from ch_tools.chadmin.cli.mutation_group import mutation_group  # noqa: E402
-from ch_tools.chadmin.cli.object_storage_group import object_storage_group  # noqa: E402
-from ch_tools.chadmin.cli.part_group import part_group  # noqa: E402
-from ch_tools.chadmin.cli.part_log_group import part_log_group  # noqa: E402
-from ch_tools.chadmin.cli.partition_group import partition_group  # noqa: E402
-from ch_tools.chadmin.cli.process_group import process_group  # noqa: E402
-from ch_tools.chadmin.cli.query_log_group import query_log_group  # noqa: E402
-from ch_tools.chadmin.cli.replicated_fetch_group import (  # noqa: E402
-    replicated_fetch_group,
-)
-from ch_tools.chadmin.cli.replication_queue_group import (  # noqa: E402
-    replication_queue_group,
-)
-from ch_tools.chadmin.cli.restore_replica_command import (  # noqa: E402
-    restore_replica_command,
-)
-from ch_tools.chadmin.cli.stack_trace_command import stack_trace_command  # noqa: E402
-from ch_tools.chadmin.cli.table_group import table_group  # noqa: E402
-from ch_tools.chadmin.cli.table_replica_group import table_replica_group  # noqa: E402
-from ch_tools.chadmin.cli.thread_log_group import thread_log_group  # noqa: E402
-from ch_tools.chadmin.cli.wait_started_command import wait_started_command  # noqa: E402
-from ch_tools.chadmin.cli.zookeeper_group import zookeeper_group  # noqa: E402
-from ch_tools.common.cli.context_settings import CONTEXT_SETTINGS  # noqa: E402
-from ch_tools.common.cli.parameters import TimeSpanParamType  # noqa: E402
+import cloup
+
+from ch_tools.chadmin.cli.chs3_backup_group import chs3_backup_group
+from ch_tools.chadmin.cli.config_command import config_command
+from ch_tools.chadmin.cli.crash_log_group import crash_log_group
+from ch_tools.chadmin.cli.data_store_group import data_store_group
+from ch_tools.chadmin.cli.database_group import database_group
+from ch_tools.chadmin.cli.diagnostics_command import diagnostics_command
+from ch_tools.chadmin.cli.dictionary_group import dictionary_group
+from ch_tools.chadmin.cli.disk_group import disks_group
+from ch_tools.chadmin.cli.list_async_metrics_command import list_async_metrics_command
+from ch_tools.chadmin.cli.list_events_command import list_events_command
+from ch_tools.chadmin.cli.list_functions_command import list_functions_command
+from ch_tools.chadmin.cli.list_macros_command import list_macros_command
+from ch_tools.chadmin.cli.list_metrics_command import list_metrics_command
+from ch_tools.chadmin.cli.list_settings_command import list_settings_command
+from ch_tools.chadmin.cli.merge_group import merge_group
+from ch_tools.chadmin.cli.mutation_group import mutation_group
+from ch_tools.chadmin.cli.object_storage_group import object_storage_group
+from ch_tools.chadmin.cli.part_group import part_group
+from ch_tools.chadmin.cli.part_log_group import part_log_group
+from ch_tools.chadmin.cli.partition_group import partition_group
+from ch_tools.chadmin.cli.process_group import process_group
+from ch_tools.chadmin.cli.query_log_group import query_log_group
+from ch_tools.chadmin.cli.replicated_fetch_group import replicated_fetch_group
+from ch_tools.chadmin.cli.replication_queue_group import replication_queue_group
+from ch_tools.chadmin.cli.restore_replica_command import restore_replica_command
+from ch_tools.chadmin.cli.stack_trace_command import stack_trace_command
+from ch_tools.chadmin.cli.table_group import table_group
+from ch_tools.chadmin.cli.table_replica_group import table_replica_group
+from ch_tools.chadmin.cli.thread_log_group import thread_log_group
+from ch_tools.chadmin.cli.wait_started_command import wait_started_command
+from ch_tools.chadmin.cli.zookeeper_group import zookeeper_group
+from ch_tools.common.cli.context_settings import CONTEXT_SETTINGS
+from ch_tools.common.cli.parameters import TimeSpanParamType
 
 LOG_FILE = "/var/log/chadmin/chadmin.log"
 
@@ -99,9 +89,15 @@ def cli(ctx, format_, settings, timeout, port, debug):
     timeout_seconds = timeout.total_seconds() if timeout else None
     settings = {item[0]: item[1] for item in settings}
 
-    ch_cli_conf = dict(port=port, timeout=timeout_seconds, settings=settings)
-
-    ctx.obj = dict(chcli_conf=ch_cli_conf, format=format_, debug=debug)
+    ctx.obj = {
+        "chcli_conf": {
+            "port": port,
+            "timeout": timeout_seconds,
+            "settings": settings,
+        },
+        "format": format_,
+        "debug": debug,
+    }
 
 
 commands: List[Any] = [
@@ -148,4 +144,7 @@ for section_title, entries in {"Commands": commands, "Groups": groups}.items():
 
 
 def main():
+    """
+    Program entry point.
+    """
     cli.main()

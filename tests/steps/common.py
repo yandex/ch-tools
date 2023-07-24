@@ -17,7 +17,7 @@ def step_configuration(context):
     default: dict = {}
     overridden_options = yaml.load(context.text or "", yaml.SafeLoader) or {}
     for key, value in merge(default, overridden_options).items():
-        context.__setattr__(key, value)
+        setattr(context, key, value)
 
 
 @when("we try to execute command on {node:w}")
@@ -71,6 +71,7 @@ def working_http(context):
     """
     Ensure that http server is ready to accept incoming requests.
     """
+    # pylint: disable=missing-timeout
     container = docker.get_container(context, "http_mock01")
     host, port = docker.get_exposed_port(container, 8080)
     response = requests.get(f"http://{host}:{port}/")

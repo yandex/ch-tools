@@ -151,7 +151,7 @@ def list_parts_command(
 @option(
     "--disk", "disk_name", help="Filter in data parts to attach by the specified disk."
 )
-@option("-a", "--all", is_flag=True, help="Attach all data parts.")
+@option("-a", "--all", "all_", is_flag=True, help="Attach all data parts.")
 @option("-l", "--limit", type=int, help="Limit the max number of data parts to attach.")
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @option(
@@ -164,7 +164,7 @@ def list_parts_command(
 @pass_context
 def attach_parts_command(
     ctx,
-    all,
+    all_,
     database,
     table,
     partition_id,
@@ -175,7 +175,7 @@ def attach_parts_command(
     dry_run,
 ):
     """Attach one or several parts."""
-    if not any((all, database, table, partition_id, part_name, disk_name, limit)):
+    if not any((all_, database, table, partition_id, part_name, disk_name, limit)):
         ctx.fail(
             "At least one of --all, --disk, --database, --table, --partition, --part, --limit"
             " options must be specified."
@@ -223,7 +223,7 @@ def attach_parts_command(
 @option(
     "--disk", "disk_name", help="Filter in data parts to detach by the specified disk."
 )
-@option("-a", "--all", is_flag=True, help="Detach all data parts.")
+@option("-a", "--all", "all_", is_flag=True, help="Detach all data parts.")
 @option("-l", "--limit", type=int, help="Limit the max number of data parts to detach.")
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @option(
@@ -236,7 +236,7 @@ def attach_parts_command(
 @pass_context
 def detach_parts_command(
     ctx,
-    all,
+    all_,
     database,
     table,
     partition_id,
@@ -247,7 +247,7 @@ def detach_parts_command(
     dry_run,
 ):
     """Detach one or several parts."""
-    if not any((all, database, table, partition_id, part_name, disk_name, limit)):
+    if not any((all_, database, table, partition_id, part_name, disk_name, limit)):
         ctx.fail(
             "At least one of --all, --disk, --database, --table, --partition, --part, --limit"
             " options must be specified."
@@ -305,7 +305,7 @@ def detach_parts_command(
 @option(
     "--reason", help="Filter in data parts to delete by the specified detach reason."
 )
-@option("-a", "--all", is_flag=True, help="Attach all data parts.")
+@option("-a", "--all", "all_", is_flag=True, help="Attach all data parts.")
 @option("-l", "--limit", type=int, help="Limit the max number of data parts to delete.")
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @option(
@@ -326,14 +326,14 @@ def delete_parts_command(
     max_size,
     detached,
     reason,
-    all,
+    all_,
     limit,
     keep_going,
     dry_run,
     **kwargs,
 ):
     """Delete one or several data parts."""
-    if not any((all, database, table, partition_id, part_name, reason is not None)):
+    if not any((all_, database, table, partition_id, part_name, reason is not None)):
         ctx.fail(
             "At least one of --all, --database, --table, --partition, --part, --reason options must be specified."
         )

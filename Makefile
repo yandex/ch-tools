@@ -132,7 +132,7 @@ clean:
 
 
 .PHONY: lint
-lint: isort black flake8
+lint: isort black flake8 pylint
 
 .PHONY: isort
 isort:
@@ -146,6 +146,11 @@ black:
 flake8:
 	flake8 src tests
 
+.PHONY: pylint
+pylint:
+	pylint src
+	pylint --disable=missing-docstring tests
+
 .PHONY: format
 format:
 	isort .
@@ -155,10 +160,11 @@ format:
 .PHONY: help
 help:
 	@echo "Base targets:"
-	@echo "  lint                       Run linters. Alias for \"isort black flake8\"."
+	@echo "  lint                       Run linters. Alias for \"isort black flake8 pylint\"."
 	@echo "  isort                      Perform isort checks."
 	@echo "  black                      Perform black checks."
 	@echo "  flake8                     Perform flake8 checks."
+	@echo "  pylint                     Perform pylint checks."
 	@echo "  format                     Re-format source code to conform style settings enforced by"
 	@echo "                             isort and black tools."
 	@echo "  prepare-changelog          Add an autobuild version entity to changelog"

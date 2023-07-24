@@ -73,6 +73,7 @@ def _check_fqdn(target: _TargetRecord, ipv6: bool) -> list:
 
 @lru_cache(maxsize=None)
 def _get_host_ip(addr_type: str) -> str:
+    # pylint: disable=missing-timeout
     if _is_gcp():
         resp = requests.get(
             IP_METADATA_PATHS_GCP[addr_type], headers={"Metadata-Flavor": "Google"}
@@ -85,7 +86,7 @@ def _get_host_ip(addr_type: str) -> str:
 
 @lru_cache(maxsize=None)
 def _is_gcp():
-    with open("/etc/dbaas.conf") as f:
+    with open("/etc/dbaas.conf", encoding="utf-8") as f:
         vtype = json.load(f).get("flavor", {}).get("vtype", "")
         return vtype == "gcp"
 
@@ -103,7 +104,7 @@ def _get_host_dns(cluster: bool, private: bool) -> List[_TargetRecord]:
         ]
 
     if cluster:
-        with open("/etc/dbaas.conf") as f:
+        with open("/etc/dbaas.conf", encoding="utf-8") as f:
             shard = json.load(f)["shard_name"]
 
         result += [

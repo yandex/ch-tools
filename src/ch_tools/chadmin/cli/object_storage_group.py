@@ -132,6 +132,9 @@ def list_objects(
     guard_interval: timedelta,
     limit: Optional[int],
 ) -> None:
+    """
+    List S3 objects.
+    """
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
     pivot_time = datetime.now(timezone.utc) - guard_interval
     counter = 0
@@ -174,6 +177,9 @@ def list_objects(
 )
 @pass_context
 def clean_object_storage(ctx, file, compressed):
+    """
+    Clean up needless S3 objects.
+    """
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
 
     if compressed:

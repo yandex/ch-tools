@@ -108,6 +108,7 @@ test = [
     "flake8",
     "flake8-string-format",
     "flake8-print",
+    "pylint",
     "mypy",
     "types-pyyaml",
     "types-requests",
@@ -115,13 +116,13 @@ test = [
     "types-tabulate",
     "types-pyOpenSSL",
     "types-setuptools",
-#pylint = "^2.13"
 #bandit = "*"
     "behave",
     "docker",
     "docker-compose",
     "pyhamcrest",
-    "pytest"
+    "pytest",
+    "flask"
 ]
 
 [project.scripts]

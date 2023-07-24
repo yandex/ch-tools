@@ -57,7 +57,7 @@ def list_part_log_command(
         result = OrderedDict()
         result["event_time"] = record["event_time"]
         result["event_type"] = record["event_type"]
-        result["completed"] = not (record["exception"])
+        result["completed"] = not record["exception"]
         result["duration_ms"] = record["duration_ms"]
         result["database"] = record["database"]
         result["table"] = record["table"]

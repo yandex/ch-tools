@@ -20,6 +20,8 @@ class ListParamType(click.ParamType):
     Command-line parameter type for lists. It supports reading from file and stdin.
     """
 
+    # pylint: disable=redefined-builtin
+
     name = "list"
 
     def __init__(self, type=None, separator=r"[,\s]+"):
@@ -95,7 +97,7 @@ def _preprocess_value(value):
         return sys.stdin.read()
 
     if value.startswith("@"):
-        with open(os.path.expanduser(value[1:])) as f:
+        with open(os.path.expanduser(value[1:]), encoding="utf-8") as f:
             return f.read()
 
     return value

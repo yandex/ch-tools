@@ -230,6 +230,8 @@ def add_command(diagnostics, name, command, section=None):
 
 
 def _execute_command(command, input_=None):
+    # pylint: disable=consider-using-with
+
     proc = subprocess.Popen(
         command,
         shell=True,

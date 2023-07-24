@@ -39,21 +39,21 @@ def check_dir(path, cleanup):
 
 
 def check_file(filename):
-    file = open(filename, mode="r", encoding="latin-1")
-    lines = file.readlines(1024)
-    if len(lines) != 5:
-        file.close()
-        return False
-    result = True
-    if not re.match("[123]\n", lines[0]):  # version 1-3
-        result = False
-    elif not re.match("1\\s+\\d+\n", lines[1]):  # object count=1 & size
-        result = False
-    elif not re.match("\\d+\\s+\\S+\n", lines[2]):  # size & object name
-        result = False
-    elif not re.match("\\d+\n", lines[3]):  # refcount
-        result = False
-    elif not re.match("[01]\n?", lines[4]):  # is readonly
-        result = False
-    file.close()
+    with open(filename, mode="r", encoding="latin-1") as file:
+        lines = file.readlines(1024)
+        if len(lines) != 5:
+            file.close()
+            return False
+        result = True
+        if not re.match("[123]\n", lines[0]):  # version 1-3
+            result = False
+        elif not re.match("1\\s+\\d+\n", lines[1]):  # object count=1 & size
+            result = False
+        elif not re.match("\\d+\\s+\\S+\n", lines[2]):  # size & object name
+            result = False
+        elif not re.match("\\d+\n", lines[3]):  # refcount
+            result = False
+        elif not re.match("[01]\n?", lines[4]):  # is readonly
+            result = False
+
     return result
