@@ -116,7 +116,6 @@ test = [
     "types-tabulate",
     "types-pyOpenSSL",
     "types-setuptools",
-#bandit = "*"
     "behave",
     "docker",
     "docker-compose",

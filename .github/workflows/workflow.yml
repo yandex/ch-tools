@@ -22,11 +22,8 @@ jobs:
       run: make flake8
     - name: "lint: pylint"
       run: make pylint
-    # Temporarily disabled due to bugs in typing in click library
-    # https://github.com/pallets/click/pull/2559
-    # https://github.com/python/mypy/issues/13250
-    # https://github.com/python/mypy/issues/13449
-    #- {name: "lint: mypy", run: make mypy }
+    - name: "lint: mypy"
+      run: make mypy
 
   push_to_dockerhub:
     runs-on: ubuntu-latest
