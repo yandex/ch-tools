@@ -10,6 +10,7 @@ warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer suppor
 
 import cloup
 
+from ch_tools import __version__
 from ch_tools.chadmin.cli.chs3_backup_group import chs3_backup_group
 from ch_tools.chadmin.cli.config_command import config_command
 from ch_tools.chadmin.cli.crash_log_group import crash_log_group
@@ -42,6 +43,7 @@ from ch_tools.chadmin.cli.thread_log_group import thread_log_group
 from ch_tools.chadmin.cli.wait_started_command import wait_started_command
 from ch_tools.chadmin.cli.zookeeper_group import zookeeper_group
 from ch_tools.common.cli.context_settings import CONTEXT_SETTINGS
+from ch_tools.common.cli.locale_resolver import LocaleResolver
 from ch_tools.common.cli.parameters import TimeSpanParamType
 
 LOG_FILE = "/var/log/chadmin/chadmin.log"
@@ -71,6 +73,7 @@ LOG_FILE = "/var/log/chadmin/chadmin.log"
 @cloup.option("--timeout", type=TimeSpanParamType(), help="Timeout for SQL queries.")
 @cloup.option("--port", type=int, help="Port to connect.")
 @cloup.option("-d", "--debug", is_flag=True, help="Enable debug output.")
+@cloup.version_option(__version__)
 @cloup.pass_context
 def cli(ctx, format_, settings, timeout, port, debug):
     """ClickHouse administration tool."""
@@ -147,4 +150,9 @@ def main():
     """
     Program entry point.
     """
+    LocaleResolver.resolve()
     cli.main()
+
+
+if __name__ == "__main__":
+    main()
