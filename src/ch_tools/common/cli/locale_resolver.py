@@ -21,11 +21,11 @@ class LocaleResolver:
 
     @staticmethod
     def resolve():
-        lang, _ = locale.getdefaultlocale()
+        lang, _ = locale.getlocale()
         locales, has_c, has_en_us = LocaleResolver._get_utf8_locales()
 
         langs = map(lambda loc: str.lower(loc[0]), locales)
-        if str(lang).lower() not in langs:
+        if lang is None or lang.lower() not in langs:
             if has_c:
                 lang = "C"
             elif has_en_us:
