@@ -136,11 +136,11 @@ lint: isort black flake8 pylint mypy
 
 .PHONY: isort
 isort:
-	isort --check --diff .
+	isort --check --diff src tests
 
 .PHONY: black
 black:
-	black --check --diff .
+	black --check --diff src tests
 
 .PHONY: flake8
 flake8:
@@ -157,8 +157,8 @@ mypy:
 
 .PHONY: format
 format:
-	isort .
-	black .
+	isort src tests
+	black src tests
 
 
 .PHONY: help

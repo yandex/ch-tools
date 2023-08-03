@@ -5,13 +5,18 @@ import pwd
 import sys
 import warnings
 from functools import wraps
+from typing import Optional
 
 warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
 
 # pylint: disable=wrong-import-position
 
 import click
+import cloup
 
+from ch_tools import __version__
+from ch_tools.common.cli.context_settings import CONTEXT_SETTINGS
+from ch_tools.common.cli.locale_resolver import LocaleResolver
 from ch_tools.common.result import Status
 from ch_tools.monrun_checks.ch_backup import backup_command
 from ch_tools.monrun_checks.ch_core_dumps import core_dumps_command
@@ -33,13 +38,30 @@ from ch_tools.monrun_checks.status import status_command
 LOG_FILE = "/var/log/clickhouse-monitoring/clickhouse-monitoring.log"
 DEFAULT_USER = "monitor"
 
+# pylint: disable=too-many-ancestors
 
-class MonrunChecks(click.Group):
-    def add_command(self, cmd, name=None):
+
+class MonrunChecks(cloup.Group):
+    def add_command(
+        self,
+        cmd: click.Command,
+        name: Optional[str] = None,
+        section: Optional[cloup.Section] = None,
+        fallback_to_default_section: bool = True,
+    ) -> None:
+        if cmd.callback is None:
+            super().add_command(
+                cmd,
+                name=name,
+                section=section,
+                fallback_to_default_section=fallback_to_default_section,
+            )
+            return
+
         cmd_callback = cmd.callback
 
         @wraps(cmd_callback)
-        @click.pass_context
+        @cloup.pass_context
         def callback_wrapper(ctx, *args, **kwargs):
             os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
             logging.basicConfig(
@@ -75,23 +97,26 @@ class MonrunChecks(click.Group):
             status.report()
 
         cmd.callback = callback_wrapper
-        super().add_command(cmd, name=name)
+        super().add_command(
+            cmd,
+            name=name,
+            section=section,
+            fallback_to_default_section=fallback_to_default_section,
+        )
 
 
-@click.group(
+@cloup.group(
     cls=MonrunChecks,
-    context_settings={
-        "help_option_names": ["-h", "--help"],
-        "terminal_width": 120,
-    },
+    context_settings=CONTEXT_SETTINGS,
 )
-@click.option(
+@cloup.option(
     "--no-user-check",
     "no_user_check",
     is_flag=True,
     default=False,
     help="Do not check current user.",
 )
+@cloup.version_option(__version__)
 def cli(no_user_check):
     if not no_user_check:
         check_current_user()
@@ -124,8 +149,8 @@ def main():
     """
     Program entry point.
     """
-    # pylint: disable=no-value-for-parameter
-    cli()
+    LocaleResolver.resolve()
+    cli.main()
 
 
 def check_current_user():
@@ -148,3 +173,7 @@ def check_current_user():
             except Exception as exc:
                 print(repr(exc), file=sys.stderr)
                 sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

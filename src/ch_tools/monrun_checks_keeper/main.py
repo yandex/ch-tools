@@ -1,10 +1,14 @@
 import logging
 import os
 from functools import wraps
+from typing import Optional
 
 import click
-from click import group, option, pass_context
+import cloup
 
+from ch_tools import __version__
+from ch_tools.common.cli.context_settings import CONTEXT_SETTINGS
+from ch_tools.common.cli.locale_resolver import LocaleResolver
 from ch_tools.common.result import Status
 from ch_tools.monrun_checks_keeper.keeper_commands import (
     alive_command,
@@ -21,13 +25,30 @@ from ch_tools.monrun_checks_keeper.status import status_command
 
 LOG_FILE = "/var/log/keeper-monitoring/keeper-monitoring.log"
 
+# pylint: disable=too-many-ancestors
 
-class KeeperChecks(click.Group):
-    def add_command(self, cmd, name=None):
+
+class KeeperChecks(cloup.Group):
+    def add_command(
+        self,
+        cmd: click.Command,
+        name: Optional[str] = None,
+        section: Optional[cloup.Section] = None,
+        fallback_to_default_section: bool = True,
+    ) -> None:
+        if cmd.callback is None:
+            super().add_command(
+                cmd,
+                name=name,
+                section=section,
+                fallback_to_default_section=fallback_to_default_section,
+            )
+            return
+
         cmd_callback = cmd.callback
 
         @wraps(cmd_callback)
-        @click.pass_context
+        @cloup.pass_context
         def wrapper(ctx, *a, **kw):
             os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
             logging.basicConfig(
@@ -58,12 +79,22 @@ class KeeperChecks(click.Group):
             status.report()
 
         cmd.callback = wrapper
-        super().add_command(cmd, name=name)
+        super().add_command(
+            cmd,
+            name=name,
+            section=section,
+            fallback_to_default_section=fallback_to_default_section,
+        )
 
 
-@group(cls=KeeperChecks, context_settings={"help_option_names": ["-h", "--help"]})
-@option("-r", "--retries", "retries", type=int, default=3, help="Number of retries")
-@option(
+@cloup.group(
+    cls=KeeperChecks,
+    context_settings=CONTEXT_SETTINGS,
+)
+@cloup.option(
+    "-r", "--retries", "retries", type=int, default=3, help="Number of retries"
+)
+@cloup.option(
     "-t",
     "--timeout",
     "timeout",
@@ -71,7 +102,7 @@ class KeeperChecks(click.Group):
     default=0.5,
     help="Connection timeout (in seconds)",
 )
-@option(
+@cloup.option(
     "-n",
     "--no-verify-ssl-certs",
     "no_verify_ssl_certs",
@@ -79,7 +110,8 @@ class KeeperChecks(click.Group):
     default=False,
     help="Allow unverified SSL certificates, e.g. self-signed ones",
 )
-@pass_context
+@cloup.version_option(__version__)
+@cloup.pass_context
 def cli(ctx, retries, timeout, no_verify_ssl_certs):
     ctx.obj = dict(
         retries=retries, timeout=timeout, no_verify_ssl_certs=no_verify_ssl_certs
@@ -108,5 +140,9 @@ def main():
     """
     Program entry point.
     """
-    # pylint: disable=no-value-for-parameter
-    cli()
+    LocaleResolver.resolve()
+    cli.main()
+
+
+if __name__ == "__main__":
+    main()
