@@ -1,41 +1,45 @@
 [build-system]
-requires = ["flit_core >=3.2,<4"]
-build-backend = "flit_core.buildapi"
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
 
-[project]
+[tool.poetry]
 name = "ch-tools"
-license = { file = "LICENSE" }
-dynamic = ["version", "description"]
+version = "2.526.48925339"
+license = "MIT"
+description = "ch-tools is a set of tools for administration and diagnostics of ClickHouse DBMS."
 
 authors = [
-    {name = "Alexander Burmak", email = "alex-burmak@yandex-team.ru"},
-    {name = "Dmitry Starov", email="dstaroff@yandex-team.ru"},
-    {name = "Anton Ivashkin", email="iantonspb@yandex-team.ru"},
-    {name = "Grigory Pervakov", email="pervakovg@yandex-team.ru"},
-    {name = "Petr Nuzhnov", email="petrnuzhnov@yandex-team.ru"},
-    {name = "Egor Medvedev", email="egor-medvedev@yandex-team.ru"},
-    {name = "Aleksei Filatov", email="alexfvk@yandex-team.ru"},
-    {name = "Evgeny Dyukov", email="secwall@yandex-team.ru"},
-    {name = "Evgeny Strizhnev", email="estrizhnev@yandex-team.ru"},
-    {name = "Vadim Volodin", email="vadim-volodin@yandex-team.ru"},
-    {name = "Anton Chaporgin", email="chapson@yandex-team.ru"},
-    {name = "Evgenii Kopanev", email="ekopanev@yandex-team.ru"},
-    {name = "Mikhail Kot", email="myrrc@yandex-team.ru"},
+    "Alexander Burmak <alex-burmak@yandex-team.ru>",
+    "Dmitry Starov <dstaroff@yandex-team.ru>",
+    # {name = "Anton Ivashkin", email="iantonspb@yandex-team.ru"},
+    # {name = "Grigory Pervakov", email="pervakovg@yandex-team.ru"},
+    # {name = "Petr Nuzhnov", email="petrnuzhnov@yandex-team.ru"},
+    # {name = "Egor Medvedev", email="egor-medvedev@yandex-team.ru"},
+    # {name = "Aleksei Filatov", email="alexfvk@yandex-team.ru"},
+    # {name = "Evgeny Dyukov", email="secwall@yandex-team.ru"},
+    # {name = "Evgeny Strizhnev", email="estrizhnev@yandex-team.ru"},
+    # {name = "Vadim Volodin", email="vadim-volodin@yandex-team.ru"},
+    # {name = "Anton Chaporgin", email="chapson@yandex-team.ru"},
+    # {name = "Evgenii Kopanev", email="ekopanev@yandex-team.ru"},
+    # {name = "Mikhail Kot", email="myrrc@yandex-team.ru"},
 ]
 
 maintainers = [
-    {name = "Alexander Burmak", email = "alex-burmak@yandex-team.ru"},
-    {name = "Dmitry Starov", email="dstaroff@yandex-team.ru"},
-    {name = "Anton Ivashkin", email="iantonspb@yandex-team.ru"},
-    {name = "Grigory Pervakov", email="pervakovg@yandex-team.ru"},
-    {name = "Petr Nuzhnov", email="petrnuzhnov@yandex-team.ru"},
-    {name = "Egor Medvedev", email="egor-medvedev@yandex-team.ru"},
-    {name = "Aleksei Filatov", email="alexfvk@yandex-team.ru"},
-    {name = "Evgenii Kopanev", email="ekopanev@yandex-team.ru"},
-    {name = "Mikhail Kot", email="myrrc@yandex-team.ru"},
+    "Alexander Burmak <alex-burmak@yandex-team.ru>",
+    # {name = "Dmitry Starov", email="dstaroff@yandex-team.ru"},
+    # {name = "Anton Ivashkin", email="iantonspb@yandex-team.ru"},
+    # {name = "Grigory Pervakov", email="pervakovg@yandex-team.ru"},
+    # {name = "Petr Nuzhnov", email="petrnuzhnov@yandex-team.ru"},
+    # {name = "Egor Medvedev", email="egor-medvedev@yandex-team.ru"},
+    # {name = "Aleksei Filatov", email="alexfvk@yandex-team.ru"},
+    # {name = "Evgenii Kopanev", email="ekopanev@yandex-team.ru"},
+    # {name = "Mikhail Kot", email="myrrc@yandex-team.ru"},
 ]
 
 readme = "README.md"
+
+repository = "https://github.com/yandex/ch-tools"
+homepage = "https://github.com/yandex/ch-tools"
 
 keywords=[
     "clickhouse",
@@ -67,61 +71,59 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-requires-python = ">=3.6.2"
+# packages
 
-dependencies = [
-    "boto3",
-    "click",
-    "cloup",
-    "deepdiff",
-    "dnspython",
-    "file_read_backwards",
-    "humanfriendly",
-    "jinja2",
-    "kazoo",
-    "lxml",
-    "psutil",
-    "pygments",
-    "pyopenssl",
-    "python-dateutil",
-    "pyyaml",
-    "requests",
-    "tabulate",
-    "tenacity",
-    "termcolor",
-    "tqdm",
-    "xmltodict",
-    "typing-extensions"
-]
-
-[tool.flit.sdist]
+# [tool.flit.sdist]
+# include = ["resources/"]
 include = ["resources/"]
 
-[project.urls]
-Source = "https://github.com/yandex/ch-tools"
+# requires-python = ">=3.6.2"
 
-[project.optional-dependencies]
-test = [
-    "flit",
-    "black",
-    "isort",
-    "mypy",
-    "types-pyyaml",
-    "types-requests",
-    "types-python-dateutil",
-    "types-tabulate",
-    "types-pyOpenSSL",
-    "types-setuptools",
+[tool.poetry.dependencies]
+python = ">=3.6.2"
+boto3 = "*"
+click = "*"
+cloup = "*"
+deepdiff = "*"
+dnspython = "*"
+file_read_backwards = "*"
+humanfriendly = "*"
+jinja2 = "*"
+kazoo = "*"
+lxml = "*"
+psutil = "*"
+pygments = "*"
+pyopenssl = "*"
+python-dateutil = "*"
+pyyaml = "*"
+requests = "*"
+tabulate = "*"
+tenacity = "*"
+termcolor = "*"
+tqdm = "*"
+xmltodict = "*"
+typing-extensions = "*"
+
+[tool.poetry.dev-dependencies]
+flit = "*"
+black = "*"
+isort = {version = "*", extras = ["pyproject"]}
+mypy = "*"
+types-pyyaml = "*"
+types-requests = "*"
+types-python-dateutil = "*"
+types-tabulate = "*"
+types-pyOpenSSL = "*"
+types-setuptools = "*"
 #pylint = "^2.13"
 #bandit = "*"
-    "behave",
-    "docker",
-    "docker-compose",
-    "pyhamcrest",
-    "pytest"
-]
+behave = "*"
+docker = "*"
+docker-compose = "*"
+pyhamcrest = "*"
+pytest = "*"
 
-[project.scripts]
+[tool.poetry.scripts]
 chadmin = "ch_tools.chadmin.chadmin_cli:main"
 ch-monitoring = "ch_tools.monrun_checks.main:main"
 keeper-monitoring = "ch_tools.monrun_checks_keeper.main:main"

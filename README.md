@@ -21,6 +21,9 @@ pip install .[test]
 flit build --no-use-vcs
 flit install
 
+# For building deb packages
+sudo apt install python3-venv debhelper devscripts 
+
 # lint
 black .
 isort .

@@ -1,53 +1,37 @@
 name: main
 on:
-  push: { branches: [main] }
+  push: { branches: [main, try_poetry] }
   pull_request: { branches: [main] }
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
+env:
+  # The latest version with support of Python 3.6
+  POETRY_VERSION: 1.1.15
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v3                
     - uses: actions/setup-python@v4
-      with: { python-version: "3.11", cache: pip }
-    - run: pip install .[test]
-    - {name: "lint: black", run: black --check --diff . }
-    - {name: "lint: isort", run: isort --check --diff . }
-    # Temporarily disabled due to bugs in typing in click library
-    # https://github.com/pallets/click/pull/2559
-    # https://github.com/python/mypy/issues/13250
-    # https://github.com/python/mypy/issues/13449
-    #- {name: "lint: mypy", run: make mypy }
+      with: { python-version: "3.11", cache: poetry }
 
-  push_to_dockerhub:
-    runs-on: ubuntu-latest
-    env:
-      CLICKHOUSE_VERSIONS: "21.8.15.7, 22.3.20.29, 22.8.19.10, 23.3.4.17, 23.4.4.16, 23.5.3.24, latest"
-    if: ${{ github.event_name == 'push' }}
-    steps:
-    - uses: actions/checkout@v3
-    - name: login to dockerhub
-      uses: docker/login-action@v2
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-    - name: build and push base images
-      uses: docker/bake-action@v3
-      with:
-        files: tests/bake.hcl
-        push: true
+    - run: |
+        pip install poetry==${{ env.POETRY_VERSION }}      
+        poetry config virtualenvs.in-project true
+        poetry install --no-root
 
-  build:
+    - run: make lint
+  
+  tests:
     needs: lint
+    runs-on: ubuntu-latest    
     strategy:
       matrix:
         target:
           - {python: "3.6.15", ubuntu: "20.04"}
           - {python: "3.10.12", ubuntu: "latest"}
-        # a copy-paste of the above as github CI can't use env context in matrices
         clickhouse:
           - "21.8.15.7"
           - "22.3.20.29"
@@ -56,30 +40,73 @@ jobs:
           - "23.4.4.16"
           - "23.5.3.24"
           - "latest"
+    env:
+      CLICKHOUSE_VERSION=${{ matrix.clickhouse }}    
+    steps:
+      - run: |
+          pip install poetry==${{ env.POETRY_VERSION }}      
+          poetry config virtualenvs.in-project true
+          poetry install --no-root
+
+      - run: make unit_tests
+
+      - run: make integration_tests            
+
+      - name: publish test report
+        uses: mikepenz/action-junit-report@v3
+        if: always()
+        with:
+          report_paths: 'tests/reports/*.xml'
+
+
+  # push_to_dockerhub:
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     CLICKHOUSE_VERSIONS: "21.8.15.7, 22.3.20.29, 22.8.19.10, 23.3.4.17, 23.4.4.16, 23.5.3.24, latest"
+  #   if: ${{ github.event_name == 'push' }}
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #   - name: login to dockerhub
+  #     uses: docker/login-action@v2
+  #     with:
+  #       username: ${{ secrets.DOCKERHUB_USERNAME }}
+  #       password: ${{ secrets.DOCKERHUB_TOKEN }}
+  #   - name: build and push base images
+  #     uses: docker/bake-action@v3
+  #     with:
+  #       files: tests/bake.hcl
+  #       push: true
+
+  build:
+    needs: tests
+    strategy:
+      matrix:
+        target:
+          - {python: "3.6.15", ubuntu: "20.04"}
+          - {python: "3.10.12", ubuntu: "latest"}
+        # a copy-paste of the above as github CI can't use env context in matrices
 
     runs-on: ubuntu-${{ matrix.target.ubuntu }}
     steps:
     - uses: actions/checkout@v3
+
     - name: set up python ${{ matrix.target.python }}
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.target.python }}
-        cache: pip
+        cache: poetry
 
     - name: install dependencies
-      # language=sh
       run: |
-        pip install '.[test]'
+        pip install poetry==${{ env.POETRY_VERSION }}      
+        poetry config virtualenvs.in-project true
+        poetry install --no-root
 
     - name: build project
-      # language=sh
-      run: |
-        make prepare-version
-        flit build --no-use-vcs
+      run: make build
 
     - name: upload wheel
       uses: actions/upload-artifact@v3
-      if: ${{ matrix.clickhouse == 'latest' }}
       with:
         name: ch_tools_py${{ matrix.target.python }}.whl
         path: dist/*.whl
@@ -87,41 +114,15 @@ jobs:
 
     - name: upload sdist
       uses: actions/upload-artifact@v3
-      if: ${{ matrix.clickhouse == 'latest' }}
       with:
         name: ch_tools_py${{ matrix.target.python }}.tar.gz
         path: dist/*.tar.gz
         if-no-files-found: error
 
-    - {name: run unit tests, run: pytest}
-
-    - name: prepare integration tests
-      # language=sh
-      run: |
-        cd tests
-        CLICKHOUSE_VERSION=${{ matrix.clickhouse }} python3 -m env_control create
-        cd ..
-
-    - name: run integration tests
-      # language=sh
-      run: |
-        cd tests
-        behave --show-timings --junit -D skip_setup
-        cd ..
-
-    - name: publish test report
-      uses: mikepenz/action-junit-report@v3
-      if: always()
-      with:
-        report_paths: 'tests/reports/*.xml'
-
     - name: prepare build deb
-      if: ${{ matrix.clickhouse == 'latest' }}
       run: sudo apt install python3-venv debhelper devscripts
 
     - name: build deb
-      if: ${{ matrix.clickhouse == 'latest' }}
-      # language=sh
       run: |
         # deb building implicitly cleans dist/
         cp dist/*.tar.gz ch_tools.tar.gz
@@ -130,8 +131,6 @@ jobs:
         sudo make build-deb-package
 
     - name: test deb
-      if: ${{ matrix.clickhouse == 'latest' }}
-      # language=sh
       run: |
         sudo make uninstall
         sudo apt-get install -q -y ./out/ch-tools*.deb
@@ -142,26 +141,25 @@ jobs:
 
     - name: upload deb package artifact
       uses: actions/upload-artifact@v3
-      if: ${{ matrix.clickhouse == 'latest' }}
       with:
         name: ch-tools_py-${{ matrix.target.python }}_ubuntu-${{ matrix.target.ubuntu }}.deb
         path: out/ch-tools*.deb
         if-no-files-found: error
 
-    - name: create a release
-      uses: softprops/action-gh-release@v1
-      if: ${{ matrix.clickhouse == 'latest' && matrix.target.ubuntu == 'latest' && startsWith(github.ref, 'refs/tags/') }}
-      with:
-        generate_release_notes: true
-        fail_on_unmatched_files: true
-        files: |
-          *.whl
-          *.tar.gz
-          out/ch-tools*.deb
+    # - name: create a release
+    #   uses: softprops/action-gh-release@v1
+    #   if: ${{ matrix.target.ubuntu == 'latest' && startsWith(github.ref, 'refs/tags/') }}
+    #   with:
+    #     generate_release_notes: true
+    #     fail_on_unmatched_files: true
+    #     files: |
+    #       *.whl
+    #       *.tar.gz
+    #       out/ch-tools*.deb
 
-    - name: publish to pypi
-      if: ${{ matrix.clickhouse == 'latest' && matrix.target.ubuntu == 'latest' && startsWith(github.ref, 'refs/tags/') }}
-      run: flit publish --no-use-vcs
-      env:
-        FLIT_USERNAME: "__token__"
-        FLIT_PASSWORD: "${{ secrets.PYPI_TOKEN }}"
+    # - name: publish to pypi
+    #   if: ${{ matrix.target.ubuntu == 'latest' && startsWith(github.ref, 'refs/tags/') }}
+    #   run: flit publish --no-use-vcs
+    #   env:
+    #     FLIT_USERNAME: "__token__"
+    #     FLIT_PASSWORD: "${{ secrets.PYPI_TOKEN }}"
