@@ -4,8 +4,6 @@ import os
 import warnings
 from typing import Any, List
 
-warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
-
 import cloup  # noqa: E402
 
 from ch_tools.chadmin.cli.chs3_backup_group import chs3_backup_group  # noqa: E402
@@ -53,6 +51,9 @@ from ch_tools.chadmin.cli.wait_started_command import wait_started_command  # no
 from ch_tools.chadmin.cli.zookeeper_group import zookeeper_group  # noqa: E402
 from ch_tools.common.cli.context_settings import CONTEXT_SETTINGS  # noqa: E402
 from ch_tools.common.cli.parameters import TimeSpanParamType  # noqa: E402
+
+warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
+
 
 LOG_FILE = "/var/log/chadmin/chadmin.log"
 

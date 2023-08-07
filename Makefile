@@ -11,7 +11,7 @@ SHELL := bash
 MAKEFLAGS += --warn-undefined-variables
 MAKEFLAGS += --no-builtin-rules
 
-PYTHON ?= python3.6
+PYTHON ?= python3
 PREFIX ?= /opt/yandex/ch-tools
 OUTPUT_DIR ?= out
 
@@ -65,7 +65,7 @@ $(INSTALL_DEPS_MARKER): check-poetry venv pyproject.toml
 .PHONY: lint
 lint: install-dependencies
 	poetry run black --check --diff ch_tools tests
-	poetry run isort --recursive --diff ch_tools tests
+	poetry run isort --diff ch_tools tests
 
 
 .PHONY: unit-tests

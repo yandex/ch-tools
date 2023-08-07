@@ -80,7 +80,7 @@ include = ["resources/"]
 # requires-python = ">=3.6.2"
 
 [tool.poetry.dependencies]
-python = ">=3.6.2"
+python = "^3.6.2"
 boto3 = "*"
 click = "*"
 cloup = "*"
@@ -107,7 +107,7 @@ typing-extensions = "*"
 [tool.poetry.dev-dependencies]
 flit = "*"
 black = "*"
-isort = {version = "*", extras = ["pyproject"]}
+isort = {version = "^5.0.0", extras = ["pyproject"]}
 mypy = "*"
 types-pyyaml = "*"
 types-requests = "*"

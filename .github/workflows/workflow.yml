@@ -41,17 +41,19 @@ jobs:
           - "23.5.3.24"
           - "latest"
     env:
-      CLICKHOUSE_VERSION=${{ matrix.clickhouse }}    
+      CLICKHOUSE_VERSION=${{ matrix.clickhouse }}
     steps:
+      - uses: actions/checkout@v3                
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.target.python }}
+          cache: poetry
       - run: |
           pip install poetry==${{ env.POETRY_VERSION }}      
           poetry config virtualenvs.in-project true
           poetry install --no-root
-
       - run: make unit_tests
-
       - run: make integration_tests            
-
       - name: publish test report
         uses: mikepenz/action-junit-report@v3
         if: always()

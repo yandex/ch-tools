@@ -6,8 +6,6 @@ import sys
 import warnings
 from functools import wraps
 
-warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
-
 import click  # noqa: E402
 
 from ch_tools.common.result import Status  # noqa: E402
@@ -31,6 +29,9 @@ from ch_tools.monrun_checks.ch_tls import tls_command  # noqa: E402
 from ch_tools.monrun_checks.exceptions import translate_to_status  # noqa: E402
 from ch_tools.monrun_checks.ext_ip_dns import ext_ip_dns_command  # noqa: E402
 from ch_tools.monrun_checks.status import status_command  # noqa: E402
+
+warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
+
 
 LOG_FILE = "/var/log/clickhouse-monitoring/clickhouse-monitoring.log"
 DEFAULT_USER = "monitor"
