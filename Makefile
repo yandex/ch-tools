@@ -12,8 +12,15 @@ MAKEFLAGS += --warn-undefined-variables
 MAKEFLAGS += --no-builtin-rules
 
 PYTHON ?= python3
+
+# The latest version supporting Python 3.6
+POETRY_VERSION ?= 1.1.15
+POETRY_HOME ?= /opt/poetry
+POETRY := $(POETRY_HOME)/bin/poetry
+
 PREFIX ?= /opt/yandex/ch-tools
-OUTPUT_DIR ?= out
+BUILD_PYTHON_OUTPUT_DIR ?= dist
+BUILD_DEB_OUTPUT_DIR ?= out
 
 # It is used by DEB building tools to install a program to temporary
 # directory before packaging
@@ -26,71 +33,105 @@ SYMLINK_BIN_DIR = $(DESTDIR)/usr/bin
 WHL_FILE = ch_tools-*.whl
 VENV_DIR = .venv
 VERSION_FILE = version.txt
-INSTALL_DEPS_MARKER = .install-deps
+INSTALL_DEPS_STAMP = .install-deps
+
+# Pass arguments for testing tools
+BEHAVE_ARGS ?= -D skip_setup
+PYTEST_ARGS ?=
 
 
 .PHONY: install
 install: install-python-package install-symlinks install-bash-completions configure-logs ;
 
 
-.PHONY: install-dependencies
-install-dependencies: $(INSTALL_DEPS_MARKER) ;
-
-
 .PHONY: uninstall
 uninstall: uninstall-python-package uninstall-symlinks uninstall-bash-completions uninstall-logrotate ;
 
 
-.PHONY: check-poetry
-check-poetry:
-	if [ -z $$(command -v poetry 2> /dev/null) ]; then
-	  echo "Poetry could not be found. See https://python-poetry.org/docs/"; 
+.PHONY: install-deps
+install-deps: $(INSTALL_DEPS_STAMP) ;
+
+
+# Update dependencies in poetry.lock to their latest versions according to your pyproject.toml
+.PHONY: update-deps
+update-deps:
+	$(POETRY) update
+
+
+$(INSTALL_DEPS_STAMP): ensure-poetry venv pyproject.toml 
+	$(POETRY) install --no-root
+	touch $(INSTALL_DEPS_STAMP)
+
+.PHONY: install-poetry
+install-poetry:
+	if [ ! -e $(POETRY) ]; then
+		echo "Installing poetry $(POETRY_VERSION)..."
+		curl -sSL https://install.python-poetry.org | POETRY_HOME=$(POETRY_HOME) $(PYTHON) - --version $(POETRY_VERSION)
+
+		# Fix cannot "import name 'appengine' from 'urllib3.contrib'..." error 
+		# while 'poetry publish' for version poetry 1.1.15
+		# https://urllib3.readthedocs.io/en/stable/v2-migration-guide.html#importerror-cannot-import-name-gaecontrib-from-requests-toolbelt-compat
+		$(POETRY_HOME)/venv/bin/python -m pip install urllib3==1.26.15
+	else
+		echo "Found installed poetry $$($(POETRY) --version)"				
+	fi
+
+.PHONY: uninstall-poetry
+uninstall-poetry:
+	echo "Uninstalling poetry..."
+	curl -sSL https://install.python-poetry.org | POETRY_HOME=$(POETRY_HOME) $(PYTHON) - --uninstall
+
+
+.PHONY: ensure-poetry
+ensure-poetry:
+	if [ ! -e $(POETRY) ]; then
+	  echo "Poetry could not be found. Please install it manually 'make install-poetry'"; 
 	  exit 1;
 	fi
 
 
-$(VENV_DIR):
-	poetry env use $(PYTHON)
-
-
 .PHONY: venv
-venv: check-poetry $(VENV_DIR) ;
+venv: ensure-poetry $(VENV_DIR) ;
 
-
-$(INSTALL_DEPS_MARKER): check-poetry venv pyproject.toml 
-	poetry install --no-root
-	touch $(INSTALL_DEPS_MARKER)
+$(VENV_DIR):
+	$(POETRY) config virtualenvs.in-project true
+	$(POETRY) env use $(PYTHON)
 
 
 .PHONY: lint
-lint: install-dependencies
-	poetry run black --check --diff ch_tools tests
-	poetry run isort --diff ch_tools tests
+lint: install-deps
+	$(POETRY) run black --check --diff ch_tools tests
+	$(POETRY) run isort --diff ch_tools tests
 
 
 .PHONY: unit-tests
-unit-tests: install-dependencies
-	poetry run $(PYTHON) -m pytest tests/unit
+unit-tests: install-deps
+	$(POETRY) run $(PYTHON) -m pytest $(PYTEST_ARGS) tests/unit
 
 
 .PHONY: integration-tests
-integration-tests: install-dependencies build-python-package	
+integration-tests: install-deps build-python-packages	
 	cd tests
-	poetry run $(PYTHON) -m env_control create
-	poetry run behave --show-timings --junit -D skip_setup
+	$(POETRY) run $(PYTHON) -m env_control create
+	$(POETRY) run behave --show-timings --junit $(BEHAVE_ARGS)
+
+
+.PHONY: publish
+publish:
+	$(POETRY) publish
 
 
 .PHONY: install-python-package
-install-python-package: build-python-package
+install-python-package: build-python-packages
 	echo 'Installing ch-tools'
 
 	# Prepare new virual environment
-	poetry run $(PYTHON) -m venv $(INSTALL_DIR)
+	$(POETRY) run $(PYTHON) -m venv $(INSTALL_DIR)
 	rm -f $(BIN_DIR)/activate*
 
 	# Install python package
 	$(BIN_DIR)/pip install --upgrade pip
-	$(BIN_DIR)/pip install --no-compile dist/$(WHL_FILE)
+	$(BIN_DIR)/pip install --no-compile $(BUILD_PYTHON_OUTPUT_DIR)/$(WHL_FILE)
 
 	# Clean python's artefacts
 	find $(INSTALL_DIR) -name __pycache__ -type d -exec rm -rf {} +
@@ -102,16 +143,16 @@ install-python-package: build-python-package
 		|| true
 
 
-.PHONY: build-python-package
-build-python-package: prepare-version clean-dist
+.PHONY: build-python-packages
+build-python-packages: install-deps prepare-version clean-dist
 	echo 'Building python packages...'
-	poetry build
+	$(POETRY) build
 
 
 .PHONY: clean-dist
 clean-dist:
 	echo 'Cleaning up residuals from building of Python package'
-	sudo rm -rf dist	
+	sudo rm -rf $(BUILD_PYTHON_OUTPUT_DIR)
 
 
 .PHONY: uninstall-python-package
@@ -186,41 +227,58 @@ prepare-version: $(VERSION_FILE)
 
 $(VERSION_FILE):
 	# Generate version
-	echo "2.$$(git rev-list HEAD --count).$$(git rev-parse --short HEAD | xargs -I {} printf '%d' 0x{})" > $
-	# Replace version in src/ch_tools/__init__.py
-	sed -ie "s/__version__ = \"[0-9\.]\+\"/__version__ = \"$$(cat $@)\"/" src/ch_tools/__init__.py
+	echo "2.$$(git rev-list HEAD --count).$$(git rev-parse --short HEAD | xargs -I {} printf '%d' 0x{})" > $@
+	# Replace version in ch_tools/__init__.py
+	sed "s/__version__ = \"[0-9\.]\+\"/__version__ = \"$$(cat $@)\"/" ch_tools/__init__.py
 	# Replace version in pyproject.toml
-	poetry version $$(cat $@)
+	$(POETRY) version $$(cat $@)
+
+
+.PHONY: prepare-build-deb
+prepare-build-deb:
+	apt install python3-venv debhelper devscripts
 
 
 .PHONY: build-deb-package
-build-deb-package: prepare-changelog	
+build-deb-package: prepare-changelog install-deps
 	# Build DEB package
-	(cd debian && poetry run debuild --check-dirname-level 0 --preserve-env --no-lintian --no-tgz-check -uc -us)
+	(cd debian && $(POETRY) run debuild --check-dirname-level 0 --preserve-env --no-lintian --no-tgz-check -uc -us)
 	# Move DEB package to output dir
 	DEB_FILE=$$(echo ../ch-tools*.deb)
-	mkdir -p $(OUTPUT_DIR) && mv $$DEB_FILE $(OUTPUT_DIR)
-	# Remove other build artefacts
-	rm $${DEB_FILE%_*.deb}*
+	mkdir -p $(BUILD_DEB_OUTPUT_DIR) && mv $$DEB_FILE $(BUILD_DEB_OUTPUT_DIR)
+
+
+.PHONY: clean_debuild
+clean_debuild:
+	rm -rf debian/{files,.debhelper,ch-tools*}
+	rm -f ../ch-tools_*{build,buildinfo,changes,deb,dsc,gz,xz}
 
 
 .PHONY: clean
-clean:
+clean: clean_debuild
 	echo 'Cleaning up'
 
-	rm -rf build
-	rm -rf debian/files debian/.debhelper
-	rm -rf debian/ch-tools*
+	rm -rf $(BUILD_DEB_OUTPUT_DIR)
+	rm -rf $(BUILD_PYTHON_OUTPUT_DIR)
+	rm -rf $(VENV_DIR)
 
  
 .PHONY: help
 help:
 	echo "Base targets:"
+	echo "  install-poetry             Install Poetry"
+	echo "  uninstall-poetry           Uninstall Poetry"
+	echo "  install-deps               Install Python dependencies to local environment $(VENV_DIR)"
+	echo "  update-deps                Update dependencies in poetry.lock to their latest versions"	
+	echo "  publish                    Publish python package to PYPI"	
+	echo "  lint           	   		   Run linters"
+	echo "  unit-tests           	   Run unit tests"
+	echo "  integration-tests          Run integration tests"
 	echo "  prepare-changelog          Add an autobuild version entity to changelog"
 	echo "  prepare-version            Update version based on latest commit"
-	echo "  build-python-package       Build 'ch-tools' Python package"
+	echo "  build-python-packages      Build 'ch-tools' Python package"
 	echo "  build-deb-package          Build 'ch-tools' debian package"
-	echo "  clean                      Clean up after building debian package"
+	echo "  clean                      Clean-up all produced/generated files inside tree"
 	echo ""
 	echo "--------------------------------------------------------------------------------"
 	echo ""
@@ -236,6 +294,7 @@ help:
 	echo "  uninstall-bash-completions Uninstall from /etc/bash_completion.d/"
 	echo "  configure-logs             Install log rotation rules to /etc/logrotate.d/ and create log dirs"
 	echo "  uninstall-logrotate        Uninstall log rotation rules from /etc/logrotate.d/"
+	echo "  prepare-build-deb          Install prerequisites for DEB packaging tool"
 	echo ""
 	echo "--------------------------------------------------------------------------------"
 	echo ""

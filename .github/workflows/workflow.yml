@@ -1,37 +1,42 @@
 name: main
 on:
-  push: { branches: [main, try_poetry] }
-  pull_request: { branches: [main] }
+  push: 
+    branches: [main, try_poetry]
+    tags: "v*"
+  pull_request:
+    branches: [main]
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 env:
-  # The latest version with support of Python 3.6
+  BUILD_DEB_OUTPUT_DIR: out
+  BUILD_PYTHON_OUTPUT_DIR: dist
+  # The latest version supporting Python 3.6
   POETRY_VERSION: 1.1.15
+
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3                
-    - uses: actions/setup-python@v4
-      with: { python-version: "3.11", cache: poetry }
-
-    - run: |
-        pip install poetry==${{ env.POETRY_VERSION }}      
-        poetry config virtualenvs.in-project true
-        poetry install --no-root
-
+    - uses: ./.github/actions/setup_dependencies
+      with:
+        python-version: "3.10.12"
+        poetry-version: ${{ env.POETRY_VERSION }}
     - run: make lint
   
   tests:
     needs: lint
-    runs-on: ubuntu-latest    
+    runs-on: ubuntu-${{ matrix.target.ubuntu }}
+    env:
+      CLICKHOUSE_VERSION: ${{ matrix.clickhouse }}        
     strategy:
+      fail-fast: false
       matrix:
         target:
-          - {python: "3.6.15", ubuntu: "20.04"}
-          - {python: "3.10.12", ubuntu: "latest"}
+          - { python: "3.6.15", ubuntu: "20.04" }
+          - { python: "3.10.12", ubuntu: "latest" }
         clickhouse:
           - "21.8.15.7"
           - "22.3.20.29"
@@ -39,21 +44,17 @@ jobs:
           - "23.3.4.17"
           - "23.4.4.16"
           - "23.5.3.24"
-          - "latest"
-    env:
-      CLICKHOUSE_VERSION=${{ matrix.clickhouse }}
+          - "latest"    
     steps:
       - uses: actions/checkout@v3                
-      - uses: actions/setup-python@v4
+      - uses: ./.github/actions/setup_dependencies
         with:
           python-version: ${{ matrix.target.python }}
-          cache: poetry
-      - run: |
-          pip install poetry==${{ env.POETRY_VERSION }}      
-          poetry config virtualenvs.in-project true
-          poetry install --no-root
-      - run: make unit_tests
-      - run: make integration_tests            
+          poetry-version: ${{ env.POETRY_VERSION }}
+
+      - run: make unit-tests
+      - run: make integration-tests
+
       - name: publish test report
         uses: mikepenz/action-junit-report@v3
         if: always()
@@ -61,27 +62,29 @@ jobs:
           report_paths: 'tests/reports/*.xml'
 
 
-  # push_to_dockerhub:
-  #   runs-on: ubuntu-latest
-  #   env:
-  #     CLICKHOUSE_VERSIONS: "21.8.15.7, 22.3.20.29, 22.8.19.10, 23.3.4.17, 23.4.4.16, 23.5.3.24, latest"
-  #   if: ${{ github.event_name == 'push' }}
-  #   steps:
-  #   - uses: actions/checkout@v3
-  #   - name: login to dockerhub
-  #     uses: docker/login-action@v2
-  #     with:
-  #       username: ${{ secrets.DOCKERHUB_USERNAME }}
-  #       password: ${{ secrets.DOCKERHUB_TOKEN }}
-  #   - name: build and push base images
-  #     uses: docker/bake-action@v3
-  #     with:
-  #       files: tests/bake.hcl
-  #       push: true
+  push_to_dockerhub:
+    runs-on: ubuntu-latest
+    env:
+      CLICKHOUSE_VERSIONS: "21.8.15.7, 22.3.20.29, 22.8.19.10, 23.3.4.17, 23.4.4.16, 23.5.3.24, latest"
+    if: ${{ github.event_name == 'push' }}
+    steps:
+    - uses: actions/checkout@v3
+    - name: login to dockerhub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    - name: build and push base images
+      uses: docker/bake-action@v3
+      with:
+        files: tests/bake.hcl
+        push: true
+
 
   build:
     needs: tests
     strategy:
+      fail-fast: false
       matrix:
         target:
           - {python: "3.6.15", ubuntu: "20.04"}
@@ -92,76 +95,71 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: set up python ${{ matrix.target.python }}
-      uses: actions/setup-python@v4
+    - uses: ./.github/actions/setup_dependencies
       with:
         python-version: ${{ matrix.target.python }}
-        cache: poetry
-
-    - name: install dependencies
-      run: |
-        pip install poetry==${{ env.POETRY_VERSION }}      
-        poetry config virtualenvs.in-project true
-        poetry install --no-root
+        poetry-version: ${{ env.POETRY_VERSION }}
 
     - name: build project
-      run: make build
+      run: make build-python-packages
 
     - name: upload wheel
       uses: actions/upload-artifact@v3
       with:
         name: ch_tools_py${{ matrix.target.python }}.whl
-        path: dist/*.whl
+        path: ${{ env.BUILD_PYTHON_OUTPUT_DIR }}/*.whl
         if-no-files-found: error
 
     - name: upload sdist
       uses: actions/upload-artifact@v3
       with:
         name: ch_tools_py${{ matrix.target.python }}.tar.gz
-        path: dist/*.tar.gz
+        path: ${{ env.BUILD_PYTHON_OUTPUT_DIR }}/*.tar.gz
         if-no-files-found: error
 
-    - name: prepare build deb
-      run: sudo apt install python3-venv debhelper devscripts
+    - name: install prerequisites for DEB packaging tools
+      run: sudo make prepare-build-deb
 
-    - name: build deb
-      run: |
-        # deb building implicitly cleans dist/
-        cp dist/*.tar.gz ch_tools.tar.gz
-        cp dist/*.whl ch_tools.whl
+    - name: build DEB package
+      run: |      
+        # Speedup Debian package building
         echo "force-unsafe-io" | sudo tee /etc/dpkg/dpkg.cfg.d/force-unsafe-io
         sudo make build-deb-package
 
-    - name: test deb
+    - name: test DEB package
       run: |
         sudo make uninstall
-        sudo apt-get install -q -y ./out/ch-tools*.deb
+        sudo apt-get install -q -y ./${{ env.BUILD_DEB_OUTPUT_DIR }}/ch-tools*.deb
         sudo chadmin --help
         sudo ch-monitoring --no-user-check --help
         sudo keeper-monitoring --help
         sudo ch-s3-credentials --help
 
-    - name: upload deb package artifact
+    - name: upload DEB package artifact
       uses: actions/upload-artifact@v3
       with:
         name: ch-tools_py-${{ matrix.target.python }}_ubuntu-${{ matrix.target.ubuntu }}.deb
-        path: out/ch-tools*.deb
+        path: ${{ env.BUILD_DEB_OUTPUT_DIR }}/ch-tools*.deb
         if-no-files-found: error
 
-    # - name: create a release
-    #   uses: softprops/action-gh-release@v1
-    #   if: ${{ matrix.target.ubuntu == 'latest' && startsWith(github.ref, 'refs/tags/') }}
-    #   with:
-    #     generate_release_notes: true
-    #     fail_on_unmatched_files: true
-    #     files: |
-    #       *.whl
-    #       *.tar.gz
-    #       out/ch-tools*.deb
+    - name: create a release
+      uses: softprops/action-gh-release@v1
+      if: ${{ matrix.target.ubuntu == 'latest' && startsWith(github.ref, 'refs/tags/') }}
+      with:
+        generate_release_notes: true
+        fail_on_unmatched_files: true
+        files: |
+          ${{ env.BUILD_PYTHON_OUTPUT_DIR }}/*.whl
+          ${{ env.BUILD_PYTHON_OUTPUT_DIR }}/*.tar.gz
+          ${{ env.BUILD_DEB_OUTPUT_DIR }}/ch-tools*.deb
 
-    # - name: publish to pypi
-    #   if: ${{ matrix.target.ubuntu == 'latest' && startsWith(github.ref, 'refs/tags/') }}
-    #   run: flit publish --no-use-vcs
-    #   env:
-    #     FLIT_USERNAME: "__token__"
-    #     FLIT_PASSWORD: "${{ secrets.PYPI_TOKEN }}"
+    - name: publish to PYPI
+      if: ${{ matrix.target.ubuntu == 'latest' && startsWith(github.ref, 'refs/tags/') }}
+      continue-on-error: true
+      run: make publish
+      env:
+        POETRY_HTTP_BASIC_PYPI_USERNAME: "__token__"
+        POETRY_HTTP_BASIC_PYPI_PASSWORD: ${{ secrets.ALEXFVK_TEST_PYPI_TOKEN }}
+        # POETRY_HTTP_BASIC_PYPI_PASSWORD: "${{ secrets.PYPI_TOKEN }}"
+        # Disable using keyring for poetry to get password from env variables
+        PYTHON_KEYRING_BACKEND: keyring.backends.null.Keyring

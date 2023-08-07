@@ -12,37 +12,36 @@
 
 All of these tools must be run on the same host as ClickHouse server is running.
 
-## Local development (using venv)
+## Local development (using poetry)
 
 ```sh
-python3 -m venv venv
-source venv/bin/activate
-pip install .[test]
-flit build --no-use-vcs
-flit install
+sudo make install-poetry
+# or to install in user's home directory
+make POETRY_HOME=~/opt/poetry install-poetry
 
 # For building deb packages
-sudo apt install python3-venv debhelper devscripts 
+sudo make prepare-build-deb
+sudo make build-deb-package  
 
 # lint
-black .
-isort .
+make lint
 
 # unit tests
-pytest
+make unit-tests
+make unit-tests PYTEST_ARGS="-k test_name"
 
 # integration tests (rebuild docker images using a .whl file)
-cd tests; behave
+make integration-tests
 
 # integration tests (do not rebuild docker images)
 # useful when you didn't change source code
-cd tests; behave -D skip_setup
+make integration-tests BEHAVE_ARGS="-D skip_setup"
 
 # integration tests (supply a custom ClickHouse version to test against)
-cd tests; CLICKHOUSE_VERSION="1.2.3.4" behave
+CLICKHOUSE_VERSION="1.2.3.4" make integration-tests
 
 # If you want to have containers running on failure, supply a flag:
-# behave -D no_stop_on_fail
+# BEHAVE_ARGS="-D no_stop_on_fail"
 ```
 
 Please note: base images for tests are pulled from [chtools Dockerhub](https://hub.docker.com/u/chtools).
