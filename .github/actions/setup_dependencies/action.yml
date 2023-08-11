@@ -3,8 +3,6 @@ description: Create Python environment with all dependencies installed
 inputs:
   python-version:
     required: true
-  poetry-version:
-    required: true
 runs:
   using: "composite"
   steps:
@@ -28,8 +26,6 @@ runs:
 
     - name: Install Python dependencies
       shell: bash
-      env:
-        POETRY_VERSION: ${{ inputs.poetry-version }}
       run: |        
         sudo make install-poetry
         make install-deps

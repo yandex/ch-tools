@@ -11,6 +11,9 @@ SHELL := bash
 MAKEFLAGS += --warn-undefined-variables
 MAKEFLAGS += --no-builtin-rules
 
+PROJECT_NAME ?= "clickhouse-tools"
+PROJECT_NAME_UNDERSCORE ?= $(subst -,_,$(PROJECT_NAME))
+
 PYTHON ?= python3
 
 # The latest version supporting Python 3.6
@@ -18,7 +21,7 @@ POETRY_VERSION ?= 1.1.15
 POETRY_HOME ?= /opt/poetry
 POETRY := $(POETRY_HOME)/bin/poetry
 
-PREFIX ?= /opt/yandex/ch-tools
+PREFIX ?= /opt/yandex/$(PROJECT_NAME)
 BUILD_PYTHON_OUTPUT_DIR ?= dist
 BUILD_DEB_OUTPUT_DIR ?= out
 SRC_DIR ?= ch_tools
@@ -32,15 +35,32 @@ INSTALL_DIR = $(DESTDIR)$(PREFIX)
 BIN_DIR = $(INSTALL_DIR)/bin
 SYMLINK_BIN_DIR = $(DESTDIR)/usr/bin
 
-WHL_FILE = ch_tools-*.whl
-VENV_DIR = .venv
-VERSION_FILE = version.txt
-INSTALL_DEPS_STAMP = .install-deps
+WHL_FILE := $(PROJECT_NAME_UNDERSCORE)-*.whl
+VENV_DIR := .venv
+VERSION_FILE := version.txt
+INSTALL_DEPS_STAMP := .install-deps
 
 # Pass arguments for testing tools
-BEHAVE_ARGS ?= -D skip_setup
+BEHAVE_ARGS ?=
 PYTEST_ARGS ?=
 
+
+define ensure_poetry
+	if [ ! -e $(POETRY) ]; then
+	  echo "Poetry could not be found. Please install it manually 'make install-poetry'"; 
+	  exit 1;
+	fi
+endef
+
+
+# Should be default target, because "make" is just run
+# by debhelper(dh_auto_build stage) for building the program during 
+# creation of a DEB package
+.PHONY: build
+build: build-python-packages ;
+
+.PHONY: all
+all: build lint test-unit test-integration
 
 .PHONY: install
 install: install-python-package install-symlinks install-bash-completions configure-logs ;
@@ -57,45 +77,39 @@ install-deps: $(INSTALL_DEPS_STAMP) ;
 # Update dependencies in poetry.lock to their latest versions according to your pyproject.toml
 .PHONY: update-deps
 update-deps:
+	$(ensure_poetry)
 	$(POETRY) update
 
-
-$(INSTALL_DEPS_STAMP): ensure-poetry venv pyproject.toml 
+$(INSTALL_DEPS_STAMP): $(VENV_DIR) pyproject.toml poetry.lock
+	$(ensure_poetry)
 	$(POETRY) install --no-root
 	touch $(INSTALL_DEPS_STAMP)
 
 .PHONY: install-poetry
 install-poetry:
-	if [ ! -e $(POETRY) ]; then
-		echo "Installing poetry $(POETRY_VERSION)..."
-		curl -sSL https://install.python-poetry.org | POETRY_HOME=$(POETRY_HOME) $(PYTHON) - --version $(POETRY_VERSION)
+	[ -e $(POETRY) ] && echo "Found installed poetry $$($(POETRY) --version)" && exit 0
 
-		# Fix cannot "import name 'appengine' from 'urllib3.contrib'..." error 
-		# while 'poetry publish' for version poetry 1.1.15
-		# https://urllib3.readthedocs.io/en/stable/v2-migration-guide.html#importerror-cannot-import-name-gaecontrib-from-requests-toolbelt-compat
-		$(POETRY_HOME)/venv/bin/python -m pip install urllib3==1.26.15
-	else
-		echo "Found installed poetry $$($(POETRY) --version)"				
-	fi
+	echo "Installing poetry $(POETRY_VERSION)..."
+	$(PYTHON) -m venv $(POETRY_HOME)
+	$(POETRY_HOME)/bin/pip install poetry==$(POETRY_VERSION)
+
+	# TODO: remove after getting rid of support Python 3.6
+	# Fix "cannot import name 'appengine' from 'urllib3.contrib'..." error 
+	# while 'poetry publish' for version poetry 1.1.15 due to incompatibility with urllib3 >= 2.0.0
+	# https://urllib3.readthedocs.io/en/stable/v2-migration-guide.html#importerror-cannot-import-name-gaecontrib-from-requests-toolbelt-compat
+	$(POETRY_HOME)/bin/python -m pip install "urllib3<2.0.0"
+
 
 .PHONY: uninstall-poetry
 uninstall-poetry:
-	echo "Uninstalling poetry..."
-	curl -sSL https://install.python-poetry.org | POETRY_HOME=$(POETRY_HOME) $(PYTHON) - --uninstall
+	[ ! -e $(POETRY_HOME) ]	&& exit 0;
 
+	rm -rf $(POETRY_HOME)
+	echo "Uninstalled poetry from $(POETRY_HOME)"
 
-.PHONY: ensure-poetry
-ensure-poetry:
-	if [ ! -e $(POETRY) ]; then
-	  echo "Poetry could not be found. Please install it manually 'make install-poetry'"; 
-	  exit 1;
-	fi
-
-
-.PHONY: venv
-venv: ensure-poetry $(VENV_DIR) ;
 
 $(VENV_DIR):
+	$(ensure_poetry)
 	$(POETRY) config virtualenvs.in-project true
 	$(POETRY) env use $(PYTHON)
 
@@ -134,16 +148,16 @@ format: install-deps
 	$(POETRY) run black $(SRC_DIR) $(TESTS_DIR)
 
 
-.PHONY: unit-tests
-unit-tests: install-deps
+.PHONY: test-unit
+test-unit: install-deps
 	$(POETRY) run $(PYTHON) -m pytest $(PYTEST_ARGS) $(TESTS_DIR)/unit
 
 
-.PHONY: integration-tests
-integration-tests: install-deps build-python-packages	
+.PHONY: test-integration
+test-integration: install-deps build-python-packages	
 	cd $(TESTS_DIR)
 	$(POETRY) run $(PYTHON) -m env_control create
-	$(POETRY) run behave --show-timings --junit $(BEHAVE_ARGS)
+	$(POETRY) run behave --show-timings -D skip_setup --junit $(BEHAVE_ARGS)
 
 
 .PHONY: publish
@@ -153,7 +167,7 @@ publish:
 
 .PHONY: install-python-package
 install-python-package: build-python-packages
-	echo 'Installing ch-tools'
+	echo 'Installing $(PROJECT_NAME)'
 
 	# Prepare new virual environment
 	$(POETRY) run $(PYTHON) -m venv $(INSTALL_DIR)
@@ -176,18 +190,25 @@ install-python-package: build-python-packages
 .PHONY: build-python-packages
 build-python-packages: install-deps prepare-version clean-dist
 	echo 'Building python packages...'
-	$(POETRY) build
+	$(POETRY) build	
+
+	# Normalize SDIST name for consistency 
+	# (dashes are replaced by undescores in project name)
+	# Poetry >= 1.2 does this itself
+	cd $(BUILD_PYTHON_OUTPUT_DIR)
+	sdist=$$(echo $(PROJECT_NAME)*.gz)
+	mv $${sdist} $${sdist/$(PROJECT_NAME)/$(PROJECT_NAME_UNDERSCORE)} 2>/dev/null
 
 
 .PHONY: clean-dist
 clean-dist:
 	echo 'Cleaning up residuals from building of Python package'
-	sudo rm -rf $(BUILD_PYTHON_OUTPUT_DIR)
+	rm -rf $(BUILD_PYTHON_OUTPUT_DIR)
 
 
 .PHONY: uninstall-python-package
 uninstall-python-package:
-	echo 'Uninstalling ch-tools'
+	echo 'Uninstalling $(PROJECT_NAME)'
 	rm -rf $(INSTALL_DIR)
 
 
@@ -247,7 +268,7 @@ uninstall-logrotate:
 .PHONY: prepare-changelog
 prepare-changelog: prepare-version
 	echo 'Bumping version into Debian package changelog'
-	DEBFULLNAME="Yandex LLC" DEBEMAIL="ch-tools@yandex-team.ru" dch --force-bad-version --distribution stable -v $$(cat $(VERSION_FILE)) Autobuild
+	DEBFULLNAME="Yandex LLC" DEBEMAIL="clickhouse-tools@yandex-team.ru" dch --force-bad-version --distribution stable -v $$(cat $(VERSION_FILE)) Autobuild
 
 
 .PHONY: prepare-version
@@ -274,14 +295,14 @@ build-deb-package: prepare-changelog install-deps
 	# Build DEB package
 	(cd debian && $(POETRY) run debuild --check-dirname-level 0 --preserve-env --no-lintian --no-tgz-check -uc -us)
 	# Move DEB package to output dir
-	DEB_FILE=$$(echo ../ch-tools*.deb)
+	DEB_FILE=$$(echo ../$(PROJECT_NAME)*.deb)
 	mkdir -p $(BUILD_DEB_OUTPUT_DIR) && mv $$DEB_FILE $(BUILD_DEB_OUTPUT_DIR)
 
 
 .PHONY: clean_debuild
 clean_debuild:
-	rm -rf debian/{files,.debhelper,ch-tools*,*stamp}
-	rm -f ../ch-tools_*{build,buildinfo,changes,deb,dsc,gz,xz}
+	rm -rf debian/{files,.debhelper,$(PROJECT_NAME)*,*stamp}
+	rm -f ../$(PROJECT_NAME)_*{build,buildinfo,changes,deb,dsc,gz,xz}
 
 
 .PHONY: clean
@@ -291,6 +312,7 @@ clean: clean_debuild
 	rm -rf $(BUILD_DEB_OUTPUT_DIR)
 	rm -rf $(BUILD_PYTHON_OUTPUT_DIR)
 	rm -rf $(VENV_DIR)
+	rm -rf $(INSTALL_DEPS_STAMP)
 
  
 .PHONY: help
@@ -302,6 +324,8 @@ help:
 	echo "  update-deps                Update dependencies in poetry.lock to their latest versions"	
 	echo "  publish                    Publish python package to PYPI"	
 	echo "  lint                       Run linters. Alias for \"isort black flake8 pylint mypy\"."
+	echo "  test-unit                  Run unit tests."
+	echo "  test-integration           Run integration tests."
 	echo "  isort                      Perform isort checks."
 	echo "  black                      Perform black checks."
 	echo "  flake8                     Perform flake8 checks."
@@ -311,19 +335,19 @@ help:
 	echo "                             isort and black tools."
 	echo "  prepare-changelog          Add an autobuild version entity to changelog"
 	echo "  prepare-version            Update version based on latest commit"
-	echo "  build-python-packages      Build 'ch-tools' Python packages (sdist and wheel)"
+	echo "  build-python-packages      Build '$(PROJECT_NAME)' Python packages (sdist and wheel)"
 	echo "  prepare-build-deb          Install prerequisites for DEB packaging tool"
-	echo "  build-deb-package          Build 'ch-tools' debian package"
+	echo "  build-deb-package          Build '$(PROJECT_NAME)' debian package"
 	echo "  clean                      Clean-up all produced/generated files inside tree"
 	echo ""
 	echo "--------------------------------------------------------------------------------"
 	echo ""
 	echo "Debian package build targets:"
-	echo "  install                    Install 'ch-tools' debian package"
-	echo "  uninstall                  Uninstall 'ch-tools' debian package"
+	echo "  install                    Install '$(PROJECT_NAME)' debian package"
+	echo "  uninstall                  Uninstall '$(PROJECT_NAME)' debian package"
 	echo ""
-	echo "  install-python-package     Install 'ch-tools' python package"
-	echo "  uninstall-python-package   Uninstall 'ch-tools' python package"
+	echo "  install-python-package     Install '$(PROJECT_NAME)' python package"
+	echo "  uninstall-python-package   Uninstall '$(PROJECT_NAME)' python package"
 	echo "  install-symlinks           Install symlinks to /usr/bin/"
 	echo "  uninstall-symlinks         Uninstall symlinks from /usr/bin/"
 	echo "  install-bash-completions   Install to /etc/bash_completion.d/"

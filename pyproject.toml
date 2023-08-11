@@ -3,10 +3,10 @@ requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "ch-tools"
-version = "2.529.131159744"
+name = "clickhouse-tools"
+version = "0.1.0"
 license = "MIT"
-description = "ch-tools is a set of tools for administration and diagnostics of ClickHouse DBMS."
+description = "clickhouse-tools is a set of tools for administration and diagnostics of ClickHouse DBMS."
 
 authors = [
     "Alexander Burmak <alex-burmak@yandex-team.ru>",
@@ -70,6 +70,10 @@ classifiers = [
     "Typing :: Typed",
 ]
 
+packages = [
+    { include = "ch_tools" },
+]
+
 include = ["resources/"]
 
 
@@ -100,22 +104,26 @@ typing-extensions = "~4.1.1"
 xmltodict = "*"
 
 [tool.poetry.dev-dependencies]
+# TODO: use groups in a modern version of poetry
+# tests
 behave = "*"
-black = { version = "^22.0.0", python = ">=3.10" }
 docker = "*"
 docker-compose = "*"
+pyhamcrest = "*"
+pytest = "*"
+
+# lint
+black = { version = "^22.0.0", python = ">=3.10" }
 flake8 = { version = "^6.1.0", python = ">=3.10" }
 isort = { version = "^5.0.0", extras = ["pyproject"] }
 mypy = { version = "^1.4.1", python = ">=3.10" }
-pyhamcrest = "*"
 pylint = { version = "^2.17.5", python = ">=3.10" }
-pytest = "*"
-types-pyOpenSSL = "*"
-types-python-dateutil = "*"
-types-pyyaml = "*"
-types-requests = "*"
-types-setuptools = "*"
-types-tabulate = "*"
+types-pyOpenSSL = { version = "*", python = ">=3.10" }
+types-python-dateutil = { version = "*", python = ">=3.10" }
+types-pyyaml = { version = "*", python = ">=3.10" }
+types-requests = { version = "*", python = ">=3.10" }
+types-setuptools = { version = "*", python = ">=3.10" }
+types-tabulate = { version = "*", python = ">=3.10" }
 
 [tool.poetry.scripts]
 chadmin = "ch_tools.chadmin.chadmin_cli:main"
