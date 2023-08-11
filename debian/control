@@ -1,4 +1,4 @@
-Source: ch-tools
+Source: clickhouse-tools
 Section: database
 Priority: optional
 Maintainer: Yandex LLC
@@ -18,7 +18,7 @@ Vcs-Browser: https://github.com/yandex/ch-tools.git
 Vcs-Git: git://github.com:yandex/ch-tools.git
 X-Python3-Version: >= 3.6
 
-Package: ch-tools
+Package: clickhouse-tools
 Architecture: any
 Description: A set of tools for administration and diagnostics of ClickHouse DBMS.
 Replaces: mdb-ch-tools
