@@ -1,13 +1,13 @@
 [![license](https://img.shields.io/github/license/yandex/ch-tools)](https://github.com/yandex/ch-tools/blob/main/LICENSE)
 [![tests status](https://img.shields.io/github/actions/workflow/status/yandex/ch-tools/.github%2Fworkflows%2Fworkflow.yml?event=push&label=tests)](https://github.com/yandex/ch-tools/actions/workflows/workflow.yml?query=event%3Apush)
 
-# ch-tools
+# clickhouse-tools
 
-**ch-tools** is a set of tools for administration and diagnostics of [ClickHouse](https://clickhouse.com/) DBMS.
+**clickhouse-tools** is a set of tools for administration and diagnostics of [ClickHouse](https://clickhouse.com/) DBMS.
 
 ## Tools
 
-**ch-tools** consist of following components:
+**clickhouse-tools** consist of following components:
 - [chadmin](./src/chtools/chadmin/README.md) - ClickHouse administration tool
 - [ch-monitoring](./src/chtools/monrun_checks/README.md) - ClickHouse monitoring tool
 - [keeper-monitoring](./src/chtools/monrun_checks_keeper/README.md) - ClickHouse Keeper / ZooKeeper monitoring tool
@@ -15,33 +15,32 @@
 
 All of these tools must be run on the same host as ClickHouse server is running.
 
-## Local development (using venv)
+## Local development (using poetry)
 
 ```sh
-python3 -m venv venv
-source venv/bin/activate
-pip install .[test]
-flit build --no-use-vcs
-flit install
+sudo make install-poetry
+# or to install in user's home directory
+make POETRY_HOME=~/opt/poetry install-poetry
 
 # lint
 make lint
 
 # unit tests
-pytest
+make test-unit
+make test-unit PYTEST_ARGS="-k test_name"
 
 # integration tests (rebuild docker images using a .whl file)
-cd tests; behave
-
-# integration tests (do not rebuild docker images)
-# useful when you didn't change source code
-cd tests; behave -D skip_setup
+make test-integration
+make test-integration BEHAVE_ARGS="-i feature_name"
 
 # integration tests (supply a custom ClickHouse version to test against)
-cd tests; CLICKHOUSE_VERSION="1.2.3.4" behave
-
+CLICKHOUSE_VERSION="1.2.3.4" make test-integration
 # If you want to have containers running on failure, supply a flag:
-# behave -D no_stop_on_fail
+# BEHAVE_ARGS="-D no_stop_on_fail"
+
+# For building deb packages
+make prepare-build-deb
+make build-deb-package  
 ```
 
 Please note: base images for tests are pulled from [chtools Dockerhub](https://hub.docker.com/u/chtools).

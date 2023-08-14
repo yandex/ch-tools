@@ -1,0 +1,31 @@
+name: Setup Python dependencies
+description: Create Python environment with all dependencies installed
+inputs:
+  python-version:
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Python ${{ inputs.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ inputs.python-version }}
+    
+    - name: Get full Python version
+      id: full-python-version
+      shell: bash
+      run: echo version=$(python -c "import sys; print('-'.join(str(v) for v in sys.version_info))") >> $GITHUB_OUTPUT
+
+    - name: Cache virtual environments
+      uses: actions/cache@v3
+      with:
+        path: |        
+          ~/.cache/pip
+          .venv        
+        key: ${{ runner.os }}-${{ steps.full-python-version.outputs.version }}-poetry-${{ hashFiles('poetry.lock') }}
+
+    - name: Install Python dependencies
+      shell: bash
+      run: |        
+        sudo make install-poetry
+        make install-deps
