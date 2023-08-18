@@ -99,11 +99,24 @@ def list_mutations(ctx, is_done, command_pattern, on_cluster):
 
 
 @mutation_group.command(name="kill")
+@option(
+    "--cluster",
+    "--on-cluster",
+    "on_cluster",
+    is_flag=True,
+    help="Kill mutations on all hosts of the cluster.",
+)
 @pass_context
-def kill_mutation(ctx):
+def kill_mutation(ctx, on_cluster):
     """Kill one or several mutations."""
+    cluster = get_cluster_name(ctx) if on_cluster else None
     query = """
         KILL MUTATION
+        {%- if cluster %}
+        ON CLUSTER '{{ cluster }}'
+        {%- endif %}
         WHERE NOT is_done
         """
-    print(execute_query(ctx, query, format_="PrettyCompact"))
+    print(
+        execute_query(ctx, query, cluster=cluster, echo=True, format_="PrettyCompact")
+    )
