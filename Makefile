@@ -11,8 +11,12 @@ SHELL := bash
 MAKEFLAGS += --warn-undefined-variables
 MAKEFLAGS += --no-builtin-rules
 
-PROJECT_NAME ?= "clickhouse-tools"
-PROJECT_NAME_UNDERSCORE ?= $(subst -,_,$(PROJECT_NAME))
+# For install target stability
+export LC_ALL = en_US.UTF-8
+export LANG   = en_US.UTF-8
+
+PROJECT_NAME ?= clickhouse-tools
+PROJECT_NAME_UNDERSCORE ?= clickhouse_tools
 
 PYTHON ?= python3
 
@@ -90,14 +94,13 @@ install-poetry:
 	[ -e $(POETRY) ] && echo "Found installed poetry $$($(POETRY) --version)" && exit 0
 
 	echo "Installing poetry $(POETRY_VERSION)..."
-	$(PYTHON) -m venv $(POETRY_HOME)
-	$(POETRY_HOME)/bin/pip install poetry==$(POETRY_VERSION)
+	curl -sSL https://install.python-poetry.org | POETRY_HOME=$(POETRY_HOME) $(PYTHON) - --version $(POETRY_VERSION)
 
 	# TODO: remove after getting rid of support Python 3.6
 	# Fix "cannot import name 'appengine' from 'urllib3.contrib'..." error 
 	# while 'poetry publish' for version poetry 1.1.15 due to incompatibility with urllib3 >= 2.0.0
 	# https://urllib3.readthedocs.io/en/stable/v2-migration-guide.html#importerror-cannot-import-name-gaecontrib-from-requests-toolbelt-compat
-	$(POETRY_HOME)/bin/python -m pip install "urllib3<2.0.0"
+	$(POETRY_HOME)/venv/bin/python -m pip install "urllib3<2.0.0"
 
 
 .PHONY: uninstall-poetry
@@ -188,17 +191,9 @@ install-python-package: build-python-packages
 
 
 .PHONY: build-python-packages
-build-python-packages: install-deps prepare-version clean-dist
+build-python-packages: prepare-version clean-dist
 	echo 'Building python packages...'
-	$(POETRY) build	
-
-	# Normalize SDIST name for consistency 
-	# (dashes are replaced by undescores in project name)
-	# Poetry >= 1.2 does this itself
-	cd $(BUILD_PYTHON_OUTPUT_DIR)
-	sdist=$$(echo $(PROJECT_NAME)*.gz)
-	mv $${sdist} $${sdist/$(PROJECT_NAME)/$(PROJECT_NAME_UNDERSCORE)} 2>/dev/null
-
+	$(POETRY) build
 
 .PHONY: clean-dist
 clean-dist:
