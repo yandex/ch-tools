@@ -1,7 +1,19 @@
 #!/usr/bin/make -f
 
+# Disable parallel downloading of dependencies
+# By default poetry's installer.max-workers is set to number_of_cores + 4.
+# This would be a problem when you run poetry on a server with like 24 cores 
+# and it is reasonable for the server side to refuse that many of connections.
+export POETRY_INSTALLER_PARALLEL=false
+# TODO: use POETRY_INSTALLER_MAX_WORKERS to control count of parallel workers
+# after upgrading to poetry >=1.2
+
 %:
 	dh $@
+
+# override_dh_auto_build:
+# 	$(MAKE) install-poetry
+# 	dh_auto_build
 
 override_dh_auto_clean: ;
 
