@@ -47,6 +47,7 @@ def replication_queue_group():
 )
 @option(
     "--type",
+    "type_",
     help="Filter replication queue tasks to output by the specified type."
     " Multiple values can be specified through a comma.",
 )
