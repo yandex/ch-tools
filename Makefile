@@ -118,7 +118,7 @@ $(VENV_DIR):
 
 
 .PHONY: lint
-lint: isort black flake8 pylint mypy
+lint: isort black ruff pylint mypy
 
 
 .PHONY: isort
@@ -131,9 +131,9 @@ black: install-deps
 	$(POETRY) run black --check --diff $(SRC_DIR) $(TESTS_DIR)
 
 
-.PHONY: flake8
-flake8: install-deps
-	$(POETRY) run flake8 $(SRC_DIR) $(TESTS_DIR)
+.PHONY: ruff
+ruff: install-deps
+	$(POETRY) run ruff $(SRC_DIR) $(TESTS_DIR)
 
 
 .PHONY: pylint
@@ -318,12 +318,12 @@ help:
 	echo "  install-deps               Install Python dependencies to local environment $(VENV_DIR)"
 	echo "  update-deps                Update dependencies in poetry.lock to their latest versions"	
 	echo "  publish                    Publish python package to PYPI"	
-	echo "  lint                       Run linters. Alias for \"isort black flake8 pylint mypy\"."
+	echo "  lint                       Run linters. Alias for \"isort black ruff pylint mypy\"."
 	echo "  test-unit                  Run unit tests."
 	echo "  test-integration           Run integration tests."
 	echo "  isort                      Perform isort checks."
 	echo "  black                      Perform black checks."
-	echo "  flake8                     Perform flake8 checks."
+	echo "  ruff                       Perform ruff checks."
 	echo "  pylint                     Perform pylint checks."
 	echo "  mypy                       Perform mypy checks."
 	echo "  format                     Re-format source code to conform style settings enforced by"

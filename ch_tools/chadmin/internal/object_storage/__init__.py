@@ -1,4 +1,3 @@
-# flake8: noqa: F401
 from ch_tools.chadmin.internal.object_storage.collect_metadata import collect_metadata
 from ch_tools.chadmin.internal.object_storage.s3_cleanup import (
     cleanup_s3_object_storage,
