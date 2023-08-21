@@ -16,7 +16,8 @@ export LC_ALL = en_US.UTF-8
 export LANG   = en_US.UTF-8
 
 PROJECT_NAME ?= clickhouse-tools
-PROJECT_NAME_UNDERSCORE ?= clickhouse_tools
+$(info "PROJECT_NAME: $(PROJECT_NAME)")
+PROJECT_NAME_UNDERSCORE ?= $(subst -,_,$(PROJECT_NAME))
 
 PYTHON ?= python3
 
