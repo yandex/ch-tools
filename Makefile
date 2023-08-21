@@ -26,6 +26,7 @@ POETRY_HOME ?= /opt/poetry
 POETRY := $(POETRY_HOME)/bin/poetry
 
 PREFIX ?= /opt/yandex/$(PROJECT_NAME)
+$(info "PREFIX: $(PREFIX)")
 BUILD_PYTHON_OUTPUT_DIR ?= dist
 BUILD_DEB_OUTPUT_DIR ?= out
 SRC_DIR ?= ch_tools
@@ -34,6 +35,7 @@ TESTS_DIR ?= tests
 # It is used by DEB building tools to install a program to temporary
 # directory before packaging
 DESTDIR ?=
+$(info "DESTDIR: $(DESTDIR)")
 
 INSTALL_DIR = $(DESTDIR)$(PREFIX)
 BIN_DIR = $(INSTALL_DIR)/bin
@@ -172,6 +174,8 @@ publish:
 install-python-package: build-python-packages
 	echo 'Installing $(PROJECT_NAME)'
 
+
+	echo "Install to $(INSTALL_DIR)"
 	# Prepare new virual environment
 	$(POETRY) run $(PYTHON) -m venv $(INSTALL_DIR)
 	rm -f $(BIN_DIR)/activate*

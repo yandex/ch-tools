@@ -11,9 +11,9 @@ export POETRY_INSTALLER_PARALLEL=false
 %:
 	dh $@
 
-# override_dh_auto_build:
-# 	$(MAKE) install-poetry
-# 	dh_auto_build
+override_dh_auto_build:
+	$(MAKE) install-poetry
+	dh_auto_build
 
 override_dh_auto_clean: ;
 
