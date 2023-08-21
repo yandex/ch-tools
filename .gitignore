@@ -1,8 +1,10 @@
 .DS_Store
 .idea
+.install-deps
 .mypy_cache/
 .python-version
 .pytype/
+.ruff_cache/
 .session_conf.sav
 __pycache__
 build/
@@ -13,4 +15,3 @@ tests/reports/
 tests/staging/
 venv/
 version.txt
-.install-deps
