@@ -44,13 +44,13 @@ class S3DiskConfiguration:
 
 def _parse_endpoint(endpoint: str) -> tuple:
     """
-    Parse both virtual and path style S3 url.
+    Parse both virtual and path style S3 endpoints url.
     """
     url = urlparse(endpoint)
     if url.hostname is None:
         raise ValueError(f"Incorrect endpoint format {endpoint}")
 
-    path = url.path.removeprefix("/")
+    path = url.path[1:] if url.path.startswith("/") else url.path
     if url.hostname.startswith(BUCKET_NAME_PREFIX):
         # virtual addressing style
         bucket_name, host = url.hostname.split(".", maxsplit=1)

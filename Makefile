@@ -143,7 +143,7 @@ pylint: install-deps
 
 .PHONY: mypy
 mypy: install-deps
-	$(POETRY) run mypy $(SRC_DIR) $(TESTS_DIR)
+	$(POETRY) run mypy --python-version=3.6 $(SRC_DIR) $(TESTS_DIR)
 
 .PHONY: format
 format: install-deps
