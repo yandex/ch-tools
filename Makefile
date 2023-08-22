@@ -267,17 +267,17 @@ prepare-changelog: prepare-version
 
 
 .PHONY: prepare-version
-prepare-version: $(VERSION_FILE)
-	echo "Version: $$(cat $(VERSION_FILE))"
-
-
-$(VERSION_FILE):
+prepare-version:
 	# Generate version
-	echo "2.$$(git rev-list HEAD --count).$$(git rev-parse --short HEAD | xargs -I {} printf '%d' 0x{})" > $@
+	echo "2.$$(git rev-list HEAD --count).$$(git rev-parse --short HEAD | xargs -I {} printf '%d' 0x{})" > $(VERSION_FILE)
+	VERSION=$$(cat $(VERSION_FILE))
+
 	# Replace version in $(SRC_DIR)/__init__.py
-	sed "s/__version__ = \"[0-9\.]\+\"/__version__ = \"$$(cat $@)\"/" $(SRC_DIR)/__init__.py
+	sed -i "s/__version__ = \"[0-9\.]\+\"/__version__ = \"$${VERSION}\"/g" $(SRC_DIR)/__init__.py
 	# Replace version in pyproject.toml
-	$(POETRY) version $$(cat $@)
+	$(POETRY) version $${VERSION}	
+
+	echo "Version: $${VERSION}"
 
 
 .PHONY: prepare-build-deb
