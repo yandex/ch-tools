@@ -173,7 +173,7 @@ install-python-package: build-python-packages
 	echo 'Installing $(PROJECT_NAME)'
 
 	# Prepare new virual environment
-	$(POETRY) run $(PYTHON) -m venv $(INSTALL_DIR)
+	$(PYTHON) -m venv $(INSTALL_DIR)
 	rm -f $(BIN_DIR)/activate*
 
 	# Install python package
@@ -286,9 +286,9 @@ prepare-build-deb:
 
 
 .PHONY: build-deb-package
-build-deb-package: prepare-changelog install-deps
+build-deb-package: prepare-changelog
 	# Build DEB package
-	(cd debian && $(POETRY) run debuild --check-dirname-level 0 --preserve-env --no-lintian --no-tgz-check -uc -us)
+	(cd debian && debuild --check-dirname-level 0 --preserve-env --no-lintian --no-tgz-check -uc -us)
 	# Move DEB package to output dir
 	DEB_FILE=$$(echo ../$(PROJECT_NAME)*.deb)
 	mkdir -p $(BUILD_DEB_OUTPUT_DIR) && mv $$DEB_FILE $(BUILD_DEB_OUTPUT_DIR)
