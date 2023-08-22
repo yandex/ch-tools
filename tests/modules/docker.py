@@ -6,7 +6,6 @@ import io
 import os
 import random
 import tarfile
-from distutils import dir_util  # pylint: disable=deprecated-module
 from typing import Sequence, Tuple
 from urllib.parse import urlparse
 
@@ -90,23 +89,6 @@ def get_file_size(container: Container, path: str) -> int:
     """
     output = container.exec_run(f'stat --format "%s" "{path}"')
     return int(output.decode())
-
-
-@utils.env_stage("create", fail=True)
-def prepare_images(context: ContextT) -> None:
-    """
-    Prepare images.
-    """
-    images_dir = context.conf["images_dir"]
-    staging_dir = context.conf["staging_dir"]
-
-    for service_name, service in context.conf["services"].items():
-        for instance_name in service["instances"]:
-            dir_util.copy_tree(
-                f"{images_dir}/{service_name}",
-                f"{staging_dir}/images/{instance_name}",
-                update=True,
-            )
 
 
 @utils.env_stage("create", fail=True)

@@ -3,6 +3,7 @@ Module responsible for template rendering.
 """
 import json
 import os
+import shutil
 from typing import Optional
 
 from jinja2 import BaseLoader, Environment, FileSystemLoader, StrictUndefined
@@ -12,26 +13,7 @@ from .clickhouse import ClickhouseClient
 from .typing import ContextT
 from .utils import context_to_dict, env_stage
 
-TEMP_FILE_EXT = "temp~"
-
-
-@env_stage("create", fail=True)
-def render_configs(context: ContextT) -> None:
-    """
-    Render each template in the subtree.
-    Each template is rendered in-place. As the framework operates in
-    staging dir, this is easily reset by `make clean`, or `rm -fr staging`.
-    """
-    staging_dir = context.conf["staging_dir"]
-    for service in context.conf["services"].values():
-        for instance_name in service["instances"]:
-            context.instance_name = instance_name
-            instance_dir = f"{staging_dir}/images/{instance_name}"
-            for root, _, files in os.walk(instance_dir):
-                for basename in files:
-                    if not basename.endswith(TEMP_FILE_EXT):
-                        _render_file(context, root, basename)
-    context.instance_name = None
+IGNORED_EXT_LIST = ["gpg"]
 
 
 def render_template(context: ContextT, text: str) -> str:
@@ -42,19 +24,64 @@ def render_template(context: ContextT, text: str) -> str:
     return template.render(context_to_dict(context))
 
 
-def _render_file(context: ContextT, directory: str, basename: str) -> None:
-    path = os.path.join(directory, basename)
-    temp_file_path = f"{path}.{TEMP_FILE_EXT}"
-    loader = FileSystemLoader(directory)
-    environment = _environment(context, loader)
+@env_stage("create", fail=True)
+def render_docker_configs(context: ContextT) -> None:
+    """
+    Render templated Docker configs.
+    """
+    images_dir = context.conf["images_dir"]
+    staging_dir = context.conf["staging_dir"]
+    for service_name, conf in context.conf["services"].items():
+        service_dir = os.path.join(images_dir, service_name)
+        for instance_name in conf["instances"]:
+            instance_dir = os.path.join(staging_dir, "images", instance_name)
+            os.makedirs(instance_dir, exist_ok=True)
+            for dirpath, dirnames, filenames in os.walk(service_dir):
+                target_dir = os.path.join(
+                    instance_dir, os.path.relpath(dirpath, start=service_dir)
+                )
+                for dirname in dirnames:
+                    os.makedirs(os.path.join(target_dir, dirname), exist_ok=True)
+
+                for filename in filenames:
+                    source_path = os.path.join(dirpath, filename)
+                    target_path = os.path.join(target_dir, filename)
+                    if _is_template(source_path):
+                        _render_file(
+                            context=context,
+                            source_path=source_path,
+                            target_path=target_path,
+                            instance_name=instance_name,
+                        )
+                    else:
+                        shutil.copy(source_path, target_path)
+
+
+def _is_template(source_path):
+    for ignored_ext in IGNORED_EXT_LIST:
+        if source_path.endswith(ignored_ext):
+            return False
+
+    return True
+
+
+def _render_file(
+    context: ContextT,
+    source_path: str,
+    target_path: str,
+    instance_name: str,
+) -> None:
+    environment = _environment(context, FileSystemLoader("."))
+
     jinja_context = context_to_dict(context)
+    jinja_context["instance_name"] = instance_name
+
     try:
-        with open(temp_file_path, "w", encoding="utf-8") as temp_file:
-            template = environment.get_template(basename)
-            temp_file.write(template.render(jinja_context))
+        with open(target_path, "w", encoding="utf-8") as file:
+            template = environment.get_template(source_path)
+            file.write(template.render(jinja_context))
     except Exception as e:
-        raise RuntimeError(f"Failed to render {path}") from e
-    os.rename(temp_file_path, path)
+        raise RuntimeError(f"Failed to render {target_path}") from e
 
 
 def _environment(context: ContextT, loader: Optional[BaseLoader] = None) -> Environment:

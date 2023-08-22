@@ -14,9 +14,8 @@ from modules import compose, docker, minio, templates
 SESSION_STATE_CONF = ".session_conf.sav"
 STAGES = {
     "create": [
-        docker.prepare_images,
+        templates.render_docker_configs,
         compose.create_config,
-        templates.render_configs,
         compose.build_images,
     ],
     "start": [
