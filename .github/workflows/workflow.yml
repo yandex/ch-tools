@@ -59,6 +59,13 @@ jobs:
       - run: make test-unit
       - run: make test-integration
 
+      - uses: actions/upload-artifact@v3
+        if: ${{ failure() }}
+        with:
+          name: integration-test-logs-py${{ matrix.target.python }}-clickhouse-${{ matrix.clickhouse }}
+          path: tests/staging/logs/
+          if-no-files-found: ignore
+
       - name: publish test report
         uses: mikepenz/action-junit-report@v3
         if: always()
