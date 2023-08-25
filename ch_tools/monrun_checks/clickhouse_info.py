@@ -11,7 +11,7 @@ class ClickhouseInfo:
         Count different clickhouse versions in cluster.
         """
         ch_client = ClickhouseClient()
-        #  I belive that all hosts in cluster have the same port set, so check current for security port
+        #  I believe that all hosts in cluster have the same port set, so check current for security port
         remote_command = (
             "remoteSecure"
             if ch_client.check_port(ClickhousePort.TCP_SECURE)

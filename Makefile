@@ -118,7 +118,7 @@ $(VENV_DIR):
 
 
 .PHONY: lint
-lint: isort black ruff pylint mypy
+lint: isort black codespell ruff pylint mypy
 
 
 .PHONY: isort
@@ -129,6 +129,15 @@ isort: install-deps
 .PHONY: black
 black: install-deps
 	$(POETRY) run black --check --diff $(SRC_DIR) $(TESTS_DIR)
+
+
+.PHONY: codespell
+codespell: install-deps
+	$(POETRY) run codespell
+
+.PHONY: fix-codespell-errors
+fix-codespell-errors: install-deps
+	$(POETRY) run codespell -w
 
 
 .PHONY: ruff
@@ -144,6 +153,7 @@ pylint: install-deps
 .PHONY: mypy
 mypy: install-deps
 	$(POETRY) run mypy --python-version=3.6 $(SRC_DIR) $(TESTS_DIR)
+
 
 .PHONY: format
 format: install-deps
@@ -172,7 +182,7 @@ publish:
 install-python-package: build-python-packages
 	echo 'Installing $(PROJECT_NAME)'
 
-	# Prepare new virual environment
+	# Prepare new virtual environment
 	$(PYTHON) -m venv $(INSTALL_DIR)
 	rm -f $(BIN_DIR)/activate*
 
@@ -319,11 +329,12 @@ help:
 	echo "  install-deps               Install Python dependencies to local environment $(VENV_DIR)"
 	echo "  update-deps                Update dependencies in poetry.lock to their latest versions"	
 	echo "  publish                    Publish python package to PYPI"	
-	echo "  lint                       Run linters. Alias for \"isort black ruff pylint mypy\"."
+	echo "  lint                       Run linters. Alias for \"isort black codespell ruff pylint mypy\"."
 	echo "  test-unit                  Run unit tests."
 	echo "  test-integration           Run integration tests."
 	echo "  isort                      Perform isort checks."
 	echo "  black                      Perform black checks."
+	echo "  codespell                  Perform codespell checks."
 	echo "  ruff                       Perform ruff checks."
 	echo "  pylint                     Perform pylint checks."
 	echo "  mypy                       Perform mypy checks."

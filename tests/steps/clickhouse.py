@@ -37,9 +37,9 @@ def step_clickhouse_queries(context, node):
         ch_client.execute(query)
 
 
-@given("we get reponse code {code:d}")
-@then("we get reponse code {code:d}")
-def step_clickhouse_reponse(context, code):
+@given("we get response code {code:d}")
+@then("we get response code {code:d}")
+def step_clickhouse_response(context, code):
     assert_that(code, equal_to(context.ret_code))
 
 
