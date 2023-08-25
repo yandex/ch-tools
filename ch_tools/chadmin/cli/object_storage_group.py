@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from gzip import GzipFile
 from io import TextIOWrapper
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import BinaryIO, Dict, List, Optional, Union
 
 import click
 from click import Context, group, option, pass_context
@@ -196,10 +196,14 @@ def clean_object_storage(ctx, file, compressed):
 
 @contextlib.contextmanager
 def dump_writer(compressed, file_path=None):
-    writer = open(file_path, "wb") if file_path is not None else sys.stdout.buffer
+    out_file = open(file_path, "wb") if file_path is not None else sys.stdout.buffer
+    writer: Union[GzipFile, BinaryIO] = (
+        GzipFile(mode="wb", fileobj=out_file) if compressed else out_file
+    )
     try:
-        yield GzipFile(mode="wb", fileobj=writer) if compressed else writer
+        yield writer
     finally:
+        writer.flush()
         if file_path is not None or compressed:
             writer.close()
 
