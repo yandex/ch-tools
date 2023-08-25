@@ -37,7 +37,7 @@ def clear_empty_directories_recursively(directory):
             directory.rmdir()
     except FileNotFoundError:
         print(
-            f"Tried to remove directory {directory}, but the error arised. Maybe it was already removed."
+            f"Tried to remove directory {directory}, but the error arose. Maybe it was already removed."
         )
 
 

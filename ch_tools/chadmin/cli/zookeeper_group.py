@@ -207,11 +207,11 @@ def update_acls_command(ctx, path, acls):
     """
 
     def _parse_acl(acl):
-        splitted = acl.split(":")
-        if len(splitted) != 3:
+        acl_tuple = acl.split(":")
+        if len(acl_tuple) != 3:
             ctx.fail("Invalid --acls parameter format. See --help for valid format.")
 
-        username, password, short_acl = splitted
+        username, password, short_acl = acl_tuple
 
         if short_acl == "all":
             return make_digest_acl(username, password, all=True)

@@ -35,7 +35,7 @@ def collect_metadata(paths: Iterable[Path]) -> ObjectKeyToMetadata:
                     metadata = S3ObjectLocalMetaData.from_file(file_path)
                 except Exception as error:
                     logging.debug(
-                        "Skip error occured while reading metadata from `%s`: %s",
+                        "Skip error occurred while reading metadata from `%s`: %s",
                         file_path,
                         repr(error),
                     )
