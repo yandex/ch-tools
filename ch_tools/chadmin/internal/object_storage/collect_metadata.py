@@ -8,6 +8,8 @@ from ch_tools.chadmin.internal.object_storage.s3_local_metadata import (
     S3ObjectLocalMetaData,
 )
 
+IGNORED_FILENAMES = ["frozen_metadata.txt", "revision.txt"]
+
 ObjectKeyToMetadata = Dict[str, Dict[Path, S3ObjectLocalMetaData]]
 
 
@@ -25,6 +27,9 @@ def collect_metadata(paths: Iterable[Path]) -> ObjectKeyToMetadata:
 
         for dirpath, _dirnames, filenames in os.walk(str(top_dir)):
             for filename in filenames:
+                if filename in IGNORED_FILENAMES:
+                    continue
+
                 file_path = Path(dirpath) / filename
                 try:
                     metadata = S3ObjectLocalMetaData.from_file(file_path)
