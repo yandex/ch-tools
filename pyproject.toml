@@ -74,7 +74,10 @@ packages = [
     { include = "ch_tools" },
 ]
 
-include = ["resources/"]
+include = [
+    "ch_tools/__init__.py",  # avoid exclusion of generated file listed in .gitignore
+    "resources/",
+]
 
 
 [tool.poetry.dependencies]

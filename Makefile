@@ -122,47 +122,47 @@ lint: isort black codespell ruff pylint mypy
 
 
 .PHONY: isort
-isort: install-deps
+isort: generate-version install-deps
 	$(POETRY) run isort --check --diff $(SRC_DIR) $(TESTS_DIR)
 
 
 .PHONY: black
-black: install-deps
+black: generate-version install-deps
 	$(POETRY) run black --check --diff $(SRC_DIR) $(TESTS_DIR)
 
 
 .PHONY: codespell
-codespell: install-deps
+codespell: generate-version install-deps
 	$(POETRY) run codespell
 
 .PHONY: fix-codespell-errors
-fix-codespell-errors: install-deps
+fix-codespell-errors: generate-version install-deps
 	$(POETRY) run codespell -w
 
 
 .PHONY: ruff
-ruff: install-deps
+ruff: generate-version install-deps
 	$(POETRY) run ruff $(SRC_DIR) $(TESTS_DIR)
 
 
 .PHONY: pylint
-pylint: install-deps
+pylint: generate-version install-deps
 	$(POETRY) run pylint $(SRC_DIR)
 
 
 .PHONY: mypy
-mypy: install-deps
+mypy: generate-version install-deps
 	$(POETRY) run mypy --python-version=3.6 $(SRC_DIR) $(TESTS_DIR)
 
 
 .PHONY: format
-format: install-deps
+format: generate-version install-deps
 	$(POETRY) run isort $(SRC_DIR) $(TESTS_DIR)
 	$(POETRY) run black $(SRC_DIR) $(TESTS_DIR)
 
 
 .PHONY: test-unit
-test-unit: install-deps
+test-unit: generate-version install-deps
 	$(POETRY) run $(PYTHON) -m pytest $(PYTEST_ARGS) $(TESTS_DIR)/unit
 
 
@@ -201,7 +201,7 @@ install-python-package: build-python-packages
 
 
 .PHONY: build-python-packages
-build-python-packages: prepare-version clean-dist
+build-python-packages: prepare-pyproject-file clean-dist
 	echo 'Building python packages...'
 	$(POETRY) build
 
@@ -271,24 +271,26 @@ uninstall-logrotate:
 
 
 .PHONY: prepare-changelog
-prepare-changelog: prepare-version
+prepare-changelog: generate-version
 	echo 'Bumping version into Debian package changelog'
 	DEBFULLNAME="Yandex LLC" DEBEMAIL="ch-tools@yandex-team.ru" dch --force-bad-version --distribution stable -v $$(cat $(VERSION_FILE)) Autobuild
 
 
-.PHONY: prepare-version
-prepare-version: $(VERSION_FILE)
-	VERSION=$$(cat $(VERSION_FILE))	
-	# Replace version in $(SRC_DIR)/__init__.py
-	sed -i "s/__version__ = \"[0-9\.]\+\"/__version__ = \"$${VERSION}\"/g" $(SRC_DIR)/__init__.py
+.PHONY: prepare-pyproject-file
+prepare-pyproject-file: generate-version
 	# Replace version in pyproject.toml
-	$(POETRY) version $${VERSION}
-
+	VERSION=$$(cat ${VERSION_FILE}) && \
+	$(POETRY) version $${VERSION} && \
 	echo "Version: $${VERSION}"
 
+.PHONE: generate-version
+generate-version: $(VERSION_FILE) $(SRC_DIR)/__init__.py
 
 $(VERSION_FILE):
 	echo "2.$$(git rev-list HEAD --count).$$(git rev-parse --short HEAD | xargs -I {} printf '%d' 0x{})" > $@
+
+$(SRC_DIR)/__init__.py: $(VERSION_FILE)
+	echo "__version__ = \"$$(cat ${VERSION_FILE})\"" > $@
 
 
 .PHONY: prepare-build-deb
@@ -319,6 +321,7 @@ clean: clean_debuild
 	rm -rf $(BUILD_PYTHON_OUTPUT_DIR)
 	rm -rf $(VENV_DIR)
 	rm -rf $(INSTALL_DEPS_STAMP)
+	rm -rf $(VERSION_FILE) $(SRC_DIR)/__init__.py
 	rm -rf .mypy_cache .ruff_cache tests/{.session_conf.sav,__pycache__,staging,reports}
 
  
@@ -342,7 +345,6 @@ help:
 	echo "  format                     Re-format source code to conform style settings enforced by"
 	echo "                             isort and black tools."
 	echo "  prepare-changelog          Add an autobuild version entity to changelog"
-	echo "  prepare-version            Update version based on latest commit"
 	echo "  build-python-packages      Build '$(PROJECT_NAME)' Python packages (sdist and wheel)"
 	echo "  prepare-build-deb          Install prerequisites for DEB packaging tool"
 	echo "  build-deb-package          Build '$(PROJECT_NAME)' debian package"
