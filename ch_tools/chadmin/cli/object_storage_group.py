@@ -111,15 +111,23 @@ def object_storage_group(ctx: Context, config_path: Path, disk_name: str) -> Non
     help="Output only newline delimited object keys",
 )
 @option(
-    "-g",
-    "--guard-interval",
-    "guard_interval",
-    default=DEFAULT_GUARD_INTERVAL,
+    "--from-time",
+    "from_time",
+    default=None,
     type=TimeSpanParamType(),
     help=(
-        "Guard interval in human-friendly format."
-        "Objects with a modification time falling within it from the now are not considered orphaned"
+        "Begin of inspecting interval in human-friendly format. "
+        "Objects with a modification time falling interval [now - from_time, now - to_time] are considered"
     ),
+)
+@option(
+    "-g",
+    "--guard-interval",
+    "--to-time",
+    "to_time",
+    default=DEFAULT_GUARD_INTERVAL,
+    type=TimeSpanParamType(),
+    help=("End of inspecting interval in human-friendly format."),
 )
 @pass_context
 def list_objects(
@@ -129,14 +137,22 @@ def list_objects(
     dump_file: Optional[Path],
     compressed: bool,
     quiet: bool,
-    guard_interval: timedelta,
+    from_time: Optional[timedelta],
+    to_time: timedelta,
     limit: Optional[int],
 ) -> None:
     """
     List S3 objects.
     """
+    if from_time is not None and from_time <= to_time:
+        raise click.BadParameter(
+            "from_time parameter must be greater than to_time",
+            param_hint="--from-time",
+        )
+
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
-    pivot_time = datetime.now(timezone.utc) - guard_interval
+    now = datetime.now(timezone.utc)
+
     counter = 0
 
     with dump_writer(compressed, dump_file) as writer:
@@ -149,7 +165,12 @@ def list_objects(
 
             metadata = object_key_to_metadata.get(name)
 
-            if orphaned and (metadata or obj.last_modified > pivot_time):
+            if obj.last_modified > now - to_time:
+                continue
+            if from_time is not None and obj.last_modified < now - from_time:
+                continue
+
+            if orphaned and metadata:
                 continue
             if not orphaned and not metadata:
                 continue
