@@ -170,7 +170,7 @@ test-unit: install-deps
 test-integration: install-deps build-python-packages	
 	cd $(TESTS_DIR)
 	$(POETRY) run $(PYTHON) -m env_control create
-	$(POETRY) run behave --show-timings -D skip_setup --junit $(BEHAVE_ARGS)
+	$(POETRY) run behave --show-timings --stop -D skip_setup --junit $(BEHAVE_ARGS)
 
 
 .PHONY: publish
@@ -319,6 +319,7 @@ clean: clean_debuild
 	rm -rf $(BUILD_PYTHON_OUTPUT_DIR)
 	rm -rf $(VENV_DIR)
 	rm -rf $(INSTALL_DEPS_STAMP)
+	rm -rf .mypy_cache .ruff_cache tests/{.session_conf.sav,__pycache__,staging,reports}
 
  
 .PHONY: help

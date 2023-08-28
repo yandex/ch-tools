@@ -151,7 +151,12 @@ def _generate_service_config(
     staging_dir = "tests/" + config["staging_dir"]
     network_name = config["network_name"]
 
-    volumes = [f"./images/{instance_name}/config:/config:rw"]
+    volumes = []
+    if os.path.exists(
+        os.path.join(config["staging_dir"], f"images/{instance_name}/config")
+    ):
+        volumes.append(f"./images/{instance_name}/config:/config:rw")
+
     # Take care of port forwarding
     ports_list = []
     for port in instance_config.get("expose", {}).values():
