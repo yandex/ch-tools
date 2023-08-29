@@ -33,13 +33,18 @@ class _TargetRecord:
 @click.option("--cluster", "cluster", is_flag=True, help="Check cluster DNS records")
 @click.option("--private", "private", is_flag=True, help="Check private DNS records")
 @click.option("--ipv6", "ipv6", is_flag=True, help="Check AAAA DNS records")
-def ext_ip_dns_command(cluster: bool, private: bool, ipv6: bool) -> Result:
+@click.option(
+    "--imdsv2", "imdsv2", is_flag=True, help="Use imdsv2 token for non gcp hosts"
+)
+def ext_ip_dns_command(
+    cluster: bool, private: bool, ipv6: bool, imdsv2: bool
+) -> Result:
     """
     Check that all DNS records consistent.
     """
     err = []
     for record in _get_host_dns(cluster, private):
-        err.extend(_check_fqdn(record, ipv6))
+        err.extend(_check_fqdn(record, ipv6, imdsv2))
 
     if not err:
         return Result(0, "OK")
@@ -47,7 +52,7 @@ def ext_ip_dns_command(cluster: bool, private: bool, ipv6: bool) -> Result:
     return Result(2, ", ".join(err))
 
 
-def _check_fqdn(target: _TargetRecord, ipv6: bool) -> list:
+def _check_fqdn(target: _TargetRecord, ipv6: bool, imdsv2: bool) -> list:
     err = []
     resolver = dns.resolver.Resolver()
 
@@ -58,7 +63,7 @@ def _check_fqdn(target: _TargetRecord, ipv6: bool) -> list:
             )
         except dns.resolver.NXDOMAIN:
             actual_addr = set()
-        target_addr = {_get_host_ip(ip_type)}
+        target_addr = {_get_host_ip(ip_type, imdsv2)}
         if target.strict:
             return target_addr == actual_addr
         return actual_addr.issuperset(target_addr)
@@ -72,16 +77,28 @@ def _check_fqdn(target: _TargetRecord, ipv6: bool) -> list:
 
 
 @lru_cache(maxsize=None)
-def _get_host_ip(addr_type: str) -> str:
+def _get_host_ip(addr_type: str, imdsv2: bool) -> str:
     # pylint: disable=missing-timeout
     if _is_gcp():
         resp = requests.get(
             IP_METADATA_PATHS_GCP[addr_type], headers={"Metadata-Flavor": "Google"}
         )
     else:
-        resp = requests.get(IP_METADATA_PATHS[addr_type])
+        headers = {}
+        if imdsv2:
+            headers["X-aws-ec2-metadata-token"] = _get_imdsv2_token()
+        resp = requests.get(IP_METADATA_PATHS[addr_type], headers=headers)
     resp.raise_for_status()
     return resp.text.strip()
+
+
+@lru_cache(maxsize=None)
+def _get_imdsv2_token():
+    return requests.put(
+        "http://169.254.169.254/latest/api/token",
+        headers={"X-aws-ec2-metadata-token-ttl-seconds": "60"},
+        timeout=10,
+    ).text
 
 
 @lru_cache(maxsize=None)
