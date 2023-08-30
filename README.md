@@ -9,10 +9,10 @@
 ## Tools
 
 **clickhouse-tools** consist of following components:
-- [chadmin](./src/chtools/chadmin/README.md) - ClickHouse administration tool
-- [ch-monitoring](./src/chtools/monrun_checks/README.md) - ClickHouse monitoring tool
-- [keeper-monitoring](./src/chtools/monrun_checks_keeper/README.md) - ClickHouse Keeper / ZooKeeper monitoring tool
-- [ch-s3-credentials](./src/chtools/s3_credentials/README.md) - ClickHouse S3 credentials management tool
+- [chadmin](./ch_tools/chadmin/README.md) - ClickHouse administration tool
+- [ch-monitoring](./ch_tools/monrun_checks/README.md) - ClickHouse monitoring tool
+- [keeper-monitoring](./ch_tools/monrun_checks_keeper/README.md) - ClickHouse Keeper / ZooKeeper monitoring tool
+- [ch-s3-credentials](./ch_tools/s3_credentials/README.md) - ClickHouse S3 credentials management tool
 
 All of these tools must be run on the same host as ClickHouse server is running.
 
