@@ -4,11 +4,11 @@ Check ClickHouse backups: its state, age and count.
 
 import json
 from datetime import datetime, timedelta, timezone
-from dateutil import parse as dateutil_parse
 from os.path import exists
 from typing import Dict, List, Optional
 
 import click
+from dateutil.parser import parse as dateutil_parse
 
 from ch_tools.common.backup import BackupConfig, get_backups
 from ch_tools.common.clickhouse.client import ClickhouseClient
