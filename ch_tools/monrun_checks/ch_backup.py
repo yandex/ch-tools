@@ -8,14 +8,13 @@ from os.path import exists
 from typing import Dict, List, Optional
 
 import click
+from dateutil.parser import parse as dateutil_parse
 
 from ch_tools.common.backup import BackupConfig, get_backups
 from ch_tools.common.clickhouse.client import ClickhouseClient
 from ch_tools.common.dbaas import DbaasConfig
 from ch_tools.monrun_checks.exceptions import die
 
-DATE_FORMAT = "%Y-%m-%d %H:%M:%S %z"
-FULL_DATE_FORMAT = "%Y-%m-%dT%H:%M:%S.%f%z"
 RESTORE_CONTEXT_PATH = "/tmp/ch_backup_restore_state.json"
 FAILED_PARTS_THRESHOLD = 10
 
@@ -169,7 +168,7 @@ def get_backup_age(backup):
     """
     Calculate and return age of ClickHouse backup.
     """
-    backup_time = datetime.strptime(backup["start_time"], DATE_FORMAT)
+    backup_time = dateutil_parse(backup["start_time"])
     return datetime.now(timezone.utc) - backup_time
 
 
@@ -181,7 +180,8 @@ def parse_str_datetime(value: str) -> Optional[datetime]:
         return None
 
     try:
-        return datetime.strptime(value, FULL_DATE_FORMAT)
+        # use dateutil.parse instead of datetime.strptime because strptime can't parse timezone with ":" on python 3.6
+        return dateutil_parse(value)
     except Exception:
         return None
 
