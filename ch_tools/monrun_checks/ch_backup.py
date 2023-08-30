@@ -15,8 +15,6 @@ from ch_tools.common.clickhouse.client import ClickhouseClient
 from ch_tools.common.dbaas import DbaasConfig
 from ch_tools.monrun_checks.exceptions import die
 
-DATE_FORMAT = "%Y-%m-%d %H:%M:%S %z"
-FULL_DATE_FORMAT = "%Y-%m-%dT%H:%M:%S.%f%z"
 RESTORE_CONTEXT_PATH = "/tmp/ch_backup_restore_state.json"
 FAILED_PARTS_THRESHOLD = 10
 
