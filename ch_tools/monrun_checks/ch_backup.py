@@ -4,6 +4,7 @@ Check ClickHouse backups: its state, age and count.
 
 import json
 from datetime import datetime, timedelta, timezone
+from dateutil import parse as dateutil_parse
 from os.path import exists
 from typing import Dict, List, Optional
 
@@ -169,7 +170,7 @@ def get_backup_age(backup):
     """
     Calculate and return age of ClickHouse backup.
     """
-    backup_time = datetime.strptime(backup["start_time"], DATE_FORMAT)
+    backup_time = dateutil_parse(backup["start_time"])
     return datetime.now(timezone.utc) - backup_time
 
 
@@ -181,7 +182,8 @@ def parse_str_datetime(value: str) -> Optional[datetime]:
         return None
 
     try:
-        return datetime.strptime(value, FULL_DATE_FORMAT)
+        # use dateutil.parse instead of datetime.strptime because strptime can't parse timezone with ":" on python 3.6
+        return dateutil_parse(value)
     except Exception:
         return None
 
