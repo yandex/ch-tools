@@ -1,4 +1,3 @@
-import getpass
 import logging
 import os
 import pwd
@@ -154,9 +153,11 @@ def main():
 
 
 def check_current_user():
-    user = getpass.getuser()
+    euid = os.geteuid()
+    user = pwd.getpwuid(euid).pw_name
+
     if user != DEFAULT_USER:
-        if os.geteuid() != 0:
+        if euid != 0:
             print(f"Wrong current user: {user}", file=sys.stderr)
             sys.exit(1)
         else:
