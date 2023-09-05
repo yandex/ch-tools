@@ -11,6 +11,7 @@ import click
 from dateutil.parser import parse as dateutil_parse
 
 from ch_tools.common.backup import BackupConfig, get_backups
+from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.client import ClickhouseClient
 from ch_tools.common.dbaas import DbaasConfig
 from ch_tools.monrun_checks.exceptions import die
@@ -24,13 +25,14 @@ FAILED_PARTS_THRESHOLD = 10
     "--critical-failed",
     "crit_failed",
     default=3,
-    help="Critical threshold for failed backupd.",
+    help="Critical threshold for failed backups.",
 )
 @click.option(
     "--critical-absent",
     "crit_absent",
-    default=timedelta(days=2),
-    help="Critical threshold for absent backupd",
+    default="2d",
+    type=TimeSpanParamType(),
+    help="Critical threshold for absent backups.",
 )
 def backup_command(crit_failed, crit_absent):
     """
@@ -92,7 +94,7 @@ def check_last_backup_not_failed(backups, crit=3):
     die(status, message)
 
 
-def check_backup_age(ch_client, backups, age_threshold=timedelta(days=1), crit=None):
+def check_backup_age(ch_client, backups, *, age_threshold=timedelta(days=1), crit=None):
     """
     Check that the last backup is not too old.
     """
