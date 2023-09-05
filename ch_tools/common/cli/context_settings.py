@@ -10,6 +10,7 @@ CONTEXT_SETTINGS = Context.settings(
     align_option_groups=False,
     align_sections=True,
     show_constraints=True,
+    show_default=True,
     formatter_settings=HelpFormatter.settings(
         theme=HelpTheme.light(),
     ),
