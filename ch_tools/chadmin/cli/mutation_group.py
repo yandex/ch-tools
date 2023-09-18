@@ -100,6 +100,9 @@ def list_mutations(ctx, is_done, command_pattern, on_cluster):
 
 @mutation_group.command(name="kill")
 @option(
+    "--command", "command_pattern", help="Filter mutations to kill by command pattern."
+)
+@option(
     "--cluster",
     "--on-cluster",
     "on_cluster",
@@ -107,7 +110,7 @@ def list_mutations(ctx, is_done, command_pattern, on_cluster):
     help="Kill mutations on all hosts of the cluster.",
 )
 @pass_context
-def kill_mutation(ctx, on_cluster):
+def kill_mutation(ctx, command_pattern, on_cluster):
     """Kill one or several mutations."""
     cluster = get_cluster_name(ctx) if on_cluster else None
     query = """
@@ -116,7 +119,16 @@ def kill_mutation(ctx, on_cluster):
         ON CLUSTER '{{ cluster }}'
         {%- endif %}
         WHERE NOT is_done
+        {% if command_pattern %}
+          AND command ILIKE '{{ command_pattern }}'
+        {% endif %}
         """
-    print(
-        execute_query(ctx, query, cluster=cluster, echo=True, format_="PrettyCompact")
+    response = execute_query(
+        ctx,
+        query,
+        command_pattern=command_pattern,
+        cluster=cluster,
+        echo=True,
+        format_="PrettyCompact",
     )
+    print(response)
