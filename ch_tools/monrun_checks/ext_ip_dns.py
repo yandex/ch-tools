@@ -1,7 +1,7 @@
 import json
 import socket
 from functools import lru_cache
-from typing import List
+from typing import List, Tuple
 
 import click
 import dns.resolver
@@ -56,7 +56,7 @@ def _check_fqdn(target: _TargetRecord, ipv6: bool, imdsv2: bool) -> list:
     err = []
     resolver = dns.resolver.Resolver()
 
-    def _compare(record_type: str, ip_type: str) -> bool:
+    def _compare(record_type: str, ip_type: str) -> Tuple[bool, set, set]:
         try:
             actual_addr = set(
                 map(lambda a: a.to_text(), resolver.resolve(target.fqdn, record_type))
@@ -65,13 +65,21 @@ def _check_fqdn(target: _TargetRecord, ipv6: bool, imdsv2: bool) -> list:
             actual_addr = set()
         target_addr = {_get_host_ip(ip_type, imdsv2)}
         if target.strict:
-            return target_addr == actual_addr
-        return actual_addr.issuperset(target_addr)
+            return target_addr == actual_addr, target_addr, actual_addr
+        return actual_addr.issuperset(target_addr), target_addr, actual_addr
 
-    if not _compare("A", "private_v4" if target.private else "public_v4"):
-        err.append(f"{target.fqdn}: invalid A")
-    if ipv6 and not _compare("AAAA", "ipv6"):
-        err.append(f"{target.fqdn}: invalid AAAA")
+    ok, target_addr, actual_addr = _compare(
+        "A", "private_v4" if target.private else "public_v4"
+    )
+    if not ok:
+        err.append(
+            f"{target.fqdn}: invalid A: expected {target_addr}, actual {actual_addr}"
+        )
+    ok, target_addr, actual_addr = _compare("AAAA", "ipv6")
+    if ipv6 and not ok:
+        err.append(
+            f"{target.fqdn}: invalid AAAA: expected {target_addr}, actual {actual_addr}"
+        )
 
     return err
 
