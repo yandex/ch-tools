@@ -120,7 +120,19 @@ def columns_command(ctx, database, table):
     "--exclude-table", help="Filter out tables to delete by the specified table name."
 )
 @option("-a", "--all", "all_", is_flag=True, help="Delete all tables.")
-@option("--cluster")
+@option(
+    "--cluster",
+    "--on-cluster",
+    "on_cluster",
+    is_flag=True,
+    help="Delete tables on all hosts of the cluster.",
+)
+@option(
+    "--sync/--async",
+    "sync_mode",
+    default=True,
+    help="Enable/Disable synchronous query execution.",
+)
 @option(
     "-n",
     "--dry-run",
@@ -128,7 +140,9 @@ def columns_command(ctx, database, table):
     default=False,
     help="Enable dry run mode and do not perform any modifying actions.",
 )
-def delete_command(ctx, dry_run, all_, database, table, exclude_table, cluster):
+def delete_command(
+    ctx, all_, database, table, exclude_table, on_cluster, sync_mode, dry_run
+):
     """
     Delete one or several tables.
     """
@@ -136,6 +150,8 @@ def delete_command(ctx, dry_run, all_, database, table, exclude_table, cluster):
         ctx.fail(
             "At least one of --all, --database, --table options must be specified."
         )
+
+    cluster = get_cluster_name(ctx) if on_cluster else None
 
     for t in list_tables(
         ctx, database=database, table=table, exclude_table=exclude_table
@@ -145,6 +161,7 @@ def delete_command(ctx, dry_run, all_, database, table, exclude_table, cluster):
             database=t["database"],
             table=t["table"],
             cluster=cluster,
+            sync_mode=sync_mode,
             echo=True,
             dry_run=dry_run,
         )
