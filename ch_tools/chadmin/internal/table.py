@@ -149,7 +149,9 @@ def attach_table(ctx, database, table, *, cluster=None, echo=False, dry_run=Fals
     )
 
 
-def delete_table(ctx, database, table, *, cluster=None, echo=False, dry_run=False):
+def delete_table(
+    ctx, database, table, *, cluster=None, echo=False, sync_mode=True, dry_run=False
+):
     """
     Perform "DROP TABLE" for the specified table.
     """
@@ -158,7 +160,9 @@ def delete_table(ctx, database, table, *, cluster=None, echo=False, dry_run=Fals
         {%- if cluster %}
         ON CLUSTER '{{ cluster }}'
         {%- endif %}
+        {%- if sync_mode %}
         NO DELAY
+        {%- endif %}
         """
     execute_query(
         ctx,
@@ -166,6 +170,7 @@ def delete_table(ctx, database, table, *, cluster=None, echo=False, dry_run=Fals
         database=database,
         table=table,
         cluster=cluster,
+        sync_mode=sync_mode,
         echo=echo,
         dry_run=dry_run,
         format_=None,

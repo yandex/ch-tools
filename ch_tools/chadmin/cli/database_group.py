@@ -1,5 +1,6 @@
 from click import argument, group, option, pass_context
 
+from ch_tools.chadmin.cli import get_cluster_name
 from ch_tools.chadmin.internal.utils import execute_query
 
 
@@ -47,7 +48,13 @@ def list_databases_command(ctx, **kwargs):
 @option("-d", "--database")
 @option("--exclude-database")
 @option("-a", "--all", "all_", is_flag=True, help="Delete all databases.")
-@option("--cluster")
+@option(
+    "--cluster",
+    "--on-cluster",
+    "on_cluster",
+    is_flag=True,
+    help="Delete databases on all hosts of the cluster.",
+)
 @option(
     "-n",
     "--dry-run",
@@ -55,9 +62,13 @@ def list_databases_command(ctx, **kwargs):
     default=False,
     help="Enable dry run mode and do not perform any modifying actions.",
 )
-def delete_databases_command(ctx, dry_run, all_, database, exclude_database, cluster):
+def delete_databases_command(
+    ctx, dry_run, all_, database, exclude_database, on_cluster
+):
     if not any((all_, database)):
         ctx.fail("At least one of --all, --database options must be specified.")
+
+    cluster = get_cluster_name(ctx) if on_cluster else None
 
     for d in get_databases(
         ctx, database=database, exclude_database=exclude_database, format_="JSON"
