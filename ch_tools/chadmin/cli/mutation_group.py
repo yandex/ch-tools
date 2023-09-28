@@ -53,8 +53,11 @@ def get_mutation(ctx, mutation, last):
     is_flag=True,
     help="Get mutations from all hosts in the cluster.",
 )
+@option(
+    "-l", "--limit", type=int, help="Limit the max number of objects in the output."
+)
 @pass_context
-def list_mutations(ctx, is_done, command_pattern, on_cluster):
+def list_mutations(ctx, is_done, command_pattern, on_cluster, limit):
     """List mutations."""
     cluster = get_cluster_name(ctx) if on_cluster else None
     query = """
@@ -86,6 +89,9 @@ def list_mutations(ctx, is_done, command_pattern, on_cluster):
         {% if command_pattern %}
           AND command ILIKE '{{ command_pattern }}'
         {% endif %}
+        {% if limit -%}
+        LIMIT {{ limit }}
+        {% endif -%}
         """
     response = execute_query(
         ctx,
@@ -93,6 +99,7 @@ def list_mutations(ctx, is_done, command_pattern, on_cluster):
         is_done=is_done,
         command_pattern=command_pattern,
         cluster=cluster,
+        limit=limit,
         format_="Vertical",
     )
     print(response)
