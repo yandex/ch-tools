@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CLICKHOUSE_VERSION: ${{ inputs.clickhouse_version }}
+      CLICKHOUSE_VERSIONS: ${{ inputs.clickhouse_version }}
       NEED_SETUP: true
     steps:
       - uses: actions/checkout@v3
