@@ -1,9 +1,11 @@
 import logging
 import os
+import re
 from contextlib import contextmanager
+from queue import Queue
 
 from kazoo.client import KazooClient
-from kazoo.exceptions import NoNodeError
+from kazoo.exceptions import NoNodeError, NotEmptyError
 
 from ch_tools.chadmin.cli import get_config, get_macros
 
@@ -27,19 +29,22 @@ def get_zk_node_acls(ctx, path):
         return zk.get_acls(path)
 
 
+def _get_children(zk, path):
+    try:
+        return zk.get_children(path)
+    except NoNodeError:
+        return []  # in the case ZK deletes a znode while we traverse the tree
+
+
 def list_zk_nodes(ctx, path, verbose=False):
     def _stat_node(zk, node):
         descendants_count = 0
         queue = [node]
         while queue:
             item = queue.pop()
-            try:
-                children = zk.get_children(item)
-                descendants_count += len(children)
-                queue.extend(os.path.join(item, node) for node in children)
-            except NoNodeError:
-                # ZooKeeper nodes can be deleted during node tree traversal
-                pass
+            children = _get_children(zk, item)
+            descendants_count += len(children)
+            queue.extend(os.path.join(item, node) for node in children)
 
         return {
             "path": node,
@@ -83,11 +88,15 @@ def delete_zk_node(ctx, path):
 
 
 def delete_zk_nodes(ctx, paths):
+    paths_formated = [_format_path(ctx, path) for path in paths]
     with zk_client(ctx) as zk:
-        for path in paths:
-            path = _format_path(ctx, path)
-            print(f"Deleting ZooKeeper node {path}")
-            zk.delete(path, recursive=True)
+        _delete_zk_nodes(zk, paths_formated)
+
+
+def _delete_zk_nodes(zk, paths):
+    for path in paths:
+        print(f"Deleting ZooKeeper node {path}")
+        zk.delete(path, recursive=True)
 
 
 def _format_path(ctx, path):
@@ -96,6 +105,132 @@ def _format_path(ctx, path):
     if no_ch_config:
         return path
     return path.format_map(get_macros(ctx))
+
+
+def _set_node_value(zk, path, value):
+    """
+    Set value to node in zk.
+    """
+    if zk.exists(path):
+        try:
+            zk.set(path, value.encode())
+        except NoNodeError:
+            print(f"Can not set for node: {path}  value : {value}")
+
+
+def _find_paths(zk, root_path, included_paths_regexp, excluded_paths_regexp=None):
+    """
+    Traverse zookeeper tree from root_path with bfs approach.
+
+    Return paths of nodes that match the include regular expression and do not match the excluded one.
+    """
+    paths = set()
+    queue: Queue = Queue()
+    queue.put(root_path)
+    included_regexp = re.compile("|".join(included_paths_regexp))
+    excluded_regexp = (
+        re.compile("|".join(excluded_paths_regexp)) if excluded_paths_regexp else None
+    )
+
+    while not queue.empty():
+        path = queue.get()
+        if excluded_regexp and re.match(excluded_regexp, path):
+            continue
+
+        for child_node in _get_children(zk, path):
+            subpath = os.path.join(path, child_node)
+
+            if re.match(included_regexp, subpath):
+                paths.add(subpath)
+            else:
+                queue.put(os.path.join(path, subpath))
+
+    return list(paths)
+
+
+def clean_zk_nodes(ctx, zk_root_path, nodes):
+    """
+    Perform cleanup in zookeeper after deleting hosts in the cluster or whole cluster deleting.
+    """
+
+    def _try_delete_zk_node(zk, node):
+        try:
+            _delete_zk_nodes(zk, [node])
+        except NoNodeError:
+            #  Someone deleted node before us. Do nothing.
+            print("Node {node} is already absent, skipped".format(node=node))
+        except NotEmptyError:
+            #  Someone created child node while deleting.
+            #  I'm not sure that we can get this exception with recursive=True.
+            #  Do nothing.
+            print("Node {node} is not empty, skipped".format(node=node))
+
+    def _find_parents(zk, root_path, nodes, parent_name):
+        excluded_paths = [
+            ".*clickhouse/task_queue",
+            ".*clickhouse/zero_copy",
+        ]
+        included_paths = [".*/" + parent_name + "/" + node for node in nodes]
+        paths = _find_paths(zk, root_path, included_paths, excluded_paths)
+        return [os.sep.join(path.split(os.sep)[:-2]) for path in paths]
+
+    def _set_replicas_is_lost(zk, table_paths, nodes):
+        """
+        Set flag <path>/replicas/<replica_name>/is_lost to 1
+        """
+        for path in table_paths:
+
+            replica_path = os.path.join(path, "replicas")
+            if not zk.exists(replica_path):
+                continue
+
+            for node in nodes:
+                is_lost_flag_path = os.path.join(replica_path, node, "is_lost")
+                print("Set is_lost_flag " + is_lost_flag_path)
+                _set_node_value(zk, is_lost_flag_path, "1")
+
+    def _remove_replicas_queues(zk, paths, replica_names):
+        """
+        Remove <path>/replicas/<replica_name>/queue
+        """
+        for path in paths:
+            replica_name = os.path.join(path, "replicas")
+            if not zk.exists(replica_name):
+                continue
+
+            for replica_name in replica_names:
+                queue_path = os.path.join(replica_name, replica_name, "queue")
+                if not zk.exists(queue_path):
+                    continue
+
+                if zk.exists(queue_path):
+                    _try_delete_zk_node(zk, queue_path)
+
+    def _nodes_absent(zk, zk_root_path, nodes):
+        included_paths = [".*/" + node for node in nodes]
+        paths_to_delete = _find_paths(zk, zk_root_path, included_paths)
+        for node in paths_to_delete:
+            _try_delete_zk_node(zk, node)
+
+    def _absent_if_empty_child(zk, path, child):
+        """
+        Remove node if subnode is empty
+        """
+        child_full_path = os.path.join(path, child)
+        if (
+            not zk.exists(child_full_path)
+            or len(_get_children(zk, child_full_path)) == 0
+        ):
+            _try_delete_zk_node(zk, path)
+
+    zk_root_path = _format_path(ctx, zk_root_path)
+    with zk_client(ctx) as zk:
+        table_paths = _find_parents(zk, zk_root_path, nodes, "replicas")
+        _set_replicas_is_lost(zk, table_paths, nodes)
+        _remove_replicas_queues(zk, table_paths, nodes)
+        _nodes_absent(zk, zk_root_path, nodes)
+        for path in table_paths:
+            _absent_if_empty_child(zk, path, "replicas")
 
 
 @contextmanager

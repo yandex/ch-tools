@@ -7,6 +7,7 @@ from kazoo.security import make_digest_acl
 from ch_tools.chadmin.internal.table_replica import get_table_replica
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
+    clean_zk_nodes,
     create_zk_nodes,
     delete_zk_nodes,
     get_zk_node,
@@ -266,3 +267,20 @@ def delete_ddl_task_command(ctx, tasks):
     """
     paths = [f"/clickhouse/task_queue/ddl/{task}" for task in tasks]
     delete_zk_nodes(ctx, paths)
+
+
+@zookeeper_group.command(name="clickhouse-hosts-cleanup")
+@option("-f", "--fqdn", type=str, help="Removed FQDNs, comma separated", required=True)
+@option(
+    "-c",
+    "--root",
+    "zk_root_path",
+    type=str,
+    help="Cluster ZooKeeper root path. If not specified,the root path will be used.",
+    required=False,
+    default="/",
+)
+@pass_context
+def clickhouse_hosts_command(ctx, fqdn, zk_root_path):
+    hosts = fqdn.split(",")
+    clean_zk_nodes(ctx, zk_root_path, hosts)
