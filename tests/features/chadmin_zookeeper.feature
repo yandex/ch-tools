@@ -41,3 +41,15 @@ Feature: keeper-monitoring tool
     """
     /test/read_sli_part/shard1/replicas/host2.net
     """
+
+
+  Scenario: Cleanup from Replicated database.
+    # Imitate that we got nodes in zk from replicated database.
+    When we execute chadmin create zk nodes on zookeeper01
+    """
+    '/test/clickhouse/databases/test/shard1/replicas/shard1|hos1.net'
+    '/test/clickhouse/databases/test/shard1/replicas/shard1|hos2.net'
+    '/test/clickhouse/databases/test/shard1/counter'
+    """
+    And we do hosts cleanup on zookeeper01 with fqdn host1.net and zk root /test
+    Then asdasda
