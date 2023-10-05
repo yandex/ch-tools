@@ -43,13 +43,29 @@ Feature: keeper-monitoring tool
     """
 
 
-  Scenario: Cleanup from Replicated database.
+  Scenario: Remove single host from Replicated database.
     # Imitate that we got nodes in zk from replicated database.
     When we execute chadmin create zk nodes on zookeeper01
     """
-    '/test/clickhouse/databases/test/shard1/replicas/shard1|hos1.net'
-    '/test/clickhouse/databases/test/shard1/replicas/shard1|hos2.net'
+    '/test/clickhouse/databases/test/shard1/replicas/shard1|host1.net'
+    '/test/clickhouse/databases/test/shard1/replicas/shard1|host2.net'
     '/test/clickhouse/databases/test/shard1/counter'
     """
     And we do hosts cleanup on zookeeper01 with fqdn host1.net and zk root /test
-    Then asdasda
+    Then the list of children on zookeeper01 for zk node /test/clickhouse/databases/test/shard1/replicas/ are equal to
+    """
+    /test/clickhouse/databases/test/shard1/replicas/shard1|host2.net
+    """
+
+  Scenario: Remove all host from Replicated database.
+    # Imitate that we got nodes in zk from replicated database.
+    When we execute chadmin create zk nodes on zookeeper01
+    """
+    '/test/clickhouse/databases/test/shard1/replicas/shard1|host1.net'
+    '/test/clickhouse/databases/test/shard1/replicas/shard1|host2.net'
+    '/test/clickhouse/databases/test/shard1/counter'
+    """
+    And we do hosts cleanup on zookeeper01 with fqdn host1.net,host2.net and zk root /test
+    Then the list of children on zookeeper01 for zk node /test/clickhouse/databases/test/ are equal to
+    """
+    """
