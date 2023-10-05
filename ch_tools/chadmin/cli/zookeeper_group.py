@@ -7,7 +7,7 @@ from kazoo.security import make_digest_acl
 from ch_tools.chadmin.internal.table_replica import get_table_replica
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
-    clean_zk_nodes,
+    clean_zk_metadata_for_hosts,
     create_zk_nodes,
     delete_zk_nodes,
     get_zk_node,
@@ -42,8 +42,19 @@ from ch_tools.common.cli.parameters import ListParamType, StringParamType
     help="Do not try to get parameters from clickhouse config.xml.",
     default=False,
 )
+@option(
+    "-c",
+    "--chroot",
+    "zk_root_path",
+    type=str,
+    help="Cluster ZooKeeper root path. If not specified,the root path will be used.",
+    required=False,
+    default="/",
+)
 @pass_context
-def zookeeper_group(ctx, host, port, timeout, zkcli_identity, no_chroot, no_ch_config):
+def zookeeper_group(
+    ctx, host, port, timeout, zkcli_identity, no_chroot, no_ch_config, zk_root_path
+):
     """ZooKeeper management commands.
 
     ZooKeeper command runs client which connects to Zookeeper node.
@@ -58,6 +69,7 @@ def zookeeper_group(ctx, host, port, timeout, zkcli_identity, no_chroot, no_ch_c
         "zkcli_identity": zkcli_identity,
         "no_chroot": no_chroot,
         "no_ch_config": no_ch_config,
+        "zk_root_path": zk_root_path,
     }
 
 
@@ -269,18 +281,11 @@ def delete_ddl_task_command(ctx, tasks):
     delete_zk_nodes(ctx, paths)
 
 
-@zookeeper_group.command(name="clickhouse-hosts-cleanup")
-@option("-f", "--fqdn", type=str, help="Removed FQDNs, comma separated", required=True)
-@option(
-    "-c",
-    "--root",
-    "zk_root_path",
-    type=str,
-    help="Cluster ZooKeeper root path. If not specified,the root path will be used.",
-    required=False,
-    default="/",
+@zookeeper_group.command(
+    name="cleanup-removed-hosts-metadata",
+    help="Remove metadata from Zookeeper for specified hosts.",
 )
+@argument("fqdn", type=ListParamType())
 @pass_context
-def clickhouse_hosts_command(ctx, fqdn, zk_root_path):
-    hosts = fqdn.split(",")
-    clean_zk_nodes(ctx, zk_root_path, hosts)
+def clickhouse_hosts_command(ctx, fqdn):
+    clean_zk_metadata_for_hosts(ctx, fqdn)
