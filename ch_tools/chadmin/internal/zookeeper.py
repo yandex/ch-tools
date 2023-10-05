@@ -148,7 +148,7 @@ def _find_paths(zk, root_path, included_paths_regexp, excluded_paths_regexp=None
     return list(paths)
 
 
-def clean_zk_nodes(ctx, zk_root_path, nodes):
+def clean_zk_metadata_for_hosts(ctx, nodes):
     """
     Perform cleanup in zookeeper after deleting hosts in the cluster or whole cluster deleting.
     """
@@ -172,7 +172,11 @@ def clean_zk_nodes(ctx, zk_root_path, nodes):
         ]
         included_paths = [".*/" + parent_name + "/" + node for node in nodes]
         paths = _find_paths(zk, root_path, included_paths, excluded_paths)
-        return [os.sep.join(path.split(os.sep)[:-2]) for path in paths]
+        # Paths will be like */shard1/replicas/hostname. But we need */shard1.
+        # Go up for 2 directories.
+        paths = [os.sep.join(path.split(os.sep)[:-2]) for path in paths]
+        # One path might be in list several times. Make list unique.
+        return list(set(paths))
 
     def _set_replicas_is_lost(zk, table_paths, nodes):
         """
@@ -223,7 +227,7 @@ def clean_zk_nodes(ctx, zk_root_path, nodes):
         ):
             _try_delete_zk_node(zk, path)
 
-    zk_root_path = _format_path(ctx, zk_root_path)
+    zk_root_path = _format_path(ctx, "/")
     with zk_client(ctx) as zk:
         table_paths = _find_parents(zk, zk_root_path, nodes, "replicas")
         _set_replicas_is_lost(zk, table_paths, nodes)
@@ -254,6 +258,7 @@ def _get_zk_client(ctx):
     zkcli_identity = args.get("zkcli_identity")
     no_chroot = args.get("no_chroot", False)
     no_ch_config = args.get("no_ch_config", False)
+    zk_root_path = args.get("zk_root_path", None)
 
     if no_ch_config:
         if not host:
@@ -267,7 +272,9 @@ def _get_zk_client(ctx):
             f'{host if host else node["host"]}:{port if port else node["port"]}'
             for node in zk_config.nodes
         )
-        if not no_chroot and zk_config.root is not None:
+        if not zk_root_path:
+            connect_str += zk_root_path
+        elif not no_chroot and zk_config.root is not None:
             connect_str += zk_config.root
 
         if zkcli_identity is None:
