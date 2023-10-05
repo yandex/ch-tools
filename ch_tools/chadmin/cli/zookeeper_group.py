@@ -49,7 +49,6 @@ from ch_tools.common.cli.parameters import ListParamType, StringParamType
     type=str,
     help="Cluster ZooKeeper root path. If not specified,the root path will be used.",
     required=False,
-    default="/",
 )
 @pass_context
 def zookeeper_group(

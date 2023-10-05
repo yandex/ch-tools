@@ -1,4 +1,4 @@
-Feature: keeper-monitoring tool
+Feature: chadmin zookeeper commands.
 
   Background:
     Given default configuration

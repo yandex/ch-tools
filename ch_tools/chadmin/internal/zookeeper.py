@@ -321,7 +321,7 @@ def _get_zk_client(ctx):
             f'{host if host else node["host"]}:{port if port else node["port"]}'
             for node in zk_config.nodes
         )
-        if not zk_root_path:
+        if zk_root_path:
             connect_str += zk_root_path
         elif not no_chroot and zk_config.root is not None:
             connect_str += zk_config.root
