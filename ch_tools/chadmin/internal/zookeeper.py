@@ -165,18 +165,53 @@ def clean_zk_metadata_for_hosts(ctx, nodes):
             #  Do nothing.
             print("Node {node} is not empty, skipped".format(node=node))
 
-    def _find_parents(zk, root_path, nodes, parent_name):
+    def _find_tables(zk, root_path, nodes):
+        """
+        Find nodes mentions in zk for table management.
+        """
+        hosts_metions = _find_paths(zk, root_path, [".*/" + node for node in nodes])
         excluded_paths = [
             ".*clickhouse/task_queue",
             ".*clickhouse/zero_copy",
         ]
-        included_paths = [".*/" + parent_name + "/" + node for node in nodes]
-        paths = _find_paths(zk, root_path, included_paths, excluded_paths)
+        included_paths = [".*/replicas/" + node for node in nodes]
+
+        included_regexp = re.compile("|".join(included_paths))
+        excluded_regexp = re.compile("|".join(excluded_paths))
+        table_paths = list(
+            filter(
+                lambda path: not re.match(excluded_regexp, path)
+                and re.match(included_regexp, path),
+                hosts_metions,
+            )
+        )
+
         # Paths will be like */shard1/replicas/hostname. But we need */shard1.
         # Go up for 2 directories.
-        paths = [os.sep.join(path.split(os.sep)[:-2]) for path in paths]
+        table_paths = [os.sep.join(path.split(os.sep)[:-2]) for path in table_paths]
         # One path might be in list several times. Make list unique.
-        return list(set(paths))
+        return (list(set(table_paths)), hosts_metions)
+
+    def _find_databases(zk, root_path, nodes):
+        """
+        Databases contains replicas in zk in cases when engine is Replicated with
+        pattern: <shard>|<replica>
+        """
+        hosts_mentions = _find_paths(
+            zk, root_path, [".*/.*[|]" + node for node in nodes]
+        )
+
+        included_paths = [".*/replicas/.*[|]" + node for node in nodes]
+        included_regexp = re.compile("|".join(included_paths))
+
+        databases_paths = list(
+            filter(lambda path: re.match(included_regexp, path), hosts_mentions)
+        )
+        databases_paths = [
+            os.sep.join(path.split(os.sep)[:-2]) for path in hosts_mentions
+        ]
+
+        return (list(set(databases_paths)), hosts_mentions)
 
     def _set_replicas_is_lost(zk, table_paths, nodes):
         """
@@ -210,31 +245,45 @@ def clean_zk_metadata_for_hosts(ctx, nodes):
                 if zk.exists(queue_path):
                     _try_delete_zk_node(zk, queue_path)
 
-    def _nodes_absent(zk, zk_root_path, nodes):
-        included_paths = [".*/" + node for node in nodes]
-        paths_to_delete = _find_paths(zk, zk_root_path, included_paths)
-        for node in paths_to_delete:
+    def _remove_hosts_nodes(zk, paths):
+        for node in paths:
             _try_delete_zk_node(zk, node)
 
-    def _absent_if_empty_child(zk, path, child):
+    def _remove_if_no_hosts_in_replicas(zk, paths):
         """
         Remove node if subnode is empty
         """
-        child_full_path = os.path.join(path, child)
-        if (
-            not zk.exists(child_full_path)
-            or len(_get_children(zk, child_full_path)) == 0
-        ):
-            _try_delete_zk_node(zk, path)
+        for path in paths:
+            child_full_path = os.path.join(path, "replicas")
+            if (
+                not zk.exists(child_full_path)
+                or len(_get_children(zk, child_full_path)) == 0
+            ):
+                _try_delete_zk_node(zk, path)
+
+    def tables_cleanup(zk, zk_root_path):
+        """
+        Do cleanup for tables which contains nodes.
+        """
+        (table_paths, hosts_paths) = _find_tables(zk, zk_root_path, nodes)
+        _set_replicas_is_lost(zk, table_paths, nodes)
+        _remove_replicas_queues(zk, table_paths, nodes)
+        _remove_hosts_nodes(zk, hosts_paths)
+        _remove_if_no_hosts_in_replicas(zk, table_paths)
+
+    def databases_cleanups(zk, zk_root_path):
+        """
+        Do cleanup for databases which contains nodes.
+        """
+
+        (databases_paths, hosts_paths) = _find_databases(zk, zk_root_path, nodes)
+        _remove_hosts_nodes(zk, hosts_paths)
+        _remove_if_no_hosts_in_replicas(zk, databases_paths)
 
     zk_root_path = _format_path(ctx, "/")
     with zk_client(ctx) as zk:
-        table_paths = _find_parents(zk, zk_root_path, nodes, "replicas")
-        _set_replicas_is_lost(zk, table_paths, nodes)
-        _remove_replicas_queues(zk, table_paths, nodes)
-        _nodes_absent(zk, zk_root_path, nodes)
-        for path in table_paths:
-            _absent_if_empty_child(zk, path, "replicas")
+        tables_cleanup(zk, zk_root_path)
+        databases_cleanups(zk, zk_root_path)
 
 
 @contextmanager
