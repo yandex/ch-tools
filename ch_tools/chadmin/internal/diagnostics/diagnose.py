@@ -12,7 +12,6 @@ from ch_tools.common.clickhouse.config import (
     ClickhouseUsersConfig,
 )
 from ch_tools.common.dbaas import DbaasConfig
-from ch_tools.common.utils import version_ge
 
 from ..utils import clickhouse_client
 from .data import DiagnosticsData, add_command, add_query, execute_query
@@ -131,11 +130,6 @@ def diagnose(ctx: Context, output_format: str, normalize_queries: bool) -> None:
                 format_=OutputFormat.Vertical,
                 section="Replication",
             ),
-        ]
-    )
-
-    if version_ge(version, "21.3"):
-        tasks.append(
             add_query(
                 diagnostics,
                 "Replicated fetches",
@@ -144,7 +138,8 @@ def diagnose(ctx: Context, output_format: str, normalize_queries: bool) -> None:
                 format_=OutputFormat.Vertical,
                 section="Replication",
             ),
-        )
+        ]
+    )
 
     tasks.extend(
         [

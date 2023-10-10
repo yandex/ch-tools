@@ -295,18 +295,9 @@ SELECT
     formatReadableSize(memory_usage) AS "memory usage",
     user,
     multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
-    {% if version_ge('21.3') -%}
     thread_ids,
-    {% endif -%}
-    {% if version_ge('21.8') -%}
     ProfileEvents,
     Settings
-    {% else -%}
-    ProfileEvents.Names,
-    ProfileEvents.Values,
-    Settings.Names,
-    Settings.Values
-    {% endif -%}
 FROM system.processes
 ORDER BY elapsed DESC
 """
@@ -320,9 +311,7 @@ SELECT
     query_start_time,
     query_duration_ms,
     query_id,
-    {% if version_ge('21.3') -%}
     query_kind,
-    {% endif -%}
     is_initial_query,
     {% if normalize_queries -%}
     normalizeQuery(query) AS normalized_query,
@@ -339,7 +328,6 @@ SELECT
     initial_user,
     multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
     client_hostname,
-    {% if version_ge('21.3') -%}
     databases,
     tables,
     columns,
@@ -353,16 +341,8 @@ SELECT
     used_storages,
     used_table_functions,
     thread_ids,
-    {% endif -%}
-    {% if version_ge('21.8') -%}
     ProfileEvents,
     Settings
-    {% else -%}
-    ProfileEvents.Names,
-    ProfileEvents.Values,
-    Settings.Names,
-    Settings.Values
-    {% endif -%}
 FROM system.query_log
 WHERE type != 'QueryStart'
   AND event_date >= today() - 1
@@ -380,9 +360,7 @@ SELECT
     query_start_time,
     query_duration_ms,
     query_id,
-    {% if version_ge('21.3') -%}
     query_kind,
-    {% endif -%}
     is_initial_query,
     {% if normalize_queries -%}
     normalizeQuery(query) AS normalized_query,
@@ -399,7 +377,6 @@ SELECT
     initial_user,
     multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
     client_hostname,
-    {% if version_ge('21.3') -%}
     databases,
     tables,
     columns,
@@ -413,16 +390,8 @@ SELECT
     used_storages,
     used_table_functions,
     thread_ids,
-    {% endif -%}
-    {% if version_ge('21.8') -%}
     ProfileEvents,
     Settings
-    {% else -%}
-    ProfileEvents.Names,
-    ProfileEvents.Values,
-    Settings.Names,
-    Settings.Values
-    {% endif -%}
 FROM system.query_log
 WHERE type != 'QueryStart'
   AND event_date >= today() - 1
@@ -440,9 +409,7 @@ SELECT
     query_start_time,
     query_duration_ms,
     query_id,
-    {% if version_ge('21.3') -%}
     query_kind,
-    {% endif -%}
     is_initial_query,
     {% if normalize_queries -%}
     normalizeQuery(query) AS normalized_query,
@@ -459,7 +426,6 @@ SELECT
     initial_user,
     multiIf(empty(client_name), http_user_agent, concat(client_name, ' ', toString(client_version_major), '.', toString(client_version_minor), '.', toString(client_version_patch))) AS client,
     client_hostname,
-    {% if version_ge('21.3') -%}
     databases,
     tables,
     columns,
@@ -473,16 +439,8 @@ SELECT
     used_storages,
     used_table_functions,
     thread_ids,
-    {% endif -%}
-    {% if version_ge('21.8') -%}
     ProfileEvents,
     Settings
-    {% else -%}
-    ProfileEvents.Names,
-    ProfileEvents.Values,
-    Settings.Names,
-    Settings.Values
-    {% endif -%}
 FROM system.query_log
 WHERE type != 'QueryStart'
   AND event_date >= today() - 1
@@ -497,9 +455,7 @@ SELECT_STACK_TRACES = str.strip(
     # language=clickhouse
     r"""
 SELECT
-    {% if version_ge('21.8') -%}
     thread_name,
-    {% endif -%}
     min(thread_id) AS min_thread_id,
     count() AS threads,
     '\n' || arrayStringConcat(
@@ -510,11 +466,7 @@ SELECT
            arrayMap(x -> demangle(addressToSymbol(x)), trace)),
        '\n') AS trace
 FROM system.stack_trace
-GROUP BY
-    {% if version_ge('21.8') -%}
-    thread_name,
-    {% endif -%}
-    trace
+GROUP BY thread_name, trace
 ORDER BY min_thread_id
 """
 )
