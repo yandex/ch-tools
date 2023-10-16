@@ -75,11 +75,12 @@ def _check_fqdn(target: _TargetRecord, ipv6: bool, imdsv2: bool) -> list:
         err.append(
             f"{target.fqdn}: invalid A: expected {target_addr}, actual {actual_addr}"
         )
-    ok, target_addr, actual_addr = _compare("AAAA", "ipv6")
-    if ipv6 and not ok:
-        err.append(
-            f"{target.fqdn}: invalid AAAA: expected {target_addr}, actual {actual_addr}"
-        )
+    if ipv6:
+        ok, target_addr, actual_addr = _compare("AAAA", "ipv6")
+        if not ok:
+            err.append(
+                f"{target.fqdn}: invalid AAAA: expected {target_addr}, actual {actual_addr}"
+            )
 
     return err
 
