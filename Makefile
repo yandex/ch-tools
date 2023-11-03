@@ -18,7 +18,7 @@ export LANG   = en_US.UTF-8
 PROJECT_NAME ?= clickhouse-tools
 PROJECT_NAME_UNDERSCORE ?= $(subst -,_,$(PROJECT_NAME))
 
-PYTHON ?= python3
+export PYTHON ?= python3
 
 # The latest version supporting Python 3.6
 POETRY_VERSION ?= 1.1.15
