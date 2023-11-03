@@ -21,5 +21,6 @@ X-Python3-Version: >= 3.6
 Package: clickhouse-tools
 Architecture: any
 Description: A set of tools for administration and diagnostics of ClickHouse DBMS.
+Depends: ${python:Depends}
 Replaces: mdb-ch-tools, ch-tools
 Conflicts: mdb-ch-tools, ch-tools
