@@ -1,5 +1,10 @@
+OK = 0
+WARNING = 1
+CRIT = 2
+
+
 class Result:
-    def __init__(self, code=0, message="Ok", verbose=""):
+    def __init__(self, code=OK, message="OK", verbose=""):
         self.code = code
         self.message = message
         self.verbose = verbose

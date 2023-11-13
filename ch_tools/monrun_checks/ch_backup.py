@@ -3,6 +3,8 @@ Check ClickHouse backups: its state, age and count.
 """
 
 import json
+import logging
+import os.path
 from datetime import datetime, timedelta, timezone
 from os.path import exists
 from typing import Dict, List
@@ -13,8 +15,9 @@ from dateutil.parser import parse as dateutil_parse
 from ch_tools.common.backup import get_backups
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.client import ClickhouseClient
-from ch_tools.monrun_checks.exceptions import die
+from ch_tools.common.result import CRIT, OK, WARNING, Result
 
+LOAD_MONITOR_FLAG_PATH = "/tmp/load-monitor-userfault.flag"
 RESTORE_CONTEXT_PATH = "/tmp/ch_backup_restore_state.json"
 FAILED_PARTS_THRESHOLD = 10
 
@@ -73,38 +76,36 @@ def backup_command(
     """
     Check ClickHouse backups: its state, age and count.
     """
-    ch_client = ClickhouseClient()
-    backups = get_backups()
+    backups, result = _get_backups()
 
-    check_restored_data()
-    check_uptime(ch_client, min_uptime)
-    check_valid_backups_exist(backups)
-    check_last_backup_not_failed(backups, failed_backup_count_crit_threshold)
-    check_backup_age(backups, backup_age_warn_threshold, backup_age_crit_threshold)
-    check_backup_count(backups, backup_count_warn_threshold)
+    if result.code == OK:
+        result = _merge_results(
+            _check_valid_backups_exist(backups),
+            _check_last_backup_not_failed(backups, failed_backup_count_crit_threshold),
+            _check_backup_age(
+                backups, backup_age_warn_threshold, backup_age_crit_threshold
+            ),
+            _check_backup_count(backups, backup_count_warn_threshold),
+            _check_restored_data(),
+        )
 
+    _suppress_if_required(result, min_uptime)
 
-def check_uptime(ch_client: ClickhouseClient, min_uptime: timedelta) -> None:
-    """
-    Check that ClickHouse uptime enough for backup creation.
-    """
-    uptime = ch_client.get_uptime()
-    if uptime < min_uptime:
-        die(0, "OK (forced due to low ClickHouse uptime)")
+    return result
 
 
-def check_valid_backups_exist(backups: List[Dict]) -> None:
+def _check_valid_backups_exist(backups: List[Dict]) -> Result:
     """
     Check that valid backups exist.
     """
     for backup in backups:
         if backup["state"] == "created":
-            return
+            return Result(OK)
 
-    die(2, "No valid backups found")
+    return Result(CRIT, "No valid backups found")
 
 
-def check_last_backup_not_failed(backups: List[Dict], crit_threshold: int) -> None:
+def _check_last_backup_not_failed(backups: List[Dict], crit_threshold: int) -> Result:
     """
     Check that the last backup is not failed. Its status must be 'created' or 'creating'.
     """
@@ -119,20 +120,20 @@ def check_last_backup_not_failed(backups: List[Dict], crit_threshold: int) -> No
             counter += 1
 
     if counter == 0:
-        return
+        return Result(OK)
 
     if counter == 1:
         message = "Last backup failed"
     else:
         message = f"Last {counter} backups failed"
 
-    status = 2 if crit_threshold and counter >= crit_threshold else 1
-    die(status, message)
+    status = CRIT if crit_threshold and counter >= crit_threshold else WARNING
+    return Result(status, message)
 
 
-def check_backup_age(
+def _check_backup_age(
     backups: List[Dict], warn_threshold: timedelta, crit_threshold: timedelta
-) -> None:
+) -> Result:
     """
     Check that the last backup is not too old.
     """
@@ -144,37 +145,42 @@ def check_backup_age(
             break
 
     if len(checking_backup) == 0:
-        die(2, "Didn't find a backup to check")
+        return Result(OK)
 
-    backup_age = get_backup_age(checking_backup)
+    backup_age = _get_backup_age(checking_backup)
 
     if crit_threshold and backup_age >= crit_threshold:
-        status = 2
+        status = CRIT
     elif warn_threshold and backup_age >= warn_threshold:
-        status = 1
+        status = WARNING
     else:
-        return
+        return Result(OK)
 
     if checking_backup["state"] == "creating":
         message = f"Last backup was started {backup_age.days} days ago"
     else:
         message = f"Last backup was created {backup_age.days} days ago"
 
-    die(status, message)
+    return Result(status, message)
 
 
-def check_backup_count(backups: List[Dict], backup_count_warn_threshold: int) -> None:
+def _check_backup_count(
+    backups: List[Dict], backup_count_warn_threshold: int
+) -> Result:
     """
     Check that the number of backups is not too large.
     """
     backup_count = len(backups)
     if backup_count_warn_threshold and backup_count >= backup_count_warn_threshold:
-        die(
-            1, f"Too many backups exist: {backup_count} > {backup_count_warn_threshold}"
+        return Result(
+            WARNING,
+            f"Too many backups exist: {backup_count} > {backup_count_warn_threshold}",
         )
 
+    return Result(OK)
 
-def check_restored_data() -> None:
+
+def _check_restored_data() -> Result:
     """
     Check count of failed parts on restore
     """
@@ -189,18 +195,59 @@ def check_restored_data() -> None:
                 sum(len(table) for table in tables.values())
                 for tables in context["databases"].values()
             )
-            if failed == 0:
-                return
-            failed_percent = int((failed / (failed + restored)) * 100)
-            die(
-                1 if failed_percent < FAILED_PARTS_THRESHOLD else 2,
-                f"Some parts restore failed: {failed}({failed_percent}%)",
-            )
+            if failed != 0:
+                failed_percent = int((failed / (failed + restored)) * 100)
+                status = 1 if failed_percent < FAILED_PARTS_THRESHOLD else 2
+                return Result(
+                    status, f"Some parts restore failed: {failed}({failed_percent}%)"
+                )
+
+    return Result(OK)
 
 
-def get_backup_age(backup):
+def _suppress_if_required(result: Result, min_uptime: timedelta) -> None:
+    if result.code == OK:
+        return
+
+    if os.path.exists(LOAD_MONITOR_FLAG_PATH):
+        result.code = WARNING
+        result.message += " (suppressed by load monitor flag file)"
+
+    if _get_uptime() < min_uptime:
+        result.code = WARNING
+        result.message += " (suppressed by low ClickHouse uptime)"
+
+
+def _get_uptime() -> timedelta:
+    try:
+        return ClickhouseClient().get_uptime()
+    except Exception:
+        logging.warning("Failed to get ClickHouse uptime", exc_info=True)
+        return timedelta()
+
+
+def _get_backups():
+    try:
+        return get_backups(), Result(OK)
+    except Exception:
+        logging.exception("Failed to get backups")
+        return None, Result(CRIT, "Failed to get backups")
+
+
+def _get_backup_age(backup):
     """
     Calculate and return age of ClickHouse backup.
     """
     backup_time = dateutil_parse(backup["start_time"])
     return datetime.now(timezone.utc) - backup_time
+
+
+def _merge_results(*results: Result) -> Result:
+    merged_result = Result()
+    for result in results:
+        if result.code > merged_result.code:
+            merged_result.code = result.code
+            merged_result.message = result.message
+            merged_result.verbose = result.verbose
+
+    return merged_result
