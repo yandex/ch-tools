@@ -144,7 +144,7 @@ def _check_backup_age(
             checking_backup = backup
             break
 
-    if len(checking_backup) == 0:
+    if not checking_backup:
         return Result(OK)
 
     backup_age = _get_backup_age(checking_backup)
@@ -197,7 +197,7 @@ def _check_restored_data() -> Result:
             )
             if failed != 0:
                 failed_percent = int((failed / (failed + restored)) * 100)
-                status = 1 if failed_percent < FAILED_PARTS_THRESHOLD else 2
+                status = WARNING if failed_percent < FAILED_PARTS_THRESHOLD else CRIT
                 return Result(
                     status, f"Some parts restore failed: {failed}({failed_percent}%)"
                 )
