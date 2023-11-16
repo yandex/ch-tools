@@ -18,6 +18,7 @@ KEEPER_DEFAULT_PATH = "/var/lib/clickhouse-keeper/snapshots"
 CH_DBMS_DEFAULT_PATH = "/var/lib/clickhouse/snapshots"
 
 context = ssl.create_default_context()
+context.minimum_version = ssl.TLSVersion.TLSv1_2
 
 
 @command("alive")
@@ -208,12 +209,12 @@ def keeper_command(cmd, timeout, verify_ssl_certs):
             if not verify_ssl_certs:
                 context.check_hostname = False
                 context.verify_mode = ssl.CERT_NONE
-            with context.wrap_socket(sock, server_hostname="localhost") as ssock:
-                ssock.connect(("localhost", port))
+            with context.wrap_socket(sock, server_hostname=socket.getfqdn()) as ssock:
+                ssock.connect(("127.0.0.1", port))
                 ssock.sendall(cmd.encode())
                 return ssock.makefile().read(-1)
         else:
-            sock.connect(("localhost", port))
+            sock.connect(("127.0.0.1", port))
             sock.sendall(cmd.encode())
             return sock.makefile().read(-1)
 
