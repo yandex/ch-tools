@@ -1,5 +1,4 @@
 import logging
-import socket
 from datetime import timedelta
 from typing import Any, Dict, Optional
 
@@ -22,22 +21,19 @@ class ClickhouseClient:
     def __init__(
         self,
         *,
-        host=socket.getfqdn(),
-        port=None,
-        user="_admin",
-        settings=None,
-        timeout=None,
-        insecure=False,
+        host,
+        protocol,
+        insecure,
+        port,
+        user,
+        password,
+        timeout,
+        settings,
     ):
-        if port is None:
-            port = 8443
-        if timeout is None:
-            timeout = 60
-        if settings is None:
-            settings = {}
-
-        self._session = self._create_session(user=user, insecure=insecure)
-        self._url = f"https://{host}:{port}"
+        self._session = self._create_session(
+            user=user, password=password, insecure=insecure
+        )
+        self._url = f"{protocol}://{host}:{port}"
         self._settings = settings
         self._timeout = timeout
         self._ch_version = None
@@ -120,12 +116,42 @@ class ClickhouseClient:
         return template.render(kwargs)
 
     @staticmethod
-    def _create_session(user, insecure):
+    def _create_session(user, password, insecure):
         session = requests.Session()
 
         session.verify = False if insecure else "/etc/clickhouse-server/ssl/allCAs.pem"
 
         if user:
             session.headers["X-ClickHouse-User"] = user
+        if password:
+            session.headers["X-ClickHouse-Key"] = password
 
         return session
+
+
+def clickhouse_client(ctx):
+    """
+    Return ClickHouse client from the context if it exists.
+    Init ClickHouse client and store to the context if it doesn't exist.
+    """
+    if not ctx.obj.get("chcli"):
+        config = ctx.obj["config"]["clickhouse"]
+
+        user = config["user"]
+        password = config["password"]
+        if ctx.obj.get("monitoring", False) and config["monitoring_user"]:
+            user = config["monitoring_user"]
+            password = config["monitoring_password"]
+
+        ctx.obj["chcli"] = ClickhouseClient(
+            host=config["host"],
+            protocol=config["protocol"],
+            insecure=config["insecure"],
+            port=config["port"],
+            user=user,
+            password=password,
+            timeout=config["timeout"],
+            settings=config["settings"],
+        )
+
+    return ctx.obj["chcli"]

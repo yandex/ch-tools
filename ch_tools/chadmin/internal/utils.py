@@ -5,29 +5,7 @@ import re
 from itertools import islice
 from typing import Iterable, Iterator
 
-from ch_tools.common.clickhouse.client import ClickhouseClient
-
-
-def clickhouse_client(ctx):
-    """
-    Return ClickHouse client from the context if it exists.
-    Init ClickHouse client and store to the context if it doesn't exist.
-    Raise RuntimeError if ClickHouse client's config doesn't exist
-    """
-    chcli_conf = ctx.obj.get("chcli_conf")
-    if not chcli_conf:
-        raise RuntimeError(
-            "Could not init ClickHouse's connection because there is no chcli config in context. Seems like bug in chadmin."
-        )
-
-    if not ctx.obj.get("chcli"):
-        ctx.obj["chcli"] = ClickhouseClient(
-            port=chcli_conf["port"],
-            timeout=chcli_conf["timeout"],
-            settings=chcli_conf["settings"],
-        )
-
-    return ctx.obj["chcli"]
+from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 
 
 def execute_query(

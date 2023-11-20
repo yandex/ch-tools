@@ -9,6 +9,7 @@ import cloup
 from ch_tools import __version__
 from ch_tools.common.cli.context_settings import CONTEXT_SETTINGS
 from ch_tools.common.cli.locale_resolver import LocaleResolver
+from ch_tools.common.config import load_config
 from ch_tools.common.result import Status
 from ch_tools.monrun_checks_keeper.keeper_commands import (
     alive_command,
@@ -113,9 +114,14 @@ class KeeperChecks(cloup.Group):
 @cloup.version_option(__version__)
 @cloup.pass_context
 def cli(ctx, retries, timeout, no_verify_ssl_certs):
-    ctx.obj = dict(
-        retries=retries, timeout=timeout, no_verify_ssl_certs=no_verify_ssl_certs
-    )
+    config = load_config()
+    ctx.obj = {
+        "config": config,
+        "retries": retries,
+        "timeout": timeout,
+        "no_verify_ssl_certs": no_verify_ssl_certs,
+        "monitoring": True,
+    }
 
 
 COMMANDS = [

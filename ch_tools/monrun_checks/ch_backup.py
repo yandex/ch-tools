@@ -9,12 +9,13 @@ from datetime import datetime, timedelta, timezone
 from os.path import exists
 from typing import Dict, List
 
-import click
+from click import Context
+from cloup import command, option, pass_context
 from dateutil.parser import parse as dateutil_parse
 
 from ch_tools.common.backup import get_backups
 from ch_tools.common.cli.parameters import TimeSpanParamType
-from ch_tools.common.clickhouse.client import ClickhouseClient
+from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 from ch_tools.common.result import CRIT, OK, WARNING, Result
 
 LOAD_MONITOR_FLAG_PATH = "/tmp/load-monitor-userfault.flag"
@@ -22,8 +23,8 @@ RESTORE_CONTEXT_PATH = "/tmp/ch_backup_restore_state.json"
 FAILED_PARTS_THRESHOLD = 10
 
 
-@click.command("backup")
-@click.option(
+@command("backup")
+@option(
     "--failed-backup-count-crit",
     "--failed-backup-count-crit-threshold",
     "--critical-failed",  # deprecated option name preserved for backward-compatibility
@@ -32,7 +33,7 @@ FAILED_PARTS_THRESHOLD = 10
     help="Critical threshold on the number of failed backups. If last backups failed and its count equals or greater "
     "than the specified threshold, a crit will be reported.",
 )
-@click.option(
+@option(
     "--backup-age-warn",
     "--backup-age-warn-threshold",
     "backup_age_warn_threshold",
@@ -41,7 +42,7 @@ FAILED_PARTS_THRESHOLD = 10
     help="Warning threshold on age of the last backup. If the last backup is created more than the specified "
     "time ago, a warning will be reported.",
 )
-@click.option(
+@option(
     "--backup-age-crit",
     "--backup-age-crit-threshold",
     "--critical-absent",  # deprecated option name preserved for backward-compatibility
@@ -51,7 +52,7 @@ FAILED_PARTS_THRESHOLD = 10
     help="Critical threshold on age of the last backup. If the last backup is created more than the specified "
     "time ago, a crit will be reported.",
 )
-@click.option(
+@option(
     "--backup-count-warn",
     "--backup-count-warn-threshold",
     "backup_count_warn_threshold",
@@ -59,14 +60,16 @@ FAILED_PARTS_THRESHOLD = 10
     help="Warning threshold on the number of backups. If the number of backups of any status equals or greater than "
     "the specified threshold, a warning will be reported.",
 )
-@click.option(
+@option(
     "--min-uptime",
     "min_uptime",
     default="2d",
     type=TimeSpanParamType(),
     help="Minimal ClickHouse uptime enough for backup creation.",
 )
+@pass_context
 def backup_command(
+    ctx,
     failed_backup_count_crit_threshold,
     backup_age_warn_threshold,
     backup_age_crit_threshold,
@@ -89,7 +92,7 @@ def backup_command(
             _check_restored_data(),
         )
 
-    _suppress_if_required(result, min_uptime)
+    _suppress_if_required(ctx, result, min_uptime)
 
     return result
 
@@ -205,7 +208,7 @@ def _check_restored_data() -> Result:
     return Result(OK)
 
 
-def _suppress_if_required(result: Result, min_uptime: timedelta) -> None:
+def _suppress_if_required(ctx: Context, result: Result, min_uptime: timedelta) -> None:
     if result.code == OK:
         return
 
@@ -213,14 +216,14 @@ def _suppress_if_required(result: Result, min_uptime: timedelta) -> None:
         result.code = WARNING
         result.message += " (suppressed by load monitor flag file)"
 
-    if _get_uptime() < min_uptime:
+    if _get_uptime(ctx) < min_uptime:
         result.code = WARNING
         result.message += " (suppressed by low ClickHouse uptime)"
 
 
-def _get_uptime() -> timedelta:
+def _get_uptime(ctx: Context) -> timedelta:
     try:
-        return ClickhouseClient().get_uptime()
+        return clickhouse_client(ctx).get_uptime()
     except Exception:
         logging.warning("Failed to get ClickHouse uptime", exc_info=True)
         return timedelta()

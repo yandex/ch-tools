@@ -4,11 +4,13 @@ import os
 import warnings
 from typing import Any, List
 
+import cloup
+
+from ch_tools.common.config import load_config
+
 warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
 
 # pylint: disable=wrong-import-position
-
-import cloup
 
 from ch_tools import __version__
 from ch_tools.chadmin.cli.chs3_backup_group import chs3_backup_group
@@ -77,7 +79,6 @@ LOG_FILE = "/var/log/chadmin/chadmin.log"
 @cloup.pass_context
 def cli(ctx, format_, settings, timeout, port, debug):
     """ClickHouse administration tool."""
-
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
     handlers: List[logging.Handler] = [logging.FileHandler(LOG_FILE)]
     if debug:
@@ -89,15 +90,16 @@ def cli(ctx, format_, settings, timeout, port, debug):
         handlers=handlers,
     )
 
-    timeout_seconds = timeout.total_seconds() if timeout else None
-    settings = {item[0]: item[1] for item in settings}
+    config = load_config()
+    if port:
+        config["clickhouse"]["port"] = port
+    if timeout:
+        config["clickhouse"]["timeout"] = timeout.total_seconds()
+    if settings:
+        config["clickhouse"]["settings"] = {item[0]: item[1] for item in settings}
 
     ctx.obj = {
-        "chcli_conf": {
-            "port": port,
-            "timeout": timeout_seconds,
-            "settings": settings,
-        },
+        "config": config,
         "format": format_,
         "debug": debug,
     }
