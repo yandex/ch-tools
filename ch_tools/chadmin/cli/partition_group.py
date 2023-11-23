@@ -111,6 +111,7 @@ def list_partitions_command(ctx, **kwargs):
 @option("--min-partition", "min_partition_id")
 @option("--max-partition", "max_partition_id")
 @option("-a", "--all", "all_", is_flag=True, help="Attach all partitions.")
+@option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @option(
     "-n",
     "--dry-run",
@@ -119,20 +120,38 @@ def list_partitions_command(ctx, **kwargs):
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 @pass_context
-def attach_partitions_command(ctx, dry_run, all_, database, table, **kwargs):
+def attach_partitions_command(
+    ctx, all_, database, table, partition_id, keep_going, dry_run, **kwargs
+):
     """Attach one or several partitions."""
-    if not any((all_, database, table)):
+    if not any((all_, database, table, partition_id)):
         ctx.fail(
             "At least one of --all, --database, --table, --partition options must be specified."
         )
 
     partitions = get_partitions(
-        ctx, database, table, detached=True, format_="JSON", **kwargs
+        ctx,
+        database,
+        table,
+        partition_id=partition_id,
+        detached=True,
+        format_="JSON",
+        **kwargs,
     )["data"]
     for p in partitions:
-        attach_partition(
-            ctx, p["database"], p["table"], p["partition_id"], dry_run=dry_run
-        )
+        try:
+            attach_partition(
+                ctx,
+                database=p["database"],
+                table=p["table"],
+                partition_id=p["partition_id"],
+                dry_run=dry_run,
+            )
+        except Exception as e:
+            if keep_going:
+                print(repr(e))
+            else:
+                raise
 
 
 @partition_group.command(name="detach")
@@ -158,7 +177,18 @@ def attach_partitions_command(ctx, dry_run, all_, database, table, **kwargs):
 @option(
     "--disk", "disk_name", help="Filter in partitions to detach by the specified disk."
 )
+@option(
+    "--merging",
+    is_flag=True,
+    help="Reattach only those partitions that have merging data parts.",
+)
+@option(
+    "--mutating",
+    is_flag=True,
+    help="Reattach only those partitions that have mutating data parts.",
+)
 @option("-a", "--all", "all_", is_flag=True, help="Detach all partitions.")
+@option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @option(
     "-n",
     "--dry-run",
@@ -168,12 +198,21 @@ def attach_partitions_command(ctx, dry_run, all_, database, table, **kwargs):
 )
 @pass_context
 def detach_partitions_command(
-    ctx, dry_run, all_, database, table, partition_id, disk_name
+    ctx,
+    all_,
+    database,
+    table,
+    partition_id,
+    disk_name,
+    merging,
+    mutating,
+    keep_going,
+    dry_run,
 ):
     """Detach one or several partitions."""
-    if not any((all_, database, table, partition_id)):
+    if not any((all_, merging, mutating, database, table, partition_id)):
         ctx.fail(
-            "At least one of --all, --database, --table, --partition options must be specified."
+            "At least one of --all, --database, --table, --partition, --merging, --mutating options must be specified."
         )
 
     partitions = get_partitions(
@@ -182,12 +221,24 @@ def detach_partitions_command(
         table,
         partition_id=partition_id,
         disk_name=disk_name,
+        merging=merging,
+        mutating=mutating,
         format_="JSON",
     )["data"]
     for p in partitions:
-        detach_partition(
-            ctx, p["database"], p["table"], p["partition_id"], dry_run=dry_run
-        )
+        try:
+            detach_partition(
+                ctx,
+                database=p["database"],
+                table=p["table"],
+                partition_id=p["partition_id"],
+                dry_run=dry_run,
+            )
+        except Exception as e:
+            if keep_going:
+                print(repr(e))
+            else:
+                raise
 
 
 @partition_group.command(name="reattach")
