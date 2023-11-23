@@ -6,12 +6,15 @@ import warnings
 from functools import wraps
 from typing import Optional
 
+import click
+import cloup
+from cloup import group, option, pass_context, version_option
+
+from ch_tools.common.config import load_config
+
 warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
 
 # pylint: disable=wrong-import-position
-
-import click
-import cloup
 
 from ch_tools import __version__
 from ch_tools.common.cli.context_settings import CONTEXT_SETTINGS
@@ -60,7 +63,7 @@ class MonrunChecks(cloup.Group):
         cmd_callback = cmd.callback
 
         @wraps(cmd_callback)
-        @cloup.pass_context
+        @pass_context
         def callback_wrapper(ctx, *args, **kwargs):
             os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
             logging.basicConfig(
@@ -104,21 +107,29 @@ class MonrunChecks(cloup.Group):
         )
 
 
-@cloup.group(
+@group(
     cls=MonrunChecks,
     context_settings=CONTEXT_SETTINGS,
 )
-@cloup.option(
+@option(
     "--no-user-check",
     "no_user_check",
     is_flag=True,
     default=False,
     help="Do not check current user.",
 )
-@cloup.version_option(__version__)
-def cli(no_user_check):
+@version_option(__version__)
+@pass_context
+def cli(ctx, no_user_check):
     if not no_user_check:
         check_current_user()
+
+    config = load_config()
+
+    ctx.obj = {
+        "config": config,
+        "monitoring": True,
+    }
 
 
 CLI_COMMANDS = [

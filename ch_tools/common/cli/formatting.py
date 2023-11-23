@@ -23,8 +23,8 @@ from pygments.token import Token
 from tabulate import tabulate
 from termcolor import colored
 
+from ..yaml import dump_yaml
 from .utils import get_timezone
-from .yaml import dump_yaml
 
 
 class FormatStyle(Style):
