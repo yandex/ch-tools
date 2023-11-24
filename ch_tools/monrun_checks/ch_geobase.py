@@ -8,11 +8,12 @@ from ch_tools.monrun_checks.clickhouse_client import ClickhouseClient
 
 
 @click.command("geobase")
-def geobase_command():
+@click.pass_context
+def geobase_command(ctx):
     """
     Check that embedded geobase is configured.
     """
-    ch_client = ClickhouseClient()
+    ch_client = ClickhouseClient(ctx)
 
     try:
         response = ch_client.execute("SELECT regionToName(CAST(1 AS UInt32))")[0][0]

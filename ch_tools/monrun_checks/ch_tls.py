@@ -28,13 +28,16 @@ CERTIFICATE_PATH = "/etc/clickhouse-server/ssl/server.crt"
     default=None,
     help="Comma separated list of ports. By default read from ClickHouse config",
 )
-def tls_command(crit: int, warn: int, ports: Optional[str]) -> Result:
+@click.pass_context
+def tls_command(
+    ctx: click.Context, crit: int, warn: int, ports: Optional[str]
+) -> Result:
     """
     Check TLS certificate for expiration and that actual cert from fs used.
     """
     file_certificate, _ = read_cert_file()
 
-    for port in get_ports(ports):
+    for port in get_ports(ctx, ports):
         try:
             addr: Tuple[str, int] = (socket.getfqdn(), int(port))
             cert: str = ssl.get_server_certificate(addr)
@@ -54,10 +57,10 @@ def tls_command(crit: int, warn: int, ports: Optional[str]) -> Result:
     return Result(0, "OK")
 
 
-def get_ports(ports: Optional[str]) -> List[str]:
+def get_ports(ctx: click.Context, ports: Optional[str]) -> List[str]:
     if ports:
         return ports.split(",")
-    client = ClickhouseClient()
+    client = ClickhouseClient(ctx)
     return [
         client.get_port(ClickhousePort.HTTPS),
         client.get_port(ClickhousePort.TCP_SECURE),

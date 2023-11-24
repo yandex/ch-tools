@@ -54,14 +54,17 @@ from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
     default=0,
     help="Show details about lag.",
 )
-def replication_lag_command(xcrit, crit, warn, mwarn, mcrit, verbose):
+@click.pass_context
+def replication_lag_command(ctx, xcrit, crit, warn, mwarn, mcrit, verbose):
     """
     Check for replication lag across replicas.
     Should be: lag >= lag_with_errors, lag >= max_execution
     """
     # pylint: disable=too-many-branches,too-many-locals
-
-    lag, lag_with_errors, max_execution, max_merges, chart = get_replication_lag()
+    ch_client = ClickhouseClient(ctx)
+    lag, lag_with_errors, max_execution, max_merges, chart = get_replication_lag(
+        ch_client
+    )
 
     msg_verbose = ""
     msg_verbose_2 = "\n\n"
@@ -146,7 +149,7 @@ def replication_lag_command(xcrit, crit, warn, mwarn, mcrit, verbose):
     max_merges_warn_threshold = 1
     max_merges_crit_threshold = 1
     if max_merges > 0:
-        max_replicated_merges_in_queue = get_max_replicated_merges_in_queue()
+        max_replicated_merges_in_queue = get_max_replicated_merges_in_queue(ch_client)
         max_merges_warn_threshold = int(max_replicated_merges_in_queue * mwarn / 100.0)
         max_merges_crit_threshold = int(max_replicated_merges_in_queue * mcrit / 100.0)
 
@@ -158,7 +161,7 @@ def replication_lag_command(xcrit, crit, warn, mwarn, mcrit, verbose):
     )
 
     try:
-        replica_versions_mismatch = ClickhouseInfo.get_versions_count() > 1
+        replica_versions_mismatch = ClickhouseInfo.get_versions_count(ctx) > 1
         if replica_versions_mismatch:
             msg += ", ClickHouse versions on replicas mismatch"
             return Result(code=1, message=msg, verbose=msg_verbose)
@@ -177,22 +180,22 @@ def replication_lag_command(xcrit, crit, warn, mwarn, mcrit, verbose):
     return Result(code=2, message=msg, verbose=msg_verbose)
 
 
-def get_replication_lag():
+def get_replication_lag(ch_client):
     """
     Get max absolute_delay from system.replicas.
     """
 
-    tables = get_tables_with_replication_delay()
+    tables = get_tables_with_replication_delay(ch_client)
     chart: Dict[str, Dict[str, Any]] = {}
     for t in tables:
         key = "{database}.{table}".format(database=t["database"], table=t["table"])
         chart[key] = {}
         chart[key]["delay"] = int(t["absolute_delay"])
-    tables = filter_out_single_replica_tables(tables)
+    tables = filter_out_single_replica_tables(ch_client, tables)
     for t in tables:
         key = "{database}.{table}".format(database=t["database"], table=t["table"])
         chart[key]["multi_replicas"] = True
-    tables = count_errors(tables, -1)
+    tables = count_errors(ch_client, tables, -1)
 
     max_merges = 0
     for t in tables:
@@ -230,15 +233,15 @@ def get_replication_lag():
     return lag, lag_with_errors, max_execution, max_merges, chart
 
 
-def get_tables_with_replication_delay():
+def get_tables_with_replication_delay(ch_client):
     """
     Get tables with absolute_delay > 0.
     """
     query = "SELECT database, table, zookeeper_path, absolute_delay FROM system.replicas WHERE absolute_delay > 0"
-    return ClickhouseClient().execute(query, compact=False)
+    return ch_client.execute(query, compact=False)
 
 
-def filter_out_single_replica_tables(tables):
+def filter_out_single_replica_tables(ch_client, tables):
     if not tables:
         return tables
 
@@ -255,10 +258,10 @@ def filter_out_single_replica_tables(tables):
             "('{0}', '{1}')".format(t["database"], t["table"]) for t in tables
         )
     )
-    return ClickhouseClient().execute(query, False)
+    return ch_client.execute(query, False)
 
 
-def count_errors(tables, exceptions_limit):
+def count_errors(ch_client, tables, exceptions_limit):
     """
     Add count of replication errors.
     """
@@ -286,7 +289,7 @@ def count_errors(tables, exceptions_limit):
         ),
         limit=limit,
     )
-    return ClickhouseClient().execute(query, False)
+    return ch_client.execute(query, False)
 
 
 def is_userfault_exception(exception):
@@ -308,14 +311,14 @@ def is_userfault_exception(exception):
     return False
 
 
-def get_max_replicated_merges_in_queue():
+def get_max_replicated_merges_in_queue(ch_client):
     """
     Get max_replicated_merges_in_queue value
     """
     query = """
         SELECT value FROM system.merge_tree_settings WHERE name='max_replicated_merges_in_queue'
     """
-    res = ClickhouseClient().execute(query, True)
+    res = ch_client.execute(query, True)
     if not res:
         return (
             16  # 16 is default value for 'max_replicated_merges_in_queue' in ClickHouse

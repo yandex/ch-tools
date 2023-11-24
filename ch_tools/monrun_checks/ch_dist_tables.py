@@ -15,11 +15,12 @@ from ch_tools.monrun_checks.clickhouse_client import ClickhouseClient
 @click.option(
     "-w", "--warning", "warn", type=int, default=600, help="Warning threshold."
 )
-def dist_tables_command(crit, warn):
+@click.pass_context
+def dist_tables_command(ctx, crit, warn):
     """
     Check for old chunks on Distributed tables.
     """
-    ch_client = ClickhouseClient()
+    ch_client = ClickhouseClient(ctx)
 
     status = 0
     issues = []

@@ -136,13 +136,7 @@ def clickhouse_client(ctx):
     """
     if not ctx.obj.get("chcli"):
         config = ctx.obj["config"]["clickhouse"]
-
-        user = config["user"]
-        password = config["password"]
-        if ctx.obj.get("monitoring", False) and config["monitoring_user"]:
-            user = config["monitoring_user"]
-            password = config["monitoring_password"]
-
+        user, password = clickhouse_credentials(ctx)
         ctx.obj["chcli"] = ClickhouseClient(
             host=config["host"],
             protocol=config["protocol"],
@@ -155,3 +149,18 @@ def clickhouse_client(ctx):
         )
 
     return ctx.obj["chcli"]
+
+
+def clickhouse_credentials(ctx):
+    """
+    Return credentials to connect to ClickHouse.
+    """
+    config = ctx.obj["config"]["clickhouse"]
+
+    user = config["user"]
+    password = config["password"]
+    if ctx.obj.get("monitoring", False) and config["monitoring_user"]:
+        user = config["monitoring_user"]
+        password = config["monitoring_password"]
+
+    return user, password

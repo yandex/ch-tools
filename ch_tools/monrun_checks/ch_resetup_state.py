@@ -7,6 +7,7 @@ import click
 import psutil
 import requests
 
+from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_credentials
 from ch_tools.common.clickhouse.config.path import CLICKHOUSE_RESETUP_CONFIG_PATH
 from ch_tools.common.result import Result
 from ch_tools.monrun_checks.exceptions import die
@@ -16,7 +17,8 @@ from ch_tools.monrun_checks.exceptions import die
 @click.option("-p", "--port", "port", type=int, help="ClickHouse HTTP(S) port to use.")
 @click.option("-s", "--ssl", "ssl", is_flag=True, help="Use HTTPS rather than HTTP.")
 @click.option("--ca_bundle", "ca_bundle", help="Path to CA bundle to use.")
-def resetup_state_command(port, ssl, ca_bundle):
+@click.pass_context
+def resetup_state_command(ctx, port, ssl, ca_bundle):
     """
     Check state of resetup process.
     """
@@ -26,7 +28,7 @@ def resetup_state_command(port, ssl, ca_bundle):
     check_resetup_required()
 
     host = socket.getfqdn()
-    if request(host, port, ssl, ca_bundle):
+    if request(ctx, host, port, ssl, ca_bundle):
         return Result(2, "ClickHouse is listening on ports reserved for resetup")
 
     if os.path.isfile(CLICKHOUSE_RESETUP_CONFIG_PATH):
@@ -70,7 +72,7 @@ def check_resetup_required():
         die(0, "OK")
 
 
-def request(host, port, ssl, ca_bundle, query=None):
+def request(ctx, host, port, ssl, ca_bundle, query=None):
     """
     Send request to ClickHouse.
     """
@@ -81,11 +83,13 @@ def request(host, port, ssl, ca_bundle, query=None):
         if query:
             params["query"] = query
 
+        user, password = clickhouse_credentials(ctx)
         r = requests.get(
             "{0}://{1}:{2}".format(protocol, host, port),
             params=params,
             headers={
-                "X-ClickHouse-User": "mdb_monitor",
+                "X-ClickHouse-User": user,
+                "X-ClickHouse-Key": password,
             },
             timeout=1,
             verify=verify,

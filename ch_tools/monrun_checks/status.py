@@ -18,7 +18,7 @@ def status_command(commands):
         Perform all checks.
         """
         checks_status = []
-        ctx.obj = {"status_mode": True}
+        ctx.obj["status_mode"] = True
         for cmd in commands:
             status = ctx.invoke(cmd)
             checks_status.append(

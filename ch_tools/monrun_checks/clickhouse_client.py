@@ -7,6 +7,7 @@ from typing import Dict
 
 import requests
 
+from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_credentials
 from ch_tools.monrun_checks.exceptions import die
 
 
@@ -43,9 +44,10 @@ class ClickhouseClient:
     port_settings: Dict[str, str] = {}
     cert_path = "/etc/clickhouse-server/ssl/allCAs.pem"
 
-    def __init__(self):
+    def __init__(self, ctx):
         self.__get_settings()
         self.host = socket.getfqdn()
+        self.user, self.password = clickhouse_credentials(ctx)
 
     def __execute_http(self, query, port=ClickhousePort.HTTPS):
         # Private method, we are sure that port is https or http and presents in config
@@ -58,7 +60,8 @@ class ClickhouseClient:
             if query
             else {},
             headers={
-                "X-ClickHouse-User": "_monitor",
+                "X-ClickHouse-User": self.user,
+                "X-ClickHouse-Key": self.password,
             },
             timeout=10,
             verify=self.cert_path if port == ClickhousePort.HTTPS else None,
@@ -76,9 +79,11 @@ class ClickhouseClient:
             self.host,
             "--port",
             self.port_settings[port],
-            "--user",
-            "_monitor",
         ]
+        if self.user:
+            cmd.extend(("--user", self.user))
+        if self.password:
+            cmd.extend(("--password", self.password))
         if port == ClickhousePort.TCP_SECURE:
             cmd.append("--secure")
 

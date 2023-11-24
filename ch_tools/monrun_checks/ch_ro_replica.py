@@ -5,11 +5,12 @@ from ch_tools.monrun_checks.clickhouse_client import ClickhouseClient
 
 
 @click.command("ro-replica")
-def ro_replica_command():
+@click.pass_context
+def ro_replica_command(ctx):
     """
     Check for readonly replicated tables.
     """
-    ch_client = ClickhouseClient()
+    ch_client = ClickhouseClient(ctx)
 
     response = ch_client.execute(
         "SELECT database, table FROM system.replicas WHERE is_readonly"
