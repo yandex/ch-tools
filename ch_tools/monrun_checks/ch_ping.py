@@ -15,13 +15,14 @@ from ch_tools.monrun_checks.clickhouse_client import ClickhouseClient, Clickhous
     "-c", "--critical", "crit", type=int, default=5, help="Critical threshold."
 )
 @click.option("-w", "--warning", "warn", type=int, default=2, help="Warning threshold.")
-def ping_command(number, crit, warn):
+@click.pass_context
+def ping_command(ctx, number, crit, warn):
     """
     Ping all available ClickHouse ports.
     """
     # pylint: disable=too-many-branches
 
-    ch_client = ClickhouseClient()
+    ch_client = ClickhouseClient(ctx)
 
     fails = {
         ClickhousePort.TCP: 0,

@@ -16,7 +16,8 @@ from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 @click.option(
     "-f", "--config_file", "conf", help="Config file with theshholds per each table."
 )
-def system_queues_command(crit, warn, conf):
+@click.pass_context
+def system_queues_command(ctx, crit, warn, conf):
     """
     Check system queues.
     """
@@ -25,8 +26,8 @@ def system_queues_command(crit, warn, conf):
     else:
         config = {"triggers": {"default": {"crit": crit, "warn": warn}}}
 
-    metrics = get_metrics()
-    return check_metrics(metrics, config)
+    metrics = get_metrics(ctx)
+    return check_metrics(ctx, metrics, config)
 
 
 def get_config(conf):
@@ -37,7 +38,7 @@ def get_config(conf):
         return yaml.safe_load(f)
 
 
-def get_metrics():
+def get_metrics(ctx):
     """
     Select and return metrics form system.replicas.
     """
@@ -45,10 +46,10 @@ def get_metrics():
         "SELECT database, table, future_parts, parts_to_check, queue_size,"
         " inserts_in_queue, merges_in_queue FROM system.replicas"
     )
-    return ClickhouseClient().execute(query, compact=False)
+    return ClickhouseClient(ctx).execute(query, compact=False)
 
 
-def check_metrics(metrics, config):
+def check_metrics(ctx, metrics, config):
     """
     Check that metrics are within acceptable levels.
     """
@@ -79,7 +80,7 @@ def check_metrics(metrics, config):
                     table_status = status_map[prior]
                     if table_status > 1:
                         if versions_count == 0:
-                            versions_count = ClickhouseInfo.get_versions_count()
+                            versions_count = ClickhouseInfo.get_versions_count(ctx)
                         if versions_count > 1:
                             table_status = 1
                             prior = "crit->warn"
@@ -94,7 +95,7 @@ def check_metrics(metrics, config):
         status = triggers[0][0]
         message = " ".join(x[1] for x in triggers)
         if versions_count == 0:
-            versions_count = ClickhouseInfo.get_versions_count()
+            versions_count = ClickhouseInfo.get_versions_count(ctx)
         if versions_count > 1:
             message += " ClickHouse versions on replicas mismatch"
 
