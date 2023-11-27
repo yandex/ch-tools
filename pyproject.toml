@@ -155,4 +155,4 @@ exclude = ['tests/staging']
 
 [tool.codespell]
 skip = 'poetry.lock'
-ignore-words-list = 'sav'
+ignore-words-list = 'sav,fpr'  # `fpr` is used in parsing GPG output
