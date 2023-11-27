@@ -15,8 +15,8 @@ MAKEFLAGS += --no-builtin-rules
 export LC_ALL = en_US.UTF-8
 export LANG   = en_US.UTF-8
 
-PROJECT_NAME ?= clickhouse-tools
-PROJECT_NAME_UNDERSCORE ?= $(subst -,_,$(PROJECT_NAME))
+export PROJECT_NAME ?= clickhouse-tools
+export PROJECT_NAME_UNDERSCORE ?= $(subst -,_,$(PROJECT_NAME))
 
 export PYTHON ?= python3
 
@@ -26,8 +26,8 @@ POETRY_HOME ?= /opt/poetry
 POETRY := $(POETRY_HOME)/bin/poetry
 
 PREFIX ?= /opt/yandex/$(PROJECT_NAME)
-BUILD_PYTHON_OUTPUT_DIR ?= dist
-BUILD_DEB_OUTPUT_DIR ?= out
+export BUILD_PYTHON_OUTPUT_DIR ?= dist
+export BUILD_DEB_OUTPUT_DIR ?= out
 SRC_DIR ?= ch_tools
 TESTS_DIR ?= tests
 
@@ -47,6 +47,21 @@ INSTALL_DEPS_STAMP := .install-deps
 # Pass arguments for testing tools
 BEHAVE_ARGS ?=
 PYTEST_ARGS ?=
+
+# Different ways of passing signing key for building debian package
+export DEB_SIGN_KEY_ID ?=
+export DEB_SIGN_KEY ?=
+export DEB_SIGN_KEY_PATH ?=
+
+# Platform of image for building debian package according to
+# https://docs.docker.com/build/building/multi-platform/#building-multi-platform-images
+# E.g. linux/amd64, linux/arm64, etc.
+# If platform is not provided Docker uses platform of the host performing the build
+export DEB_TARGET_PLATFORM ?=
+# Name of image (with tag) for building deb package.
+# E.g. ubuntu:22.04, ubuntu:jammy, ubuntu:bionic, etc.
+# If it is not provided, default value in Dockerfile is used
+export DEB_BUILD_DISTRIBUTION ?=
 
 
 define ensure_poetry
@@ -278,7 +293,7 @@ prepare-changelog: prepare-version
 
 .PHONY: prepare-version
 prepare-version: $(VERSION_FILE)
-	VERSION=$$(cat $(VERSION_FILE))	
+	VERSION=$$(cat $(VERSION_FILE))
 	# Replace version in $(SRC_DIR)/__init__.py
 	sed -i "s/__version__ = \"[0-9\.]\+\"/__version__ = \"$${VERSION}\"/g" $(SRC_DIR)/__init__.py
 	# Replace version in pyproject.toml
@@ -297,12 +312,13 @@ prepare-build-deb:
 
 
 .PHONY: build-deb-package
-build-deb-package: prepare-changelog
-	# Build DEB package
-	(cd debian && debuild --check-dirname-level 0 --preserve-env --no-lintian --no-tgz-check -uc -us)
-	# Move DEB package to output dir
-	DEB_FILE=$$(echo ../$(PROJECT_NAME)*.deb)
-	mkdir -p $(BUILD_DEB_OUTPUT_DIR) && mv $$DEB_FILE $(BUILD_DEB_OUTPUT_DIR)
+build-deb-package:
+	./build_deb_in_docker.sh
+
+
+.PHONY: build-deb-package-local
+build-deb-package-local: prepare-changelog
+	./build_deb.sh
 
 
 .PHONY: clean_debuild

@@ -128,10 +128,12 @@ jobs:
         path: ${{ env.BUILD_PYTHON_OUTPUT_DIR }}/*.tar.gz
         if-no-files-found: error
 
-    - name: install prerequisites for DEB packaging tools
-      run: sudo make prepare-build-deb
+    - name: Set up QEMU (for building ARM debian package)
+      uses: docker/setup-qemu-action@v3
 
     - name: build DEB package
+      env:
+        DEB_BUILD_DISTRIBUTION: ubuntu:${{ matrix.target.ubuntu }}
       run: |
         # Speedup Debian package building
         echo "force-unsafe-io" | sudo tee /etc/dpkg/dpkg.cfg.d/force-unsafe-io

@@ -1,0 +1,40 @@
+ARG BASE_IMAGE=ubuntu:22.04
+FROM --platform=$TARGETPLATFORM $BASE_IMAGE
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN set -ex \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        # Debian packaging tools
+        build-essential \
+        debhelper \
+        devscripts \
+        fakeroot \
+        # Managing keys for debian package signing
+        gpg \
+        gpg-agent \
+        # Python packaging tools
+        python3-dev \
+        python3-pip \
+        python3-setuptools \
+        python3-venv \
+        # Misc
+        curl \
+        locales \        
+    # Configure locales
+    && locale-gen en_US.UTF-8 \
+    && update-locale LANG=en_US.UTF-8 \
+    # Ensure that `python` refers to `python3` so that poetry works. 
+    # It makes sense for ubuntu:18.04
+    && ln -s /usr/bin/python3 /usr/bin/python
+
+# Install poetry in a unified way
+COPY Makefile ./
+RUN make install-poetry
+
+# Project directory must be mounted here
+VOLUME /src
+WORKDIR /src
+
+CMD ["make", "build-deb-package-local"]
