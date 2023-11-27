@@ -18,7 +18,6 @@ KEEPER_DEFAULT_PATH = "/var/lib/clickhouse-keeper/snapshots"
 CH_DBMS_DEFAULT_PATH = "/var/lib/clickhouse/snapshots"
 
 context = ssl.create_default_context()
-context.minimum_version = ssl.TLSVersion.TLSv1_2
 
 
 @command("alive")
