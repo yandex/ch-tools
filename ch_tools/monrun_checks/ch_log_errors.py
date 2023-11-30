@@ -4,19 +4,13 @@ from datetime import datetime, timedelta
 import click
 from file_read_backwards import FileReadBackwards
 
+from ch_tools.common.cli.parameters import RegexpParamType
 from ch_tools.common.result import Result
 
 REGEXP = re.compile(
     r"^([0-9]{4}\.[0-9]{2}\.[0-9]{2}\ [0-9]{2}\:[0-9]{2}\:[0-9]{2}).*?<(Error|Fatal)>"
 )
 DEFAULT_EXCLUDE = r"e\.displayText\(\) = No message received"
-
-
-def validate_exclude(ctx, param, value):  # pylint: disable=unused-argument
-    try:
-        return re.compile(value if value is not None else DEFAULT_EXCLUDE)
-    except re.error:
-        raise click.BadParameter("Value should be a valid regular expression.")
 
 
 @click.command("log-errors")
@@ -36,8 +30,8 @@ def validate_exclude(ctx, param, value):  # pylint: disable=unused-argument
     "-e",
     "--exclude",
     "exclude",
+    type=RegexpParamType(),
     default=DEFAULT_EXCLUDE,
-    callback=validate_exclude,
     help="Excluded error.",
 )
 @click.option(

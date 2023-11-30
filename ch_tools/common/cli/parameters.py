@@ -52,6 +52,20 @@ class StringParamType(click.ParamType):
         return _preprocess_value(value)
 
 
+class RegexpParamType(click.ParamType):
+    """
+    Command-line parameter type for regular expressions.
+    """
+
+    name = "regexp"
+
+    def convert(self, value, param, ctx):
+        try:
+            return re.compile(value)
+        except re.error:
+            raise click.BadParameter("Value should be a valid regular expression.")
+
+
 class TimeSpanParamType(click.ParamType):
     """
     Command-line parameter type for times span values.
