@@ -144,7 +144,7 @@ jobs:
         sudo make uninstall
         sudo apt-get install -q -y ./${{ env.BUILD_DEB_OUTPUT_DIR }}/*.deb
         sudo chadmin --help
-        sudo ch-monitoring --no-user-check --help
+        sudo ch-monitoring --no-ensure-monitoring-user --help
         sudo keeper-monitoring --help
         sudo ch-s3-credentials --help
 

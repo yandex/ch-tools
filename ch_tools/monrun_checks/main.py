@@ -112,19 +112,18 @@ class MonrunChecks(cloup.Group):
     context_settings=CONTEXT_SETTINGS,
 )
 @option(
-    "--no-user-check",
-    "no_user_check",
-    is_flag=True,
-    default=False,
-    help="Do not check current user.",
+    "--ensure-monitoring-user/--no-ensure-monitoring-user",
+    "ensure_monitoring_user",
+    default=True,
+    help="Ensure that monitoring checks are run under monitoring user.",
 )
 @version_option(__version__)
 @pass_context
-def cli(ctx, no_user_check):
-    if not no_user_check:
-        check_current_user()
-
+def cli(ctx, ensure_monitoring_user):
     config = load_config()
+
+    if ensure_monitoring_user:
+        _ensure_monitoring_user()
 
     ctx.obj = {
         "config": config,
@@ -163,7 +162,7 @@ def main():
     cli.main()
 
 
-def check_current_user():
+def _ensure_monitoring_user():
     euid = os.geteuid()
     user = pwd.getpwuid(euid).pw_name
 
