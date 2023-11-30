@@ -80,9 +80,9 @@ class ClickhouseClient:
             "--port",
             self.port_settings[port],
         ]
-        if self.user:
+        if self.user is not None:
             cmd.extend(("--user", self.user))
-        if self.password:
+        if self.password is not None:
             cmd.extend(("--password", self.password))
         if port == ClickhousePort.TCP_SECURE:
             cmd.append("--secure")
