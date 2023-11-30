@@ -122,7 +122,7 @@ class MonrunChecks(cloup.Group):
 def cli(ctx, ensure_monitoring_user):
     config = load_config()
 
-    if not ensure_monitoring_user:
+    if ensure_monitoring_user:
         _ensure_monitoring_user()
 
     ctx.obj = {
