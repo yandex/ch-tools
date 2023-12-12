@@ -1,4 +1,4 @@
-from typing import Any, Iterator, Tuple
+from typing import Any, Iterator, Optional, Tuple
 
 import boto3  # type: ignore[import]
 from botocore.client import Config  # type: ignore[import]
@@ -12,7 +12,10 @@ IGNORED_OBJECT_NAME_PREFIXES = ["operations", ".SCHEMA_VERSION"]
 
 
 def s3_object_storage_iterator(
-    disk: S3DiskConfiguration, object_name_prefix: str
+    disk: S3DiskConfiguration,
+    *,
+    path_prefix: Optional[str] = None,
+    object_name_prefix: str = ""
 ) -> Iterator[Tuple[str, ObjectSummary]]:
     s3 = boto3.resource(
         "s3",
@@ -23,8 +26,11 @@ def s3_object_storage_iterator(
     )
     bucket = s3.Bucket(disk.bucket_name)
 
-    for obj in bucket.objects.filter(Prefix=disk.prefix + object_name_prefix):
-        name: str = obj.key[len(disk.prefix) :]
+    if not path_prefix:
+        path_prefix = disk.prefix
+
+    for obj in bucket.objects.filter(Prefix=path_prefix + object_name_prefix):
+        name: str = obj.key[len(path_prefix) :]
 
         if _is_ignored(name):
             continue
