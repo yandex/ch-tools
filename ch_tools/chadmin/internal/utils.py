@@ -47,6 +47,8 @@ def chunked(iterable: Iterable, n: int) -> Iterator[list]:
         raise ValueError("n must be at least one")
     it = iter(iterable)
 
-    chunk = list(islice(it, n))
-    while chunk:
+    while True:
+        chunk = list(islice(it, n))
+        if not chunk:
+            break
         yield chunk
