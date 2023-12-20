@@ -303,6 +303,8 @@ def _get_zk_client(ctx):
     args = ctx.obj.get("zk_client_args", {})
     host = args.get("host")
     port = args.get("port", 2181)
+    use_ssl = args.get("use_ssl", False)
+    no_verify_ssl_certs = args.get("no_verify_ssl_certs", False)
     timeout = args.get("timeout", 10)
     zkcli_identity = args.get("zkcli_identity")
     no_chroot = args.get("no_chroot", False)
@@ -334,5 +336,10 @@ def _get_zk_client(ctx):
         auth_data = [("digest", zkcli_identity)]
 
     return KazooClient(
-        connect_str, auth_data=auth_data, timeout=timeout, logger=logging.getLogger()
+        connect_str,
+        auth_data=auth_data,
+        timeout=timeout,
+        logger=logging.getLogger(),
+        use_ssl=use_ssl,
+        verify_certs=not no_verify_ssl_certs,
     )

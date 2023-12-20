@@ -23,6 +23,13 @@ from ch_tools.common.cli.parameters import ListParamType, StringParamType
 @group("zookeeper")
 @option("--port", help="ZooKeeper port.", type=int, default=2181)
 @option("--host", help="ZooKeeper host.", type=str)
+@option("--secure", help="Use secure connection.", default=False, is_flag=True)
+@option(
+    "--no-verify-ssl-certs",
+    help="Do not check SSL Certificates in secure connection.",
+    default=False,
+    is_flag=True,
+)
 @option("--timeout", help="ZooKeeper timeout.", default=10)
 @option(
     "--zkcli-identity",
@@ -52,7 +59,16 @@ from ch_tools.common.cli.parameters import ListParamType, StringParamType
 )
 @pass_context
 def zookeeper_group(
-    ctx, host, port, timeout, zkcli_identity, no_chroot, no_ch_config, zk_root_path
+    ctx,
+    host,
+    secure,
+    no_verify_ssl_certs,
+    port,
+    timeout,
+    zkcli_identity,
+    no_chroot,
+    no_ch_config,
+    zk_root_path,
 ):
     """ZooKeeper management commands.
 
@@ -64,6 +80,8 @@ def zookeeper_group(
     ctx.obj["zk_client_args"] = {
         "port": port,
         "host": host,
+        "use_ssl": secure,
+        "no_verify_ssl_certs": no_verify_ssl_certs,
         "timeout": timeout,
         "zkcli_identity": zkcli_identity,
         "no_chroot": no_chroot,
