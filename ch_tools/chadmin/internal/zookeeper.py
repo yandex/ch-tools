@@ -304,7 +304,7 @@ def _get_zk_client(ctx):
     host = args.get("host")
     port = args.get("port", 2181)
     use_ssl = args.get("use_ssl", False)
-    no_verify_ssl_certs = args.get("no_verify_ssl_certs", False)
+    verify_ssl_certs = args.get("verify_ssl_certs", True)
     timeout = args.get("timeout", 10)
     zkcli_identity = args.get("zkcli_identity")
     no_chroot = args.get("no_chroot", False)
@@ -341,5 +341,5 @@ def _get_zk_client(ctx):
         timeout=timeout,
         logger=logging.getLogger(),
         use_ssl=use_ssl,
-        verify_certs=not no_verify_ssl_certs,
+        verify_certs=verify_ssl_certs,
     )

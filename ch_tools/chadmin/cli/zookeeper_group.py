@@ -25,10 +25,9 @@ from ch_tools.common.cli.parameters import ListParamType, StringParamType
 @option("--host", help="ZooKeeper host.", type=str)
 @option("--secure", help="Use secure connection.", default=False, is_flag=True)
 @option(
-    "--no-verify-ssl-certs",
-    help="Do not check SSL Certificates in secure connection.",
-    default=False,
-    is_flag=True,
+    "--verify-ssl-certs/--no-verify-ssl-certs",
+    help="Check or not SSL Certificates in secure connection.",
+    default=True,
 )
 @option("--timeout", help="ZooKeeper timeout.", default=10)
 @option(
@@ -62,7 +61,7 @@ def zookeeper_group(
     ctx,
     host,
     secure,
-    no_verify_ssl_certs,
+    verify_ssl_certs,
     port,
     timeout,
     zkcli_identity,
@@ -81,7 +80,7 @@ def zookeeper_group(
         "port": port,
         "host": host,
         "use_ssl": secure,
-        "no_verify_ssl_certs": no_verify_ssl_certs,
+        "verify_ssl_certs": verify_ssl_certs,
         "timeout": timeout,
         "zkcli_identity": zkcli_identity,
         "no_chroot": no_chroot,
