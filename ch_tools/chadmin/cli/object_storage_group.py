@@ -210,9 +210,10 @@ def clean_object_storage(ctx, prefix, file, compressed):
     """
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
 
-    file = TextIOWrapper(file)
     if compressed:
         file = GzipFile(fileobj=file)
+    file = TextIOWrapper(file)
+
     if prefix:
         file = (
             obj.key
