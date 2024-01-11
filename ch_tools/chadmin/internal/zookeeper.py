@@ -171,23 +171,24 @@ def _delete_nodes_transaction(zk, to_delete_in_trasaction):
 
 def _remove_subpaths(paths):
     """
-    Removing from the list paths that are subpath of antoher.
+    Removing from the list paths that are subpath of another.
 
     Example:
     [/a, /a/b/c<-remove it]
     """
+    if not paths:
+        return
     # Sorting the list in the lexicographic order
     paths.sort()
     paths = [path.split("/") for path in paths]
-    normalized = [paths[0]]
-    # If path[i] have subnode path[j] then all paths from i to j will be subnode of i.
+    normalized_paths = [paths[0]]
+    # If path[i] has subnode path[j] then all paths from i to j will be subnode of i.
     for path in paths:
-        if (
-            len(normalized[-1]) > len(path)
-            or path[: len(normalized[-1])] != normalized[-1]
-        ):
-            normalized.append(path)
-    return ["/".join(normalized_list) for normalized_list in normalized]
+        last = normalized_paths[-1]
+        # Ignore the path if the last normalized one is its prefix
+        if len(last) > len(path) or path[: len(last)] != last:
+            normalized_paths.append(path)
+    return ["/".join(path) for path in normalized_paths]
 
 
 def _delete_recursive(zk, paths):
