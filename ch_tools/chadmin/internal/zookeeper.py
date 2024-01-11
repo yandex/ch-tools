@@ -194,7 +194,7 @@ def _delete_recursive(zk, paths):
                 normalized.append(path)
         return normalized
 
-    if not len(paths):
+    if len(paths) == 0:
         return
     print("Node to recursive delete", paths)
     paths = remove_subpaths(paths)
