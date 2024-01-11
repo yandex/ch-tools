@@ -38,3 +38,10 @@ def step_childen_list_empty(context, node, zk_node):
     container = get_container(context, node)
     result = Chadmin(container).zk_list(zk_node)
     assert_that(result.output.decode(), equal_to("\n"))
+
+
+@when("we delete zookeepers nodes {zk_nodes} on {node:w}")
+def step_delete_command(context, zk_nodes, node):
+    container = get_container(context, node)
+    result = Chadmin(container).zk_delete(zk_nodes)
+    assert result.exit_code == 0, f" output:\n {result.output.decode().strip()}"

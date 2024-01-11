@@ -1,14 +1,15 @@
 import logging
 import os
 import re
+from collections import deque
 from contextlib import contextmanager
 from math import sqrt
-from queue import Queue
 
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError
 
 from ch_tools.chadmin.cli import get_clickhouse_config, get_macros
+from ch_tools.chadmin.internal.utils import chunked
 
 
 def get_zk_node(ctx, path, binary=False):
@@ -120,15 +121,14 @@ def _find_paths(zk, root_path, included_paths_regexp, excluded_paths_regexp=None
     Return paths of nodes that match the include regular expression and do not match the excluded one.
     """
     paths = set()
-    queue: Queue = Queue()
-    queue.put(root_path)
+    queue = deque(root_path)
     included_regexp = re.compile("|".join(included_paths_regexp))
     excluded_regexp = (
         re.compile("|".join(excluded_paths_regexp)) if excluded_paths_regexp else None
     )
 
-    while not queue.empty():
-        path = queue.get()
+    while len(queue):
+        path = queue.popleft()
         if excluded_regexp and re.match(excluded_regexp, path):
             continue
 
@@ -138,7 +138,7 @@ def _find_paths(zk, root_path, included_paths_regexp, excluded_paths_regexp=None
             if re.match(included_regexp, subpath):
                 paths.add(subpath)
             else:
-                queue.put(os.path.join(path, subpath))
+                queue.append(os.path.join(path, subpath))
 
     return list(paths)
 
@@ -156,6 +156,11 @@ def _delete_nodes_transaction(zk, to_delete_in_trasaction):
     if result.count(True) == len(result):
         # Transaction completed successfully, exit.
         return
+
+    print(
+        "Delete transaction have failed. Fallthrough to single delete operations for zk_nodes : ",
+        to_delete_in_trasaction,
+    )
     for node in to_delete_in_trasaction:
         try:
             zk.delete(node, recursive=True)
@@ -173,27 +178,42 @@ def _delete_recursive(zk, paths):
     To delete in correct order first of all we perform topological sort using bfs approach.
     """
 
+    def remove_subpaths(paths):
+        """
+        Removing from the list paths that are subpath of antoher.
+
+        Example:
+        [/a, /a/b/c<-remove it]
+        """
+        # Sorting the list in the lexicographic order
+        paths.sort()
+        normalized = [paths[0]]
+        # If path[i] have subnode path[j] then all paths from i to j will be subnode of i.
+        for path in paths:
+            if not path.startswith(normalized[-1]):
+                normalized.append(path)
+        return normalized
+
+    if not len(paths):
+        return
     print("Node to recursive delete", paths)
+    paths = remove_subpaths(paths)
     nodes_to_delete = []
-    queue: Queue = Queue()
-    for path in paths:
-        queue.put(path)
+    queue = deque(paths)
+
+    while len(queue):
+        path = queue.popleft()
         nodes_to_delete.append(path)
-
-    while not queue.empty():
-        path = queue.get()
         for child_node in _get_children(zk, path):
-            full_child_path = os.path.join(path, child_node)
-            queue.put(full_child_path)
-            nodes_to_delete.append(full_child_path)
+            queue.append(os.path.join(path, child_node))
 
+    # When number of nodes to delete is large preferable to use greater transaction size.
     operations_in_transaction = max(100, int(sqrt(len(nodes_to_delete))))
 
-    while len(nodes_to_delete) > 0:
-        transaction_size = min(len(nodes_to_delete), operations_in_transaction)
-        transaction_oper = nodes_to_delete[-transaction_size:]
-        nodes_to_delete = nodes_to_delete[:-transaction_size]
-        _delete_nodes_transaction(zk, transaction_oper[::-1])
+    for transaction_orerations in chunked(
+        reversed(nodes_to_delete), operations_in_transaction
+    ):
+        _delete_nodes_transaction(zk, transaction_orerations)
 
 
 def clean_zk_metadata_for_hosts(ctx, nodes):
