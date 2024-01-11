@@ -19,6 +19,13 @@ class Chadmin:
         )
         return self.exec_cmd(cmd)
 
+    def zk_delete(self, zk_nodes, no_ch_config=True):
+        cmd = "zookeeper {use_config} delete {nodes}".format(
+            use_config="--no-ch-config" if no_ch_config else "",
+            nodes=zk_nodes,
+        )
+        return self.exec_cmd(cmd)
+
     def zk_list(self, zk_node, no_ch_config=True):
         cmd = "zookeeper {use_config} list {node}".format(
             use_config="--no-ch-config" if no_ch_config else "",
