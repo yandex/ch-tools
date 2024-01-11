@@ -169,6 +169,27 @@ def _delete_nodes_transaction(zk, to_delete_in_trasaction):
             print("Node {node} is already absent, skipped".format(node=node))
 
 
+def _remove_subpaths(paths):
+    """
+    Removing from the list paths that are subpath of antoher.
+
+    Example:
+    [/a, /a/b/c<-remove it]
+    """
+    # Sorting the list in the lexicographic order
+    paths.sort()
+    paths = [path.split("/") for path in paths]
+    normalized = [paths[0]]
+    # If path[i] have subnode path[j] then all paths from i to j will be subnode of i.
+    for path in paths:
+        if (
+            len(normalized[-1]) > len(path)
+            or path[: len(normalized[-1])] != normalized[-1]
+        ):
+            normalized.append(path)
+    return ["/".join(normalized_list) for normalized_list in normalized]
+
+
 def _delete_recursive(zk, paths):
     """
     Kazoo already has the ability to recursively delete nodes, but the implementation is quite naive
@@ -178,30 +199,14 @@ def _delete_recursive(zk, paths):
     To delete in correct order first of all we perform topological sort using bfs approach.
     """
 
-    def remove_subpaths(paths):
-        """
-        Removing from the list paths that are subpath of antoher.
-
-        Example:
-        [/a, /a/b/c<-remove it]
-        """
-        # Sorting the list in the lexicographic order
-        paths.sort()
-        normalized = [paths[0]]
-        # If path[i] have subnode path[j] then all paths from i to j will be subnode of i.
-        for path in paths:
-            if not path.startswith(normalized[-1]):
-                normalized.append(path)
-        return normalized
-
     if len(paths) == 0:
         return
     print("Node to recursive delete", paths)
-    paths = remove_subpaths(paths)
+    paths = _remove_subpaths(paths)
     nodes_to_delete = []
     queue = deque(paths)
 
-    while len(queue):
+    while queue:
         path = queue.popleft()
         nodes_to_delete.append(path)
         for child_node in _get_children(zk, path):
