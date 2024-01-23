@@ -1,4 +1,3 @@
-import logging
 from typing import Any, Dict
 
 import click
@@ -6,7 +5,6 @@ from tabulate import tabulate
 
 from ch_tools.common.result import Result
 from ch_tools.monrun_checks.clickhouse_client import ClickhouseClient
-from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
 
 @click.command("replication-lag")
@@ -159,16 +157,6 @@ def replication_lag_command(ctx, xcrit, crit, warn, mwarn, mcrit, verbose):
     msg = "Max {0} seconds, with errors {1} seconds, max task execution {2} seconds, max merges in queue {3}".format(
         lag, lag_with_errors, max_execution, max_merges
     )
-
-    try:
-        replica_versions_mismatch = ClickhouseInfo.get_versions_count(ctx) > 1
-        if replica_versions_mismatch:
-            msg += ", ClickHouse versions on replicas mismatch"
-            return Result(code=1, message=msg, verbose=msg_verbose)
-    except Exception:
-        logging.warning("Unable to get version info from replicas", exc_info=True)
-        msg += ", one or more replicas is unavailable"
-        return Result(code=1, message=msg, verbose=msg_verbose)
 
     if (
         lag_with_errors < crit
