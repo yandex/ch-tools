@@ -1,9 +1,10 @@
 import time
+import sys
 
 from click import command, option, pass_context
 
-from ch_tools.common.result import Result
 from ch_tools.monrun_checks.ch_replication_lag import estimate_replication_lag
+from ch_tools.common.cli.parameters import TimeSpanParamType
 
 
 @command("wait-replication-sync")
@@ -12,31 +13,31 @@ from ch_tools.monrun_checks.ch_replication_lag import estimate_replication_lag
     "--status",
     type=int,
     default=0,
-    help="Wait until returned status is no worse than given, 0 = OK (default), 1 = WARN, 2 = CRIT.",
+    help="Wait until returned status is no worse than given, 0 = OK, 1 = WARN, 2 = CRIT.",
 )
 @option(
     "-p",
     "--pause",
-    type=int,
-    default=30,
-    help="Pause between request in seconds, default is 30 seconds.",
+    type=TimeSpanParamType(),
+    default="30s",
+    help="Pause between requests.",
 )
 @option(
     "-t",
     "--timeout",
-    type=int,
-    default=3 * 24 * 60 * 60,
-    help="Max amount of time to wait, in seconds. Default is 30 days.",
+    type=TimeSpanParamType(),
+    default="3d",
+    help="Max amount of time to wait.",
 )
 @pass_context
 def wait_replication_sync_command(ctx, status, pause, timeout):
     """Wait for ClickHouse server to sync replication with other replicas."""
 
-    deadline = time.time() + timeout
+    deadline = time.time() + timeout.total_seconds()
     while time.time() < deadline:
         res = estimate_replication_lag(ctx)
         if res.code <= status:
-            return Result(code=0) 
-        time.sleep(pause)
+            sys.exit(0)
+        time.sleep(pause.total_seconds())
 
-    return Result(code=2, message=f"ClickHouse can\'t sync replica for {timeout} seconds")
+    sys.exit(1)
