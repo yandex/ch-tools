@@ -3,7 +3,6 @@ import yaml
 
 from ch_tools.common.result import Result
 from ch_tools.monrun_checks.clickhouse_client import ClickhouseClient
-from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
 
 @click.command("system-queues")
@@ -59,7 +58,6 @@ def check_metrics(metrics, config):
     status = 0
     message = "OK"
     triggers = []
-    versions_count = 0
 
     for row in metrics:
         db_table = "{}.{}".format(row["database"], row["table"])
@@ -77,12 +75,6 @@ def check_metrics(metrics, config):
                 threshold = thresholds[prior]
                 if value > threshold:
                     table_status = status_map[prior]
-                    if table_status > 1:
-                        if versions_count == 0:
-                            versions_count = ClickhouseInfo.get_versions_count()
-                        if versions_count > 1:
-                            table_status = 1
-                            prior = "crit->warn"
                     report += "{}: {} {} > {} ({});".format(
                         db_table, key, value, threshold, prior
                     )
@@ -93,9 +85,5 @@ def check_metrics(metrics, config):
         triggers.sort(reverse=True, key=lambda x: x[0])
         status = triggers[0][0]
         message = " ".join(x[1] for x in triggers)
-        if versions_count == 0:
-            versions_count = ClickhouseInfo.get_versions_count()
-        if versions_count > 1:
-            message += " ClickHouse versions on replicas mismatch"
 
     return Result(code=status, message=message)
