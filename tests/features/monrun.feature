@@ -371,3 +371,13 @@ Feature: ch-monitoring tool
     """
     2;KazooTimeoutError('Connection time-out')
     """
+
+  Scenario: Check wait replication sync
+    When we execute command on clickhouse01
+    """
+    ch-monitoring wait-replication-sync -t 10 -p 1
+    """
+    Then we get response
+    """
+    0;OK
+    """

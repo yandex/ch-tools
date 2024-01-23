@@ -56,6 +56,10 @@ from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 )
 @click.pass_context
 def replication_lag_command(ctx, xcrit, crit, warn, mwarn, mcrit, verbose):
+    return estimate_replication_lag(ctx, xcrit, crit, warn, mwarn, mcrit, verbose)
+
+
+def estimate_replication_lag(ctx, xcrit=3600, crit=6000, warn=300, mwarn=50.0, mcrit=90.0, verbose=0):
     """
     Check for replication lag across replicas.
     Should be: lag >= lag_with_errors, lag >= max_execution
