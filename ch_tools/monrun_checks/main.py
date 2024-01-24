@@ -28,7 +28,6 @@ from ch_tools.monrun_checks.ch_keeper import keeper_command
 from ch_tools.monrun_checks.ch_log_errors import log_errors_command
 from ch_tools.monrun_checks.ch_ping import ping_command
 from ch_tools.monrun_checks.ch_replication_lag import replication_lag_command
-from ch_tools.monrun_checks.ch_replication_sync import wait_replication_sync_command
 from ch_tools.monrun_checks.ch_resetup_state import resetup_state_command
 from ch_tools.monrun_checks.ch_ro_replica import ro_replica_command
 from ch_tools.monrun_checks.ch_s3_backup_orphaned import orphaned_backups_command
@@ -136,7 +135,6 @@ CLI_COMMANDS = [
     ping_command,
     log_errors_command,
     replication_lag_command,
-    wait_replication_sync_command,
     system_queues_command,
     core_dumps_command,
     dist_tables_command,

@@ -1,9 +1,10 @@
+import logging
 import time
 import sys
 
 from click import command, option, pass_context
 
-from ch_tools.monrun_checks.ch_replication_lag import estimate_replication_lag
+from ch_tools.common.replication_lag import estimate_replication_lag
 from ch_tools.common.cli.parameters import TimeSpanParamType
 
 
@@ -40,4 +41,5 @@ def wait_replication_sync_command(ctx, status, pause, timeout):
             sys.exit(0)
         time.sleep(pause.total_seconds())
 
+    logging.error(f"ClickHouse can't sync replica.")
     sys.exit(1)
