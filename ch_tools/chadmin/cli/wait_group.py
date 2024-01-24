@@ -3,9 +3,11 @@ import os
 import sys
 import time
 
-from click import command, option, pass_context
+from click import group, option, pass_context
 
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common.cli.parameters import TimeSpanParamType
+from ch_tools.common.commands.replication_lag import estimate_replication_lag
 from ch_tools.common.utils import execute
 
 BASE_TIMEOUT = 600
@@ -13,7 +15,50 @@ LOCAL_PART_LOAD_SPEED = 10  # in data parts per second
 S3_PART_LOAD_SPEED = 0.5  # in data parts per second
 
 
-@command("wait-started")
+@group("wait")
+def wait_group():
+    """Commands to wait until Clickhouse is in a certain state."""
+    pass
+
+
+@wait_group.command("replication-sync")
+@option(
+    "-s",
+    "--status",
+    type=int,
+    default=0,
+    help="Wait until returned status is no worse than given, 0 = OK, 1 = WARN, 2 = CRIT.",
+)
+@option(
+    "-p",
+    "--pause",
+    type=TimeSpanParamType(),
+    default="30s",
+    help="Pause between requests.",
+)
+@option(
+    "-t",
+    "--timeout",
+    type=TimeSpanParamType(),
+    default="3d",
+    help="Max amount of time to wait.",
+)
+@pass_context
+def wait_replication_sync_command(ctx, status, pause, timeout):
+    """Wait for ClickHouse server to sync replication with other replicas."""
+
+    deadline = time.time() + timeout.total_seconds()
+    while time.time() < deadline:
+        res = estimate_replication_lag(ctx)
+        if res.code <= status:
+            sys.exit(0)
+        time.sleep(pause.total_seconds())
+
+    logging.error(f"ClickHouse can't sync replica.")
+    sys.exit(1)
+
+
+@wait_group.command("started")
 @option(
     "--timeout",
     type=int,

@@ -11,5 +11,5 @@ Feature: chadmin commands.
   Scenario: Check wait replication sync
     When we execute command on clickhouse01
     """
-    chadmin wait-replication-sync -t 10 -p 1
+    chadmin wait replication-sync -t 10 -p 1
     """

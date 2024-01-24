@@ -2,7 +2,7 @@ from typing import Any, Dict
 
 import click
 
-from ch_tools.common.replication_lag import estimate_replication_lag
+from ch_tools.common.commands.replication_lag import estimate_replication_lag
 
 
 @click.command("replication-lag")

@@ -42,10 +42,7 @@ from ch_tools.chadmin.cli.stack_trace_command import stack_trace_command
 from ch_tools.chadmin.cli.table_group import table_group
 from ch_tools.chadmin.cli.table_replica_group import table_replica_group
 from ch_tools.chadmin.cli.thread_log_group import thread_log_group
-from ch_tools.chadmin.cli.wait_replication_sync_command import (
-    wait_replication_sync_command,
-)
-from ch_tools.chadmin.cli.wait_started_command import wait_started_command
+from ch_tools.chadmin.cli.wait_group import wait_group
 from ch_tools.chadmin.cli.zookeeper_group import zookeeper_group
 from ch_tools.common.cli.context_settings import CONTEXT_SETTINGS
 from ch_tools.common.cli.locale_resolver import LocaleResolver
@@ -119,8 +116,6 @@ commands: List[Any] = [
     list_settings_command,
     restore_replica_command,
     stack_trace_command,
-    wait_replication_sync_command,
-    wait_started_command,
 ]
 
 groups: List[Any] = [
@@ -143,6 +138,7 @@ groups: List[Any] = [
     table_group,
     table_replica_group,
     thread_log_group,
+    wait_group,
     zookeeper_group,
 ]
 
