@@ -1,11 +1,11 @@
 import logging
-import time
 import sys
+import time
 
 from click import command, option, pass_context
 
-from ch_tools.common.replication_lag import estimate_replication_lag
 from ch_tools.common.cli.parameters import TimeSpanParamType
+from ch_tools.common.replication_lag import estimate_replication_lag
 
 
 @command("wait-replication-sync")

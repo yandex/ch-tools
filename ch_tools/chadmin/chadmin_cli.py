@@ -42,7 +42,9 @@ from ch_tools.chadmin.cli.stack_trace_command import stack_trace_command
 from ch_tools.chadmin.cli.table_group import table_group
 from ch_tools.chadmin.cli.table_replica_group import table_replica_group
 from ch_tools.chadmin.cli.thread_log_group import thread_log_group
-from ch_tools.chadmin.cli.wait_replication_sync_command import wait_replication_sync_command
+from ch_tools.chadmin.cli.wait_replication_sync_command import (
+    wait_replication_sync_command,
+)
 from ch_tools.chadmin.cli.wait_started_command import wait_started_command
 from ch_tools.chadmin.cli.zookeeper_group import zookeeper_group
 from ch_tools.common.cli.context_settings import CONTEXT_SETTINGS

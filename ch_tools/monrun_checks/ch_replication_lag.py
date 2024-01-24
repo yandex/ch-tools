@@ -1,7 +1,7 @@
-import logging
 from typing import Any, Dict
 
 import click
+
 from ch_tools.common.replication_lag import estimate_replication_lag
 
 
