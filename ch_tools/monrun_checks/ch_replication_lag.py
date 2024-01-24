@@ -1,5 +1,3 @@
-from typing import Any, Dict
-
 import click
 
 from ch_tools.common.commands.replication_lag import estimate_replication_lag

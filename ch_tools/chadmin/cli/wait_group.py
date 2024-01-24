@@ -54,7 +54,7 @@ def wait_replication_sync_command(ctx, status, pause, timeout):
             sys.exit(0)
         time.sleep(pause.total_seconds())
 
-    logging.error(f"ClickHouse can't sync replica.")
+    logging.error("ClickHouse can't sync replicas.")
     sys.exit(1)
 
 
