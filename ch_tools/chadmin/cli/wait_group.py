@@ -3,7 +3,7 @@ import os
 import sys
 import time
 
-from click import group, option, pass_context
+from click import FloatRange, group, option, pass_context
 
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common.cli.parameters import TimeSpanParamType
@@ -27,7 +27,7 @@ def wait_group():
     "--status",
     type=int,
     default=0,
-    help="Wait until returned status is no worse than given, 0 = OK, 1 = WARN, 2 = CRIT.",
+    help="Wait until replication-lag returned status is no worse than given, 0 = OK, 1 = WARN, 2 = CRIT.",
 )
 @option(
     "-p",
@@ -43,13 +43,57 @@ def wait_group():
     default="3d",
     help="Max amount of time to wait.",
 )
+@option(
+    "-x",
+    "--exec-critical",
+    "xcrit",
+    type=int,
+    default=3600,
+    help="Critical threshold for one task execution.",
+)
+@option(
+    "-c",
+    "--critical",
+    "crit",
+    type=int,
+    default=600,
+    help="Critical threshold for lag with errors.",
+)
+@option("-w", "--warning", "warn", type=int, default=300, help="Warning threshold.")
+@option(
+    "-M",
+    "--merges-critical",
+    "mcrit",
+    type=FloatRange(0.0, 100.0),
+    default=90.0,
+    help="Critical threshold in percent of max_replicated_merges_in_queue.",
+)
+@option(
+    "-m",
+    "--merges-warning",
+    "mwarn",
+    type=FloatRange(0.0, 100.0),
+    default=50.0,
+    help="Warning threshold in percent of max_replicated_merges_in_queue.",
+)
+@option(
+    "-v",
+    "--verbose",
+    "verbose",
+    type=int,
+    count=True,
+    default=0,
+    help="Show details about lag.",
+)
 @pass_context
-def wait_replication_sync_command(ctx, status, pause, timeout):
-    """Wait for ClickHouse server to sync replication with other replicas."""
+def wait_replication_sync_command(
+    ctx, status, pause, timeout, xcrit, crit, warn, mwarn, mcrit, verbose
+):
+    """Wait for ClickHouse server to sync replication with other replicas using replication-lag command."""
 
     deadline = time.time() + timeout.total_seconds()
     while time.time() < deadline:
-        res = estimate_replication_lag(ctx)
+        res = estimate_replication_lag(ctx, xcrit, crit, warn, mwarn, mcrit, verbose)
         if res.code <= status:
             sys.exit(0)
         time.sleep(pause.total_seconds())
