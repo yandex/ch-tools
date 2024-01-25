@@ -139,6 +139,23 @@ Feature: ch-monitoring tool
     """
     0;OK
     """
+    When we execute query on clickhouse01
+    """
+    SYSTEM STOP FETCHES
+    """
+    And we execute query on clickhouse02
+    """
+    INSERT INTO test.table_01 SELECT number FROM numbers(100)
+    """
+    And we sleep for 5 seconds
+    And we execute command on clickhouse01
+    """
+    ch-monitoring replication-lag -w 4
+    """
+    Then we get response contains
+    """
+    1;
+    """
 
   Scenario: Check System queues size
     When we execute command on clickhouse01

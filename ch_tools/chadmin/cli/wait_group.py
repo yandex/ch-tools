@@ -3,9 +3,11 @@ import os
 import sys
 import time
 
-from click import command, option, pass_context
+from click import FloatRange, group, option, pass_context
 
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common.cli.parameters import TimeSpanParamType
+from ch_tools.common.commands.replication_lag import estimate_replication_lag
 from ch_tools.common.utils import execute
 
 BASE_TIMEOUT = 600
@@ -13,7 +15,94 @@ LOCAL_PART_LOAD_SPEED = 10  # in data parts per second
 S3_PART_LOAD_SPEED = 0.5  # in data parts per second
 
 
-@command("wait-started")
+@group("wait")
+def wait_group():
+    """Commands to wait until Clickhouse is in a certain state."""
+    pass
+
+
+@wait_group.command("replication-sync")
+@option(
+    "-s",
+    "--status",
+    type=int,
+    default=0,
+    help="Wait until replication-lag returned status is no worse than given, 0 = OK, 1 = WARN, 2 = CRIT.",
+)
+@option(
+    "-p",
+    "--pause",
+    type=TimeSpanParamType(),
+    default="30s",
+    help="Pause between requests.",
+)
+@option(
+    "-t",
+    "--timeout",
+    type=TimeSpanParamType(),
+    default="3d",
+    help="Max amount of time to wait.",
+)
+@option(
+    "-x",
+    "--exec-critical",
+    "xcrit",
+    type=int,
+    default=3600,
+    help="Critical threshold for one task execution.",
+)
+@option(
+    "-c",
+    "--critical",
+    "crit",
+    type=int,
+    default=600,
+    help="Critical threshold for lag with errors.",
+)
+@option("-w", "--warning", "warn", type=int, default=300, help="Warning threshold.")
+@option(
+    "-M",
+    "--merges-critical",
+    "mcrit",
+    type=FloatRange(0.0, 100.0),
+    default=90.0,
+    help="Critical threshold in percent of max_replicated_merges_in_queue.",
+)
+@option(
+    "-m",
+    "--merges-warning",
+    "mwarn",
+    type=FloatRange(0.0, 100.0),
+    default=50.0,
+    help="Warning threshold in percent of max_replicated_merges_in_queue.",
+)
+@option(
+    "-v",
+    "--verbose",
+    "verbose",
+    type=int,
+    count=True,
+    default=0,
+    help="Show details about lag.",
+)
+@pass_context
+def wait_replication_sync_command(
+    ctx, status, pause, timeout, xcrit, crit, warn, mwarn, mcrit, verbose
+):
+    """Wait for ClickHouse server to sync replication with other replicas using replication-lag command."""
+
+    deadline = time.time() + timeout.total_seconds()
+    while time.time() < deadline:
+        res = estimate_replication_lag(ctx, xcrit, crit, warn, mwarn, mcrit, verbose)
+        if res.code <= status:
+            sys.exit(0)
+        time.sleep(pause.total_seconds())
+
+    logging.error("ClickHouse can't sync replicas.")
+    sys.exit(1)
+
+
+@wait_group.command("started")
 @option(
     "--timeout",
     type=int,
