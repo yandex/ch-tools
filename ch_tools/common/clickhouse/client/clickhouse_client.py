@@ -64,6 +64,7 @@ class ClickhouseClient:
         timeout: Optional[int] = None,
         echo: bool = False,
         dry_run: bool = False,
+        stream: bool = False,
     ) -> Any:
         """
         Execute query.
@@ -92,9 +93,14 @@ class ClickhouseClient:
                 },
                 json=post_data,
                 timeout=timeout,
+                stream=stream,
             )
 
             response.raise_for_status()
+
+            # Return response for iterating over
+            if stream:
+                return response
 
             if format_ in ("JSON", "JSONCompact"):
                 return response.json()

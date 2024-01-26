@@ -9,7 +9,14 @@ from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_clien
 
 
 def execute_query(
-    ctx, query, timeout=None, echo=False, dry_run=False, format_="default", **kwargs
+    ctx,
+    query,
+    timeout=None,
+    echo=False,
+    dry_run=False,
+    format_="default",
+    stream=False,
+    **kwargs
 ):
     """
     Execute ClickHouse query.
@@ -24,6 +31,7 @@ def execute_query(
         format_=format_,
         echo=echo,
         dry_run=dry_run,
+        stream=stream,
     )
 
 

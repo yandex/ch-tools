@@ -13,7 +13,7 @@ from ch_tools.monrun_checks.clickhouse_client import ClickhouseClient
     "-w", "--warning", "warn", type=int, default=10, help="Warning threshold."
 )
 @click.option(
-    "-f", "--config_file", "conf", help="Config file with theshholds per each table."
+    "-f", "--config_file", "conf", help="Config file with thresholds per each table."
 )
 @click.pass_context
 def system_queues_command(ctx, crit, warn, conf):

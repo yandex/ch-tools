@@ -1,5 +1,8 @@
 import os.path
 
+from ch_tools.common.clickhouse.config.storage_configuration import (
+    ClickhouseStorageConfiguration,
+)
 from ch_tools.common.utils import deep_merge
 
 from .path import (
@@ -44,9 +47,11 @@ class ClickhouseConfig:
         """
         return ClickhouseZookeeperConfig(self._config_root.get("zookeeper", {}))
 
-    def has_disk(self, name):
-        storage_configuration = self._config_root.get("storage_configuration", {})
-        return name in storage_configuration.get("disks", {})
+    @property
+    def storage_configuration(self) -> ClickhouseStorageConfiguration:
+        return ClickhouseStorageConfiguration(
+            self._config_root.get("storage_configuration", {})
+        )
 
     def dump(self, mask_secrets=True):
         return _dump_config(self._config, mask_secrets=mask_secrets)

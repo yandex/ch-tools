@@ -1,11 +1,9 @@
 from typing import Any, Iterator, Optional, Tuple
 
 import boto3  # type: ignore[import]
-from botocore.client import Config  # type: ignore[import]
+from botocore.client import Config
 
-from ch_tools.chadmin.internal.object_storage.s3_disk_configuration import (
-    S3DiskConfiguration,
-)
+from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 
 ObjectSummary = Any
 IGNORED_OBJECT_NAME_PREFIXES = ["operations", ".SCHEMA_VERSION"]
@@ -23,7 +21,7 @@ def s3_object_storage_iterator(
         endpoint_url=disk.endpoint_url,
         aws_access_key_id=disk.access_key_id,
         aws_secret_access_key=disk.secret_access_key,
-        config=Config(s3={"addressing_style": "virtual"}),
+        config=Config(s3={"addressing_style": "auto"}),
     )
     bucket = s3.Bucket(disk.bucket_name)
 
