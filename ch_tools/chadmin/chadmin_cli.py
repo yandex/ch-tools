@@ -9,6 +9,9 @@ import cloup
 from ch_tools.common.config import load_config
 
 warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
+warnings.filterwarnings(
+    action="ignore", message="Boto3 will no longer support Python 3.6"
+)
 
 # pylint: disable=wrong-import-position
 
