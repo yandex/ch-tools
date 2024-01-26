@@ -188,11 +188,7 @@ def _clean_object_storage(
     ) as resp:
         # make generator for lazy iterating
         paths_to_delete = (line.decode() for line in resp.iter_lines())
-        if dry_run:
-            # just count items
-            deleted = sum(1 for _ in paths_to_delete)
-        else:
-            deleted = cleanup_s3_object_storage(disk_conf, paths_to_delete)
+        deleted = cleanup_s3_object_storage(disk_conf, paths_to_delete, dry_run)
 
     click.echo(
         f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects from bucket [{disk_conf.bucket_name}] with prefix {disk_conf.prefix}"

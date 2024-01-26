@@ -6,10 +6,12 @@ from botocore.client import Config  # type: ignore[import]
 from ch_tools.chadmin.internal.utils import chunked
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 
-BULK_DELETE_CHUNK_SIZE = 1000
+BULK_DELETE_CHUNK_SIZE = 100
 
 
-def cleanup_s3_object_storage(disk: S3DiskConfiguration, keys: Iterator[str]) -> int:
+def cleanup_s3_object_storage(
+    disk: S3DiskConfiguration, keys: Iterator[str], dry_run: bool = False
+) -> int:
     s3 = boto3.resource(
         "s3",
         endpoint_url=disk.endpoint_url,
@@ -21,7 +23,8 @@ def cleanup_s3_object_storage(disk: S3DiskConfiguration, keys: Iterator[str]) ->
     deleted = 0
 
     for chunk in chunked(keys, BULK_DELETE_CHUNK_SIZE):
-        _bulk_delete(bucket, chunk)
+        if not dry_run:
+            _bulk_delete(bucket, chunk)
         deleted += len(chunk)
 
     return deleted
