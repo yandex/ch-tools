@@ -250,6 +250,8 @@ def _traverse_object_storage(
     if obj_paths_batch:
         _insert_listing_batch(ctx, obj_paths_batch, listing_table)
 
+    click.echo(f"Collected {counter} objects")
+
 
 def _insert_listing_batch(
     ctx: Context, obj_paths_batch: List[str], listing_table: str
