@@ -64,6 +64,8 @@ class ClickhouseClient:
         timeout: Optional[int] = None,
         echo: bool = False,
         dry_run: bool = False,
+        stream: bool = False,
+        settings: Optional[dict] = None,
     ) -> Any:
         """
         Execute query.
@@ -81,6 +83,7 @@ class ClickhouseClient:
             return None
 
         timeout = max(self._timeout, timeout or 0)
+        per_query_settings = settings or {}
 
         logging.debug("Executing query: %s", query)
         try:
@@ -89,12 +92,18 @@ class ClickhouseClient:
                 params={
                     **self._settings,
                     "query": query,
+                    **per_query_settings,  # overwrites previous settings
                 },
                 json=post_data,
                 timeout=timeout,
+                stream=stream,
             )
 
             response.raise_for_status()
+
+            # Return response for iterating over
+            if stream:
+                return response
 
             if format_ in ("JSON", "JSONCompact"):
                 return response.json()

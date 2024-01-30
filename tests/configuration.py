@@ -1,6 +1,7 @@
 """
 Variables that influence testing behavior are defined here.
 """
+import os
 
 
 def create():
@@ -45,16 +46,25 @@ def create():
         },
     }
 
+    s3 = {
+        "endpoint": "http://minio01:9000",
+        "port": 9000,
+        "access_secret_key": "test_secret",
+        "access_key_id": "test_key",
+        "bucket": "cloud-storage-test",
+        "boto_config": {
+            "addressing_style": "auto",
+            "region_name": "us-east-1",
+        },
+        "container": "minio01",
+    }
+
     return {
+        "ch_version": os.getenv("CLICKHOUSE_VERSION", "latest"),
         "images_dir": "images",
         "staging_dir": "staging",
         "network_name": network_name,
-        "s3": {
-            "endpoint": "http://minio01:9000",
-            "access_secret_key": "test_secret",
-            "access_key_id": "test_key",
-            "bucket": "test",
-        },
+        "s3": s3,
         "ch_backup": {
             "encrypt_key": "test_encrypt",
         },

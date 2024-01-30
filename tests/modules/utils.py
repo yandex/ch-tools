@@ -9,6 +9,8 @@ from random import choice as random_choise
 from types import SimpleNamespace
 from typing import Mapping, MutableMapping
 
+from pkg_resources import parse_version
+
 from .typing import ContextT
 
 
@@ -76,3 +78,25 @@ def context_to_dict(context: ContextT) -> dict:
                 result[key] = value
 
     return result
+
+
+def version_ge(current_version, comparing_version):
+    """
+    Return True if `current_version` is greater or equal than `comparing_version`, or False otherwise.
+    """
+    # "latest" is greater or equal than any known version
+    if current_version == "latest":
+        return True
+
+    return parse_version(current_version) >= parse_version(comparing_version)  # type: ignore
+
+
+def version_lt(current_version, comparing_version):
+    """
+    Return True if `current_version` is less than `comparing_version`, or False otherwise.
+    """
+    # "latest" is not less than any known version
+    if current_version == "latest":
+        return False
+
+    return parse_version(current_version) < parse_version(comparing_version)  # type: ignore

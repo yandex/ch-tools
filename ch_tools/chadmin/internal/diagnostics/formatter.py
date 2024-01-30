@@ -19,7 +19,7 @@ def format_storage(dbaas_config, ch_config):
     disk_size = format_size(dbaas_config.disk_size, binary=True)
 
     storage = f"{disk_size} {disk_type}"
-    if ch_config.has_disk("object_storage"):
+    if ch_config.storage_configuration.has_disk("object_storage"):
         storage += " + S3"
 
     return storage

@@ -1,11 +1,9 @@
-from typing import Any, Iterator, Optional, Tuple
+from typing import Any, Iterator
 
 import boto3  # type: ignore[import]
-from botocore.client import Config  # type: ignore[import]
+from botocore.client import Config
 
-from ch_tools.chadmin.internal.object_storage.s3_disk_configuration import (
-    S3DiskConfiguration,
-)
+from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 
 ObjectSummary = Any
 IGNORED_OBJECT_NAME_PREFIXES = ["operations", ".SCHEMA_VERSION"]
@@ -14,30 +12,23 @@ IGNORED_OBJECT_NAME_PREFIXES = ["operations", ".SCHEMA_VERSION"]
 def s3_object_storage_iterator(
     disk: S3DiskConfiguration,
     *,
-    path_prefix: Optional[str] = None,
     object_name_prefix: str = "",
     skip_ignoring: bool = False
-) -> Iterator[Tuple[str, ObjectSummary]]:
+) -> Iterator[ObjectSummary]:
     s3 = boto3.resource(
         "s3",
         endpoint_url=disk.endpoint_url,
         aws_access_key_id=disk.access_key_id,
         aws_secret_access_key=disk.secret_access_key,
-        config=Config(s3={"addressing_style": "virtual"}),
+        config=Config(s3={"addressing_style": "auto"}),
     )
     bucket = s3.Bucket(disk.bucket_name)
 
-    if not path_prefix:
-        path_prefix = disk.prefix
-
-    for obj in bucket.objects.filter(Prefix=path_prefix + object_name_prefix):
-        name: str = obj.key[len(path_prefix) :]
-
-        if not skip_ignoring and _is_ignored(name):
+    for obj in bucket.objects.filter(Prefix=object_name_prefix):
+        if not skip_ignoring and _is_ignored(obj.key):
             continue
-
-        yield name, obj
+        yield obj
 
 
 def _is_ignored(name: str) -> bool:
-    return any(name.startswith(p) for p in IGNORED_OBJECT_NAME_PREFIXES)
+    return any(p in name for p in IGNORED_OBJECT_NAME_PREFIXES)

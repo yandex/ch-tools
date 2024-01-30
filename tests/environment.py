@@ -2,11 +2,11 @@
 Behave entry point.
 """
 import logging
+import re
 
 import env_control
 from modules.logs import save_logs
-
-REQUIRE_VERSION_PREFIX_LEN = len("require_version_")
+from modules.utils import version_ge, version_lt
 
 try:
     import ipdb as pdb
@@ -30,11 +30,13 @@ def before_feature(context, _feature):
         env_control.restart(context)
 
 
-def before_scenario(context, _scenario):
+def before_scenario(context, scenario):
     """
     Cleanup function executing per scenario.
     """
-    if "dependent-scenarios" not in context.feature.tags:
+    if "dependent-scenarios" not in context.feature.tags and _check_tags(
+        context, scenario
+    ):
         env_control.restart(context)
 
 
@@ -58,3 +60,33 @@ def after_all(context):
         logging.info("Not stopping containers on failure as requested")
         return
     env_control.stop(context)
+
+
+def _check_tags(context, scenario):
+    ch_version = context.conf["ch_version"]
+
+    require_version = _parse_version_tag(scenario.tags, "require_version")
+    if require_version:
+        if not version_ge(ch_version, require_version):
+            logging.info("Skipping scenario due to require_version mismatch")
+            scenario.mark_skipped()
+            return False
+
+    require_lt_version = _parse_version_tag(scenario.tags, "require_version_less_than")
+    if require_lt_version:
+        if not version_lt(ch_version, require_lt_version):
+            logging.info("Skipping scenario due to require_version_less_than mismatch")
+            scenario.mark_skipped()
+            return False
+
+    return True
+
+
+def _parse_version_tag(tags, prefix):
+    tag_pattern = prefix + r"_(?P<version>[\d\.]+)"
+    for tag in tags:
+        match = re.fullmatch(tag_pattern, tag)
+        if match:
+            return match.group("version")
+
+    return None

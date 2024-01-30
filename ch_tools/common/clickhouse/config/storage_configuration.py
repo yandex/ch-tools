@@ -1,10 +1,8 @@
 from dataclasses import dataclass
-from pathlib import Path
 from urllib.parse import urlparse
 
-from lxml import etree  # type: ignore[import]
-from typing_extensions import Self
-
+# YC specific value for sanity checking
+# TODO: pass bucket, prefix, endpoint as arguments to cli for versatility
 BUCKET_NAME_PREFIX = "cloud-storage-"
 
 
@@ -17,23 +15,35 @@ class S3DiskConfiguration:
     bucket_name: str
     prefix: str
 
-    @classmethod
-    def from_config(cls, config_path: Path, disk_name: str) -> Self:
-        config = etree.parse(config_path)
-        disk = config.find(f"/storage_configuration/disks/{disk_name}")
 
-        disk_type = disk.find("type").text
-        if disk_type != "s3":
-            raise TypeError(f"Unsupported object storage type {disk_type}")
+class ClickhouseStorageConfiguration:
+    """
+    Storage configuration section of ClickHouse server config.
+    """
 
-        access_key_id = disk.find("access_key_id").text
-        secret_access_key = disk.find("secret_access_key").text
-        endpoint: str = disk.find("endpoint").text
+    def __init__(self, config: dict) -> None:
+        self._config = config
+
+    def has_disk(self, name: str) -> bool:
+        return name in self._config.get("disks", {})
+
+    def s3_disk_configuaration(self, name: str) -> S3DiskConfiguration:
+        if not self.has_disk(name):
+            raise RuntimeError(f"Config section for disk '{name}' is not found")
+
+        disk = self._config["disks"][name]
+
+        if disk["type"] != "s3":
+            raise TypeError(f"Unsupported object storage type {disk['type']}")
+
+        access_key_id = disk["access_key_id"]
+        secret_access_key = disk["secret_access_key"]
+        endpoint: str = disk["endpoint"]
 
         _host, bucket_name, prefix, endpoint_url = _parse_endpoint(endpoint)
 
-        return cls(
-            name=disk_name,
+        return S3DiskConfiguration(
+            name=name,
             endpoint_url=endpoint_url,
             access_key_id=access_key_id,
             secret_access_key=secret_access_key,
