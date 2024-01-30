@@ -122,7 +122,7 @@ def wait_replication_sync_command(
                 timeout=min(replica_timeout.total_seconds(), time_left),
             )
         except ReadTimeout:
-            print(f"Timeout while runnung SYNC REPLICA on {full_name}.")
+            print(f"Timeout while running SYNC REPLICA on {full_name}.")
             sys.exit(1)
         except:
             raise

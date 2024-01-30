@@ -35,7 +35,7 @@ Feature: chadmin commands.
     """
     Then it fails with response contains
     """
-    Timeout while runnung SYNC REPLICA on
+    Timeout while running SYNC REPLICA on
     """
     When we execute query on clickhouse01
     """
