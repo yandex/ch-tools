@@ -18,7 +18,6 @@ Feature: chadmin object-storage commands
     """
     Then S3 contains greater than 0 objects
 
-  @require_version_22.8
   Scenario: Dry-run clean on one replica with guard period
     When we execute command on clickhouse01
     """
@@ -37,7 +36,6 @@ Feature: chadmin object-storage commands
     Would delete [1-9][0-9]* objects from bucket \[cloud-storage-test\]
     """
 
-  @require_version_22.8
   Scenario: Dry-run clean on cluster with guard period
     When we execute command on clickhouse01
     """
@@ -56,7 +54,6 @@ Feature: chadmin object-storage commands
     Would delete 0 objects from bucket [cloud-storage-test]
     """
 
-  @require_version_22.8
   Scenario: Clean orphaned objects
     When we put object in S3
     """
@@ -86,12 +83,11 @@ Feature: chadmin object-storage commands
       path: /data/orpaned_object.tsv
     """
 
-  @require_version_22.8
   Scenario: Clean many orphaned objects
     When we put 100 objects in S3
     """
       bucket: cloud-storage-test
-      path: /data/orpaned_object.tsv
+      path: /data/orpaned_object-{}
       data: '1'
     """
     When we execute command on clickhouse01
@@ -117,4 +113,47 @@ Feature: chadmin object-storage commands
     Then we get response contains
     """
     Would delete 0 objects from bucket [cloud-storage-test]
+    """
+
+  Scenario: Clean orphaned objects with prefix
+    When we put object in S3
+    """
+      bucket: cloud-storage-test
+      path: /data_1/orpaned_object.tsv
+      data: '1'
+    """
+    When we put object in S3
+    """
+      bucket: cloud-storage-test
+      path: /data_2/orpaned_object.tsv
+      data: '1'
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin object-storage clean --dry-run --to-time 0h --on-cluster --prefix "data_1"
+    """
+    Then we get response contains
+    """
+    Would delete 1 objects from bucket [cloud-storage-test]
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin object-storage clean --to-time 0h --on-cluster --prefix "data_1"
+    """
+    Then we get response contains
+    """
+    Deleted 1 objects from bucket [cloud-storage-test]
+    """
+    And path does not exist in S3
+    """
+      bucket: cloud-storage-test
+      path: /data_1/orpaned_object.tsv
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin object-storage clean --dry-run --to-time 0h --on-cluster --prefix "data_2"
+    """
+    Then we get response contains
+    """
+    Would delete 1 objects from bucket [cloud-storage-test]
     """

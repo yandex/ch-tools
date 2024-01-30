@@ -184,7 +184,6 @@ test-unit: install-deps
 .PHONY: test-integration
 test-integration: install-deps build-python-packages	
 	cd $(TESTS_DIR)
-	$(POETRY) run $(PYTHON) -m env_control create
 	$(POETRY) run behave --show-timings --stop --junit $(BEHAVE_ARGS)
 
 

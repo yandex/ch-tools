@@ -62,7 +62,7 @@ def step_put_file_count_in_s3(context, count):
     conf = get_step_data(context)
     s3_client = s3.S3Client(context, conf["bucket"])
     for i in range(count):
-        path = f"{conf['path']}-{i}"
+        path = f"{conf['path'].format(i)}"
         s3_client.upload_data(conf["data"], path)
         assert s3_client.path_exists(path)
 

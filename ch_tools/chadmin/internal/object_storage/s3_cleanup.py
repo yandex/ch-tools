@@ -6,7 +6,7 @@ from botocore.client import Config  # type: ignore[import]
 from ch_tools.chadmin.internal.utils import chunked
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 
-BULK_DELETE_CHUNK_SIZE = 100
+BULK_DELETE_CHUNK_SIZE = 1000
 
 
 def cleanup_s3_object_storage(

@@ -19,6 +19,12 @@ DEFAULT_CONFIG = {
         "monitoring_user": None,
         "monitoring_password": None,
     },
+    "object_storage": {
+        "clean": {
+            "listing_table_prefix": "listing_objects_from_",
+            "listing_table_database": "default",
+        }
+    },
 }
 
 

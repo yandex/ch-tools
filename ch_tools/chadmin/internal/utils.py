@@ -16,6 +16,7 @@ def execute_query(
     dry_run=False,
     format_="default",
     stream=False,
+    settings=None,
     **kwargs
 ):
     """
@@ -32,6 +33,7 @@ def execute_query(
         echo=echo,
         dry_run=dry_run,
         stream=stream,
+        settings=settings,
     )
 
 

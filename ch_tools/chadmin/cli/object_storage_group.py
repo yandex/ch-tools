@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, timedelta, timezone
+from tempfile import TemporaryFile
 from typing import List, Optional
 
 import click
@@ -18,12 +19,12 @@ from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfig
 # And for metadata for which object is not found in S3.
 # These objects are not counted if their last modified time fall in the interval from the moment of starting analyzing.
 DEFAULT_GUARD_INTERVAL = "24h"
-# Prefix for a listing table name
-LISTING_TABLE_PREFIX = "listing_objects_from_"
 # Batch size for inserts in a listing table
 # Set not very big value due to default ClickHouse 'http_max_field_value_size' settings value 128Kb
 # TODO: streaming upload in POST body while INSERT
 INSERT_BATCH_SIZE = 500
+# Use big enough timeout for stream HTTP query
+STREAM_TIMEOUT = 10 * 60
 
 
 @group("object-storage")
@@ -53,7 +54,10 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     "--object_name_prefix",
     "object_name_prefix",
     default="",
-    help="Additional prefix of object name used while listing bucket.",
+    help=(
+        "Prefix of object name used while listing bucket. By default its value is attempted to parse "
+        "from endpoint in clickhouse S3 disk config"
+    ),
 )
 @option(
     "--from-time",
@@ -98,6 +102,12 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     is_flag=True,
     help=("Do not delete collected paths of objects from object storage."),
 )
+@option(
+    "--use-saved-list",
+    "use_saved_list",
+    is_flag=True,
+    help=("Use saved object list without traversing object storage again."),
+)
 @pass_context
 def clean_command(
     ctx: Context,
@@ -108,6 +118,7 @@ def clean_command(
     cluster_name: str,
     dry_run: bool,
     keep_paths: bool,
+    use_saved_list: bool,
 ) -> None:
     """
     Clean orphaned S3 objects.
@@ -119,7 +130,9 @@ def clean_command(
         )
 
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
-    listing_table = LISTING_TABLE_PREFIX + disk_conf.name
+    config = ctx.obj["config"]["object_storage"]["clean"]
+
+    listing_table = f"{config['listing_table_database']}.{config['listing_table_prefix']}{disk_conf.name}"
     # Create listing table for storing paths from object storage
     try:
         execute_query(
@@ -135,6 +148,7 @@ def clean_command(
             cluster_name,
             dry_run,
             listing_table,
+            use_saved_list,
         )
     finally:
         if not keep_paths:
@@ -152,16 +166,20 @@ def _clean_object_storage(
     cluster_name: str,
     dry_run: bool,
     listing_table: str,
+    use_saved_list: bool,
 ) -> None:
     """
     Delete orphaned objects from object storage.
     """
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
-    click.echo(
-        f"Collecting objects for S3 disk '{disk_conf.name}' with endpoint '{disk_conf.endpoint_url}' "
-        f"in bucket [{disk_conf.bucket_name}] with prefix '{disk_conf.prefix}'"
-    )
-    _traverse_object_storage(ctx, listing_table, from_time, to_time, object_name_prefix)
+    prefix = object_name_prefix or disk_conf.prefix
+
+    if not use_saved_list:
+        click.echo(
+            f"Collecting objects... (Disk: '{disk_conf.name}', Endpoint '{disk_conf.endpoint_url}', "
+            f"Bucket: {disk_conf.bucket_name}, Prefix: '{prefix}')"
+        )
+        _traverse_object_storage(ctx, listing_table, from_time, to_time, prefix)
 
     remote_data_paths_table = "system.remote_data_paths"
     if on_cluster:
@@ -183,15 +201,20 @@ def _clean_object_storage(
         click.echo("Deleting orphaned objects...")
 
     deleted = 0
-    with execute_query(
-        ctx, antijoin_query, stream=True, format_="TabSeparated"
-    ) as resp:
-        # make generator for lazy iterating
-        paths_to_delete = (line.decode() for line in resp.iter_lines())
-        deleted = cleanup_s3_object_storage(disk_conf, paths_to_delete, dry_run)
+    with TemporaryFile() as keys_file:
+        with execute_query(
+            ctx, antijoin_query, stream=True, format_="TabSeparated"
+        ) as resp:
+            # Save response to the file by chunks
+            for chunk in resp.iter_content(chunk_size=8192):
+                keys_file.write(chunk)
+
+        keys_file.seek(0)  # rewind file pointer to the beginning
+        keys = (line.decode().strip() for line in keys_file)
+        deleted = cleanup_s3_object_storage(disk_conf, keys, dry_run)
 
     click.echo(
-        f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects from bucket [{disk_conf.bucket_name}] with prefix {disk_conf.prefix}"
+        f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects from bucket [{disk_conf.bucket_name}] with prefix {prefix}"
     )
 
 
@@ -209,7 +232,7 @@ def _traverse_object_storage(
     counter = 0
     now = datetime.now(timezone.utc)
 
-    for _, obj in s3_object_storage_iterator(
+    for obj in s3_object_storage_iterator(
         ctx.obj["disk_configuration"], object_name_prefix=prefix
     ):
         if obj.last_modified > now - to_time:

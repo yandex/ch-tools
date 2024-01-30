@@ -8,8 +8,6 @@ import env_control
 from modules.logs import save_logs
 from modules.utils import version_ge, version_lt
 
-REQUIRE_VERSION_PREFIX_LEN = len("require_version_")
-
 try:
     import ipdb as pdb
 except ImportError:
