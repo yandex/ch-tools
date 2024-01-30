@@ -9,6 +9,7 @@ from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.commands.replication_lag import estimate_replication_lag
 from ch_tools.common.utils import execute
+from requests.exceptions import ReadTimeout
 
 BASE_TIMEOUT = 600
 LOCAL_PART_LOAD_SPEED = 10  # in data parts per second
@@ -23,6 +24,20 @@ def wait_group():
 
 @wait_group.command("replication-sync")
 @option(
+    "--replica-timeout",
+    "replica_timeout",
+    type=TimeSpanParamType(),
+    default="1h",
+    help="Timeout for SYNC REPLICA command.",
+)
+@option(
+    "--total-timeout",
+    "total_timeout",
+    type=TimeSpanParamType(),
+    default="3d",
+    help="Max amount of time to wait.",
+)
+@option(
     "-s",
     "--status",
     type=int,
@@ -34,14 +49,7 @@ def wait_group():
     "--pause",
     type=TimeSpanParamType(),
     default="30s",
-    help="Pause between requests.",
-)
-@option(
-    "-t",
-    "--timeout",
-    type=TimeSpanParamType(),
-    default="3d",
-    help="Max amount of time to wait.",
+    help="Pause between replication lag requests.",
 )
 @option(
     "-x",
@@ -76,29 +84,57 @@ def wait_group():
     default=50.0,
     help="Warning threshold in percent of max_replicated_merges_in_queue.",
 )
-@option(
-    "-v",
-    "--verbose",
-    "verbose",
-    type=int,
-    count=True,
-    default=0,
-    help="Show details about lag.",
-)
 @pass_context
 def wait_replication_sync_command(
-    ctx, status, pause, timeout, xcrit, crit, warn, mwarn, mcrit, verbose
+    ctx,
+    replica_timeout,
+    total_timeout,
+    status,
+    pause,
+    xcrit,
+    crit,
+    warn,
+    mwarn,
+    mcrit,
 ):
-    """Wait for ClickHouse server to sync replication with other replicas using replication-lag command."""
+    """Wait for ClickHouse server to sync replication with other replicas."""
 
-    deadline = time.time() + timeout.total_seconds()
+    start_time = time.time()
+    deadline = start_time + total_timeout.total_seconds()
+
+    # Get replicated tables
+    tables = execute_query(
+        ctx,
+        "SELECT name, database FROM system.tables WHERE engine = 'ReplicatedMergeTree'",
+        format_="JSON",
+    )["data"]
+
+    # Sync tables in cycle
+    for t in tables:
+        full_name = f"{t['database']}.{t['name']}"
+        time_left = deadline - time.time()
+
+        try:
+            execute_query(
+                ctx,
+                f"SYSTEM SYNC REPLICA {full_name}",
+                format_=None,
+                timeout=min(replica_timeout.total_seconds(), time_left),
+            )
+        except ReadTimeout:
+            print(f"Timeout while runnung SYNC REPLICA on {full_name}.")
+            sys.exit(1)
+        except:
+            raise
+
+    # Replication lag
     while time.time() < deadline:
-        res = estimate_replication_lag(ctx, xcrit, crit, warn, mwarn, mcrit, verbose)
+        res = estimate_replication_lag(ctx, xcrit, crit, warn, mwarn, mcrit)
         if res.code <= status:
             sys.exit(0)
         time.sleep(pause.total_seconds())
 
-    logging.error("ClickHouse can't sync replicas.")
+    print(f"Timeout while waiting on replication-lag command.")
     sys.exit(1)
 
 

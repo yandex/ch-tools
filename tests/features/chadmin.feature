@@ -18,7 +18,7 @@ Feature: chadmin commands.
   Scenario: Check wait replication sync
     When we execute command on clickhouse01
     """
-    chadmin wait replication-sync -t 10 -p 1 -w 4
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4
     """
     When we execute query on clickhouse01
     """
@@ -31,14 +31,17 @@ Feature: chadmin commands.
     And we sleep for 5 seconds
     When we try to execute command on clickhouse01
     """
-    chadmin wait replication-sync -t 10 -p 1 -w 4
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4
     """
-    Then it fails
+    Then it fails with response contains
+    """
+    Timeout while runnung SYNC REPLICA on
+    """
     When we execute query on clickhouse01
     """
     SYSTEM START FETCHES
     """
     When we execute command on clickhouse01
     """
-    chadmin wait replication-sync -t 10 -p 1 -w 4
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4
     """
