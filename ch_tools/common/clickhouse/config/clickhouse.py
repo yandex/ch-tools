@@ -3,10 +3,9 @@ import os.path
 from ch_tools.common.clickhouse.config.storage_configuration import (
     ClickhouseStorageConfiguration,
 )
-from ch_tools.common.utils import deep_merge
 
+from ...utils import first_value
 from .path import (
-    CLICKHOUSE_SERVER_CLUSTER_CONFIG_PATH,
     CLICKHOUSE_SERVER_CONFIGD_PATH,
     CLICKHOUSE_SERVER_MAIN_CONFIG_PATH,
     CLICKHOUSE_SERVER_PREPROCESSED_CONFIG_PATH,
@@ -26,7 +25,7 @@ class ClickhouseConfig:
 
     @property
     def _config_root(self) -> dict:
-        return self._config.get("clickhouse", self._config.get("yandex", {}))
+        return first_value(self._config)
 
     @property
     def macros(self):
@@ -72,27 +71,45 @@ class ClickhouseConfig:
 
         # Otherwise load all server config files and perform manual merge and processing
         config = _load_config(CLICKHOUSE_SERVER_MAIN_CONFIG_PATH)
-        deep_merge(config, _load_config(CLICKHOUSE_SERVER_CLUSTER_CONFIG_PATH))
-        for file in os.listdir(CLICKHOUSE_SERVER_CONFIGD_PATH):
-            deep_merge(
-                config, _load_config(os.path.join(CLICKHOUSE_SERVER_CONFIGD_PATH, file))
-            )
+        if os.path.exists(CLICKHOUSE_SERVER_CONFIGD_PATH):
+            for file in os.listdir(CLICKHOUSE_SERVER_CONFIGD_PATH):
+                _merge_configs(
+                    config,
+                    _load_config(os.path.join(CLICKHOUSE_SERVER_CONFIGD_PATH, file)),
+                )
 
         # Process includes
-        root_key = next(iter(config))
-        root_section = config[root_key]
-        for key, config_section in root_section.copy().items():
-            if not isinstance(config_section, dict):
-                continue
-
-            include = config_section.get("@incl")
-            if not include:
-                continue
-
-            if include != key and include in root_section:
-                root_section[key] = root_section[include]
-                del root_section[include]
-
-            del config_section["@incl"]
+        root_section = first_value(config)
+        include_file = root_section.get("include_from")
+        if include_file:
+            include_config = first_value(_load_config(include_file))
+            _apply_config_directives(root_section, include_config)
 
         return ClickhouseConfig(config, preprocessed=False)
+
+
+def _merge_configs(main_config, additional_config):
+    for key, value in additional_config.items():
+        if key not in main_config:
+            main_config[key] = value
+            continue
+
+        if isinstance(main_config[key], dict) and isinstance(value, dict):
+            _merge_configs(main_config[key], value)
+            continue
+
+        if value is not None:
+            main_config[key] = value
+
+
+def _apply_config_directives(config_section, include_config):
+    for key, item in config_section.items():
+        if not isinstance(item, dict):
+            continue
+
+        include = item.get("@incl")
+        if include:
+            config_section[key] = include_config[include]
+            continue
+
+        _apply_config_directives(item, include_config)
