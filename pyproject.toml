@@ -111,6 +111,7 @@ docker = "*"
 docker-compose = "*"
 pyhamcrest = "*"
 pytest = "*"
+pyfakefs = "*"
 
 # lint
 black = { version = "^22.0.0", python = ">=3.10" }

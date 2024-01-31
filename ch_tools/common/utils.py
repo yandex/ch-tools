@@ -1,7 +1,6 @@
 import os
 import re
 import subprocess
-from collections import OrderedDict
 from pathlib import Path
 
 
@@ -69,12 +68,16 @@ def deep_merge(dest, update):
     Like `dict.update`, but instead of updating only top-level keys, perform recursive dict merge.
     """
     for key, value in update.items():
-        if (
-            key in dest
-            and isinstance(dest[key], (dict, OrderedDict))
-            and isinstance(value, (dict, OrderedDict))
-        ):
+        if key in dest and isinstance(dest[key], dict) and isinstance(value, dict):
             deep_merge(dest[key], value)
         else:
             dest[key] = value
     return dest
+
+
+def first_key(mapping):
+    return next(iter(mapping.keys()))
+
+
+def first_value(mapping):
+    return next(iter(mapping.values()))
