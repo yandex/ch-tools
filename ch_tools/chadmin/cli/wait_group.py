@@ -105,7 +105,7 @@ def wait_replication_sync_command(
     # Get replicated tables
     tables = execute_query(
         ctx,
-        "SELECT name, database FROM system.tables WHERE engine = 'ReplicatedMergeTree'",
+        "SELECT name, database FROM system.tables WHERE engine LIKE 'Replicated%' AND engine LIKE '%MergeTree'",
         format_="JSON",
     )["data"]
 
