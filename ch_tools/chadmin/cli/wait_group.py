@@ -124,8 +124,6 @@ def wait_replication_sync_command(
         except ReadTimeout:
             print(f"Timeout while running SYNC REPLICA on {full_name}.")
             sys.exit(1)
-        except:
-            raise
 
     # Replication lag
     while time.time() < deadline:
@@ -134,7 +132,7 @@ def wait_replication_sync_command(
             sys.exit(0)
         time.sleep(pause.total_seconds())
 
-    print(f"Timeout while waiting on replication-lag command.")
+    print("Timeout while waiting on replication-lag command.")
     sys.exit(1)
 
 
