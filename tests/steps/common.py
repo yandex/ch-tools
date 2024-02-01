@@ -46,6 +46,14 @@ def step_command_fail(context):
     ), f'"{context.command}" succeeded, but failure was expected'
 
 
+@then("it fails with response contains")
+def step_command_fail_response_contains(context):
+    assert (
+        context.exit_code != 0
+    ), f'"{context.command}" succeeded, but failure was expected'
+    assert_that(context.response, contains_string(context.text))
+
+
 @then("we get response")
 def step_get_response(context):
     assert_that(context.response, equal_to(context.text))

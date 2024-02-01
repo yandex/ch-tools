@@ -82,7 +82,9 @@ class ClickhouseClient:
         if dry_run:
             return None
 
-        timeout = max(self._timeout, timeout or 0)
+        if timeout is None:
+            timeout = self._timeout
+
         per_query_settings = settings or {}
 
         logging.debug("Executing query: %s", query)
