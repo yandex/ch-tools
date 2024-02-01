@@ -8,6 +8,7 @@ from requests.exceptions import ReadTimeout
 
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common.cli.parameters import TimeSpanParamType
+from ch_tools.common.clickhouse.client.error import ClickhouseError
 from ch_tools.common.commands.replication_lag import estimate_replication_lag
 from ch_tools.common.utils import execute
 
@@ -113,17 +114,24 @@ def wait_replication_sync_command(
     for t in tables:
         full_name = f"{t['database']}.{t['name']}"
         time_left = deadline - time.time()
+        timeout = min(replica_timeout.total_seconds(), time_left)
 
         try:
             execute_query(
                 ctx,
                 f"SYSTEM SYNC REPLICA {full_name}",
                 format_=None,
-                timeout=min(replica_timeout.total_seconds(), time_left),
+                timeout=timeout,
+                settings={"receive_timeout": timeout},
             )
         except ReadTimeout:
             print(f"Timeout while running SYNC REPLICA on {full_name}.")
             sys.exit(1)
+        except ClickhouseError as e:
+            if "TIMEOUT_EXCEEDED" in str(e):
+                print(f"Timeout while running SYNC REPLICA on {full_name}.")
+                sys.exit(1)
+            raise
 
     # Replication lag
     while time.time() < deadline:
