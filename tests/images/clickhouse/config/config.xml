@@ -1,4 +1,4 @@
-<yandex>
+<clickhouse>
     <logger>
         <console>1</console>
     </logger>
@@ -87,4 +87,4 @@
         <replica>{{ instance_name }}.{{ conf.network_name }}</replica>
         <cluster>cluster</cluster>
     </macros>
-</yandex>
+</clickhouse>

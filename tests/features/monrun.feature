@@ -103,10 +103,10 @@ Feature: ch-monitoring tool
     When we execute command on clickhouse01
     """
     echo -e "
-        <yandex>
+        <clickhouse>
             <path_to_regions_hierarchy_file>/opt/geo/regions_hierarchy.txt</path_to_regions_hierarchy_file>
             <path_to_regions_names_files>/opt/geo/</path_to_regions_names_files>
-        </yandex>
+        </clickhouse>
         " > /etc/clickhouse-server/config.d/geo.xml && \
     supervisorctl restart clickhouse-server
     """

@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<yandex>
+<clickhouse>
     <profiles>
         <default>
             <distributed_ddl_task_timeout>20</distributed_ddl_task_timeout>
@@ -36,4 +36,4 @@
     <quotas>
         <default/>
     </quotas>
-</yandex>
+</clickhouse>
