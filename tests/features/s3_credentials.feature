@@ -36,12 +36,12 @@ Feature: ch_s3_credentials tool
     Then we get response
     """
     <?xml version="1.0" encoding="utf-8"?>
-    <yandex>
+    <clickhouse>
         <s3>
             <cloud_storage>
                 <endpoint>storage.com</endpoint>
                 <header>X-YaCloud-SubjectToken: IAM_TOKEN</header>
             </cloud_storage>
         </s3>
-    </yandex>
+    </clickhouse>
     """
