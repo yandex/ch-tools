@@ -60,3 +60,11 @@ def step_same_clickhouse_data(context, node1, node2):
         return data
 
     assert_that(_get_data(node1), equal_to(_get_data(node2)))
+
+
+@then("there are no unfinished dll queries on {node:w}")
+def step_check_unfinished_ddl(context, node):
+    ch_client = ClickhouseClient(context, node)
+    query = "SELECT count(*) FROM system.distributed_ddl_queue WHERE status!='Finished'"
+    ret_code, response = ch_client.get_response(query)
+    assert_that(response, equal_to("0"))
