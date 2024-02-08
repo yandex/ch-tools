@@ -14,13 +14,9 @@ from ch_tools.chadmin.internal.utils import chunked
 
 def get_zk_node(ctx, path, binary=False):
     with zk_client(ctx) as zk:
-        return _get_zk_node(zk, ctx, path, binary)
-
-
-def _get_zk_node(zk, ctx, path, binary):
-    path = _format_path(ctx, path)
-    value = zk.get(path)[0]
-    return value if binary else value.decode().strip()
+        path = _format_path(ctx, path)
+        value = zk.get(path)[0]
+        return value if binary else value.decode().strip()
 
 
 def check_zk_node(ctx, path):
