@@ -14,9 +14,13 @@ from ch_tools.chadmin.internal.utils import chunked
 
 def get_zk_node(ctx, path, binary=False):
     with zk_client(ctx) as zk:
-        path = _format_path(ctx, path)
-        value = zk.get(path)[0]
-        return value if binary else value.decode().strip()
+        return _get_zk_node(zk, ctx, path, binary)
+
+
+def _get_zk_node(zk, ctx, path, binary):
+    path = _format_path(ctx, path)
+    value = zk.get(path)[0]
+    return value if binary else value.decode().strip()
 
 
 def check_zk_node(ctx, path):
@@ -357,8 +361,15 @@ def clean_zk_metadata_for_hosts(ctx, nodes, zk_ddl_query_path):
     def get_host_mention_in_task(zk, host, ddl_task_path):
         """
         Predicate for indicating that host must execute this task.
-
         If there is a host mention in the ddl, then returns the escaped hostname with port.
+        Example of ddl:
+
+        version: 5
+        query: CREATE TABLE default.test ...
+        hosts: ['host:port', ...]
+        initiator: host:port
+        settings: s3_min_upload_part_size = 33554432, s3_max_single_part_upload_size = 33554432, distributed_foreground_insert = true, distributed_background_insert_batch = true, log_queries = false, log_queries_cut_to_length = 10000000, max_concurrent_queries_for_user = 450, ignore_on_cluster_for_replicated_udf_queries = true, ignore_on_cluster_for_replicated_access_entities_queries = true, timeout_before_checking_execution_speed = 300., join_algorithm = 'auto,direct', allow_drop_detached = true, database_atomic_wait_for_drop_and_detach_synchronously = true, kafka_disable_num_consumers_limit = true, force_remove_data_recursively_on_drop = true
+        tracing: 00000000-0000-0000-0000-000000000000
         """
         try:
             for line in zk.get(ddl_task_path)[0].decode().strip().splitlines():
@@ -373,7 +384,7 @@ def clean_zk_metadata_for_hosts(ctx, nodes, zk_ddl_query_path):
         except NoNodeError:
             pass
 
-    def propagate_ddl_query(zk):
+    def mark_finished_ddl_query(zk):
         """
         If after deleting a host there are still unfinished ddl tasks in the queue,
         then we pretend that the host has completed this task.
@@ -396,7 +407,7 @@ def clean_zk_metadata_for_hosts(ctx, nodes, zk_ddl_query_path):
     with zk_client(ctx) as zk:
         tables_cleanup(zk, zk_root_path)
         databases_cleanups(zk, zk_root_path)
-        propagate_ddl_query(zk)
+        mark_finished_ddl_query(zk)
 
 
 @contextmanager

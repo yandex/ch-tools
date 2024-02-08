@@ -91,30 +91,27 @@ Feature: chadmin zookeeper commands.
 
 
   Scenario: Set finished to ddl with removed host.
-    # Create the fake cluster with removed host. 
-    When we execute command on clickhouse02
+    # Create the fake cluster with removed host.
+    When we put the  clickhouse config to path /etc/clickhouse-server/config.d/cluster.xml with restarting on clickhouse02
     """
-    echo -e "
-        <clickhouse>
-          <remote_servers>
-            <cluster_with_removed_host>
-                <shard>
-                    <internal_replication>true</internal_replication>
-                    <replica>
-                        <host>clickhouse02</host>
-                        <port>9000</port>
-                    </replica>
+    <clickhouse>
+        <remote_servers>
+          <cluster_with_removed_host>
+              <shard>
+                  <internal_replication>true</internal_replication>
+                  <replica>
+                      <host>clickhouse02</host>
+                      <port>9000</port>
+                  </replica>
 
-                    <replica>
-                        <host>zone-host.db.asd.net</host>
-                        <port>9000</port>
-                    </replica>
-                </shard>
-            </cluster_with_removed_host>
-        </remote_servers>
-      </clickhouse>
-    " > /etc/clickhouse-server/config.d/cluster.xml && \
-    supervisorctl restart clickhouse-server
+                  <replica>
+                      <host>zone-host.db.asd.net</host>
+                      <port>9000</port>
+                  </replica>
+              </shard>
+          </cluster_with_removed_host>
+      </remote_servers>
+    </clickhouse>
     """
     And we execute query on clickhouse02
     """
