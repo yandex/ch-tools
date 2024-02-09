@@ -76,11 +76,11 @@ def step_put_config(context, path, node):
     config = context.text
     container = get_container(context, node)
     result = container.exec_run(
-        ["bash", "-c", "echo", "-e", '"', config, '"', ">", path], user="root"
+        ["bash", "-c", f'echo -e " {config} " > {path}'], user="root"
     )
     assert_that(result.exit_code, equal_to(0))
 
     result = container.exec_run(
-        ["bash", "-c", "supervisorctl", "restart", "clickhouse-server"], user="root"
+        ["bash", "-c", "supervisorctl restart clickhouse-server"], user="root"
     )
     assert_that(result.exit_code, equal_to(0))

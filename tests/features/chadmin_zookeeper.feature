@@ -124,6 +124,6 @@ Feature: chadmin zookeeper commands.
     """
       CREATE TABLE test_db.test ON CLUSTER 'cluster_with_removed_host'  (a int) ENGINE=MergeTree() ORDER BY a
     """
-    
+  
     And we do hosts cleanup on clickhouse02 with fqdn zone-host.db.asd.net
     Then there are no unfinished dll queries on clickhouse02
