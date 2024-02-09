@@ -18,6 +18,7 @@ from ch_tools.chadmin.internal.zookeeper import (
 )
 from ch_tools.common.cli.formatting import print_json, print_response
 from ch_tools.common.cli.parameters import ListParamType, StringParamType
+from ch_tools.common.config import load_config
 
 
 @group("zookeeper")
@@ -304,4 +305,7 @@ def delete_ddl_task_command(ctx, tasks):
 @argument("fqdn", type=ListParamType())
 @pass_context
 def clickhouse_hosts_command(ctx, fqdn):
-    clean_zk_metadata_for_hosts(ctx, fqdn)
+    # We can't get the ddl queue path from clickhouse config,
+    # because in some cases we are changing this path while performing cluster resetup.
+    config = load_config()
+    clean_zk_metadata_for_hosts(ctx, fqdn, config["clickhouse"]["distributed_ddl_path"])

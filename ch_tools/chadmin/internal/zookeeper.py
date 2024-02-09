@@ -222,7 +222,21 @@ def _delete_recursive(zk, paths):
         _delete_nodes_transaction(zk, transaction_orerations)
 
 
-def clean_zk_metadata_for_hosts(ctx, nodes):
+def escape_for_zookeeper(s: str) -> str:
+    # clickhouse uses name formatting in zookeeper.
+    # See escapeForFileName.cpp
+    result = []
+    for c in s:
+        if c.isalnum() or c == "_":
+            result.append(c)
+        else:
+            code = ord(c)
+            result.append(f"%{code//16:X}{code%16:X}")
+
+    return "".join(result)
+
+
+def clean_zk_metadata_for_hosts(ctx, nodes, zk_ddl_query_path):
     """
     Perform cleanup in zookeeper after deleting hosts in the cluster or whole cluster deleting.
     """
@@ -340,10 +354,56 @@ def clean_zk_metadata_for_hosts(ctx, nodes):
         _delete_recursive(zk, hosts_paths)
         _remove_if_no_hosts_in_replicas(zk, databases_paths)
 
+    def get_host_mention_in_task(zk, host, ddl_task_path):
+        """
+        Predicate for indicating that host must execute this task.
+        If there is a host mention in the ddl, then returns the escaped hostname with port.
+        Example of ddl:
+
+        version: 5
+        query: CREATE TABLE default.test ...
+        hosts: ['host:port', ...]
+        initiator: host:port
+        settings: s3_min_upload_part_size = 33554432, s3_max_single_part_upload_size = 33554432, distributed_foreground_insert = true, distributed_background_insert_batch = true, log_queries = false, log_queries_cut_to_length = 10000000, max_concurrent_queries_for_user = 450, ignore_on_cluster_for_replicated_udf_queries = true, ignore_on_cluster_for_replicated_access_entities_queries = true, timeout_before_checking_execution_speed = 300., join_algorithm = 'auto,direct', allow_drop_detached = true, database_atomic_wait_for_drop_and_detach_synchronously = true, kafka_disable_num_consumers_limit = true, force_remove_data_recursively_on_drop = true
+        tracing: 00000000-0000-0000-0000-000000000000
+        """
+        try:
+            for line in zk.get(ddl_task_path)[0].decode().strip().splitlines():
+                if "hosts: " in line:
+                    escaped_host = escape_for_zookeeper(host)
+                    pos = line.find(escaped_host)
+                    # Not found
+                    if pos == -1:
+                        return None
+
+                    return line[pos : line.find("'", pos)]
+        except NoNodeError:
+            pass
+
+    def mark_finished_ddl_query(zk):
+        """
+        If after deleting a host there are still unfinished ddl tasks in the queue,
+        then we pretend that the host has completed this task.
+
+        """
+
+        for ddl_task in _get_children(zk, _format_path(ctx, zk_ddl_query_path)):
+            ddl_task_full = os.path.join(zk_ddl_query_path, ddl_task)
+            for host in nodes:
+                host_mention = get_host_mention_in_task(zk, host, ddl_task_full)
+                if not host_mention:
+                    continue
+                finished_path = os.path.join(ddl_task_full, f"finished/{host_mention}")
+                if zk.exists(finished_path):
+                    continue
+                print(f"Add {host} to finished for ddl_task: {ddl_task}")
+                zk.create(finished_path, b"0\n")
+
     zk_root_path = _format_path(ctx, "/")
     with zk_client(ctx) as zk:
         tables_cleanup(zk, zk_root_path)
         databases_cleanups(zk, zk_root_path)
+        mark_finished_ddl_query(zk)
 
 
 @contextmanager

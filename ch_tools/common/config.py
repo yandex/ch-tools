@@ -18,6 +18,7 @@ DEFAULT_CONFIG = {
         "settings": {},
         "monitoring_user": None,
         "monitoring_password": None,
+        "distributed_ddl_path": "/clickhouse/task_queue/ddl",
     },
     "object_storage": {
         "clean": {

@@ -5,6 +5,7 @@ Feature: chadmin zookeeper commands.
     And a working s3
     And a working zookeeper
     And a working clickhouse on clickhouse01
+    And a working clickhouse on clickhouse02
 
 
   Scenario: Cleanup all hosts
@@ -88,3 +89,41 @@ Feature: chadmin zookeeper commands.
     And we delete zookeepers nodes /test/a,/test/a/b on zookeeper01
     And we delete zookeepers nodes /test/c/d,/test/c on zookeeper01
     Then the list of children on zookeeper01 for zk node /test are empty
+
+
+  Scenario: Set finished to ddl with removed host.
+    # Create the fake cluster with removed host.
+    When we put the  clickhouse config to path /etc/clickhouse-server/config.d/cluster.xml with restarting on clickhouse02
+    """
+    <clickhouse>
+        <remote_servers>
+          <cluster_with_removed_host>
+              <shard>
+                  <internal_replication>true</internal_replication>
+                  <replica>
+                      <host>clickhouse02</host>
+                      <port>9000</port>
+                  </replica>
+
+                  <replica>
+                      <host>zone-host.db.asd.net</host>
+                      <port>9000</port>
+                  </replica>
+              </shard>
+          </cluster_with_removed_host>
+      </remote_servers>
+    </clickhouse>
+    """
+    And we execute query on clickhouse02
+    """
+      CREATE DATABASE test_db ON CLUSTER 'cluster_with_removed_host'
+    """
+    # Make sure that ddl have executed on clickhouse02
+    And we sleep for 5 seconds
+    And we execute query on clickhouse02
+    """
+      CREATE TABLE test_db.test ON CLUSTER 'cluster_with_removed_host'  (a int) ENGINE=MergeTree() ORDER BY a
+    """
+  
+    And we do hosts cleanup on clickhouse02 with fqdn zone-host.db.asd.net
+    Then there are no unfinished dll queries on clickhouse02

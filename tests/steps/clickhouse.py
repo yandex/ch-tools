@@ -4,6 +4,7 @@ Steps for interacting with ClickHouse DBMS.
 from behave import given, then, when
 from hamcrest import assert_that, equal_to
 from modules.clickhouse import ClickhouseClient
+from modules.docker import get_container
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 
@@ -60,3 +61,26 @@ def step_same_clickhouse_data(context, node1, node2):
         return data
 
     assert_that(_get_data(node1), equal_to(_get_data(node2)))
+
+
+@then("there are no unfinished dll queries on {node:w}")
+def step_check_unfinished_ddl(context, node):
+    ch_client = ClickhouseClient(context, node)
+    query = "SELECT count(*) FROM system.distributed_ddl_queue WHERE status!='Finished'"
+    ret_code, response = ch_client.get_response(query)
+    assert_that(response, equal_to("0"))
+
+
+@when("we put the  clickhouse config to path {path} with restarting on {node:w}")
+def step_put_config(context, path, node):
+    config = context.text
+    container = get_container(context, node)
+    result = container.exec_run(
+        ["bash", "-c", f'echo -e " {config} " > {path}'], user="root"
+    )
+    assert_that(result.exit_code, equal_to(0))
+
+    result = container.exec_run(
+        ["bash", "-c", "supervisorctl restart clickhouse-server"], user="root"
+    )
+    assert_that(result.exit_code, equal_to(0))
