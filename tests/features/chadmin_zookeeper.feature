@@ -5,6 +5,7 @@ Feature: chadmin zookeeper commands.
     And a working s3
     And a working zookeeper
     And a working clickhouse on clickhouse01
+    And a working clickhouse on clickhouse02
 
 
   Scenario: Cleanup all hosts
@@ -117,6 +118,8 @@ Feature: chadmin zookeeper commands.
     """
       CREATE DATABASE test_db ON CLUSTER 'cluster_with_removed_host'
     """
+    # Make sure that ddl have executed on clickhouse02
+    And we sleep for 5 seconds
     And we execute query on clickhouse02
     """
       CREATE TABLE test_db.test ON CLUSTER 'cluster_with_removed_host'  (a int) ENGINE=MergeTree() ORDER BY a
