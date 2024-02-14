@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from math import sqrt
 
 from kazoo.client import KazooClient
-from kazoo.exceptions import NoNodeError
+from kazoo.exceptions import NoNodeError, NotEmptyError
 
 from ch_tools.chadmin.cli import get_clickhouse_config, get_macros
 from ch_tools.chadmin.internal.utils import chunked
@@ -162,11 +162,18 @@ def _delete_nodes_transaction(zk, to_delete_in_trasaction):
         to_delete_in_trasaction,
     )
     for node in to_delete_in_trasaction:
-        try:
-            zk.delete(node, recursive=True)
-        except NoNodeError:
-            #  Someone deleted node before us. Do nothing.
-            print("Node {node} is already absent, skipped".format(node=node))
+        successful_delete = False
+        while not successful_delete:
+            try:
+                zk.delete(node, recursive=True)
+                successful_delete = True
+            except NoNodeError:
+                #  Someone deleted node before us. Do nothing.
+                print("Node {node} is already absent, skipped".format(node=node))
+                successful_delete = True
+            except NotEmptyError:
+                # Someone created a node while we deleting. Restart the operation.
+                pass
 
 
 def _remove_subpaths(paths):
@@ -294,7 +301,6 @@ def clean_zk_metadata_for_hosts(ctx, nodes, zk_ddl_query_path):
         Set flag <path>/replicas/<replica_name>/is_lost to 1
         """
         for path in table_paths:
-
             replica_path = os.path.join(path, "replicas")
             if not zk.exists(replica_path):
                 continue
