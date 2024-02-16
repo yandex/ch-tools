@@ -36,24 +36,42 @@ def get_query_command(ctx, **kwargs):
 @option("-u", "--user", help="Filter log records to output by user.")
 @option("-U", "--exclude-user", help="Filter log records to not output by user.")
 @option(
-    "--query", "query_pattern", help="Filter log records to output by query pattern."
+    "--query",
+    "query_pattern",
+    help="Filter log records to output by query pattern.",
 )
 @option(
     "--exclude-query",
     "exclude_query_pattern",
     help="Filter log records to not output by query pattern.",
 )
-@option("--error")
-@option("--date")
-@option("--min-date")
-@option("--max-date")
-@option("--min-time")
-@option("--max-time")
-@option("--time")
-@option("--client")
-@option("--failed", is_flag=True)
-@option("--completed", is_flag=True)
-@option("--is-initial-query", "--initial", "is_initial_query", type=bool)
+@option("--date", help="Filter log records to output by date.")
+@option("--time", help="Filter log records to output by time.")
+@option("--min-date", help="Filter out log records created before the specified date.")
+@option("--max-date", help="Filter out log records created after the specified date.")
+@option(
+    "--min-time",
+    help="Filter out log records created before the specified timestamp.",
+)
+@option(
+    "--max-time",
+    help="Filter out log records created after the specified timestamp.",
+)
+@option(
+    "--failed/--completed",
+    "failed",
+    default=None,
+    help="Output only log records on failed / successful part operations.",
+)
+@option("--error", help="Filter log records to output by error pattern.")
+@option("--client", help="Filter log records to output by client.")
+@option(
+    "--is-initial-query",
+    "--initial",
+    "is_initial_query",
+    type=bool,
+    help="Filter log records to output by is_initial flag.",
+)
 @option("-v", "--verbose", is_flag=True, help="Verbose mode.")
 @option(
     "--cluster",
@@ -277,7 +295,6 @@ def get_queries(
     max_time=None,
     client=None,
     failed=None,
-    completed=None,
     is_initial_query=None,
     on_cluster=False,
     limit=10,
@@ -354,10 +371,9 @@ def get_queries(
         {% if exclude_query_pattern -%}
           AND lower(query) NOT LIKE lower('{{ exclude_query_pattern }}')
         {% endif -%}
-        {% if failed -%}
+        {% if failed is true -%}
           AND exception != ''
-        {% endif -%}
-        {% if completed -%}
+        {% elif failed is false -%}
           AND exception = ''
         {% endif -%}
         {% if is_initial_query is true -%}
@@ -390,7 +406,6 @@ def get_queries(
         max_time=max_time,
         client=client,
         failed=failed,
-        completed=completed,
         is_initial_query=is_initial_query,
         cluster=cluster,
         limit=limit,
