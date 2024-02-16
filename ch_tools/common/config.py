@@ -14,11 +14,12 @@ DEFAULT_CONFIG = {
         "port": 8443,
         "user": None,
         "password": None,
-        "timeout": 60,
         "settings": {},
         "monitoring_user": None,
         "monitoring_password": None,
         "distributed_ddl_path": "/clickhouse/task_queue/ddl",
+        "timeout": 60,
+        "alter_table_timeout": 600,
     },
     "object_storage": {
         "clean": {
