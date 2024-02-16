@@ -270,6 +270,7 @@ def list_part_log(
     max_date=None,
     min_time=None,
     max_time=None,
+    failed=None,
     order_by=None,
     limit=None,
 ):
@@ -334,6 +335,11 @@ def list_part_log(
         {% if max_time %}
           AND event_time <= toDateTime('{{ max_time }}')
         {% endif %}
+        {% if failed is true -%}
+          AND exception != ''
+        {% elif failed is false -%}
+          AND exception = ''
+        {% endif -%}
         ORDER BY {{ order_by }}
         {% if limit %}
         LIMIT {{ limit }}
@@ -351,6 +357,7 @@ def list_part_log(
         min_time=min_time,
         max_time=max_time,
         order_by=order_by,
+        failed=failed,
         limit=limit,
         format_="JSON",
     )["data"]

@@ -21,16 +21,26 @@ def part_log_group():
 
 
 @part_log_group.command("list")
-@option("-d", "--database")
-@option("-t", "--table")
-@option("--partition")
-@option("--part")
-@option("--date")
-@option("--min-date")
-@option("--max-date")
-@option("--min-time")
-@option("--max-time")
-@option("--time")
+@option("-d", "--database", help="Filter log records to output by database name.")
+@option("-t", "--table", help="Filter log records to output by table name.")
+@option("--partition", help="Filter log records to output by partition ID.")
+@option("--part", help="Filter log records to output by part name.")
+@option("--date", help="Filter log records to output by date.")
+@option("--time", help="Filter log records to output by time.")
+@option("--min-date", help="Filter out log records created before the specified date.")
+@option("--max-date", help="Filter out log records created after the specified date.")
+@option(
+    "--min-time", help="Filter out log records created before the specified timestamp."
+)
+@option(
+    "--max-time", help="Filter out log records created after the specified timestamp."
+)
+@option(
+    "--failed/--completed",
+    "failed",
+    default=None,
+    help="Output only log records on failed / successful part operations.",
+)
 @option(
     "--order-by",
     type=Choice(["time", "size", "rows", "peak_memory_usage"]),
@@ -42,7 +52,7 @@ def part_log_group():
     "--limit",
     type=int,
     default=10,
-    help="Limit the max number of objects in the output.",
+    help="Limit the max number of log records in the output.",
 )
 @pass_context
 def list_part_log_command(
