@@ -1,3 +1,4 @@
+from ch_tools.chadmin.internal.object_storage.obj_list_item import ObjListItem
 from ch_tools.chadmin.internal.object_storage.s3_cleanup import (
     cleanup_s3_object_storage,
 )

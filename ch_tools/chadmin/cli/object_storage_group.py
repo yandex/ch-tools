@@ -1,5 +1,4 @@
 import logging
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from tempfile import TemporaryFile
 from typing import List, Optional
@@ -10,6 +9,7 @@ from humanfriendly import format_size
 
 from ch_tools.chadmin.cli import get_clickhouse_config
 from ch_tools.chadmin.internal.object_storage import (
+    ObjListItem,
     cleanup_s3_object_storage,
     s3_object_storage_iterator,
 )
@@ -28,17 +28,6 @@ DEFAULT_GUARD_INTERVAL = "24h"
 INSERT_BATCH_SIZE = 500
 # Use big enough timeout for stream HTTP query
 STREAM_TIMEOUT = 10 * 60
-
-
-@dataclass
-class ObjListItem:
-    path: str
-    size: int
-
-    @classmethod
-    def from_tab_separated(cls, value: str) -> "ObjListItem":
-        path, size = value.split("\t")
-        return cls(path, int(size))
 
 
 @group("object-storage")
@@ -229,16 +218,10 @@ def _clean_object_storage(
 
         keys_file.seek(0)  # rewind file pointer to the beginning
 
-        # Generator producing keys from temporary file with counting of statistics
-        def keys():
-            nonlocal deleted, total_size
-            for line in keys_file:
-                obj = ObjListItem.from_tab_separated(line.decode().strip())
-                yield obj.path
-                deleted += 1
-                total_size += obj.size
-
-        cleanup_s3_object_storage(disk_conf, keys(), dry_run)
+        keys = (
+            ObjListItem.from_tab_separated(line.decode().strip()) for line in keys_file
+        )
+        deleted, total_size = cleanup_s3_object_storage(disk_conf, keys, dry_run)
 
     logging.info(
         "%s %s objects with total size %s from bucket [%s] with prefix %s",
