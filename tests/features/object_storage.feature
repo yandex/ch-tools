@@ -21,37 +21,41 @@ Feature: chadmin object-storage commands
   Scenario: Dry-run clean on one replica with guard period
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --dry-run
+    chadmin --format yaml object-storage clean --dry-run
     """
     Then we get response contains
     """
-    Would delete 0 objects from bucket [cloud-storage-test]
+    - WouldDelete: 0
+      TotalSize: 0
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --to-time 0h --dry-run
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run
     """
     Then we get response matches
     """
-    Would delete [1-9][0-9]* objects from bucket \[cloud-storage-test\]
+    - WouldDelete: [1-9][0-9]*
+      TotalSize: [1-9][0-9]*
     """
 
   Scenario: Dry-run clean on cluster with guard period
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --dry-run --on-cluster
+    chadmin --format yaml object-storage clean --dry-run --on-cluster
     """
     Then we get response contains
     """
-    Would delete 0 objects from bucket [cloud-storage-test]
+    - WouldDelete: 0
+      TotalSize: 0
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --to-time 0h --dry-run --on-cluster
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run --on-cluster
     """
     Then we get response contains
     """
-    Would delete 0 objects from bucket [cloud-storage-test]
+    - WouldDelete: 0
+      TotalSize: 0
     """
 
   Scenario: Clean orphaned objects
@@ -63,86 +67,93 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --dry-run --to-time 0h --on-cluster
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster
     """
     Then we get response contains
     """
-    Would delete 1 objects from bucket [cloud-storage-test]
+    - WouldDelete: 1
+      TotalSize: 1
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --to-time 0h --on-cluster
+    chadmin --format yaml object-storage clean --to-time 0h --on-cluster
     """
     Then we get response contains
     """
-    Deleted 1 objects from bucket [cloud-storage-test]
+    - Deleted: 1
+      TotalSize: 1
     """
     And path does not exist in S3
     """
       bucket: cloud-storage-test
       path: /data/orpaned_object.tsv
     """
-
+  
   Scenario: Clean many orphaned objects
     When we put 100 objects in S3
     """
       bucket: cloud-storage-test
       path: /data/orpaned_object-{}
-      data: '1'
+      data: '10'
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --dry-run --to-time 0h --on-cluster
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster
     """
     Then we get response contains
     """
-    Would delete 100 objects from bucket [cloud-storage-test]
+    - WouldDelete: 100
+      TotalSize: 200
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --to-time 0h --on-cluster
+    chadmin --format yaml object-storage clean --to-time 0h --on-cluster
     """
     Then we get response contains
     """
-    Deleted 100 objects from bucket [cloud-storage-test]
+    - Deleted: 100
+      TotalSize: 200
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --to-time 0h --dry-run --on-cluster
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run --on-cluster
     """
     Then we get response contains
     """
-    Would delete 0 objects from bucket [cloud-storage-test]
+    - WouldDelete: 0
+      TotalSize: 0
     """
-
+ 
   Scenario: Clean orphaned objects with prefix
     When we put object in S3
     """
       bucket: cloud-storage-test
       path: /data_1/orpaned_object.tsv
-      data: '1'
+      data: '10'
     """
     When we put object in S3
     """
       bucket: cloud-storage-test
       path: /data_2/orpaned_object.tsv
-      data: '1'
+      data: '100'
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --dry-run --to-time 0h --on-cluster --prefix "data_1"
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --prefix "data_1"
     """
     Then we get response contains
     """
-    Would delete 1 objects from bucket [cloud-storage-test]
+    - WouldDelete: 1
+      TotalSize: 2
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --to-time 0h --on-cluster --prefix "data_1"
+    chadmin --format yaml object-storage clean --to-time 0h --on-cluster --prefix "data_1"
     """
     Then we get response contains
     """
-    Deleted 1 objects from bucket [cloud-storage-test]
+    - Deleted: 1
+      TotalSize: 2
     """
     And path does not exist in S3
     """
@@ -151,9 +162,10 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --dry-run --to-time 0h --on-cluster --prefix "data_2"
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --prefix "data_2"
     """
     Then we get response contains
     """
-    Would delete 1 objects from bucket [cloud-storage-test]
+    - WouldDelete: 1
+      TotalSize: 3
     """
