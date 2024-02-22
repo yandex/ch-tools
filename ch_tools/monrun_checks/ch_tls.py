@@ -7,11 +7,11 @@ from typing import List, Optional, Tuple
 import click
 from OpenSSL.crypto import FILETYPE_PEM, dump_certificate, load_certificate
 
-from ch_tools.common.result import Result
 from ch_tools.common.clickhouse.client.clickhouse_client import (
-    clickhouse_client,
     ClickhousePort,
+    clickhouse_client,
 )
+from ch_tools.common.result import Result
 
 CERTIFICATE_PATH = "/etc/clickhouse-server/ssl/server.crt"
 

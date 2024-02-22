@@ -2,8 +2,8 @@ from typing import Any, Dict
 
 from tabulate import tabulate
 
-from ch_tools.common.result import Result
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
+from ch_tools.common.result import Result
 
 XCRIT = 3600
 CRIT = 600

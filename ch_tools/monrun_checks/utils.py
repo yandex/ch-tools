@@ -1,6 +1,6 @@
 from ch_tools.common.clickhouse.client.clickhouse_client import (
-    clickhouse_client,
     ClickhousePort,
+    clickhouse_client,
 )
 
 

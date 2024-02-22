@@ -1,11 +1,10 @@
-import logging
 import json
+import logging
 import subprocess
+import xml.etree.ElementTree as xml
 from datetime import timedelta
 from enum import Enum
 from typing import Any, Dict, Optional
-
-import xml.etree.ElementTree as xml
 
 import requests
 from jinja2 import Environment
@@ -91,6 +90,11 @@ class ClickhouseClient:
     ):
         schema = "https" if port == ClickhousePort.HTTPS else "http"
         url = f"{schema}://{self.host}:{self.ports[port]}"
+        headers = {
+            "X-ClickHouse-User": self.user,
+            "X-ClickHouse-Key": self.password,
+        }
+        verify = self.cert_path if port == ClickhousePort.HTTPS else None
         try:
             if query:
                 response = requests.post(
@@ -100,24 +104,19 @@ class ClickhouseClient:
                         "query": query,
                         **per_query_settings,  # overwrites previous settings
                     },
-                    headers={
-                        "X-ClickHouse-User": self.user,
-                        "X-ClickHouse-Key": self.password,
-                    },
+                    headers=headers,
                     json=post_data,
                     timeout=timeout,
                     stream=stream,
-                    verify=self.cert_path if port == ClickhousePort.HTTPS else None,
+                    verify=verify,
                 )
             else:
+                # Used for ping
                 response = requests.get(
-                    f"{schema}://{self.host}:{self.ports[port]}",
-                    headers={
-                        "X-ClickHouse-User": self.user,
-                        "X-ClickHouse-Key": self.password,
-                    },
+                    url,
+                    headers=headers,
                     timeout=timeout,
-                    verify=self.cert_path if port == ClickhousePort.HTTPS else None,
+                    verify=verify,
                 )
 
             response.raise_for_status()
