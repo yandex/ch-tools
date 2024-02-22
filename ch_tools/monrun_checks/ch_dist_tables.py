@@ -5,7 +5,7 @@ from urllib.parse import quote
 import click
 
 from ch_tools.common.result import Result
-from ch_tools.monrun_checks.clickhouse_client import ClickhouseClient
+from ch_tools.monrun_checks.utils import execute_query
 
 
 @click.command("dist-tables")
@@ -20,13 +20,12 @@ def dist_tables_command(ctx, crit, warn):
     """
     Check for old chunks on Distributed tables.
     """
-    ch_client = ClickhouseClient(ctx)
 
     status = 0
     issues = []
 
     query = "SELECT database, name FROM system.tables WHERE engine = 'Distributed'"
-    distributed_tables = ch_client.execute(query, compact=False)
+    distributed_tables = execute_query(ctx, query=query, compact=False)
     for table in distributed_tables:
         tss = get_chunk_timestamps(table)
         if tss["broken"]:

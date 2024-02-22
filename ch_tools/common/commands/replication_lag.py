@@ -3,7 +3,7 @@ from typing import Any, Dict
 from tabulate import tabulate
 
 from ch_tools.common.result import Result
-from ch_tools.monrun_checks.clickhouse_client import ClickhouseClient
+from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 
 XCRIT = 3600
 CRIT = 600
@@ -21,7 +21,7 @@ def estimate_replication_lag(
     Should be: lag >= lag_with_errors, lag >= max_execution
     """
     # pylint: disable=too-many-branches,too-many-locals
-    ch_client = ClickhouseClient(ctx)
+    ch_client = clickhouse_client(ctx)
     lag, lag_with_errors, max_execution, max_merges, chart = get_replication_lag(
         ch_client
     )
@@ -188,7 +188,7 @@ def get_tables_with_replication_delay(ch_client):
     Get tables with absolute_delay > 0.
     """
     query = "SELECT database, table, zookeeper_path, absolute_delay FROM system.replicas WHERE absolute_delay > 0"
-    return ch_client.execute(query=query, compact=False)
+    return ch_client.query(query=query, format_="JSON")["data"]
 
 
 def filter_out_single_replica_tables(ch_client, tables):
@@ -208,7 +208,7 @@ def filter_out_single_replica_tables(ch_client, tables):
             "('{0}', '{1}')".format(t["database"], t["table"]) for t in tables
         )
     )
-    return ch_client.execute(query=query, compact=False)
+    return ch_client.query(query=query, format_="JSON")["data"]
 
 
 def count_errors(ch_client, tables, exceptions_limit):
@@ -239,7 +239,7 @@ def count_errors(ch_client, tables, exceptions_limit):
         ),
         limit=limit,
     )
-    return ch_client.execute(query=query, compact=False)
+    return ch_client.query(query=query, format_="JSON")["data"]
 
 
 def is_userfault_exception(exception):
@@ -268,7 +268,7 @@ def get_max_replicated_merges_in_queue(ch_client):
     query = """
         SELECT value FROM system.merge_tree_settings WHERE name='max_replicated_merges_in_queue'
     """
-    res = ch_client.execute(query=query, compact=True)
+    res = ch_client.query(query=query, format_="JSONCompact")["data"]
     if not res:
         return (
             16  # 16 is default value for 'max_replicated_merges_in_queue' in ClickHouse

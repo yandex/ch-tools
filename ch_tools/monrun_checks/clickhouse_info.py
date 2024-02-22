@@ -1,6 +1,6 @@
 import functools
 
-from ch_tools.monrun_checks.clickhouse_client import ClickhouseClient
+from ch_tools.monrun_checks.utils import execute_query
 
 
 class ClickhouseInfo:
@@ -18,7 +18,7 @@ class ClickhouseInfo:
             AND shard_num = (SELECT shard_num FROM system.clusters
                             WHERE host_name = hostName() AND cluster = '{cluster}')
             """
-        return [row[0] for row in ClickhouseClient(ctx).execute(query)]
+        return [row[0] for row in execute_query(ctx, query=query)]
 
     @classmethod
     @functools.lru_cache(maxsize=1)
@@ -27,4 +27,4 @@ class ClickhouseInfo:
         Get cluster identifier.
         """
         query = "SELECT substitution FROM system.macros WHERE macro = 'cluster'"
-        return ClickhouseClient(ctx).execute(query)[0][0]
+        return execute_query(ctx, query=query)[0][0]

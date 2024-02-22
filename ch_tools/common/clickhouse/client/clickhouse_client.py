@@ -1,6 +1,11 @@
 import logging
+import json
+import subprocess
 from datetime import timedelta
+from enum import Enum
 from typing import Any, Dict, Optional
+
+import xml.etree.ElementTree as xml
 
 import requests
 from jinja2 import Environment
@@ -13,6 +18,31 @@ from .retry import retry
 from .utils import _format_str_imatch, _format_str_match
 
 
+class ClickhousePort(Enum):
+    HTTPS = 4
+    HTTP = 3
+    TCP_SECURE = 2
+    TCP = 1
+    AUTO = 0  # Select any available port
+
+
+class ClickhousePortHelper:
+    _map = {
+        "https_port": ClickhousePort.HTTPS,
+        "http_port": ClickhousePort.HTTP,
+        "tcp_port_secure": ClickhousePort.TCP_SECURE,
+        "tcp_port": ClickhousePort.TCP,
+    }
+
+    @classmethod
+    def get(cls, string):
+        return cls._map[string] if string in cls._map else ClickhousePort.AUTO
+
+    @classmethod
+    def list(cls):
+        return cls._map.keys()
+
+
 class ClickhouseClient:
     """
     ClickHouse client wrapper.
@@ -22,18 +52,20 @@ class ClickhouseClient:
         self,
         *,
         host,
-        protocol,
         insecure,
-        port,
         user,
         password,
+        ports,
+        cert_path,
         timeout,
         settings,
     ):
-        self._session = self._create_session(
-            user=user, password=password, insecure=insecure
-        )
-        self._url = f"{protocol}://{host}:{port}"
+        self.host = host
+        self.insecure = insecure
+        self.user = user
+        self.ports = ports
+        self.cert_path = cert_path
+        self.password = password
         self._settings = settings
         self._timeout = timeout
         self._ch_version = None
@@ -54,6 +86,84 @@ class ClickhouseClient:
         seconds = int(self.query("SELECT uptime()"))
         return timedelta(seconds=seconds)
 
+    def execute_http(
+        self, query, format_, port, post_data, timeout, stream, per_query_settings
+    ):
+        schema = "https" if port == ClickhousePort.HTTPS else "http"
+        url = f"{schema}://{self.host}:{self.ports[port]}"
+        try:
+            if query:
+                response = requests.post(
+                    url,
+                    params={
+                        **self._settings,
+                        "query": query,
+                        **per_query_settings,  # overwrites previous settings
+                    },
+                    headers={
+                        "X-ClickHouse-User": self.user,
+                        "X-ClickHouse-Key": self.password,
+                    },
+                    json=post_data,
+                    timeout=timeout,
+                    stream=stream,
+                    verify=self.cert_path if port == ClickhousePort.HTTPS else None,
+                )
+            else:
+                response = requests.get(
+                    f"{schema}://{self.host}:{self.ports[port]}",
+                    headers={
+                        "X-ClickHouse-User": self.user,
+                        "X-ClickHouse-Key": self.password,
+                    },
+                    timeout=timeout,
+                    verify=self.cert_path if port == ClickhousePort.HTTPS else None,
+                )
+
+            response.raise_for_status()
+
+            # Return response for iterating over
+            if stream:
+                return response
+
+            if format_ in ("JSON", "JSONCompact"):
+                return response.json()
+
+            return response.text.strip()
+        except requests.exceptions.HTTPError as e:
+            raise ClickhouseError(query, e.response) from None
+
+    def execute_tcp(self, query, port):
+        # Private method, we are sure that port is tcps or tcp and presents in config
+        cmd = [
+            "clickhouse-client",
+            "--host",
+            self.host,
+            "--port",
+            self.ports[port],
+        ]
+        if self.user is not None:
+            cmd.extend(("--user", self.user))
+        if self.password is not None:
+            cmd.extend(("--password", self.password))
+        if port == ClickhousePort.TCP_SECURE:
+            cmd.append("--secure")
+
+        if not query:
+            raise RuntimeError(1, "Can't send empty query in tcp(s) port")
+
+        # pylint: disable=consider-using-with
+        proc = subprocess.Popen(
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        stdout, stderr = proc.communicate(input=query.encode())
+
+        if proc.returncode:
+            raise RuntimeError('"{0}" failed with: {1}'.format(cmd, stderr.decode()))
+
+        resp = stdout.decode().strip()
+        return json.loads(resp)
+
     @retry(requests.exceptions.ConnectionError)
     def query(
         self: Self,
@@ -66,6 +176,7 @@ class ClickhouseClient:
         dry_run: bool = False,
         stream: bool = False,
         settings: Optional[dict] = None,
+        port=ClickhousePort.AUTO,
     ) -> Any:
         """
         Execute query.
@@ -87,32 +198,20 @@ class ClickhouseClient:
 
         per_query_settings = settings or {}
 
+        # check ports
+        if port == ClickhousePort.AUTO:
+            for port in ClickhousePort:
+                if self.check_port(port):
+                    break
+            if port == ClickhousePort.AUTO:
+                raise UserWarning(2, "Can't find any port in clickhouse-server config")
+        # execute http or tcp
         logging.debug("Executing query: %s", query)
-        try:
-            response = self._session.post(
-                self._url,
-                params={
-                    **self._settings,
-                    "query": query,
-                    **per_query_settings,  # overwrites previous settings
-                },
-                json=post_data,
-                timeout=timeout,
-                stream=stream,
+        if port in [ClickhousePort.HTTPS, ClickhousePort.HTTP]:
+            return self.execute_http(
+                query, format_, port, post_data, timeout, stream, per_query_settings
             )
-
-            response.raise_for_status()
-
-            # Return response for iterating over
-            if stream:
-                return response
-
-            if format_ in ("JSON", "JSONCompact"):
-                return response.json()
-
-            return response.text.strip()
-        except requests.exceptions.HTTPError as e:
-            raise ClickhouseError(query, e.response) from None
+        return self.execute_tcp(query, port)
 
     def render_query(self, query, **kwargs):
         env = Environment()
@@ -126,18 +225,18 @@ class ClickhouseClient:
         template = env.from_string(query)
         return template.render(kwargs)
 
-    @staticmethod
-    def _create_session(user, password, insecure):
-        session = requests.Session()
+    def check_port(self, port=ClickhousePort.AUTO):
+        if port == ClickhousePort.AUTO:
+            return bool(self.ports)  # Has any port
+        return port in self.ports
 
-        session.verify = False if insecure else "/etc/clickhouse-server/ssl/allCAs.pem"
+    def get_port(self, port):
+        if port in self.ports:
+            return self.ports[port]
+        return 0
 
-        if user:
-            session.headers["X-ClickHouse-User"] = user
-        if password:
-            session.headers["X-ClickHouse-Key"] = password
-
-        return session
+    def ping(self, port=ClickhousePort.HTTPS):
+        return self.query(query=None, port=port)
 
 
 def clickhouse_client(ctx):
@@ -146,15 +245,16 @@ def clickhouse_client(ctx):
     Init ClickHouse client and store to the context if it doesn't exist.
     """
     if not ctx.obj.get("chcli"):
+        ports, cert_path = get_ports()
         config = ctx.obj["config"]["clickhouse"]
         user, password = clickhouse_credentials(ctx)
         ctx.obj["chcli"] = ClickhouseClient(
             host=config["host"],
-            protocol=config["protocol"],
             insecure=config["insecure"],
-            port=config["port"],
             user=user,
             password=password,
+            ports=ports,
+            cert_path=cert_path,
             timeout=config["timeout"],
             settings=config["settings"],
         )
@@ -175,3 +275,27 @@ def clickhouse_credentials(ctx):
         password = config["monitoring_password"]
 
     return user, password
+
+
+def get_ports():
+    ports: Dict[str, str] = {}
+    try:
+        root = xml.parse("/var/lib/clickhouse/preprocessed_configs/config.xml")
+        for setting in ClickhousePortHelper.list():
+            node = root.find(setting)
+            if node is not None:
+                ports[ClickhousePortHelper.get(setting)] = str(node.text)
+        if not ports:
+            raise UserWarning(2, "Can't find any port in clickhouse-server config")
+        node = root.find("./openSSL/server/caConfig")
+        cert_path = "/etc/clickhouse-server/ssl/allCAs.pem"
+        if node is not None:
+            cert_path = str(node.text)
+
+    except FileNotFoundError as e:
+        raise UserWarning(2, f"clickhouse-server config not found: {e.filename}")
+
+    except Exception as e:
+        raise UserWarning(2, f"Failed to parse clickhouse-server config: {e}")
+
+    return ports, cert_path
