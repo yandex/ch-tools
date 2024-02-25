@@ -3,10 +3,9 @@ ClickHouse client.
 """
 
 import logging
-from typing import Any, Optional, Sequence, Tuple, Union
-from urllib.parse import urljoin
+from typing import Any, Optional, Sequence, Tuple
 
-from requests import HTTPError, Session
+from requests import HTTPError
 
 from ch_tools.common.clickhouse.client.clickhouse_client import (
     ClickhouseClient,
@@ -133,14 +132,10 @@ def execute_query(
     context,
     node,
     query: Optional[str] = None,
-    data: Union[None, bytes, str] = None,
     format_=None,
 ) -> Any:
 
     client = clickhouse_client(context, node)
-
-    if isinstance(data, str):
-        data = data.encode()
 
     try:
         logging.debug("Executing ClickHouse query: %s", query)

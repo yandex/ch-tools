@@ -85,7 +85,7 @@ class ClickhouseClient:
         seconds = int(self.query("SELECT uptime()"))
         return timedelta(seconds=seconds)
 
-    def execute_http(
+    def _execute_http(
         self,
         query,
         format_,
@@ -140,7 +140,7 @@ class ClickhouseClient:
         except requests.exceptions.HTTPError as e:
             raise ClickhouseError(query, e.response) from None
 
-    def execute_tcp(self, query, format_, port):
+    def _execute_tcp(self, query, format_, port):
         # Private method, we are sure that port is tcps or tcp and presents in config
         cmd = [
             "clickhouse-client",
