@@ -1,6 +1,7 @@
 """
 Module responsible for template rendering.
 """
+
 import json
 import os
 import shutil
@@ -9,7 +10,7 @@ from typing import Optional
 from jinja2 import BaseLoader, Environment, FileSystemLoader, StrictUndefined
 
 from . import docker
-from .clickhouse import ClickhouseClient
+from .clickhouse import clickhouse_client
 from .typing import ContextT
 from .utils import context_to_dict, env_stage
 
@@ -94,7 +95,7 @@ def _environment(context: ContextT, loader: Optional[BaseLoader] = None) -> Envi
         return docker.get_file_size(container, path)
 
     def _clickhouse_version(container_name):
-        return ClickhouseClient(context, container_name).get_version()
+        return clickhouse_client(context, container_name).get_version()
 
     environment = Environment(
         autoescape=False,

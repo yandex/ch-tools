@@ -51,13 +51,13 @@ class ClickhouseClient:
         self,
         *,
         host,
-        insecure,
-        user,
-        password,
-        ports,
-        cert_path,
+        insecure=False,
+        user=None,
+        password=None,
+        ports: Dict[str, str],
+        cert_path=None,
         timeout,
-        settings,
+        settings={},
     ):
         self.host = host
         self.insecure = insecure
@@ -86,14 +86,22 @@ class ClickhouseClient:
         return timedelta(seconds=seconds)
 
     def execute_http(
-        self, query, format_, port, post_data, timeout, stream, per_query_settings
+        self,
+        query,
+        format_,
+        post_data,
+        timeout,
+        stream,
+        per_query_settings,
+        port,
     ):
         schema = "https" if port == ClickhousePort.HTTPS else "http"
         url = f"{schema}://{self.host}:{self.ports[port]}"
-        headers = {
-            "X-ClickHouse-User": self.user,
-            "X-ClickHouse-Key": self.password,
-        }
+        headers = {}
+        if self.user:
+            headers["X-ClickHouse-User"] = self.user
+        if self.password:
+            headers["X-ClickHouse-Key"] = self.password
         verify = self.cert_path if port == ClickhousePort.HTTPS else None
         try:
             if query:
@@ -132,7 +140,7 @@ class ClickhouseClient:
         except requests.exceptions.HTTPError as e:
             raise ClickhouseError(query, e.response) from None
 
-    def execute_tcp(self, query, port):
+    def execute_tcp(self, query, format_, port):
         # Private method, we are sure that port is tcps or tcp and presents in config
         cmd = [
             "clickhouse-client",
@@ -160,8 +168,12 @@ class ClickhouseClient:
         if proc.returncode:
             raise RuntimeError('"{0}" failed with: {1}'.format(cmd, stderr.decode()))
 
-        resp = stdout.decode().strip()
-        return json.loads(resp)
+        response = stdout.decode().strip()
+
+        if format_ in ("JSON", "JSONCompact"):
+            return json.loads(response)
+
+        return response.strip()
 
     @retry(requests.exceptions.ConnectionError)
     def query(
@@ -197,20 +209,25 @@ class ClickhouseClient:
 
         per_query_settings = settings or {}
 
-        # check ports
         if port == ClickhousePort.AUTO:
             for port in ClickhousePort:
                 if self.check_port(port):
                     break
             if port == ClickhousePort.AUTO:
                 raise UserWarning(2, "Can't find any port in clickhouse-server config")
-        # execute http or tcp
+
         logging.debug("Executing query: %s", query)
         if port in [ClickhousePort.HTTPS, ClickhousePort.HTTP]:
             return self.execute_http(
-                query, format_, port, post_data, timeout, stream, per_query_settings
+                query,
+                format_,
+                post_data,
+                timeout,
+                stream,
+                per_query_settings,
+                port,
             )
-        return self.execute_tcp(query, port)
+        return self.execute_tcp(query, format_, port)
 
     def render_query(self, query, **kwargs):
         env = Environment()
@@ -234,7 +251,7 @@ class ClickhouseClient:
             return self.ports[port]
         return 0
 
-    def ping(self, port=ClickhousePort.HTTPS):
+    def ping(self, port=ClickhousePort.AUTO):
         return self.query(query=None, port=port)
 
 

@@ -1,9 +1,10 @@
 """
 Steps for interacting with ClickHouse DBMS.
 """
+
 from behave import given, then, when
 from hamcrest import assert_that, equal_to
-from modules.clickhouse import ClickhouseClient
+from modules.clickhouse import *
 from modules.docker import get_container
 from tenacity import retry, stop_after_attempt, wait_fixed
 
@@ -14,14 +15,13 @@ def step_wait_for_clickhouse_alive(context, node):
     """
     Wait until clickhouse is ready to accept incoming requests.
     """
-    ClickhouseClient(context, node).ping()
+    ping(context, node)
 
 
 @given("we have executed query on {node:w}")
 @when("we execute query on {node:w}")
 def step_clickhouse_query(context, node):
-    ch_client = ClickhouseClient(context, node)
-    context.ret_code, context.response = ch_client.get_response(context.text)
+    context.ret_code, context.response = get_response(context, node, context.text)
 
 
 @given("we have executed queries on {node:w}")
@@ -33,9 +33,8 @@ def step_clickhouse_queries(context, node):
         if string:
             queries.append(string)
 
-    ch_client = ClickhouseClient(context, node)
     for query in queries:
-        ch_client.execute(query)
+        execute_query(context, node, query)
 
 
 @given("we get response code {code:d}")
@@ -47,8 +46,7 @@ def step_clickhouse_response(context, code):
 @then("{node1:w} has the same schema as {node2:w}")
 def step_has_same_schema(context, node1, node2):
     def _get_schema(node):
-        ch_client = ClickhouseClient(context, node)
-        return ch_client.get_all_user_schemas()
+        return get_all_user_schemas(context, node)
 
     assert_that(_get_schema(node1), equal_to(_get_schema(node2)))
 
@@ -56,8 +54,7 @@ def step_has_same_schema(context, node1, node2):
 @then("{node1:w} has the same data as {node2:w}")
 def step_same_clickhouse_data(context, node1, node2):
     def _get_data(node):
-        ch_client = ClickhouseClient(context, node)
-        _, data = ch_client.get_all_user_data()
+        _, data = get_all_user_data(context, node)
         return data
 
     assert_that(_get_data(node1), equal_to(_get_data(node2)))
@@ -65,9 +62,8 @@ def step_same_clickhouse_data(context, node1, node2):
 
 @then("there are no unfinished dll queries on {node:w}")
 def step_check_unfinished_ddl(context, node):
-    ch_client = ClickhouseClient(context, node)
     query = "SELECT count(*) FROM system.distributed_ddl_queue WHERE status!='Finished'"
-    ret_code, response = ch_client.get_response(query)
+    ret_code, response = get_response(context, node, query)
     assert_that(response, equal_to("0"))
 
 
