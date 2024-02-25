@@ -3,22 +3,19 @@ ClickHouse client.
 """
 
 import logging
-import sys
 from typing import Any, Optional, Sequence, Tuple, Union
 from urllib.parse import urljoin
 
 from requests import HTTPError, Session
-
-from . import docker
-from .typing import ContextT
-
-sys.path.insert(0, "/home/kirillgarbar/repos/ch-tools")
 
 from ch_tools.common.clickhouse.client.clickhouse_client import (
     ClickhouseClient,
     ClickhousePort,
 )
 from ch_tools.common.clickhouse.client.error import ClickhouseError
+
+from . import docker
+from .typing import ContextT
 
 
 def clickhouse_client(context: ContextT, node_name: str):
