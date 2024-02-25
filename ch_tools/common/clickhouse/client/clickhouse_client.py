@@ -57,7 +57,7 @@ class ClickhouseClient:
         ports: Dict[str, str],
         cert_path=None,
         timeout,
-        settings={},
+        settings=None,
     ):
         self.host = host
         self.insecure = insecure
@@ -65,7 +65,7 @@ class ClickhouseClient:
         self.ports = ports
         self.cert_path = cert_path
         self.password = password
-        self._settings = settings
+        self._settings = settings or {}
         self._timeout = timeout
         self._ch_version = None
 
@@ -209,15 +209,17 @@ class ClickhouseClient:
 
         per_query_settings = settings or {}
 
-        if port == ClickhousePort.AUTO:
-            for port in ClickhousePort:
-                if self.check_port(port):
+        found_port = port
+        if found_port == ClickhousePort.AUTO:
+            for port_ in ClickhousePort:
+                if self.check_port(port_):
+                    found_port = port_
                     break
-            if port == ClickhousePort.AUTO:
+            if found_port == ClickhousePort.AUTO:
                 raise UserWarning(2, "Can't find any port in clickhouse-server config")
 
         logging.debug("Executing query: %s", query)
-        if port in [ClickhousePort.HTTPS, ClickhousePort.HTTP]:
+        if found_port in [ClickhousePort.HTTPS, ClickhousePort.HTTP]:
             return self._execute_http(
                 query,
                 format_,
@@ -225,9 +227,9 @@ class ClickhouseClient:
                 timeout,
                 stream,
                 per_query_settings,
-                port,
+                found_port,
             )
-        return self._execute_tcp(query, format_, port)
+        return self._execute_tcp(query, format_, found_port)
 
     def render_query(self, query, **kwargs):
         env = Environment()
