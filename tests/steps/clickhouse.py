@@ -4,7 +4,13 @@ Steps for interacting with ClickHouse DBMS.
 
 from behave import given, then, when
 from hamcrest import assert_that, equal_to
-from modules.clickhouse import ping, execute_query, get_all_user_data, get_all_user_schemas, get_response
+from modules.clickhouse import (
+    execute_query,
+    get_all_user_data,
+    get_all_user_schemas,
+    get_response,
+    ping,
+)
 from modules.docker import get_container
 from tenacity import retry, stop_after_attempt, wait_fixed
 
