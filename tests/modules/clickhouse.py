@@ -55,8 +55,6 @@ def get_response(context, node, query: str) -> Tuple[int, str]:
     except HTTPError as e:
         return e.response.status_code, e.response.text
     except ClickhouseError as e:
-        print(e.response)
-        print(e.query)
         return e.response.status_code, e.response.text
 
 
