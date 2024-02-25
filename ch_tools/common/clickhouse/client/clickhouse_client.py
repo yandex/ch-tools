@@ -218,7 +218,7 @@ class ClickhouseClient:
 
         logging.debug("Executing query: %s", query)
         if port in [ClickhousePort.HTTPS, ClickhousePort.HTTP]:
-            return self.execute_http(
+            return self._execute_http(
                 query,
                 format_,
                 post_data,
@@ -227,7 +227,7 @@ class ClickhouseClient:
                 per_query_settings,
                 port,
             )
-        return self.execute_tcp(query, format_, port)
+        return self._execute_tcp(query, format_, port)
 
     def render_query(self, query, **kwargs):
         env = Environment()
