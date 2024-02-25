@@ -48,16 +48,16 @@ class ClickhouseClient:
     """
 
     def __init__(
-        self,
+        self: Self,
         *,
-        host,
-        insecure=False,
-        user=None,
-        password=None,
-        ports: Dict[str, str],
-        cert_path=None,
-        timeout,
-        settings=None,
+        host: str,
+        insecure: bool = False,
+        user: Optional[str] = None,
+        password: Optional[str] = None,
+        ports: Dict[ClickhousePort, str],
+        cert_path: Optional[str] = None,
+        timeout: int,
+        settings: Optional[Dict[str, Any]] = None,
     ):
         self.host = host
         self.insecure = insecure
@@ -161,7 +161,7 @@ class ClickhouseClient:
 
         # pylint: disable=consider-using-with
         proc = subprocess.Popen(
-            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE  # type: ignore[arg-type]
         )
         stdout, stderr = proc.communicate(input=query.encode())
 
@@ -187,7 +187,7 @@ class ClickhouseClient:
         dry_run: bool = False,
         stream: bool = False,
         settings: Optional[dict] = None,
-        port=ClickhousePort.AUTO,
+        port: ClickhousePort = ClickhousePort.AUTO,
     ) -> Any:
         """
         Execute query.
@@ -296,7 +296,7 @@ def clickhouse_credentials(ctx):
 
 
 def get_ports():
-    ports: Dict[str, str] = {}
+    ports: Dict[ClickhousePort, str] = {}
     try:
         root = xml.parse("/var/lib/clickhouse/preprocessed_configs/config.xml")
         for setting in ClickhousePortHelper.list():

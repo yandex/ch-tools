@@ -95,7 +95,7 @@ def _environment(context: ContextT, loader: Optional[BaseLoader] = None) -> Envi
         return docker.get_file_size(container, path)
 
     def _clickhouse_version(container_name):
-        return clickhouse_client(context, container_name).get_version()
+        return clickhouse_client(context, container_name).get_clickhouse_version()
 
     environment = Environment(
         autoescape=False,

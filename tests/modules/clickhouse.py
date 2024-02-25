@@ -17,7 +17,7 @@ from . import docker
 from .typing import ContextT
 
 
-def clickhouse_client(context: ContextT, node_name: str):
+def clickhouse_client(context: ContextT, node_name: str) -> ClickhouseClient:
     protocol = "http"
     port = context.conf["services"]["clickhouse"]["expose"][protocol]
     host, port = docker.get_exposed_port(docker.get_container(context, node_name), port)
@@ -35,14 +35,14 @@ def clickhouse_client(context: ContextT, node_name: str):
     )
 
 
-def ping(context, node) -> None:
+def ping(context: ContextT, node: str) -> None:
     """
     Ping ClickHouse server.
     """
     return execute_query(context, node, query=None)
 
 
-def get_response(context, node, query: str) -> Tuple[int, str]:
+def get_response(context: ContextT, node: str, query: str) -> Tuple[int, str]:
     """
     Execute arbitrary query and return result
     """
@@ -54,20 +54,20 @@ def get_response(context, node, query: str) -> Tuple[int, str]:
         return e.response.status_code, e.response.text
 
 
-def get_version(context, node) -> str:
+def get_version(context: ContextT, node: str) -> str:
     """
     Get ClickHouse version.
     """
     return execute_query(context, node, "SELECT version()", format_="JSONCompact")
 
 
-def get_all_user_data(context, node) -> Tuple[int, dict]:
+def get_all_user_data(context: ContextT, node: str) -> Tuple[int, dict]:
     """
     Retrieve all user data.
     """
     user_data = {}
     rows_count = 0
-    for db_name, table_name, columns in context, _get_all_user_tables(context, node):
+    for db_name, table_name, columns in _get_all_user_tables(context, node):
         query = f"""
             SELECT *
             FROM `{db_name}`.`{table_name}`
@@ -79,7 +79,7 @@ def get_all_user_data(context, node) -> Tuple[int, dict]:
     return rows_count, user_data
 
 
-def get_all_user_schemas(context, node) -> dict:
+def get_all_user_schemas(context: ContextT, node: str) -> dict:
     """
     Retrieve DDL for user schemas.
     """
@@ -93,7 +93,7 @@ def get_all_user_schemas(context, node) -> dict:
     return all_tables_desc
 
 
-def get_all_user_databases(context, node) -> Sequence[str]:
+def get_all_user_databases(context: ContextT, node: str) -> Sequence[str]:
     """
     Get user databases.
     """
@@ -107,14 +107,14 @@ def get_all_user_databases(context, node) -> Sequence[str]:
     return [db[0] for db in databases]
 
 
-def drop_database(context, node, db_name: str) -> None:
+def drop_database(context: ContextT, node: str, db_name: str) -> None:
     """
     Drop database.
     """
     execute_query(context, node, f"DROP DATABASE {db_name}")
 
 
-def _get_all_user_tables(context, node) -> dict:
+def _get_all_user_tables(context: ContextT, node: str) -> dict:
     query = """
         SELECT
             database,
@@ -129,10 +129,10 @@ def _get_all_user_tables(context, node) -> dict:
 
 
 def execute_query(
-    context,
-    node,
+    context: ContextT,
+    node: str,
     query: Optional[str] = None,
-    format_=None,
+    format_: Optional[str] = None,
 ) -> Any:
 
     client = clickhouse_client(context, node)
