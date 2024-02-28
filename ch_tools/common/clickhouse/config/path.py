@@ -9,3 +9,5 @@ CLICKHOUSE_S3_CREDENTIALS_CONFIG_PATH = (
 )
 CLICKHOUSE_KEEPER_CONFIG_PATH = "/etc/clickhouse-keeper/config.xml"
 CLICKHOUSE_USERS_CONFIG_PATH = "/etc/clickhouse-server/users.xml"
+CLICKHOUSE_CERT_PATH_DEFAULT = "/etc/clickhouse-server/ssl/allCAs.pem"
+CLICKHOUSE_CERT_CONFIG_PATH = "./openSSL/server/caConfig"

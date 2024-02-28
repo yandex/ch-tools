@@ -1,8 +1,8 @@
 import click
 import yaml
 
+from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 from ch_tools.common.result import Result
-from ch_tools.monrun_checks.clickhouse_client import ClickhouseClient
 
 
 @click.command("system-queues")
@@ -45,7 +45,7 @@ def get_metrics(ctx):
         "SELECT database, table, future_parts, parts_to_check, queue_size,"
         " inserts_in_queue, merges_in_queue FROM system.replicas"
     )
-    return ClickhouseClient(ctx).execute(query, compact=False)
+    return clickhouse_client(ctx).query_json_data(query=query, compact=False)
 
 
 def check_metrics(metrics, config):

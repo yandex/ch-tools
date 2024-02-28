@@ -13,7 +13,7 @@ def user_warning(exc: UserWarning, status: Status) -> Status:
 def unknown_exception(exc: Exception, status: Status) -> Status:
     status.append(
         "Unknown error: {type}".format(
-            type=exc.__class__.__name__,
+            type=str(exc),
         )
     )
     status.set_code(1)

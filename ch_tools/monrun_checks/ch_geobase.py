@@ -3,8 +3,8 @@
 import click
 import requests
 
+from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 from ch_tools.common.result import Result
-from ch_tools.monrun_checks.clickhouse_client import ClickhouseClient
 
 
 @click.command("geobase")
@@ -13,10 +13,11 @@ def geobase_command(ctx):
     """
     Check that embedded geobase is configured.
     """
-    ch_client = ClickhouseClient(ctx)
 
     try:
-        response = ch_client.execute("SELECT regionToName(CAST(1 AS UInt32))")[0][0]
+        response = clickhouse_client(ctx).query_json_data(
+            query="SELECT regionToName(CAST(1 AS UInt32))"
+        )[0][0]
         expected = "Москва и Московская область"
         if response != expected:
             return Result(

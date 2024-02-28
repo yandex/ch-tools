@@ -7,8 +7,11 @@ from typing import List, Optional, Tuple
 import click
 from OpenSSL.crypto import FILETYPE_PEM, dump_certificate, load_certificate
 
+from ch_tools.common.clickhouse.client.clickhouse_client import (
+    ClickhousePort,
+    clickhouse_client,
+)
 from ch_tools.common.result import Result
-from ch_tools.monrun_checks.clickhouse_client import ClickhouseClient, ClickhousePort
 
 CERTIFICATE_PATH = "/etc/clickhouse-server/ssl/server.crt"
 
@@ -60,7 +63,7 @@ def tls_command(
 def get_ports(ctx: click.Context, ports: Optional[str]) -> List[str]:
     if ports:
         return ports.split(",")
-    client = ClickhouseClient(ctx)
+    client = clickhouse_client(ctx)
     return [
         client.get_port(ClickhousePort.HTTPS),
         client.get_port(ClickhousePort.TCP_SECURE),
