@@ -4,8 +4,8 @@ from urllib.parse import quote
 
 import click
 
+from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 from ch_tools.common.result import Result
-from ch_tools.monrun_checks.utils import execute_query
 
 
 @click.command("dist-tables")
@@ -24,8 +24,10 @@ def dist_tables_command(ctx, crit, warn):
     status = 0
     issues = []
 
+    ch_client = clickhouse_client(ctx)
+
     query = "SELECT database, name FROM system.tables WHERE engine = 'Distributed'"
-    distributed_tables = execute_query(ctx, query=query, compact=False)
+    distributed_tables = ch_client.query_json_data(query=query, compact=False)
     for table in distributed_tables:
         tss = get_chunk_timestamps(table)
         if tss["broken"]:

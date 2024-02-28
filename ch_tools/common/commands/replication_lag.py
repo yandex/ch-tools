@@ -188,7 +188,7 @@ def get_tables_with_replication_delay(ch_client):
     Get tables with absolute_delay > 0.
     """
     query = "SELECT database, table, zookeeper_path, absolute_delay FROM system.replicas WHERE absolute_delay > 0"
-    return ch_client.query(query=query, format_="JSON")["data"]
+    return ch_client.query_json_data(query=query, compact=False)
 
 
 def filter_out_single_replica_tables(ch_client, tables):
@@ -208,7 +208,7 @@ def filter_out_single_replica_tables(ch_client, tables):
             "('{0}', '{1}')".format(t["database"], t["table"]) for t in tables
         )
     )
-    return ch_client.query(query=query, format_="JSON")["data"]
+    return ch_client.query_json_data(query=query, compact=False)
 
 
 def count_errors(ch_client, tables, exceptions_limit):
@@ -239,7 +239,7 @@ def count_errors(ch_client, tables, exceptions_limit):
         ),
         limit=limit,
     )
-    return ch_client.query(query=query, format_="JSON")["data"]
+    return ch_client.query_json_data(query=query, compact=False)
 
 
 def is_userfault_exception(exception):
@@ -268,7 +268,7 @@ def get_max_replicated_merges_in_queue(ch_client):
     query = """
         SELECT value FROM system.merge_tree_settings WHERE name='max_replicated_merges_in_queue'
     """
-    res = ch_client.query(query=query, format_="JSONCompact")["data"]
+    res = ch_client.query_json_data(query=query)
     if not res:
         return (
             16  # 16 is default value for 'max_replicated_merges_in_queue' in ClickHouse

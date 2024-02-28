@@ -3,8 +3,8 @@
 import click
 import requests
 
+from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 from ch_tools.common.result import Result
-from ch_tools.monrun_checks.utils import execute_query
 
 
 @click.command("geobase")
@@ -15,9 +15,9 @@ def geobase_command(ctx):
     """
 
     try:
-        response = execute_query(ctx, query="SELECT regionToName(CAST(1 AS UInt32))")[
-            0
-        ][0]
+        response = clickhouse_client(ctx).query_json_data(
+            query="SELECT regionToName(CAST(1 AS UInt32))"
+        )[0][0]
         expected = "Москва и Московская область"
         if response != expected:
             return Result(

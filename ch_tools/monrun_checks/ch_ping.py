@@ -8,7 +8,6 @@ from ch_tools.common.clickhouse.client.clickhouse_client import (
     clickhouse_client,
 )
 from ch_tools.common.result import Result
-from ch_tools.monrun_checks.utils import execute_query_client
 
 
 @click.command("ping")
@@ -40,9 +39,9 @@ def ping_command(ctx, number, crit, warn):
     for _ in range(number):
         try:
             if (
-                execute_query_client(
-                    ch_client, query="SELECT 1", port=ClickhousePort.TCP
-                )[0][0]
+                ch_client.query_json_data(query="SELECT 1", port=ClickhousePort.TCP)[0][
+                    0
+                ]
                 != 1
             ):
                 fails[ClickhousePort.TCP] += 1
@@ -55,8 +54,8 @@ def ping_command(ctx, number, crit, warn):
         try:
             if ch_client.check_port(ClickhousePort.TCP_SECURE):
                 if (
-                    execute_query_client(
-                        ch_client, query="SELECT 1", port=ClickhousePort.TCP_SECURE
+                    ch_client.query_json_data(
+                        query="SELECT 1", port=ClickhousePort.TCP_SECURE
                     )[0][0]
                     != 1
                 ):
@@ -71,8 +70,8 @@ def ping_command(ctx, number, crit, warn):
             if ch_client.check_port(ClickhousePort.HTTP):
                 if (
                     ch_client.ping(ClickhousePort.HTTP) != "Ok."
-                    or execute_query_client(
-                        ch_client, query="SELECT 1", port=ClickhousePort.HTTP
+                    or ch_client.query_json_data(
+                        query="SELECT 1", port=ClickhousePort.HTTP
                     )[0][0]
                     != 1
                 ):
@@ -87,8 +86,8 @@ def ping_command(ctx, number, crit, warn):
             if ch_client.check_port(ClickhousePort.HTTPS):
                 if (
                     ch_client.ping(ClickhousePort.HTTPS) != "Ok."
-                    or execute_query_client(
-                        ch_client, query="SELECT 1", port=ClickhousePort.HTTPS
+                    or ch_client.query_json_data(
+                        query="SELECT 1", port=ClickhousePort.HTTPS
                     )[0][0]
                     != 1
                 ):

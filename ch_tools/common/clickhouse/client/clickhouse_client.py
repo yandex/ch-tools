@@ -10,6 +10,11 @@ import requests
 from jinja2 import Environment
 from typing_extensions import Self
 
+from ch_tools.common.clickhouse.config.path import (
+    CLICKHOUSE_CERT_CONFIG_PATH,
+    CLICKHOUSE_CERT_PATH_DEFAULT,
+    CLICKHOUSE_SERVER_PREPROCESSED_CONFIG_PATH,
+)
 from ch_tools.common.utils import version_ge
 
 from .error import ClickhouseError
@@ -34,8 +39,10 @@ class ClickhousePortHelper:
     }
 
     @classmethod
-    def get(cls, string):
-        return cls._map[string] if string in cls._map else ClickhousePort.AUTO
+    def get(
+        cls, port: str, default: ClickhousePort = ClickhousePort.AUTO
+    ) -> ClickhousePort:
+        return cls._map.get(port, default)
 
     @classmethod
     def list(cls):
@@ -231,6 +238,39 @@ class ClickhouseClient:
             )
         return self._execute_tcp(query, format_, found_port)
 
+    def query_json_data(
+        self: Self,
+        query: str,
+        query_args: Optional[Dict[str, Any]] = None,
+        compact: bool = True,
+        post_data: Any = None,
+        timeout: Optional[int] = None,
+        echo: bool = False,
+        dry_run: bool = False,
+        stream: bool = False,
+        settings: Optional[dict] = None,
+        port: ClickhousePort = ClickhousePort.AUTO,
+    ) -> Any:
+        """
+        Execute ClickHouse query formatted as JSON and return data.
+        """
+        format_ = "JSON"
+        if compact:
+            format_ = "JSONCompact"
+
+        return self.query(
+            query=query,
+            query_args=query_args,
+            post_data=post_data,
+            timeout=timeout,
+            format_=format_,
+            echo=echo,
+            dry_run=dry_run,
+            stream=stream,
+            settings=settings,
+            port=port,
+        )["data"]
+
     def render_query(self, query, **kwargs):
         env = Environment()
 
@@ -249,9 +289,7 @@ class ClickhouseClient:
         return port in self.ports
 
     def get_port(self, port):
-        if port in self.ports:
-            return self.ports[port]
-        return 0
+        return self.ports.get(port, 0)
 
     def ping(self, port=ClickhousePort.AUTO):
         return self.query(query=None, port=port)
@@ -298,15 +336,15 @@ def clickhouse_credentials(ctx):
 def get_ports():
     ports: Dict[ClickhousePort, str] = {}
     try:
-        root = xml.parse("/var/lib/clickhouse/preprocessed_configs/config.xml")
+        root = xml.parse(CLICKHOUSE_SERVER_PREPROCESSED_CONFIG_PATH)
         for setting in ClickhousePortHelper.list():
             node = root.find(setting)
             if node is not None:
                 ports[ClickhousePortHelper.get(setting)] = str(node.text)
         if not ports:
             raise UserWarning(2, "Can't find any port in clickhouse-server config")
-        node = root.find("./openSSL/server/caConfig")
-        cert_path = "/etc/clickhouse-server/ssl/allCAs.pem"
+        node = root.find(CLICKHOUSE_CERT_CONFIG_PATH)
+        cert_path = CLICKHOUSE_CERT_PATH_DEFAULT
         if node is not None:
             cert_path = str(node.text)
 
