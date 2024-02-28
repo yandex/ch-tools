@@ -27,6 +27,9 @@ DEFAULT_CONFIG = {
             "listing_table_database": "default",
         }
     },
+    "zookeeper": {
+        "randomize_hosts": True,
+    },
 }
 
 

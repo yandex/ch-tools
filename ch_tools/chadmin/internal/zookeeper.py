@@ -436,6 +436,9 @@ def _get_zk_client(ctx):
     no_chroot = args.get("no_chroot", False)
     no_ch_config = args.get("no_ch_config", False)
     zk_root_path = args.get("zk_root_path", None)
+    zk_randomize_hosts = (
+        ctx.obj["config"].get("zookeeper", {}).get("randomize_hosts", True)
+    )
 
     if no_ch_config:
         if not host:
@@ -468,4 +471,5 @@ def _get_zk_client(ctx):
         logger=logging.getLogger(),
         use_ssl=use_ssl,
         verify_certs=verify_ssl_certs,
+        randomize_hosts=zk_randomize_hosts,
     )
