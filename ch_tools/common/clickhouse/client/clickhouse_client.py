@@ -158,10 +158,12 @@ class ClickhouseClient:
         ]
         if self.user is not None:
             cmd.extend(("--user", self.user))
-        if self.password is not None:
-            cmd.extend(("--password", self.password))
         if port == ClickhousePort.TCP_SECURE:
             cmd.append("--secure")
+        masked_cmd = cmd.copy()
+        if self.password is not None:
+            cmd.extend(("--password", self.password))
+            masked_cmd.extend(("--password", "*****"))
 
         if not query:
             raise RuntimeError(1, "Can't send empty query in tcp(s) port")
@@ -173,7 +175,9 @@ class ClickhouseClient:
         stdout, stderr = proc.communicate(input=query.encode())
 
         if proc.returncode:
-            raise RuntimeError('"{0}" failed with: {1}'.format(cmd, stderr.decode()))
+            raise RuntimeError(
+                '"{0}" failed with: {1}'.format(masked_cmd, stderr.decode())
+            )
 
         response = stdout.decode().strip()
 
