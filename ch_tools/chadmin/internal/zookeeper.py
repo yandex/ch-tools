@@ -395,15 +395,19 @@ def clean_zk_metadata_for_hosts(ctx, nodes, zk_ddl_query_path):
 
         for ddl_task in _get_children(zk, _format_path(ctx, zk_ddl_query_path)):
             ddl_task_full = os.path.join(zk_ddl_query_path, ddl_task)
+            print(f"DDL task full path: {ddl_task_full}")
             for host in nodes:
                 host_mention = get_host_mention_in_task(zk, host, ddl_task_full)
                 if not host_mention:
+                    print("Host is not mentioned in DDL task value")
                     continue
                 finished_path = os.path.join(ddl_task_full, f"finished/{host_mention}")
                 if zk.exists(finished_path):
+                    print(f"Finished path already exists: {finished_path}")
                     continue
                 print(f"Add {host} to finished for ddl_task: {ddl_task}")
                 zk.create(finished_path, b"0\n")
+        print("Finish mark ddl query")
 
     zk_root_path = _format_path(ctx, "/")
     with zk_client(ctx) as zk:
