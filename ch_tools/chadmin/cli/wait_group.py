@@ -112,7 +112,7 @@ def wait_replication_sync_command(
 
     # Sync tables in cycle
     for t in tables:
-        full_name = f"{t['database']}.{t['name']}"
+        full_name = f"`{t['database']}`.`{t['name']}`"
         time_left = deadline - time.time()
         timeout = min(replica_timeout.total_seconds(), time_left)
 
