@@ -31,7 +31,7 @@ FAILED_PARTS_THRESHOLD = 10
     "failed_backup_count_crit_threshold",
     default=3,
     help="Critical threshold on the number of failed backups. If last backups failed and its count equals or greater "
-    "than the specified threshold, a crit will be reported.",
+    "than the specified threshold, a crit will be reported. Doesn't count backups that failed due to the user's fault",
 )
 @option(
     "--backup-age-warn",
@@ -112,23 +112,30 @@ def _check_last_backup_not_failed(backups: List[Dict], crit_threshold: int) -> R
     """
     Check that the last backup is not failed. Its status must be 'created' or 'creating'.
     """
-    counter = 0
+    counter, userfault_counter = 0, 0
     for i, backup in enumerate(backups):
         state = backup["state"]
 
         if state == "created":
             break
 
-        if state == "failed" or (state == "creating" and i > 0):
-            counter += 1
+        if (state == "failed") or (state == "creating" and i > 0):
+            if "fail_reason" not in backup or not _is_userfault_exception(
+                backup["fail_reason"]
+            ):
+                counter += 1
+            else:
+                userfault_counter += 1
 
-    if counter == 0:
+    total_count = counter + userfault_counter
+
+    if total_count == 0:
         return Result(OK)
 
-    if counter == 1:
+    if total_count == 1:
         message = "Last backup failed"
     else:
-        message = f"Last {counter} backups failed"
+        message = f"Last {total_count} backups failed"
 
     status = CRIT if crit_threshold and counter >= crit_threshold else WARNING
     return Result(status, message)
@@ -254,3 +261,15 @@ def _merge_results(*results: Result) -> Result:
             merged_result.verbose = result.verbose
 
     return merged_result
+
+
+def _is_userfault_exception(exception):
+    """
+    Check if exception was caused by user.
+    Current list:
+      * Disk quota exceeded
+    """
+    if not exception:
+        return False
+
+    return "Disk quota exceeded" in exception
