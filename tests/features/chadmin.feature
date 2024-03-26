@@ -45,3 +45,20 @@ Feature: chadmin commands.
     """
     chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4
     """
+  Scenario: Check warning old entry replication sync
+    When we create fake replication entry on clickhouse01
+    """
+    zk_table_root: /tables/table_01
+    replica_name: clickhouse01.ch_tools_test
+    id: '00000001'
+    create_time: 2021-07-28 18:53:14
+    """
+    And we execute command on clickhouse01
+    """
+    supervisorctl restart clickhouse-server
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4
+    """
+    
