@@ -85,10 +85,12 @@ def get_ports(ctx: click.Context, ports: Optional[str]) -> List[str]:
     if ports:
         return ports.split(",")
     client = clickhouse_client(ctx)
-    return [
-        client.get_port(ClickhousePort.HTTPS),
-        client.get_port(ClickhousePort.TCP_SECURE),
-    ]
+    result = []
+    if client.check_port(ClickhousePort.HTTPS):
+        result.append(client.get_port(ClickhousePort.HTTPS))
+    if client.check_port(ClickhousePort.TCP_SECURE):
+        result.append(client.get_port(ClickhousePort.TCP_SECURE))
+    return result
 
 
 @lru_cache(maxsize=None)
