@@ -4,6 +4,7 @@ Steps for interacting with ClickHouse DBMS.
 
 from behave import given, then, when
 from hamcrest import assert_that, equal_to
+from modules.chadmin import Chadmin
 from modules.clickhouse import (
     execute_query,
     get_all_user_data,
@@ -12,6 +13,7 @@ from modules.clickhouse import (
     ping,
 )
 from modules.docker import get_container
+from modules.steps import get_step_data
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 
@@ -86,3 +88,24 @@ def step_put_config(context, path, node):
         ["bash", "-c", "supervisorctl restart clickhouse-server"], user="root"
     )
     assert_that(result.exit_code, equal_to(0))
+
+
+@when("we create fake replication entry on {node:w}")
+def step_create_fake_replication_task(context, node):
+    container = get_container(context, node)
+    chadmin = Chadmin(container)
+    data = get_step_data(context)
+    zk_node = f'{data["zk_table_root"]}/replicas/{data["replica_name"]}/queue/queue-{data["id"]}'
+
+    content = (
+        "format version: 4",
+        f'create_time: {data["create_time"]}',
+        "source replica: ",
+        "block_id: ",
+        "get",
+        "98_0_0_0",
+    )
+    # Remove leading whitespaces
+    content = ("\n".join(content)) + "\n"  # type: ignore
+    print(content)
+    chadmin.create_zk_node(zk_node=zk_node, no_ch_config=False, content=content)
