@@ -120,8 +120,8 @@ def _check_last_backup_not_failed(backups: List[Dict], crit_threshold: int) -> R
             break
 
         if (state == "failed") or (state == "creating" and i > 0):
-            if "fail_reason" not in backup or not _is_userfault_exception(
-                backup["fail_reason"]
+            if "exception" not in backup or not _is_userfault_exception(
+                backup["exception"]
             ):
                 counter += 1
             else:

@@ -13,7 +13,7 @@ from ch_tools.monrun_checks.ch_backup import _check_last_backup_not_failed
         (({"state": "created"},), OK),
         (
             (
-                {"state": "failed", "fail_reason": None},
+                {"state": "failed", "exception": None},
                 {"state": "created"},
             ),
             WARNING,
@@ -44,7 +44,7 @@ from ch_tools.monrun_checks.ch_backup import _check_last_backup_not_failed
         ),
         (
             (
-                {"state": "failed", "fail_reason": "Disk quota exceeded"},
+                {"state": "failed", "exception": "Disk quota exceeded"},
                 {"state": "failed"},
                 {"state": "failed"},
                 {"state": "created"},
@@ -53,7 +53,7 @@ from ch_tools.monrun_checks.ch_backup import _check_last_backup_not_failed
         ),
         (
             (
-                {"state": "failed", "fail_reason": "God's will"},
+                {"state": "failed", "exception": "God's will"},
                 {"state": "failed"},
                 {"state": "failed"},
                 {"state": "created"},
@@ -62,7 +62,7 @@ from ch_tools.monrun_checks.ch_backup import _check_last_backup_not_failed
         ),
         (
             (
-                {"state": "failed", "fail_reason": None},
+                {"state": "failed", "exception": None},
                 {"state": "failed"},
                 {"state": "failed"},
                 {"state": "created"},
@@ -71,9 +71,9 @@ from ch_tools.monrun_checks.ch_backup import _check_last_backup_not_failed
         ),
         (
             (
-                {"state": "failed", "fail_reason": "Disk quota exceeded"},
-                {"state": "failed", "fail_reason": "Disk quota exceeded"},
-                {"state": "failed", "fail_reason": "Disk quota exceeded"},
+                {"state": "failed", "exception": "Disk quota exceeded"},
+                {"state": "failed", "exception": "Disk quota exceeded"},
+                {"state": "failed", "exception": "Disk quota exceeded"},
                 {"state": "created"},
             ),
             WARNING,
