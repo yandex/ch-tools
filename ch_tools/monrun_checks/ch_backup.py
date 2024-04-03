@@ -242,7 +242,7 @@ def _suppress_if_required(
         and counter - userfault_counter < failed_backup_count_crit_threshold
     ):
         result.code = WARNING
-        result.message += " (supressed due to user fault backup exceptions)"
+        result.message += " (suppressed due to user fault backup exceptions)"
 
 
 def _get_uptime(ctx: Context) -> timedelta:
