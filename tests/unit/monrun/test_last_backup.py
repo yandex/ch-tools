@@ -3,27 +3,26 @@ from typing import Dict, Sequence
 from hamcrest import assert_that, equal_to
 from pytest import mark
 
-from ch_tools.common.result import CRIT, OK, WARNING
-from ch_tools.monrun_checks.ch_backup import _check_last_backup_not_failed
+from ch_tools.monrun_checks.ch_backup import _count_failed_backups
 
 
 @mark.parametrize(
-    ["backups", "status_expected"],
+    ["backups", "userfault_expected"],
     [
-        (({"state": "created"},), OK),
+        (({"state": "created"},), 0),
         (
             (
                 {"state": "failed", "exception": None},
                 {"state": "created"},
             ),
-            WARNING,
+            0,
         ),
         (
             (
                 {"state": "failed"},
                 {"state": "created"},
             ),
-            WARNING,
+            0,
         ),
         (
             (
@@ -31,16 +30,7 @@ from ch_tools.monrun_checks.ch_backup import _check_last_backup_not_failed
                 {"state": "failed"},
                 {"state": "created"},
             ),
-            WARNING,
-        ),
-        (
-            (
-                {"state": "failed"},
-                {"state": "failed"},
-                {"state": "failed"},
-                {"state": "created"},
-            ),
-            CRIT,
+            0,
         ),
         (
             (
@@ -49,7 +39,7 @@ from ch_tools.monrun_checks.ch_backup import _check_last_backup_not_failed
                 {"state": "failed"},
                 {"state": "created"},
             ),
-            WARNING,
+            1,
         ),
         (
             (
@@ -58,7 +48,7 @@ from ch_tools.monrun_checks.ch_backup import _check_last_backup_not_failed
                 {"state": "failed"},
                 {"state": "created"},
             ),
-            CRIT,
+            0,
         ),
         (
             (
@@ -67,7 +57,7 @@ from ch_tools.monrun_checks.ch_backup import _check_last_backup_not_failed
                 {"state": "failed"},
                 {"state": "created"},
             ),
-            CRIT,
+            0,
         ),
         (
             (
@@ -76,13 +66,12 @@ from ch_tools.monrun_checks.ch_backup import _check_last_backup_not_failed
                 {"state": "failed", "exception": "Disk quota exceeded"},
                 {"state": "created"},
             ),
-            WARNING,
+            3,
         ),
     ],
 )
 def test_last_backup_not_failed(
-    backups: Sequence[Dict], status_expected: Sequence[int]
+    backups: Sequence[Dict], userfault_expected: Sequence[int]
 ) -> None:
-    assert_that(
-        _check_last_backup_not_failed(list(backups), 3).code, equal_to(status_expected)
-    )
+    _, userfault = _count_failed_backups(list(backups))
+    assert_that(userfault, equal_to(userfault_expected))

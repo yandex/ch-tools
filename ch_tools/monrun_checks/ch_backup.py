@@ -7,7 +7,7 @@ import logging
 import os.path
 from datetime import datetime, timedelta, timezone
 from os.path import exists
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from click import Context
 from cloup import command, option, pass_context
@@ -31,7 +31,7 @@ FAILED_PARTS_THRESHOLD = 10
     "failed_backup_count_crit_threshold",
     default=3,
     help="Critical threshold on the number of failed backups. If last backups failed and its count equals or greater "
-    "than the specified threshold, a crit will be reported. Doesn't count backups that failed due to the user's fault",
+    "than the specified threshold, a crit will be reported.",
 )
 @option(
     "--backup-age-warn",
@@ -92,7 +92,9 @@ def backup_command(
             _check_restored_data(),
         )
 
-    _suppress_if_required(ctx, result, min_uptime)
+    _suppress_if_required(
+        ctx, result, min_uptime, backups, failed_backup_count_crit_threshold
+    )
 
     return result
 
@@ -108,10 +110,7 @@ def _check_valid_backups_exist(backups: List[Dict]) -> Result:
     return Result(CRIT, "No valid backups found")
 
 
-def _check_last_backup_not_failed(backups: List[Dict], crit_threshold: int) -> Result:
-    """
-    Check that the last backup is not failed. Its status must be 'created' or 'creating'.
-    """
+def _count_failed_backups(backups: List[Dict]) -> Tuple[int, int]:
     counter, userfault_counter = 0, 0
     for i, backup in enumerate(backups):
         state = backup["state"]
@@ -120,22 +119,26 @@ def _check_last_backup_not_failed(backups: List[Dict], crit_threshold: int) -> R
             break
 
         if (state == "failed") or (state == "creating" and i > 0):
-            if "exception" not in backup or not _is_userfault_exception(
-                backup["exception"]
-            ):
-                counter += 1
-            else:
+            if "exception" in backup and _is_userfault_exception(backup["exception"]):
                 userfault_counter += 1
+            counter += 1
 
-    total_count = counter + userfault_counter
+    return counter, userfault_counter
 
-    if total_count == 0:
+
+def _check_last_backup_not_failed(backups: List[Dict], crit_threshold: int) -> Result:
+    """
+    Check that the last backup is not failed. Its status must be 'created' or 'creating'.
+    """
+    counter, _ = _count_failed_backups(backups)
+
+    if counter == 0:
         return Result(OK)
 
-    if total_count == 1:
+    if counter == 1:
         message = "Last backup failed"
     else:
-        message = f"Last {total_count} backups failed"
+        message = f"Last {counter} backups failed"
 
     status = CRIT if crit_threshold and counter >= crit_threshold else WARNING
     return Result(status, message)
@@ -215,7 +218,13 @@ def _check_restored_data() -> Result:
     return Result(OK)
 
 
-def _suppress_if_required(ctx: Context, result: Result, min_uptime: timedelta) -> None:
+def _suppress_if_required(
+    ctx: Context,
+    result: Result,
+    min_uptime: timedelta,
+    backups: List[Dict],
+    failed_backup_count_crit_threshold: int,
+) -> None:
     if result.code == OK:
         return
 
@@ -226,6 +235,14 @@ def _suppress_if_required(ctx: Context, result: Result, min_uptime: timedelta) -
     if _get_uptime(ctx) < min_uptime:
         result.code = WARNING
         result.message += " (suppressed by low ClickHouse uptime)"
+
+    counter, userfault_counter = _count_failed_backups(backups)
+    if (
+        userfault_counter > 0
+        and counter - userfault_counter < failed_backup_count_crit_threshold
+    ):
+        result.code = WARNING
+        result.message += " (supressed due to user fault backup exceptions)"
 
 
 def _get_uptime(ctx: Context) -> timedelta:
