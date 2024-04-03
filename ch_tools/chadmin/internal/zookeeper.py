@@ -9,7 +9,7 @@ from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError, NotEmptyError
 
 from ch_tools.chadmin.cli import get_clickhouse_config, get_macros
-from ch_tools.chadmin.internal.utils import chunked
+from ch_tools.chadmin.internal.utils import chunked, replace_macros
 
 
 def get_zk_node(ctx, path, binary=False):
@@ -100,7 +100,7 @@ def _format_path(ctx, path):
     no_ch_config = args.get("no_ch_config", False)
     if no_ch_config:
         return path
-    return path.format_map(get_macros(ctx))
+    return replace_macros(path, get_macros(ctx))
 
 
 def _set_node_value(zk, path, value):
