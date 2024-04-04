@@ -5,6 +5,7 @@ from collections import deque
 from contextlib import contextmanager
 from math import sqrt
 
+from click import BadParameter
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError, NotEmptyError
 
@@ -243,7 +244,16 @@ def escape_for_zookeeper(s: str) -> str:
     return "".join(result)
 
 
-def clean_zk_metadata_for_hosts(ctx, nodes, zk_ddl_query_path):
+# pylint: disable=too-many-statements
+def clean_zk_metadata_for_hosts(
+    ctx,
+    nodes,
+    zk_cleanup_root_path="/",
+    cleanup_tables=True,
+    cleanup_database=True,
+    cleanup_ddl_queue=True,
+    zk_ddl_query_path=None,
+):
     """
     Perform cleanup in zookeeper after deleting hosts in the cluster or whole cluster deleting.
     """
@@ -409,11 +419,22 @@ def clean_zk_metadata_for_hosts(ctx, nodes, zk_ddl_query_path):
                 zk.create(finished_path, b"0\n")
         print("Finish mark ddl query")
 
-    zk_root_path = _format_path(ctx, "/")
+    zk_root_path = _format_path(ctx, zk_cleanup_root_path)
+
     with zk_client(ctx) as zk:
-        tables_cleanup(zk, zk_root_path)
-        databases_cleanups(zk, zk_root_path)
-        mark_finished_ddl_query(zk)
+        if cleanup_tables:
+            tables_cleanup(zk, zk_root_path)
+
+        if cleanup_database:
+            databases_cleanups(zk, zk_root_path)
+
+        if cleanup_ddl_queue:
+            if not zk_ddl_query_path:
+                raise BadParameter(
+                    "Trying to clean ddl queue, but the ddl queue path is not specified."
+                )
+
+            mark_finished_ddl_query(zk)
 
 
 @contextmanager

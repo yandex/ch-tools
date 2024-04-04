@@ -9,21 +9,23 @@ Feature: chadmin zookeeper commands.
 
 
   Scenario: Cleanup all hosts
-    When we execute chadmin create zk nodes on zookeeper01
+    When we execute queries on clickhouse01
     """
-    /test/write_sli_part/shard1/replicas/host1.net
-    /test/write_sli_part/shard1/replicas/host2.net
-    /test/read_sli_part/shard1/replicas/host1.net
-    /test/read_sli_part/shard1/replicas/host2.net
-    /test/write_sli_part/shard1/log
-    """
-    And we do hosts cleanup on zookeeper01 with fqdn host1.net,host2.net and zk root /test
+    DROP DATABASE IF EXISTS test ON CLUSTER 'cluster'; 
+    CREATE DATABASE test ON CLUSTER 'cluster';
 
-    Then the list of children on zookeeper01 for zk node /test/write_sli_part are empty
-    And the list of children on zookeeper01 for zk node /test/read_sli_part are empty
+    CREATE TABLE test.table_01 ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n;
+
+    CREATE TABLE test.table_02 ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_02', '{replica}') PARTITION BY n ORDER BY n;
+    """
+
+    And we do hosts cleanup on clickhouse01 with fqdn clickhouse01.ch_tools_test,clickhouse02.ch_tools_test and zk root /tables
+    Then the list of children on clickhouse01 for zk node /tables/ are empty
 
   Scenario: Cleanup single host 
-    When we execute chadmin create zk nodes on zookeeper01
+    When we execute chadmin create zk nodes on clickhouse01
     """
     /test/write_sli_part/shard1/replicas/host1.net
     /test/write_sli_part/shard1/replicas/host2.net
@@ -31,14 +33,13 @@ Feature: chadmin zookeeper commands.
     /test/read_sli_part/shard1/replicas/host2.net
     /test/write_sli_part/shard1/log
     """
-    And we do hosts cleanup on zookeeper01 with fqdn host1.net and zk root /test
+    And we do hosts cleanup on clickhouse01 with fqdn host1.net and zk root /test
     
-
-    Then the list of children on zookeeper01 for zk node /test/write_sli_part/shard1/replicas/ are equal to
+    Then the list of children on clickhouse01 for zk node /test/write_sli_part/shard1/replicas/ are equal to
     """
     /test/write_sli_part/shard1/replicas/host2.net
     """
-    And the list of children on zookeeper01 for zk node  /test/read_sli_part/shard1/replicas/ are equal to
+    And the list of children on clickhouse01 for zk node  /test/read_sli_part/shard1/replicas/ are equal to
     """
     /test/read_sli_part/shard1/replicas/host2.net
     """
@@ -46,49 +47,49 @@ Feature: chadmin zookeeper commands.
 
   Scenario: Remove single host from Replicated database.
     # Imitate that we got nodes in zk from replicated database.
-    When we execute chadmin create zk nodes on zookeeper01
+    When we execute chadmin create zk nodes on clickhouse01
     """
     '/test/clickhouse/databases/test/shard1/replicas/shard1|host1.net'
     '/test/clickhouse/databases/test/shard1/replicas/shard1|host2.net'
     '/test/clickhouse/databases/test/shard1/counter'
     """
-    And we do hosts cleanup on zookeeper01 with fqdn host1.net and zk root /test
-    Then the list of children on zookeeper01 for zk node /test/clickhouse/databases/test/shard1/replicas/ are equal to
+    And we do hosts cleanup on clickhouse01 with fqdn host1.net and zk root /test
+    Then the list of children on clickhouse01 for zk node /test/clickhouse/databases/test/shard1/replicas/ are equal to
     """
     /test/clickhouse/databases/test/shard1/replicas/shard1|host2.net
     """
 
   Scenario: Remove all host from Replicated database.
     # Imitate that we got nodes in zk from replicated database.
-    When we execute chadmin create zk nodes on zookeeper01
+    When we execute chadmin create zk nodes on clickhouse01
     """
     '/test/clickhouse/databases/test/shard1/replicas/shard1|host1.net'
     '/test/clickhouse/databases/test/shard1/replicas/shard1|host2.net'
     '/test/clickhouse/databases/test/shard1/counter'
     """
-    And we do hosts cleanup on zookeeper01 with fqdn host1.net,host2.net and zk root /test
-    Then the list of children on zookeeper01 for zk node test/clickhouse/databases/test/ are empty
+    And we do hosts cleanup on clickhouse01 with fqdn host1.net,host2.net and zk root /test
+    Then the list of children on clickhouse01 for zk node test/clickhouse/databases/test/ are empty
 
   Scenario: Zookeeper recursive delete command
-    When we execute chadmin create zk nodes on zookeeper01
+    When we execute chadmin create zk nodes on clickhouse01
     """
       /test/a/b/c
       /test/a/b/d
       /test/a/f
     """
-    And we delete zookeepers nodes /test/a on zookeeper01
-    Then the list of children on zookeeper01 for zk node /test are empty
+    And we delete zookeepers nodes /test/a on clickhouse01
+    Then the list of children on clickhouse01 for zk node /test are empty
 
   Scenario: Zookeeper delete parent and child nodes
-    When we execute chadmin create zk nodes on zookeeper01
+    When we execute chadmin create zk nodes on clickhouse01
     """
       /test/a/b
       /test/c/d
     """
     # Make sure that it is okey to delete the node and its child.
-    And we delete zookeepers nodes /test/a,/test/a/b on zookeeper01
-    And we delete zookeepers nodes /test/c/d,/test/c on zookeeper01
-    Then the list of children on zookeeper01 for zk node /test are empty
+    And we delete zookeepers nodes /test/a,/test/a/b on clickhouse01
+    And we delete zookeepers nodes /test/c/d,/test/c on clickhouse01
+    Then the list of children on clickhouse01 for zk node /test are empty
 
 
   Scenario: Set finished to ddl with removed host.
@@ -127,3 +128,25 @@ Feature: chadmin zookeeper commands.
   
     And we do hosts cleanup on clickhouse02 with fqdn zone-host.db.asd.net
     Then there are no unfinished dll queries on clickhouse02
+
+
+  Scenario: Remove host from table in zookeeper
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS test ON CLUSTER 'cluster'; 
+    CREATE DATABASE test ON CLUSTER 'cluster';
+
+    CREATE TABLE test.table_01 ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n;
+    """
+
+    And we do table cleanup on clickhouse01 with fqdn clickhouse01.ch_tools_test from table with /tables/table_01 zookeeper path
+    
+    Then the list of children on clickhouse01 for zk node  /tables/table_01/replicas/ are equal to
+    """
+    /tables/table_01/replicas/clickhouse02.ch_tools_test
+    """
+
+    When we do table cleanup on clickhouse01 with fqdn clickhouse02.ch_tools_test from table with /tables/table_01 zookeeper path
+    Then the list of children on clickhouse01 for zk node /tables are empty
+ 
