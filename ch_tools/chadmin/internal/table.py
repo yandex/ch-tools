@@ -1,6 +1,10 @@
-from click import ClickException
+from typing import Dict, List
+
+from click import ClickException, Context
 
 from ch_tools.chadmin.internal.utils import execute_query
+
+CONVERT_TO_REPLICATED_FLAG = "convert_to_replicated"
 
 
 def get_table(ctx, database, table, active_parts=None):
@@ -41,6 +45,7 @@ def list_tables(
             parts,
             rows,
             metadata_mtime,
+            data_paths,
             {%- if verbose %}
             engine,
             create_table_query
@@ -53,6 +58,7 @@ def list_tables(
                 name "table",
                 metadata_modification_time "metadata_mtime",
                 engine,
+                data_paths,
                 create_table_query
              FROM system.tables
         ) tables
@@ -183,3 +189,36 @@ def materialize_ttl(ctx, database, table, echo=False, dry_run=False):
     """
     query = f"ALTER TABLE `{database}`.`{table}` MATERIALIZE TTL"
     execute_query(ctx, query, timeout=300, echo=echo, dry_run=dry_run, format_=None)
+
+
+def get_tables_to_convert(
+    ctx: Context, database: str, table: str, exclude_table: str
+) -> List[Dict]:
+    all_tables = get_tables_dict(ctx, database, table, exclude_table)
+    return list(
+        filter(
+            lambda table: not table["engine"].startswith("Replicated"),
+            all_tables,
+        )
+    )
+
+
+def get_tables_dict(
+    ctx: Context, database: str, table: str, exclude_table: str
+) -> List[Dict]:
+    tables = list_tables(
+        ctx,
+        database=database,
+        table=table,
+        exclude_table=exclude_table,
+        engine="%MergeTree%",
+    )
+    return [
+        {
+            "database": item["database"],
+            "table": item["table"],
+            "data_paths": item["data_paths"],
+            "engine": item["engine"],
+        }
+        for item in tables
+    ]
