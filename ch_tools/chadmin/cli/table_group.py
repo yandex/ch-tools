@@ -410,12 +410,12 @@ def set_flag_command(
     if database is None:
         return
 
-    tables_to_convert = (
+    tables = (
         get_tables_to_convert(ctx, database, table, exclude_table)
         if flag == CONVERT_TO_REPLICATED_FLAG
         else get_tables_dict(ctx, database, table, exclude_table)
     )
-    data_paths = [table["data_paths"][0] for table in tables_to_convert]
+    data_paths = [table["data_paths"][0] for table in tables]
     flag_paths = [os.path.join(data_path, flag) for data_path in data_paths]
 
     for flag_path in flag_paths:
@@ -423,5 +423,5 @@ def set_flag_command(
             pass
 
     if verbose:
-        for table_, flag_path in zip(tables_to_convert, flag_paths):
+        for table_, flag_path in zip(tables, flag_paths):
             print(f"{table_['table']}: {flag_path}")
