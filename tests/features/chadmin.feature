@@ -14,6 +14,7 @@ Feature: chadmin commands.
     ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n;
     """
 
+  @require_version_24.2
   Scenario Outline: Check set-flag with convert_to_replicated
     Given we have executed queries on clickhouse01
     """
