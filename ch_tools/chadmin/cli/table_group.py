@@ -3,6 +3,7 @@ import os
 from click import Choice, Context, argument, group, option, pass_context
 
 from ch_tools.chadmin.cli import get_cluster_name
+from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.table import (
     CONVERT_TO_REPLICATED_FLAG,
     attach_table,
@@ -408,6 +409,14 @@ def set_flag_command(
     Create a flag with the specified name inside the data directory of the table.
     """
     if database is None:
+        print("Database is not specified")
+        return
+    if flag == CONVERT_TO_REPLICATED_FLAG and not match_ch_version(
+        ctx, min_version="24.2"
+    ):
+        print(
+            "Converting MergeTree tables to replicated is supported since ClickHouse 24.2"
+        )
         return
 
     tables = (
