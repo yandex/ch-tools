@@ -30,7 +30,7 @@ Feature: chadmin commands.
     """
     When we execute command on clickhouse01
     """
-    chadmin table set-flag <databases> <tables> --flag=convert_to_replicated
+    chadmin table set-flag <options> --engine %MergeTree --exclude-engine Replicated% convert_to_replicated
     """
     And we execute command on clickhouse01
     """
@@ -46,14 +46,14 @@ Feature: chadmin commands.
     <result>
     """
     Examples:
-      | databases                  | tables                     | result                                                                                                                      |
-      | --database=test,test1      |                            | table_01\tReplicatedMergeTree\ntable_02\tReplicatedMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tReplicatedMergeTree  |
-      | --database=test,test1      | --table=table_02,table_03  | table_01\tReplicatedMergeTree\ntable_02\tReplicatedMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tMergeTree            |
-      | --database=test,test1      | --exclude-table=table_04   | table_01\tReplicatedMergeTree\ntable_02\tReplicatedMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tMergeTree            |
-      | --database=test,test1      | --table=table_03           | table_01\tReplicatedMergeTree\ntable_02\tMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tMergeTree                      |
-      | --database=test1           |                            | table_01\tReplicatedMergeTree\ntable_02\tMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tReplicatedMergeTree            |
-      | --database=test1           | --table=table_01           | table_01\tReplicatedMergeTree\ntable_02\tMergeTree\ntable_03\tMergeTree\ntable_04\tMergeTree                                |
-      |                            |                            | table_01\tReplicatedMergeTree\ntable_02\tMergeTree\ntable_03\tMergeTree\ntable_04\tMergeTree                                |
+      | options                                                 | result                                                                                                                      |
+      | --all --exclude-database=system                         | table_01\tReplicatedMergeTree\ntable_02\tReplicatedMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tReplicatedMergeTree  |
+      | --database=test,test1                                   | table_01\tReplicatedMergeTree\ntable_02\tReplicatedMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tReplicatedMergeTree  |
+      | --database=test,test1        --table=table_02,table_03  | table_01\tReplicatedMergeTree\ntable_02\tReplicatedMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tMergeTree            |
+      | --database=test,test1        --exclude-table=table_04   | table_01\tReplicatedMergeTree\ntable_02\tReplicatedMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tMergeTree            |
+      | --database=test,test1        --table=table_03           | table_01\tReplicatedMergeTree\ntable_02\tMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tMergeTree                      |
+      | --database=test1                                        | table_01\tReplicatedMergeTree\ntable_02\tMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tReplicatedMergeTree            |
+      | --database=test1             --table=table_01           | table_01\tReplicatedMergeTree\ntable_02\tMergeTree\ntable_03\tMergeTree\ntable_04\tMergeTree                                |
 
   Scenario: Check wait replication sync
     When we execute command on clickhouse01

@@ -1,10 +1,6 @@
-from typing import Dict, List
-
-from click import ClickException, Context
+from click import ClickException
 
 from ch_tools.chadmin.internal.utils import execute_query
-
-CONVERT_TO_REPLICATED_FLAG = "convert_to_replicated"
 
 
 def get_table(ctx, database, table, active_parts=None):
@@ -22,9 +18,11 @@ def list_tables(
     ctx,
     *,
     database=None,
+    exclude_database=None,
     table=None,
     exclude_table=None,
     engine=None,
+    exclude_engine=None,
     active_parts=None,
     verbose=None,
     order_by=None,
@@ -78,8 +76,11 @@ def list_tables(
         ) parts USING database, table
         {% if database -%}
         WHERE database {{ format_str_match(database) }}
-        {% else -%}
+        {% else %}
         WHERE database NOT IN ('system', 'INFORMATION_SCHEMA')
+        {% endif -%}
+        {% if exclude_database -%}
+          AND database NOT {{ format_str_match(exclude_database) }}
         {% endif -%}
         {% if table -%}
           AND table {{ format_str_match(table) }}
@@ -90,6 +91,9 @@ def list_tables(
         {% if engine -%}
           AND engine {{ format_str_match(engine) }}
         {% endif -%}
+        {% if exclude_engine -%}
+          AND engine NOT {{ format_str_match(exclude_engine) }}
+        {% endif -%}
         ORDER BY {{ order_by }}
         {% if limit is not none -%}
         LIMIT {{ limit }}
@@ -99,9 +103,11 @@ def list_tables(
         ctx,
         query,
         database=database,
+        exclude_database=exclude_database,
         table=table,
         exclude_table=exclude_table,
         engine=engine,
+        exclude_engine=exclude_engine,
         active_parts=active_parts,
         verbose=verbose,
         order_by=order_by,
@@ -189,36 +195,3 @@ def materialize_ttl(ctx, database, table, echo=False, dry_run=False):
     """
     query = f"ALTER TABLE `{database}`.`{table}` MATERIALIZE TTL"
     execute_query(ctx, query, timeout=300, echo=echo, dry_run=dry_run, format_=None)
-
-
-def get_tables_to_convert(
-    ctx: Context, database: str, table: str, exclude_table: str
-) -> List[Dict]:
-    all_tables = get_tables_dict(ctx, database, table, exclude_table)
-    return list(
-        filter(
-            lambda table: not table["engine"].startswith("Replicated"),
-            all_tables,
-        )
-    )
-
-
-def get_tables_dict(
-    ctx: Context, database: str, table: str, exclude_table: str
-) -> List[Dict]:
-    tables = list_tables(
-        ctx,
-        database=database,
-        table=table,
-        exclude_table=exclude_table,
-        engine="%MergeTree%",
-    )
-    return [
-        {
-            "database": item["database"],
-            "table": item["table"],
-            "data_paths": item["data_paths"],
-            "engine": item["engine"],
-        }
-        for item in tables
-    ]

@@ -3,15 +3,11 @@ import os
 from click import Choice, Context, argument, group, option, pass_context
 
 from ch_tools.chadmin.cli import get_cluster_name
-from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.table import (
-    CONVERT_TO_REPLICATED_FLAG,
     attach_table,
     delete_table,
     detach_table,
     get_table,
-    get_tables_dict,
-    get_tables_to_convert,
     list_tables,
     materialize_ttl,
 )
@@ -376,7 +372,12 @@ def materialize_ttl_command(ctx, dry_run, all_, database, table, exclude_table):
 @option(
     "--database",
     type=StringParamType(),
-    help="Filter tables to set the flag by the specified database name.",
+    help="Filter in tables to set the flag by the specified database name.",
+)
+@option(
+    "--exclude-database",
+    type=StringParamType(),
+    help="Filter out tables to set the flag by the specified database name.",
 )
 @option(
     "--table",
@@ -388,7 +389,22 @@ def materialize_ttl_command(ctx, dry_run, all_, database, table, exclude_table):
     type=StringParamType(),
     help="Filter out tables by the specified table name.",
 )
-@option("--flag", type=str, default="convert_to_replicated", help="Flag name.")
+@option(
+    "--engine", type=StringParamType(), help="Filter in tables by the specified engine."
+)
+@option(
+    "--exclude-engine",
+    type=StringParamType(),
+    help="Filter out tables by the specified engine.",
+)
+@argument("flag")
+@option(
+    "--all",
+    "all_",
+    type=bool,
+    is_flag=True,
+    help="Set the flag to all tables in all databases.",
+)
 @option(
     "-v",
     "--verbose",
@@ -400,29 +416,31 @@ def materialize_ttl_command(ctx, dry_run, all_, database, table, exclude_table):
 def set_flag_command(
     ctx: Context,
     database: str,
+    exclude_database: str,
     table: str,
     exclude_table: str,
+    engine: str,
+    exclude_engine: str,
     flag: str,
+    all_: bool,
     verbose: bool,
 ) -> None:
     """
     Create a flag with the specified name inside the data directory of the table.
     """
-    if database is None:
-        print("Database is not specified")
-        return
-    if flag == CONVERT_TO_REPLICATED_FLAG and not match_ch_version(
-        ctx, min_version="24.2"
-    ):
-        print(
-            "Converting MergeTree tables to replicated is supported since ClickHouse 24.2"
+    if not any((all_, database, table)):
+        ctx.fail(
+            "At least one of --all, --database, --table options must be specified."
         )
-        return
 
-    tables = (
-        get_tables_to_convert(ctx, database, table, exclude_table)
-        if flag == CONVERT_TO_REPLICATED_FLAG
-        else get_tables_dict(ctx, database, table, exclude_table)
+    tables = list_tables(
+        ctx,
+        database=database,
+        exclude_database=exclude_database,
+        table=table,
+        exclude_table=exclude_table,
+        engine=engine,
+        exclude_engine=exclude_engine,
     )
     data_paths = [table["data_paths"][0] for table in tables]
     flag_paths = [os.path.join(data_path, flag) for data_path in data_paths]
