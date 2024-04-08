@@ -305,6 +305,7 @@ def _insert_listing_batch(
         ctx,
         f"INSERT INTO {listing_table} (obj_path, obj_size) VALUES {batch_values}",
         format_=None,
+        use_s3_retries=True,
     )
 
 

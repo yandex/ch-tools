@@ -15,6 +15,7 @@ def execute_query(
     echo=False,
     dry_run=False,
     format_="default",
+    use_s3_retries=False,
     stream=False,
     settings=None,
     **kwargs
@@ -29,6 +30,7 @@ def execute_query(
         query=query,
         query_args=kwargs,
         timeout=timeout,
+        use_s3_retry_policy=use_s3_retries,
         format_=format_,
         echo=echo,
         dry_run=dry_run,

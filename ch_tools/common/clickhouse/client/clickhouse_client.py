@@ -1,6 +1,7 @@
 import json
 import logging
 import subprocess
+import time
 import xml.etree.ElementTree as xml
 from datetime import timedelta
 from enum import Enum
@@ -28,6 +29,14 @@ class ClickhousePort(Enum):
     TCP_SECURE = 2
     TCP = 1
     AUTO = 0  # Select any available port
+
+
+class ClickhouseErrorCodes(Enum):
+    S3_ERROR = 499
+    OK = 0
+
+
+S3_MAX_RETRY_COUNT = 10
 
 
 class ClickhousePortHelper:
@@ -145,7 +154,7 @@ class ClickhouseClient:
 
             return response.text.strip()
         except requests.exceptions.HTTPError as e:
-            raise ClickhouseError(query, e.response) from None
+            raise ClickhouseError(query, e.response.text) from None
 
     def _execute_tcp(self, query, format_, port):
         # Private method, we are sure that port is tcps or tcp and presents in config
@@ -175,9 +184,7 @@ class ClickhouseClient:
         stdout, stderr = proc.communicate(input=query.encode())
 
         if proc.returncode:
-            raise RuntimeError(
-                '"{0}" failed with: {1}'.format(masked_cmd, stderr.decode())
-            )
+            raise ClickhouseError(query, stderr.decode())
 
         response = stdout.decode().strip()
 
@@ -191,6 +198,7 @@ class ClickhouseClient:
         self: Self,
         query: str,
         query_args: Optional[Dict[str, Any]] = None,
+        use_s3_retry_policy: bool = False,
         format_: Optional[str] = None,
         post_data: Any = None,
         timeout: Optional[int] = None,
@@ -230,17 +238,36 @@ class ClickhouseClient:
                 raise UserWarning(2, "Can't find any port in clickhouse-server config")
 
         logging.debug("Executing query: %s", query)
-        if found_port in [ClickhousePort.HTTPS, ClickhousePort.HTTP]:
-            return self._execute_http(
-                query,
-                format_,
-                post_data,
-                timeout,
-                stream,
-                per_query_settings,
-                found_port,
-            )
-        return self._execute_tcp(query, format_, found_port)
+
+        for attempt_count in range(0, S3_MAX_RETRY_COUNT):
+            try:
+                if found_port in [ClickhousePort.HTTPS, ClickhousePort.HTTP]:
+                    return self._execute_http(
+                        query,
+                        format_,
+                        post_data,
+                        timeout,
+                        stream,
+                        per_query_settings,
+                        found_port,
+                    )
+
+                return self._execute_tcp(query, format_, found_port)
+            except ClickhouseError as e:
+                if (
+                    use_s3_retry_policy
+                    and e.code == ClickhouseErrorCodes.S3_ERROR.value
+                    and attempt_count + 1 < S3_MAX_RETRY_COUNT
+                ):
+                    time_to_sleep = min(2**attempt_count, 60)
+                    logging.info(
+                        "Query has failed (%s) will restart it after %d seconds",
+                        e.query,
+                        time_to_sleep,
+                    )
+                    time.sleep(time_to_sleep)
+                    continue
+                raise
 
     def query_json_data(
         self: Self,
