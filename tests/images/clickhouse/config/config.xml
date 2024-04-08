@@ -86,5 +86,6 @@
     <macros>
         <replica>{{ instance_name }}.{{ conf.network_name }}</replica>
         <cluster>cluster</cluster>
+        <shard>shard1</shard>
     </macros>
 </clickhouse>

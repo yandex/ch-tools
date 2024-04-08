@@ -1,4 +1,6 @@
-from click import Choice, argument, group, option, pass_context
+import os
+
+from click import Choice, Context, argument, group, option, pass_context
 
 from ch_tools.chadmin.cli import get_cluster_name
 from ch_tools.chadmin.internal.table import (
@@ -11,6 +13,7 @@ from ch_tools.chadmin.internal.table import (
 )
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common.cli.formatting import print_response
+from ch_tools.common.cli.parameters import StringParamType
 
 
 @group("table")
@@ -363,3 +366,89 @@ def materialize_ttl_command(ctx, dry_run, all_, database, table, exclude_table):
         materialize_ttl(
             ctx, database=t["database"], table=t["table"], echo=True, dry_run=dry_run
         )
+
+
+@table_group.command("set-flag")
+@option(
+    "--database",
+    type=StringParamType(),
+    help="Filter in tables to set the flag by the specified database name.",
+)
+@option(
+    "--exclude-database",
+    type=StringParamType(),
+    help="Filter out tables to set the flag by the specified database name.",
+)
+@option(
+    "--table",
+    type=StringParamType(),
+    help="Filter in tables by the specified table name.",
+)
+@option(
+    "--exclude-table",
+    type=StringParamType(),
+    help="Filter out tables by the specified table name.",
+)
+@option(
+    "--engine", type=StringParamType(), help="Filter in tables by the specified engine."
+)
+@option(
+    "--exclude-engine",
+    type=StringParamType(),
+    help="Filter out tables by the specified engine.",
+)
+@argument("flag")
+@option(
+    "--all",
+    "all_",
+    type=bool,
+    is_flag=True,
+    help="Set the flag to all tables in all databases.",
+)
+@option(
+    "-v",
+    "--verbose",
+    type=bool,
+    is_flag=True,
+    help="Show tables and flag paths.",
+)
+@pass_context
+def set_flag_command(
+    ctx: Context,
+    database: str,
+    exclude_database: str,
+    table: str,
+    exclude_table: str,
+    engine: str,
+    exclude_engine: str,
+    flag: str,
+    all_: bool,
+    verbose: bool,
+) -> None:
+    """
+    Create a flag with the specified name inside the data directory of the table.
+    """
+    if not any((all_, database, table)):
+        ctx.fail(
+            "At least one of --all, --database, --table options must be specified."
+        )
+
+    tables = list_tables(
+        ctx,
+        database=database,
+        exclude_database=exclude_database,
+        table=table,
+        exclude_table=exclude_table,
+        engine=engine,
+        exclude_engine=exclude_engine,
+    )
+    data_paths = [table["data_paths"][0] for table in tables]
+    flag_paths = [os.path.join(data_path, flag) for data_path in data_paths]
+
+    for flag_path in flag_paths:
+        with open(flag_path, "a", encoding="utf-8") as _:
+            pass
+
+    if verbose:
+        for table_, flag_path in zip(tables, flag_paths):
+            print(f"{table_['table']}: {flag_path}")
