@@ -1,6 +1,7 @@
 import os
 
-from click import Choice, Context, argument, group, option, pass_context
+from cloup import Choice, Context, argument, group, option, option_group, pass_context
+from cloup.constraints import RequireAtLeast
 
 from ch_tools.chadmin.cli import get_cluster_name
 from ch_tools.chadmin.internal.table import (
@@ -112,17 +113,31 @@ def columns_command(ctx, database, table):
 
 
 @table_group.command("delete")
-@pass_context
-@option(
-    "-d",
-    "--database",
-    help="Filter in tables to delete by the specified database name.",
+@option_group(
+    "Table selection options",
+    option(
+        "-a",
+        "--all",
+        "_all",
+        is_flag=True,
+        help="Filter in all tables.",
+    ),
+    option(
+        "-d",
+        "--database",
+        help="Filter in tables to delete by the specified database name.",
+    ),
+    option(
+        "-t",
+        "--table",
+        help="Filter in tables to delete by the specified table name.",
+    ),
+    option(
+        "--exclude-table",
+        help="Filter out tables to delete by the specified table name.",
+    ),
+    constraint=RequireAtLeast(1),
 )
-@option("-t", "--table", help="Filter in tables to delete by the specified table name.")
-@option(
-    "--exclude-table", help="Filter out tables to delete by the specified table name."
-)
-@option("-a", "--all", "all_", is_flag=True, help="Delete all tables.")
 @option(
     "--cluster",
     "--on-cluster",
@@ -143,21 +158,27 @@ def columns_command(ctx, database, table):
     default=False,
     help="Enable dry run mode and do not perform any modifying actions.",
 )
+@pass_context
 def delete_command(
-    ctx, all_, database, table, exclude_table, on_cluster, sync_mode, dry_run
+    ctx,
+    _all,
+    database,
+    table,
+    exclude_table,
+    on_cluster,
+    sync_mode,
+    dry_run,
 ):
     """
     Delete one or several tables.
     """
-    if not any((all_, database, table)):
-        ctx.fail(
-            "At least one of --all, --database, --table options must be specified."
-        )
-
     cluster = get_cluster_name(ctx) if on_cluster else None
 
     for t in list_tables(
-        ctx, database=database, table=table, exclude_table=exclude_table
+        ctx,
+        database=database,
+        table=table,
+        exclude_table=exclude_table,
     ):
         delete_table(
             ctx,
@@ -171,19 +192,31 @@ def delete_command(
 
 
 @table_group.command("recreate")
-@pass_context
-@option(
-    "-d",
-    "--database",
-    help="Filter in tables to recreate by the specified database name.",
+@option_group(
+    "Table selection options",
+    option(
+        "-a",
+        "--all",
+        "_all",
+        is_flag=True,
+        help="Filter in all tables.",
+    ),
+    option(
+        "-d",
+        "--database",
+        help="Filter in tables to recreate by the specified database name.",
+    ),
+    option(
+        "-t",
+        "--table",
+        help="Filter in tables to recreate by the specified table name.",
+    ),
+    option(
+        "--exclude-table",
+        help="Filter out tables to recreate by the specified table name.",
+    ),
+    constraint=RequireAtLeast(1),
 )
-@option(
-    "-t", "--table", help="Filter in tables to recreate by the specified table name."
-)
-@option(
-    "--exclude-table", help="Filter out tables to recreate by the specified table name."
-)
-@option("-a", "--all", "all_", is_flag=True, help="Recreate all tables.")
 @option(
     "-n",
     "--dry-run",
@@ -191,17 +224,17 @@ def delete_command(
     default=False,
     help="Enable dry run mode and do not perform any modifying actions.",
 )
-def recreate_command(ctx, dry_run, all_, database, table, exclude_table):
+@pass_context
+def recreate_command(ctx, database, table, exclude_table, dry_run):
     """
     Recreate one or several tables.
     """
-    if not any((all_, database, table)):
-        ctx.fail(
-            "At least one of --all, --database, --table options must be specified."
-        )
-
     for t in list_tables(
-        ctx, database=database, table=table, exclude_table=exclude_table, verbose=True
+        ctx,
+        database=database,
+        table=table,
+        exclude_table=exclude_table,
+        verbose=True,
     ):
         delete_table(
             ctx, database=t["database"], table=t["table"], echo=True, dry_run=dry_run
@@ -212,18 +245,26 @@ def recreate_command(ctx, dry_run, all_, database, table, exclude_table):
 
 
 @table_group.command("detach")
-@pass_context
-@option(
-    "-d",
-    "--database",
-    help="Filter in tables to detach by the specified database name.",
+@option_group(
+    "Table selection options",
+    option("-a", "--all", "_all", is_flag=True, help="Filter in all tables."),
+    option(
+        "-d",
+        "--database",
+        help="Filter in tables to detach by the specified database name.",
+    ),
+    option(
+        "-t",
+        "--table",
+        help="Filter in tables to detach by the specified table name.",
+    ),
+    option(
+        "--exclude-table",
+        help="Filter out tables to reattach by the specified table name.",
+    ),
+    option("--engine", help="Filter tables to detach by the specified engine."),
+    constraint=RequireAtLeast(1),
 )
-@option("-t", "--table", help="Filter in tables to detach by the specified table name.")
-@option(
-    "--exclude-table", help="Filter out tables to reattach by the specified table name."
-)
-@option("--engine", help="Filter tables to detach by the specified engine.")
-@option("-a", "--all", "all_", is_flag=True, help="Detach all tables.")
 @option(
     "--cluster",
     "--on-cluster",
@@ -238,21 +279,28 @@ def recreate_command(ctx, dry_run, all_, database, table, exclude_table):
     default=False,
     help="Enable dry run mode and do not perform any modifying actions.",
 )
+@pass_context
 def detach_command(
-    ctx, dry_run, all_, database, table, engine, exclude_table, on_cluster
+    ctx,
+    _all,
+    database,
+    table,
+    engine,
+    exclude_table,
+    on_cluster,
+    dry_run,
 ):
     """
     Detach one or several tables.
     """
-    if not any((all_, database, table)):
-        ctx.fail(
-            "At least one of --all, --database, --table options must be specified."
-        )
-
     cluster = get_cluster_name(ctx) if on_cluster else None
 
     for t in list_tables(
-        ctx, database=database, table=table, engine=engine, exclude_table=exclude_table
+        ctx,
+        database=database,
+        table=table,
+        engine=engine,
+        exclude_table=exclude_table,
     ):
         detach_table(
             ctx,
@@ -265,20 +313,32 @@ def detach_command(
 
 
 @table_group.command("reattach")
-@pass_context
-@option(
-    "-d",
-    "--database",
-    help="Filter in tables to reattach by the specified database name.",
+@option_group(
+    "Table selection options",
+    option(
+        "-a",
+        "--all",
+        "_all",
+        is_flag=True,
+        help="Filter in all tables.",
+    ),
+    option(
+        "-d",
+        "--database",
+        help="Filter in tables to reattach by the specified database name.",
+    ),
+    option(
+        "-t",
+        "--table",
+        help="Filter in tables to reattach by the specified table name.",
+    ),
+    option(
+        "--exclude-table",
+        help="Filter out tables to reattach by the specified table name.",
+    ),
+    option("--engine", help="Filter tables to reattach by the specified engine."),
+    constraint=RequireAtLeast(1),
 )
-@option(
-    "-t", "--table", help="Filter in tables to reattach by the specified table name."
-)
-@option(
-    "--exclude-table", help="Filter out tables to reattach by the specified table name."
-)
-@option("--engine", help="Filter tables to reattach by the specified engine.")
-@option("-a", "--all", "all_", is_flag=True, help="Reattach all tables.")
 @option(
     "--cluster",
     "--on-cluster",
@@ -293,21 +353,28 @@ def detach_command(
     default=False,
     help="Enable dry run mode and do not perform any modifying actions.",
 )
+@pass_context
 def reattach_command(
-    ctx, dry_run, all_, database, table, engine, exclude_table, on_cluster
+    ctx,
+    _all,
+    database,
+    table,
+    engine,
+    exclude_table,
+    on_cluster,
+    dry_run,
 ):
     """
     Reattach one or several tables.
     """
-    if not any((all_, database, table)):
-        ctx.fail(
-            "At least one of --all, --database, --table options must be specified."
-        )
-
     cluster = get_cluster_name(ctx) if on_cluster else None
 
     for t in list_tables(
-        ctx, database=database, table=table, engine=engine, exclude_table=exclude_table
+        ctx,
+        database=database,
+        table=table,
+        engine=engine,
+        exclude_table=exclude_table,
     ):
         detach_table(
             ctx,
@@ -328,22 +395,31 @@ def reattach_command(
 
 
 @table_group.command("materialize-ttl")
-@pass_context
-@option(
-    "-d",
-    "--database",
-    help="Filter in tables to materialize TTL by the specified database name.",
+@option_group(
+    "Table selection options",
+    option(
+        "-a",
+        "--all",
+        "_all",
+        is_flag=True,
+        help="Filter in all tables.",
+    ),
+    option(
+        "-d",
+        "--database",
+        help="Filter in tables to materialize TTL by the specified database name.",
+    ),
+    option(
+        "-t",
+        "--table",
+        help="Filter in tables to materialize TTL by the specified table name.",
+    ),
+    option(
+        "--exclude-table",
+        help="Filter out tables to materialize TTL by the specified table name.",
+    ),
+    constraint=RequireAtLeast(1),
 )
-@option(
-    "-t",
-    "--table",
-    help="Filter in tables to materialize TTL by the specified table name.",
-)
-@option(
-    "--exclude-table",
-    help="Filter out tables to materialize TTL by the specified table name.",
-)
-@option("-a", "--all", "all_", is_flag=True, help="Materialize TTL for all tables.")
 @option(
     "-n",
     "--dry-run",
@@ -351,17 +427,16 @@ def reattach_command(
     default=False,
     help="Enable dry run mode and do not perform any modifying actions.",
 )
-def materialize_ttl_command(ctx, dry_run, all_, database, table, exclude_table):
+@pass_context
+def materialize_ttl_command(ctx, _all, database, table, exclude_table, dry_run):
     """
     Materialize TTL for one or several tables.
     """
-    if not any((all_, database, table)):
-        ctx.fail(
-            "At least one of --all, --database, --table options must be specified."
-        )
-
     for t in list_tables(
-        ctx, database=database, table=table, exclude_table=exclude_table
+        ctx,
+        database=database,
+        table=table,
+        exclude_table=exclude_table,
     ):
         materialize_ttl(
             ctx, database=t["database"], table=t["table"], echo=True, dry_run=dry_run
@@ -369,41 +444,47 @@ def materialize_ttl_command(ctx, dry_run, all_, database, table, exclude_table):
 
 
 @table_group.command("set-flag")
-@option(
-    "--database",
-    type=StringParamType(),
-    help="Filter in tables to set the flag by the specified database name.",
-)
-@option(
-    "--exclude-database",
-    type=StringParamType(),
-    help="Filter out tables to set the flag by the specified database name.",
-)
-@option(
-    "--table",
-    type=StringParamType(),
-    help="Filter in tables by the specified table name.",
-)
-@option(
-    "--exclude-table",
-    type=StringParamType(),
-    help="Filter out tables by the specified table name.",
-)
-@option(
-    "--engine", type=StringParamType(), help="Filter in tables by the specified engine."
-)
-@option(
-    "--exclude-engine",
-    type=StringParamType(),
-    help="Filter out tables by the specified engine.",
-)
 @argument("flag")
-@option(
-    "--all",
-    "all_",
-    type=bool,
-    is_flag=True,
-    help="Set the flag to all tables in all databases.",
+@option_group(
+    "Table selection options",
+    option(
+        "-a",
+        "--all",
+        "_all",
+        is_flag=True,
+        help="Filter in all tables.",
+    ),
+    option(
+        "--database",
+        type=StringParamType(),
+        help="Filter in tables to set the flag by the specified database name.",
+    ),
+    option(
+        "--exclude-database",
+        type=StringParamType(),
+        help="Filter out tables to set the flag by the specified database name.",
+    ),
+    option(
+        "--table",
+        type=StringParamType(),
+        help="Filter in tables by the specified table name.",
+    ),
+    option(
+        "--exclude-table",
+        type=StringParamType(),
+        help="Filter out tables by the specified table name.",
+    ),
+    option(
+        "--engine",
+        type=StringParamType(),
+        help="Filter in tables by the specified engine.",
+    ),
+    option(
+        "--exclude-engine",
+        type=StringParamType(),
+        help="Filter out tables by the specified engine.",
+    ),
+    constraint=RequireAtLeast(1),
 )
 @option(
     "-v",
@@ -415,6 +496,7 @@ def materialize_ttl_command(ctx, dry_run, all_, database, table, exclude_table):
 @pass_context
 def set_flag_command(
     ctx: Context,
+    _all: bool,
     database: str,
     exclude_database: str,
     table: str,
@@ -422,17 +504,11 @@ def set_flag_command(
     engine: str,
     exclude_engine: str,
     flag: str,
-    all_: bool,
     verbose: bool,
 ) -> None:
     """
     Create a flag with the specified name inside the data directory of the table.
     """
-    if not any((all_, database, table)):
-        ctx.fail(
-            "At least one of --all, --database, --table options must be specified."
-        )
-
     tables = list_tables(
         ctx,
         database=database,

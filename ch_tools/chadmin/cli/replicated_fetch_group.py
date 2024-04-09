@@ -24,7 +24,7 @@ def replicated_fetch_group():
     pass
 
 
-@replicated_fetch_group.command(name="list")
+@replicated_fetch_group.command("list")
 @option(
     "-d", "--database", help="Filter in merges to output by the specified database."
 )
