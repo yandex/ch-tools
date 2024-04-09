@@ -12,7 +12,7 @@ def mutation_group():
     pass
 
 
-@mutation_group.command(name="get")
+@mutation_group.command("get")
 @argument("mutation", required=False)
 @option("--last", is_flag=True)
 @pass_context
@@ -34,7 +34,7 @@ def get_mutation(ctx, mutation, last):
     print(execute_query(ctx, query, mutation=mutation, format_="Vertical"))
 
 
-@mutation_group.command(name="list")
+@mutation_group.command("list")
 @option(
     "--completed/--incompleted",
     "is_done",
@@ -105,7 +105,7 @@ def list_mutations(ctx, is_done, command_pattern, on_cluster, limit):
     print(response)
 
 
-@mutation_group.command(name="kill")
+@mutation_group.command("kill")
 @option(
     "--command", "command_pattern", help="Filter mutations to kill by command pattern."
 )

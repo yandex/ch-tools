@@ -90,7 +90,7 @@ def zookeeper_group(
     }
 
 
-@zookeeper_group.command(name="get")
+@zookeeper_group.command("get")
 @argument("path")
 @option("-b", "--binary", is_flag=True)
 @pass_context
@@ -102,7 +102,7 @@ def get_command(ctx, path, binary):
     print(get_zk_node(ctx, path, binary=binary))
 
 
-@zookeeper_group.command(name="exists")
+@zookeeper_group.command("exists")
 @argument("path")
 @pass_context
 def exists_command(ctx, path):
@@ -117,7 +117,7 @@ def exists_command(ctx, path):
     sys.exit(1)
 
 
-@zookeeper_group.command(name="get-acl")
+@zookeeper_group.command("get-acl")
 @argument("path")
 @pass_context
 def get_acl_command(ctx, path):
@@ -128,7 +128,7 @@ def get_acl_command(ctx, path):
     print_json(ctx, get_zk_node_acls(ctx, path)[0])
 
 
-@zookeeper_group.command(name="list")
+@zookeeper_group.command("list")
 @argument("path")
 @option("-v", "--verbose", is_flag=True, help="Verbose mode.")
 @pass_context
@@ -144,7 +144,7 @@ def list_command(ctx, path, verbose):
         print("\n".join(nodes))
 
 
-@zookeeper_group.command(name="stat")
+@zookeeper_group.command("stat")
 @argument("path")
 @pass_context
 def stat_command(ctx, path):
@@ -155,7 +155,7 @@ def stat_command(ctx, path):
     print(get_zk_node_acls(ctx, path)[1])
 
 
-@zookeeper_group.command(name="create")
+@zookeeper_group.command("create")
 @argument("paths", type=ListParamType())
 @argument("value", type=StringParamType(), required=False)
 @option(
@@ -174,7 +174,7 @@ def create_command(ctx, paths, value, make_parents):
     create_zk_nodes(ctx, paths, value, make_parents=make_parents)
 
 
-@zookeeper_group.command(name="update")
+@zookeeper_group.command("update")
 @argument("paths", type=ListParamType())
 @argument("value", type=StringParamType())
 @pass_context
@@ -187,7 +187,7 @@ def update_command(ctx, paths, value):
     update_zk_nodes(ctx, paths, value)
 
 
-@zookeeper_group.command(name="delete")
+@zookeeper_group.command("delete")
 @argument("paths", type=ListParamType())
 @pass_context
 def delete_command(ctx, paths):
@@ -199,7 +199,7 @@ def delete_command(ctx, paths):
     delete_zk_nodes(ctx, paths)
 
 
-@zookeeper_group.command(name="get-table-metadata")
+@zookeeper_group.command("get-table-metadata")
 @argument("database")
 @argument("table")
 @pass_context
@@ -210,7 +210,7 @@ def get_table_metadata_command(ctx, database, table):
     print(get_zk_node(ctx, path))
 
 
-@zookeeper_group.command(name="update-table-metadata")
+@zookeeper_group.command("update-table-metadata")
 @argument("database")
 @argument("table")
 @argument("value", type=StringParamType())
@@ -226,7 +226,7 @@ def update_table_metadata_command(ctx, database, table, value):
     update_zk_nodes(ctx, metadata_paths, value)
 
 
-@zookeeper_group.command(name="update-acl")
+@zookeeper_group.command("update-acl")
 @argument("path")
 @argument("acls", type=ListParamType())
 @pass_context
@@ -266,7 +266,7 @@ def update_acls_command(ctx, path, acls):
     update_acls_zk_node(ctx, path, parsed_acls)
 
 
-@zookeeper_group.command(name="get-table-replica-metadata")
+@zookeeper_group.command("get-table-replica-metadata")
 @argument("database")
 @argument("table")
 @pass_context
@@ -277,7 +277,7 @@ def get_table_replica_metadata_command(ctx, database, table):
     print(get_zk_node(ctx, path))
 
 
-@zookeeper_group.command(name="get-ddl-task")
+@zookeeper_group.command("get-ddl-task")
 @argument("task")
 @pass_context
 def get_ddl_task_command(ctx, task):
@@ -286,7 +286,7 @@ def get_ddl_task_command(ctx, task):
     print(get_zk_node(ctx, path))
 
 
-@zookeeper_group.command(name="delete-ddl-task")
+@zookeeper_group.command("delete-ddl-task")
 @argument("tasks", type=ListParamType())
 @pass_context
 def delete_ddl_task_command(ctx, tasks):

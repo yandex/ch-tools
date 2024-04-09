@@ -1,6 +1,7 @@
 from collections import OrderedDict
 
-from click import Choice, group, option, pass_context
+from cloup import Choice, group, option, option_group, pass_context
+from cloup.constraints import RequireAtLeast
 
 from ch_tools.chadmin.internal.part import (
     attach_part,
@@ -28,7 +29,7 @@ def part_group():
     pass
 
 
-@part_group.command(name="list")
+@part_group.command("list")
 @option(
     "-d", "--database", help="Filter in data parts to output by the specified database."
 )
@@ -131,28 +132,49 @@ def list_parts_command(
     )
 
 
-@part_group.command(name="attach")
-@option(
-    "-d", "--database", help="Filter in data parts to attach by the specified database."
+@part_group.command("attach")
+@option_group(
+    "Part selection options",
+    option(
+        "-a",
+        "--all",
+        "_all",
+        is_flag=True,
+        help="Filter in all data parts.",
+    ),
+    option(
+        "-d",
+        "--database",
+        help="Filter in data parts to attach by the specified database.",
+    ),
+    option(
+        "-t", "--table", help="Filter in data parts to attach by the specified table."
+    ),
+    option(
+        "--id",
+        "--partition",
+        "partition_id",
+        help="Filter in data parts to attach by the specified partition.",
+    ),
+    option(
+        "--name",
+        "--part",
+        "part_name",
+        help="Filter in data parts to attach by the specified data part name.",
+    ),
+    option(
+        "--disk",
+        "disk_name",
+        help="Filter in data parts to attach by the specified disk.",
+    ),
+    option(
+        "-l",
+        "--limit",
+        type=int,
+        help="Limit the max number of data parts to attach.",
+    ),
+    constraint=RequireAtLeast(1),
 )
-@option("-t", "--table", help="Filter in data parts to attach by the specified table.")
-@option(
-    "--id",
-    "--partition",
-    "partition_id",
-    help="Filter in data parts to attach by the specified partition.",
-)
-@option(
-    "--name",
-    "--part",
-    "part_name",
-    help="Filter in data parts to attach by the specified data part name.",
-)
-@option(
-    "--disk", "disk_name", help="Filter in data parts to attach by the specified disk."
-)
-@option("-a", "--all", "all_", is_flag=True, help="Attach all data parts.")
-@option("-l", "--limit", type=int, help="Limit the max number of data parts to attach.")
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @option(
     "-n",
@@ -162,39 +184,17 @@ def list_parts_command(
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 @pass_context
-def attach_parts_command(
-    ctx,
-    all_,
-    database,
-    table,
-    partition_id,
-    part_name,
-    disk_name,
-    limit,
-    keep_going,
-    dry_run,
-):
+def attach_parts_command(ctx, _all, keep_going, dry_run, **kwargs):
     """Attach one or several parts."""
-    if not any((all_, database, table, partition_id, part_name, disk_name, limit)):
-        ctx.fail(
-            "At least one of --all, --disk, --database, --table, --partition, --part, --limit"
-            " options must be specified."
-        )
-
-    parts = list_detached_parts(
-        ctx,
-        database=database,
-        table=table,
-        partition_id=partition_id,
-        part_name=part_name,
-        disk_name=disk_name,
-        reason="",
-        limit=limit,
-    )
+    parts = list_detached_parts(ctx, reason="", **kwargs)
     for part in parts:
         try:
             attach_part(
-                ctx, part["database"], part["table"], part["name"], dry_run=dry_run
+                ctx,
+                part["database"],
+                part["table"],
+                part["name"],
+                dry_run=dry_run,
             )
         except Exception as e:
             if keep_going:
@@ -203,28 +203,51 @@ def attach_parts_command(
                 raise
 
 
-@part_group.command(name="detach")
-@option(
-    "-d", "--database", help="Filter in data parts to detach by the specified database."
+@part_group.command("detach")
+@option_group(
+    "Part selection options",
+    option(
+        "-a",
+        "--all",
+        "_all",
+        is_flag=True,
+        help="Filter in all data parts.",
+    ),
+    option(
+        "-d",
+        "--database",
+        help="Filter in data parts to detach by the specified database.",
+    ),
+    option(
+        "-t",
+        "--table",
+        help="Filter in data parts to detach by the specified table.",
+    ),
+    option(
+        "--id",
+        "--partition",
+        "partition_id",
+        help="Filter in data parts to detach by the specified partition.",
+    ),
+    option(
+        "--name",
+        "--part",
+        "part_name",
+        help="Filter in data parts to detach by the specified data part name.",
+    ),
+    option(
+        "--disk",
+        "disk_name",
+        help="Filter in data parts to detach by the specified disk.",
+    ),
+    option(
+        "-l",
+        "--limit",
+        type=int,
+        help="Limit the max number of data parts to detach.",
+    ),
+    constraint=RequireAtLeast(1),
 )
-@option("-t", "--table", help="Filter in data parts to detach by the specified table.")
-@option(
-    "--id",
-    "--partition",
-    "partition_id",
-    help="Filter in data parts to detach by the specified partition.",
-)
-@option(
-    "--name",
-    "--part",
-    "part_name",
-    help="Filter in data parts to detach by the specified data part name.",
-)
-@option(
-    "--disk", "disk_name", help="Filter in data parts to detach by the specified disk."
-)
-@option("-a", "--all", "all_", is_flag=True, help="Detach all data parts.")
-@option("-l", "--limit", type=int, help="Limit the max number of data parts to detach.")
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @option(
     "-n",
@@ -234,38 +257,17 @@ def attach_parts_command(
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 @pass_context
-def detach_parts_command(
-    ctx,
-    all_,
-    database,
-    table,
-    partition_id,
-    part_name,
-    disk_name,
-    limit,
-    keep_going,
-    dry_run,
-):
+def detach_parts_command(ctx, _all, keep_going, dry_run, **kwargs):
     """Detach one or several parts."""
-    if not any((all_, database, table, partition_id, part_name, disk_name, limit)):
-        ctx.fail(
-            "At least one of --all, --disk, --database, --table, --partition, --part, --limit"
-            " options must be specified."
-        )
-
-    parts = list_parts(
-        ctx,
-        database=database,
-        table=table,
-        partition_id=partition_id,
-        part_name=part_name,
-        disk_name=disk_name,
-        limit=limit,
-    )
+    parts = list_parts(ctx, **kwargs)
     for part in parts:
         try:
             detach_part(
-                ctx, part["database"], part["table"], part["name"], dry_run=dry_run
+                ctx,
+                part["database"],
+                part["table"],
+                part["name"],
+                dry_run=dry_run,
             )
         except Exception as e:
             if keep_going:
@@ -274,39 +276,63 @@ def detach_parts_command(
                 raise
 
 
-@part_group.command(name="delete")
-@option(
-    "-d", "--database", help="Filter in data parts to delete by the specified database."
-)
-@option("-t", "--table", help="Filter in data parts to delete by the specified table.")
-@option(
-    "--id",
-    "--partition",
-    "partition_id",
-    help="Filter in data parts to delete by the specified partition.",
-)
-@option("--min-partition", "min_partition_id")
-@option("--max-partition", "max_partition_id")
-@option(
-    "--name",
-    "--part",
-    "part_name",
-    help="Filter in data parts to delete by the specified data part name.",
-)
-@option(
-    "--disk", "disk_name", help="Filter in data parts to delete by the specified disk."
-)
-@option("--level", type=int)
-@option("--min-level", type=int)
-@option("--max-level", type=int)
-@option("--min-size", type=BytesParamType())
-@option("--max-size", type=BytesParamType())
+@part_group.command("delete")
 @option("--detached", is_flag=True)
-@option(
-    "--reason", help="Filter in data parts to delete by the specified detach reason."
+@option_group(
+    "Part selection options",
+    option(
+        "-a",
+        "--all",
+        "_all",
+        is_flag=True,
+        help="Filter in all data parts.",
+    ),
+    option(
+        "-d",
+        "--database",
+        help="Filter in data parts to delete by the specified database.",
+    ),
+    option(
+        "-t",
+        "--table",
+        help="Filter in data parts to delete by the specified table.",
+    ),
+    option(
+        "--id",
+        "--partition",
+        "partition_id",
+        help="Filter in data parts to delete by the specified partition.",
+    ),
+    option("--min-partition", "min_partition_id"),
+    option("--max-partition", "max_partition_id"),
+    option(
+        "--name",
+        "--part",
+        "part_name",
+        help="Filter in data parts to delete by the specified data part name.",
+    ),
+    option(
+        "--disk",
+        "disk_name",
+        help="Filter in data parts to delete by the specified disk.",
+    ),
+    option("--level", type=int),
+    option("--min-level", type=int),
+    option("--max-level", type=int),
+    option("--min-size", type=BytesParamType()),
+    option("--max-size", type=BytesParamType()),
+    option(
+        "--reason",
+        help="Filter in data parts to delete by the specified detach reason.",
+    ),
+    option(
+        "-l",
+        "--limit",
+        type=int,
+        help="Limit the max number of data parts to delete.",
+    ),
+    constraint=RequireAtLeast(1),
 )
-@option("-a", "--all", "all_", is_flag=True, help="Attach all data parts.")
-@option("-l", "--limit", type=int, help="Limit the max number of data parts to delete.")
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @option(
     "-n",
@@ -318,35 +344,20 @@ def detach_parts_command(
 @pass_context
 def delete_parts_command(
     ctx,
-    database,
-    table,
-    partition_id,
-    part_name,
+    _all,
+    detached,
     min_size,
     max_size,
-    detached,
     reason,
-    all_,
-    limit,
     keep_going,
     dry_run,
     **kwargs,
 ):
     """Delete one or several data parts."""
-    if not any((all_, database, table, partition_id, part_name, reason is not None)):
-        ctx.fail(
-            "At least one of --all, --database, --table, --partition, --part, --reason options must be specified."
-        )
-
     if detached:
         parts = list_detached_parts(
             ctx,
-            database=database,
-            table=table,
-            partition_id=partition_id,
-            part_name=part_name,
             reason=reason,
-            limit=limit,
             **kwargs,
         )
     else:
@@ -355,13 +366,8 @@ def delete_parts_command(
 
         parts = list_parts(
             ctx,
-            database=database,
-            table=table,
-            partition_id=partition_id,
-            part_name=part_name,
             min_size=min_size,
             max_size=max_size,
-            limit=limit,
             **kwargs,
         )
     for part in parts:
@@ -381,32 +387,49 @@ def delete_parts_command(
                 raise
 
 
-@part_group.command(name="move")
-@option(
-    "-d", "--database", help="Filter in data parts to move by the specified database."
-)
-@option("-t", "--table", help="Filter in data parts to move by the specified table.")
-@option(
-    "--id",
-    "--partition",
-    "partition_id",
-    help="Filter in data parts to move by the specified partition.",
-)
-@option("--min-partition", "min_partition_id")
-@option("--max-partition", "max_partition_id")
-@option(
-    "--name",
-    "--part",
-    "part_name",
-    help="Filter in data parts to move by the specified data part name.",
-)
-@option(
-    "--disk", "disk_name", help="Filter in data parts to move by the specified disk."
+@part_group.command("move")
+@option_group(
+    "Part selection options",
+    option(
+        "-d",
+        "--database",
+        help="Filter in data parts to move by the specified database.",
+    ),
+    option(
+        "-t",
+        "--table",
+        help="Filter in data parts to move by the specified table.",
+    ),
+    option(
+        "--id",
+        "--partition",
+        "partition_id",
+        help="Filter in data parts to move by the specified partition.",
+    ),
+    option("--min-partition", "min_partition_id"),
+    option("--max-partition", "max_partition_id"),
+    option(
+        "--name",
+        "--part",
+        "part_name",
+        help="Filter in data parts to move by the specified data part name.",
+    ),
+    option(
+        "--disk",
+        "disk_name",
+        help="Filter in data parts to move by the specified disk.",
+    ),
+    option("--min-size", type=BytesParamType()),
+    option("--max-size", type=BytesParamType()),
+    option(
+        "-l",
+        "--limit",
+        type=int,
+        help="Limit the max number of data parts to move.",
+    ),
+    constraint=RequireAtLeast(1),
 )
 @option("--new-disk", "new_disk_name", required=True)
-@option("--min-size", type=BytesParamType())
-@option("--max-size", type=BytesParamType())
-@option("-l", "--limit", type=int, help="Limit the max number of data parts to move.")
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @option(
     "-n",
@@ -418,34 +441,13 @@ def delete_parts_command(
 @pass_context
 def move_parts_command(
     ctx,
-    database,
-    table,
-    partition_id,
-    part_name,
-    disk_name,
     new_disk_name,
-    limit,
     keep_going,
     dry_run,
     **kwargs,
 ):
     """Move one or several data parts."""
-    if not any((database, table, partition_id, part_name, disk_name)):
-        ctx.fail(
-            "At least one of --database, --table, --partition, --part, --disk options must be specified."
-        )
-
-    parts = list_parts(
-        ctx,
-        database=database,
-        table=table,
-        partition_id=partition_id,
-        part_name=part_name,
-        disk_name=disk_name,
-        active=True,
-        limit=limit,
-        **kwargs,
-    )
+    parts = list_parts(ctx, active=True, **kwargs)
     for part in parts:
         try:
             move_part(

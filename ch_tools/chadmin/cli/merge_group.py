@@ -27,7 +27,7 @@ def merge_group():
     pass
 
 
-@merge_group.command(name="list")
+@merge_group.command("list")
 @option(
     "-d", "--database", help="Filter in merges to output by the specified database."
 )
