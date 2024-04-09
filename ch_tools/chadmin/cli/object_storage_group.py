@@ -111,6 +111,12 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     is_flag=True,
     help=("Use saved object list without traversing object storage again."),
 )
+@option(
+    "--storage-policy",
+    "storage_policy",
+    default="local",
+    help=("Internal table storage policy.."),
+)
 @pass_context
 def clean_command(
     ctx: Context,
@@ -122,6 +128,7 @@ def clean_command(
     dry_run: bool,
     keep_paths: bool,
     use_saved_list: bool,
+    storage_policy: str,
 ) -> None:
     """
     Clean orphaned S3 objects.
@@ -140,7 +147,7 @@ def clean_command(
     try:
         execute_query(
             ctx,
-            f"CREATE TABLE IF NOT EXISTS {listing_table} (obj_path String, obj_size UInt64) ENGINE MergeTree ORDER BY obj_path",
+            f"CREATE TABLE IF NOT EXISTS {listing_table} (obj_path String, obj_size UInt64) ENGINE MergeTree ORDER BY obj_path SETTINGS storage_policy = '{storage_policy}'",
         )
         _clean_object_storage(
             ctx,
