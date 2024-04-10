@@ -67,12 +67,11 @@ def clean_orphaned_tables_command(
         results.append(path_result)
 
     print_response(ctx, results, default_format="table")
-    # print(tabulate(results, headers="keys"))
 
 
 def process_path(
     path: str, prefix: str, column: str, remove: bool, count_directory_size: bool
-) -> None:
+) -> dict:
     logging.info("Processing path %s with prefix %s:", path, prefix)
 
     result = {
