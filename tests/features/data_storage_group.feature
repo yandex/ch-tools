@@ -20,6 +20,7 @@ Feature: chadmin data-store commands
     """
     - path: /var/lib/clickhouse/disks/object_storage/store/123
       status: not_used
+      size: 8.0K
       removed: false
     """
     When we execute command on clickhouse01
@@ -30,5 +31,6 @@ Feature: chadmin data-store commands
     """
     - path: /var/lib/clickhouse/disks/object_storage/store/123
       status: not_used
+      size: 8.0K
       removed: true
     """

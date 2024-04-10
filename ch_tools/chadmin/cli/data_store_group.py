@@ -9,6 +9,7 @@ from click import group, option, pass_context
 from ch_tools.common.cli.formatting import print_response
 
 CLICKHOUSE_PATH = "/var/lib/clickhouse"
+CLICKHOUSE_STORE_PATH = CLICKHOUSE_PATH + "/store"
 
 
 @group("data-store")
@@ -37,14 +38,7 @@ def data_store_group():
     "--store-path",
     "store_path",
     default=CLICKHOUSE_PATH + "/store",
-    help="Set the store subdirectory path,  `/var/lib/clickhouse/store` by default.",
-)
-@option(
-    "--show-directory-size",
-    "show_directory_size",
-    is_flag=True,
-    default=False,
-    help="Flag to show metadata size.",
+    help="Set the store subdirectory path.",
 )
 @option(
     "--show-all-metadata",
@@ -54,23 +48,24 @@ def data_store_group():
     help="Flag to only orphaned metadata.",
 )
 def clean_orphaned_tables_command(
-    ctx, column, remove, store_path, show_directory_size, show_only_orphaned_metadata
+    ctx, column, remove, store_path, show_only_orphaned_metadata
 ):
     results = []
     for prefix in os.listdir(store_path):
         path = store_path + "/" + prefix
-        path_result = process_path(path, prefix, column, remove, show_directory_size)
+        path_result = process_path(path, prefix, column, remove)
         if show_only_orphaned_metadata and path_result["status"] != "not_used":
             continue
-        if not show_directory_size:
-            del path_result["size"]
         results.append(path_result)
 
     print_response(ctx, results, default_format="table")
 
 
 def process_path(
-    path: str, prefix: str, column: str, remove: bool, count_directory_size: bool
+    path: str,
+    prefix: str,
+    column: str,
+    remove: bool,
 ) -> dict:
     logging.info("Processing path %s with prefix %s:", path, prefix)
 
@@ -81,12 +76,9 @@ def process_path(
         "removed": False,
     }
 
-    if count_directory_size:
-        size = du(path)
-        logging.info("Size of path %s: %s", path, size)
-        result["size"] = size
-    else:
-        result["size"] = 0
+    size = du(path)
+    logging.info("Size of path %s: %s", path, size)
+    result["size"] = size
 
     file = prefix_exists_in_metadata(prefix)
 
