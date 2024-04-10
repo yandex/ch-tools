@@ -37,7 +37,7 @@ def data_store_group():
 @option(
     "--store-path",
     "store_path",
-    default=CLICKHOUSE_PATH + "/store",
+    default=CLICKHOUSE_STORE_PATH,
     help="Set the store subdirectory path.",
 )
 @option(
