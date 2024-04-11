@@ -106,6 +106,7 @@ def cli(ctx, format_, settings, timeout, port, debug):
         "format": format_,
         "debug": debug,
     }
+    ctx.default_map = config["chadmin"]
 
 
 commands: List[Any] = [

@@ -9,7 +9,6 @@ from ch_tools.common.commands.replication_lag import estimate_replication_lag
     "--exec-critical",
     "xcrit",
     type=int,
-    default=3600,
     help="Critical threshold for one task execution.",
 )
 @click.option(
@@ -17,18 +16,14 @@ from ch_tools.common.commands.replication_lag import estimate_replication_lag
     "--critical",
     "crit",
     type=int,
-    default=600,
     help="Critical threshold for lag with errors.",
 )
-@click.option(
-    "-w", "--warning", "warn", type=int, default=300, help="Warning threshold."
-)
+@click.option("-w", "--warning", "warn", type=int, help="Warning threshold.")
 @click.option(
     "-M",
     "--merges-critical",
     "mcrit",
     type=click.FloatRange(0.0, 100.0),
-    default=90.0,
     help="Critical threshold in percent of max_replicated_merges_in_queue.",
 )
 @click.option(
@@ -36,7 +31,6 @@ from ch_tools.common.commands.replication_lag import estimate_replication_lag
     "--merges-warning",
     "mwarn",
     type=click.FloatRange(0.0, 100.0),
-    default=50.0,
     help="Warning threshold in percent of max_replicated_merges_in_queue.",
 )
 @click.option(

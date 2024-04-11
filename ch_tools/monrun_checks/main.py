@@ -129,6 +129,7 @@ def cli(ctx, ensure_monitoring_user):
         "config": config,
         "monitoring": True,
     }
+    ctx.default_map = config["ch-monitoring"]
 
 
 CLI_COMMANDS = [

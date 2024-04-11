@@ -122,6 +122,7 @@ def cli(ctx, retries, timeout, no_verify_ssl_certs):
         "no_verify_ssl_certs": no_verify_ssl_certs,
         "monitoring": True,
     }
+    ctx.default_map = config["keeper-monitoring"]
 
 
 COMMANDS = [

@@ -5,17 +5,8 @@ from tabulate import tabulate
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 from ch_tools.common.result import Result
 
-XCRIT = 3600
-CRIT = 600
-WARN = 300
-MWARN = 50.0
-MCRIT = 90.0
-VERBOSE = 0
 
-
-def estimate_replication_lag(
-    ctx, xcrit=XCRIT, crit=CRIT, warn=WARN, mwarn=MWARN, mcrit=MCRIT, verbose=VERBOSE
-):
+def estimate_replication_lag(ctx, xcrit, crit, warn, mwarn, mcrit, verbose=0):
     """
     Check for replication lag across replicas.
     Should be: lag >= lag_with_errors, lag >= max_execution
