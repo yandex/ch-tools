@@ -1,9 +1,12 @@
+import logging
 import os
 import shutil
 import subprocess
 from typing import Optional
 
-from click import group, option
+from click import group, option, pass_context
+
+from ch_tools.common.cli.formatting import print_response
 
 CLICKHOUSE_PATH = "/var/lib/clickhouse"
 CLICKHOUSE_STORE_PATH = CLICKHOUSE_PATH + "/store"
@@ -18,10 +21,11 @@ def data_store_group():
 
 
 @data_store_group.command("clean-orphaned-tables")
+@pass_context
 @option(
     "--column",
     "column",
-    default="",
+    default=None,
     help="Additional check: specified COLUMN name should exists in data to be removed. Example: `initial_query_start_time_microseconds.bin` for `query_log`-table.",
 )
 @option(
@@ -30,40 +34,80 @@ def data_store_group():
     default=False,
     help="Flag to REMOVE data from store subdirectories.",
 )
-def clean_orphaned_tables_command(column, remove):
-    for prefix in os.listdir(CLICKHOUSE_STORE_PATH):
-        path = CLICKHOUSE_STORE_PATH + "/" + prefix
+@option(
+    "--store-path",
+    "store_path",
+    default=CLICKHOUSE_STORE_PATH,
+    help="Set the store subdirectory path.",
+)
+@option(
+    "--show-all-metadata",
+    "show_only_orphaned_metadata",
+    is_flag=True,
+    default=True,
+    help="Flag to only orphaned metadata.",
+)
+def clean_orphaned_tables_command(
+    ctx, column, remove, store_path, show_only_orphaned_metadata
+):
+    results = []
+    for prefix in os.listdir(store_path):
+        path = store_path + "/" + prefix
+        path_result = process_path(path, prefix, column, remove)
+        if show_only_orphaned_metadata and path_result["status"] != "not_used":
+            continue
+        results.append(path_result)
 
-        process_path(path, prefix, column, remove)
+    print_response(ctx, results, default_format="table")
 
 
-def process_path(path: str, prefix: str, column: str, remove: bool) -> None:
-    print(f"Processing path {path} with prefix {prefix}:")
+def process_path(
+    path: str,
+    prefix: str,
+    column: str,
+    remove: bool,
+) -> dict:
+    logging.info("Processing path %s with prefix %s:", path, prefix)
 
-    file = prefix_exists_in_metadata(prefix)
-    if file:
-        print(f'\tPrefix "{prefix}" is used in metadata file "{file}"')
-        return
-
-    print(f'\tPrefix "{prefix}" is NOT used in any metadata file')
-
-    if not additional_check_successed(column, path):
-        print("\t\tAdditional check for column-parameter not passed")
-        return
+    result = {
+        "path": path,
+        "status": "unknown",
+        "size": 0,
+        "removed": False,
+    }
 
     size = du(path)
+    logging.info("Size of path %s: %s", path, size)
+    result["size"] = size
 
-    print(f"\t\tSize of path {path}: {size}")
+    file = prefix_exists_in_metadata(prefix)
+
+    if file:
+        logging.info('Prefix "%s" is used in metadata file "%s"', prefix, file)
+        result["status"] = "used"
+        return result
+
+    if column and not additional_check_successed(column, path):
+        logging.info("Additional check for column-parameter not passed")
+        result["status"] = "not_passed_column_check"
+        return result
+
+    logging.info('Prefix "%s" is NOT used in any metadata file', prefix)
+    result["status"] = "not_used"
 
     if remove:
-        print(f'\t\tTrying to remove path "{path}"...')
+        logging.info('Trying to remove path "%s"', path)
 
         remove_data(path)
-        return
+        result["removed"] = True
+    else:
+        logging.info(
+            'Path "%s" is not removed because of remove-parameter is not specified',
+            path,
+        )
+        result["removed"] = False
 
-    print(
-        f'\t\tPath "{path}" is not removed because of remove-parameter is not specified'
-    )
+    return result
 
 
 def prefix_exists_in_metadata(prefix: str) -> Optional[str]:
@@ -83,9 +127,6 @@ def prefix_exists_in_metadata(prefix: str) -> Optional[str]:
 
 
 def additional_check_successed(column: str, path: str) -> bool:
-    if not column:
-        return False
-
     for w in os.walk(path):
         filenames = w[2]
 
@@ -103,6 +144,6 @@ def du(path: str) -> str:
 def remove_data(path: str) -> None:
     def onerror(*args):
         errors = list(args)
-        print(f"\t\t\tERROR! {errors}")
+        logging.error("ERROR: %s", "\n".join(errors))
 
     shutil.rmtree(path=path, onerror=onerror)
