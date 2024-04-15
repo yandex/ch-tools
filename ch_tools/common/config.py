@@ -96,9 +96,9 @@ DEFAULT_CONFIG = {
         "handlers": {
             "chadmin": {
                 "chadmin": {
-                "sink": CHADMIN_LOG_FILE,
-                "level": "DEBUG",
-                "format": "ch-tools",
+                    "sink": CHADMIN_LOG_FILE,
+                    "level": "DEBUG",
+                    "format": "ch-tools",
                 },
                 "boto3": S3_LOG_CONFIG,
                 "botocore": S3_LOG_CONFIG,
@@ -108,19 +108,20 @@ DEFAULT_CONFIG = {
             },
             "ch-monitoring": {
                 "ch-monitoring": {
-                "sink": CH_MONITORING_LOG_FILE,
-                "level": "DEBUG",
-                "format": "ch-tools",
+                    "sink": CH_MONITORING_LOG_FILE,
+                    "level": "DEBUG",
+                    "format": "ch-tools",
                 },
                 "urllib3.connectionpool": {
                     "sink": CH_MONITORING_LOG_FILE,
                     "level": "CRITICAL",
                     "format": "ch-tools",
                 },
-            } 
+            },
         },
     },
 }
+
 
 def load_config():
     """

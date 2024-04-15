@@ -13,10 +13,10 @@ from ch_tools.chadmin.internal.object_storage import (
     s3_object_storage_iterator,
 )
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
-from ch_tools.chadmin import logging
 
 # The guard interval is used for S3 objects for which metadata is not found.
 # And for metadata for which object is not found in S3.
@@ -42,9 +42,9 @@ STREAM_TIMEOUT = 10 * 60
 def object_storage_group(ctx: Context, disk_name: str) -> None:
     """Commands to manage S3 objects and their metadata."""
     ch_config = get_clickhouse_config(ctx)
-    ctx.obj["disk_configuration"] = (
-        ch_config.storage_configuration.s3_disk_configuaration(disk_name)
-    )
+    ctx.obj[
+        "disk_configuration"
+    ] = ch_config.storage_configuration.s3_disk_configuaration(disk_name)
 
 
 @object_storage_group.command("clean")

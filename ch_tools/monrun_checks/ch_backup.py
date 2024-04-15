@@ -12,11 +12,11 @@ from click import Context
 from cloup import command, option, pass_context
 from dateutil.parser import parse as dateutil_parse
 
+from ch_tools.common import logging
 from ch_tools.common.backup import get_backups
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 from ch_tools.common.result import CRIT, OK, WARNING, Result
-from ch_tools.monrun_checks import logging
 
 LOAD_MONITOR_FLAG_PATH = "/tmp/load-monitor-userfault.flag"
 RESTORE_CONTEXT_PATH = "/tmp/ch_backup_restore_state.json"

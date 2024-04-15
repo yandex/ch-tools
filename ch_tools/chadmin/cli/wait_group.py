@@ -6,11 +6,11 @@ from click import FloatRange, group, option, pass_context
 from requests.exceptions import ReadTimeout
 
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.client.error import ClickhouseError
 from ch_tools.common.commands.replication_lag import estimate_replication_lag
 from ch_tools.common.utils import execute
-from ch_tools.chadmin import logging
 
 BASE_TIMEOUT = 600
 LOCAL_PART_LOAD_SPEED = 10  # in data parts per second

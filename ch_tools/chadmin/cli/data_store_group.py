@@ -1,4 +1,3 @@
-import logging
 import os
 import shutil
 import subprocess
@@ -6,6 +5,7 @@ from typing import Optional
 
 from click import group, option, pass_context
 
+from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
 
 CLICKHOUSE_PATH = "/var/lib/clickhouse"

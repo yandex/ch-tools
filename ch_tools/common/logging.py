@@ -4,12 +4,12 @@ Logging module.
 
 import inspect
 import logging
+import sys
 from typing import Any
 
 from loguru import logger
 
-
-MODULE = "ch-monitoring"
+this = sys.modules[__name__]
 
 
 class Filter:
@@ -66,14 +66,14 @@ class InterceptHandler(logging.Handler):
         ).log(level, record.getMessage())
 
 
-def configure(config_loguru: dict) -> None:
+def configure(config_loguru: dict, module: str) -> None:
     """
     Configure logger.
     """
-    # Configure loguru.
+    this.module = module
     loguru_handlers = []
 
-    for name, value in config_loguru["handlers"][MODULE].items():
+    for name, value in config_loguru["handlers"][module].items():
         handler = {
             "sink": value["sink"],
             "format": config_loguru["formatters"][value["format"]],
@@ -106,7 +106,7 @@ def critical(msg, *args, **kwargs):
     Log a message with severity 'CRITICAL'.
     """
     with_exception = kwargs.get("exc_info", False)
-    getLogger(MODULE).opt(exception=with_exception).critical(msg, *args, **kwargs)
+    getLogger(this.module).opt(exception=with_exception).critical(msg, *args, **kwargs)
 
 
 def error(msg, *args, **kwargs):
@@ -114,7 +114,7 @@ def error(msg, *args, **kwargs):
     Log a message with severity 'ERROR'.
     """
     with_exception = kwargs.get("exc_info", False)
-    getLogger(MODULE).opt(exception=with_exception).error(msg, *args, **kwargs)
+    getLogger(this.module).opt(exception=with_exception).error(msg, *args, **kwargs)
 
 
 def exception(msg, *args, **kwargs):
@@ -123,7 +123,7 @@ def exception(msg, *args, **kwargs):
     """
 
     with_exception = kwargs.get("exc_info", False)
-    getLogger(MODULE).opt(exception=with_exception).debug(msg, *args, **kwargs)
+    getLogger(this.module).opt(exception=with_exception).debug(msg, *args, **kwargs)
 
 
 def warning(msg, *args, **kwargs):
@@ -131,7 +131,7 @@ def warning(msg, *args, **kwargs):
     Log a message with severity 'WARNING'.
     """
     with_exception = kwargs.get("exc_info", False)
-    getLogger(MODULE).opt(exception=with_exception).warning(msg, *args, **kwargs)
+    getLogger(this.module).opt(exception=with_exception).warning(msg, *args, **kwargs)
 
 
 def info(msg, *args, **kwargs):
@@ -139,7 +139,7 @@ def info(msg, *args, **kwargs):
     Log a message with severity 'INFO'.
     """
     with_exception = kwargs.get("exc_info", False)
-    getLogger(MODULE).opt(exception=with_exception).info(msg, *args, **kwargs)
+    getLogger(this.module).opt(exception=with_exception).info(msg, *args, **kwargs)
 
 
 def debug(msg, *args, **kwargs):
@@ -147,10 +147,13 @@ def debug(msg, *args, **kwargs):
     Log a message with severity 'DEBUG'.
     """
     with_exception = kwargs.get("exc_info", False)
-    getLogger(MODULE).opt(exception=with_exception).debug(msg, *args, **kwargs)
+    getLogger(this.module).opt(exception=with_exception).debug(msg, *args, **kwargs)
 
 
 def log_status(status, msg):
+    """
+    Log a message with by status code.
+    """
     if status == 0:
         debug(msg)
     elif status == 1:

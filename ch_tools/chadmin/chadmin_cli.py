@@ -4,8 +4,8 @@ from typing import Any, List
 
 import cloup
 
+from ch_tools.common import logging
 from ch_tools.common.config import load_config
-from ch_tools.chadmin import logging
 
 warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
 warnings.filterwarnings(
@@ -81,7 +81,7 @@ def cli(ctx, format_, settings, timeout, port, debug):
     """ClickHouse administration tool."""
     config = load_config()
 
-    logging.configure(config["loguru"])
+    logging.configure(config["loguru"], "chadmin")
 
     if port:
         config["clickhouse"]["port"] = port
