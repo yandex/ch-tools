@@ -23,7 +23,7 @@ jobs:
       CLICKHOUSE_VERSIONS: ${{ inputs.clickhouse_version }}
       NEED_SETUP: true
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Check the input tag to ${{ inputs.clickhouse_version }}
         continue-on-error: true
         run: |
