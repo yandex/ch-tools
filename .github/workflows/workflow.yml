@@ -18,7 +18,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: ./.github/actions/setup_dependencies
       with:
         python-version: "3.10"
@@ -52,7 +52,7 @@ jobs:
           - "23.8.9.54"
           - "latest"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_dependencies
         with:
           python-version: ${{ matrix.target.python }}
@@ -80,7 +80,7 @@ jobs:
       CLICKHOUSE_VERSIONS: "21.8.15.7, 22.3.20.29, 22.8.19.10, 23.3.4.17, latest"
     if: ${{ github.event_name == 'push' }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: login to dockerhub
       uses: docker/login-action@v2
       with:
@@ -104,7 +104,7 @@ jobs:
 
     runs-on: ubuntu-${{ matrix.target.ubuntu }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - uses: ./.github/actions/setup_dependencies
       with:
