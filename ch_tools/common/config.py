@@ -6,6 +6,7 @@ from ch_tools.common.utils import deep_merge
 from ch_tools.common.yaml import load_yaml
 
 CHADMIN_LOG_FILE = "/var/log/chadmin/chadmin.log"
+CH_MONITORING_LOG_FILE = "/var/log/clickhouse-monitoring/clickhouse-monitoring.log"
 
 CONFIG_FILE = "/etc/clickhouse-tools/config.yaml"
 
@@ -94,19 +95,32 @@ DEFAULT_CONFIG = {
         },
         "handlers": {
             "chadmin": {
-                "sink": f"{CHADMIN_LOG_FILE}",
+                "chadmin": {
+                "sink": CHADMIN_LOG_FILE,
                 "level": "DEBUG",
                 "format": "ch-tools",
+                },
+                "boto3": S3_LOG_CONFIG,
+                "botocore": S3_LOG_CONFIG,
+                "nose": S3_LOG_CONFIG,
+                "s3transfer": S3_LOG_CONFIG,
+                "urllib3": S3_LOG_CONFIG,
             },
-            "boto3": S3_LOG_CONFIG,
-            "botocore": S3_LOG_CONFIG,
-            "nose": S3_LOG_CONFIG,
-            "s3transfer": S3_LOG_CONFIG,
-            "urllib3": S3_LOG_CONFIG,
+            "ch-monitoring": {
+                "ch-monitoring": {
+                "sink": CH_MONITORING_LOG_FILE,
+                "level": "DEBUG",
+                "format": "ch-tools",
+                },
+                "urllib3.connectionpool": {
+                    "sink": CH_MONITORING_LOG_FILE,
+                    "level": "CRITICAL",
+                    "format": "ch-tools",
+                },
+            } 
         },
     },
 }
-
 
 def load_config():
     """

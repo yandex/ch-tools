@@ -3,7 +3,6 @@ Check ClickHouse backups: its state, age and count.
 """
 
 import json
-import logging
 import os.path
 from datetime import datetime, timedelta, timezone
 from os.path import exists
@@ -17,6 +16,7 @@ from ch_tools.common.backup import get_backups
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 from ch_tools.common.result import CRIT, OK, WARNING, Result
+from ch_tools.monrun_checks import logging
 
 LOAD_MONITOR_FLAG_PATH = "/tmp/load-monitor-userfault.flag"
 RESTORE_CONTEXT_PATH = "/tmp/ch_backup_restore_state.json"
