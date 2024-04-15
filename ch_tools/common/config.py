@@ -5,7 +5,16 @@ from copy import deepcopy
 from ch_tools.common.utils import deep_merge
 from ch_tools.common.yaml import load_yaml
 
+CHADMIN_LOG_FILE = "/var/log/chadmin/chadmin.log"
+
 CONFIG_FILE = "/etc/clickhouse-tools/config.yaml"
+
+S3_LOG_CONFIG = {
+    "sink": f"{CHADMIN_LOG_FILE}",
+    "level": "WARNING",
+    "format": "ch-tools",
+}
+
 DEFAULT_CONFIG = {
     "clickhouse": {
         "host": socket.getfqdn(),
@@ -79,6 +88,23 @@ DEFAULT_CONFIG = {
         },
     },
     "keeper-monitoring": {},
+    "loguru": {
+        "formatters": {
+            "ch-tools": "{time:YYYY-MM-DD HH:mm:ss,SSS} {process.name:11} {process.id:5} [{level:8}] {extra[logger_name]}: {message}",
+        },
+        "handlers": {
+            "chadmin": {
+                "sink": f"{CHADMIN_LOG_FILE}",
+                "level": "DEBUG",
+                "format": "ch-tools",
+            },
+            "boto3": S3_LOG_CONFIG,
+            "botocore": S3_LOG_CONFIG,
+            "nose": S3_LOG_CONFIG,
+            "s3transfer": S3_LOG_CONFIG,
+            "urllib3": S3_LOG_CONFIG,
+        },
+    },
 }
 
 

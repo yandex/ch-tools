@@ -1,4 +1,3 @@
-import logging
 from datetime import datetime, timedelta, timezone
 from tempfile import TemporaryFile
 from typing import List, Optional
@@ -17,6 +16,7 @@ from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
+from ch_tools.chadmin import logging
 
 # The guard interval is used for S3 objects for which metadata is not found.
 # And for metadata for which object is not found in S3.
@@ -41,13 +41,10 @@ STREAM_TIMEOUT = 10 * 60
 @pass_context
 def object_storage_group(ctx: Context, disk_name: str) -> None:
     """Commands to manage S3 objects and their metadata."""
-    # Restrict excessive boto logging
-    _set_boto_log_level(logging.WARNING)
-
     ch_config = get_clickhouse_config(ctx)
-    ctx.obj[
-        "disk_configuration"
-    ] = ch_config.storage_configuration.s3_disk_configuaration(disk_name)
+    ctx.obj["disk_configuration"] = (
+        ch_config.storage_configuration.s3_disk_configuaration(disk_name)
+    )
 
 
 @object_storage_group.command("clean")
@@ -306,14 +303,3 @@ def _insert_listing_batch(
         f"INSERT INTO {listing_table} (obj_path, obj_size) VALUES {batch_values}",
         format_=None,
     )
-
-
-def _set_boto_log_level(level: int) -> None:
-    """
-    Set log level for libraries involved in communications with S3.
-    """
-    logging.getLogger("boto3").setLevel(level)
-    logging.getLogger("botocore").setLevel(level)
-    logging.getLogger("nose").setLevel(level)
-    logging.getLogger("s3transfer").setLevel(level)
-    logging.getLogger("urllib3").setLevel(level)
