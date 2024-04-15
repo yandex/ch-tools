@@ -157,7 +157,7 @@ fix-codespell-errors: install-deps
 
 .PHONY: ruff
 ruff: install-deps
-	$(POETRY) run ruff $(SRC_DIR) $(TESTS_DIR)
+	$(POETRY) run ruff check $(SRC_DIR) $(TESTS_DIR)
 
 
 .PHONY: pylint
