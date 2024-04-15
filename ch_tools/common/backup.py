@@ -69,9 +69,12 @@ def run(command, data=None):
 
     encoded_data = data.encode() if data else None
 
-    stdout, _stderr = proc.communicate(input=encoded_data)
+    stdout, stderr = proc.communicate(input=encoded_data)
 
     if proc.returncode:
-        raise RuntimeError(f'Command "{command}" failed with code {proc.returncode}')
+        message = f'Command "{command}" failed with code {proc.returncode}'
+        if stderr:
+            message = f"{message}\n{stderr.decode().strip()}"
+        raise RuntimeError(message)
 
     return stdout.decode()

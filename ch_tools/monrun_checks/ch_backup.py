@@ -79,21 +79,37 @@ def backup_command(
     """
     Check ClickHouse backups: its state, age and count.
     """
-    backups, result = _get_backups()
+    try:
+        backups = get_backups()
+        result = Result(OK)
+    except Exception:
+        backups = []
+        result = Result(CRIT, "Failed to get backups")
+        logging.exception(result.message)
 
-    if result.code == OK:
-        result = _merge_results(
-            _check_valid_backups_exist(backups),
-            _check_last_backup_not_failed(backups, failed_backup_count_crit_threshold),
-            _check_backup_age(
-                backups, backup_age_warn_threshold, backup_age_crit_threshold
-            ),
-            _check_backup_count(backups, backup_count_warn_threshold),
-            _check_restored_data(),
-        )
+    try:
+        if result.code == OK:
+            result = _merge_results(
+                _check_valid_backups_exist(backups),
+                _check_last_backup_not_failed(
+                    backups, failed_backup_count_crit_threshold
+                ),
+                _check_backup_age(
+                    backups, backup_age_warn_threshold, backup_age_crit_threshold
+                ),
+                _check_backup_count(backups, backup_count_warn_threshold),
+                _check_restored_data(),
+            )
+    except Exception:
+        result = Result(CRIT, "Failed to check backups")
+        logging.exception(result.message)
 
     _suppress_if_required(
-        ctx, result, min_uptime, backups, failed_backup_count_crit_threshold
+        ctx,
+        result,
+        min_uptime,
+        backups,
+        failed_backup_count_crit_threshold,
     )
 
     return result
@@ -251,14 +267,6 @@ def _get_uptime(ctx: Context) -> timedelta:
     except Exception:
         logging.warning("Failed to get ClickHouse uptime", exc_info=True)
         return timedelta()
-
-
-def _get_backups():
-    try:
-        return get_backups(), Result(OK)
-    except Exception:
-        logging.exception("Failed to get backups")
-        return None, Result(CRIT, "Failed to get backups")
 
 
 def _get_backup_age(backup):
