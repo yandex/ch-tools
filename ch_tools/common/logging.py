@@ -5,10 +5,11 @@ Logging module.
 import inspect
 import logging
 import sys
-from typing import Any
+from typing import Any, Optional
 
 from loguru import logger
 
+# Used to store this.module variable
 this = sys.modules[__name__]
 
 
@@ -66,7 +67,7 @@ class InterceptHandler(logging.Handler):
         ).log(level, record.getMessage())
 
 
-def configure(config_loguru: dict, module: str) -> None:
+def configure(config_loguru: dict, module: str, cmd_name: Optional[str] = None) -> None:
     """
     Configure logger.
     """
@@ -74,9 +75,13 @@ def configure(config_loguru: dict, module: str) -> None:
     loguru_handlers = []
 
     for name, value in config_loguru["handlers"][module].items():
+        format_ = config_loguru["formatters"][value["format"]]
+        # Partial formatting is almost impossible otherwise
+        if cmd_name:
+            format_ = format_.replace("{cmd_name}", cmd_name)
         handler = {
             "sink": value["sink"],
-            "format": config_loguru["formatters"][value["format"]],
+            "format": format_,
             "enqueue": True,
             "diagnose": False,
         }
@@ -171,5 +176,8 @@ def getLogger(name: str) -> Any:
     return logger.bind(logger_name=name)
 
 
-def add(sink, level, format):
-    logger.add(sink=sink, level=level, format=format)
+def add(sink, level, format_):
+    """
+    Add new log handler.
+    """
+    logger.add(sink=sink, level=level, format=format_)
