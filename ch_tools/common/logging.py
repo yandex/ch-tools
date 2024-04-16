@@ -169,3 +169,7 @@ def getLogger(name: str) -> Any:
     """
 
     return logger.bind(logger_name=name)
+
+
+def add(sink, level, format):
+    logger.add(sink=sink, level=level, format=format)

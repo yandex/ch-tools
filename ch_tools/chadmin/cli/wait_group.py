@@ -147,9 +147,8 @@ def wait_replication_sync_command(
 @pass_context
 def wait_started_command(ctx, timeout, quiet):
     """Wait for ClickHouse server to start up."""
-    # TODO: stdout
-    # if not quiet:
-    #     logging.basicConfig(level="INFO", format="%(message)s")
+    if not quiet:
+        logging.add(sys.stdout, level="INFO", format="{message}")
 
     if not timeout:
         timeout = get_timeout()
