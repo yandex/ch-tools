@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "clickhouse-tools"
-version = "1.0.0"
+version = "2.588.195754051"
 license = "MIT"
 description = "clickhouse-tools is a set of tools for administration and diagnostics of ClickHouse DBMS."
 
@@ -102,6 +102,7 @@ termcolor = "*"
 tqdm = "*"
 typing-extensions = "~4.1.1"
 xmltodict = "*"
+loguru = "*"
 
 [tool.poetry.dev-dependencies]
 # TODO: use groups in a modern version of poetry
