@@ -2,7 +2,7 @@ import logging
 import os
 import shutil
 import subprocess
-from typing import Optional
+from typing import List, Optional, Tuple
 
 from click import group, option, pass_context
 
@@ -10,6 +10,8 @@ from ch_tools.common.cli.formatting import print_response
 
 CLICKHOUSE_PATH = "/var/lib/clickhouse"
 CLICKHOUSE_STORE_PATH = CLICKHOUSE_PATH + "/store"
+CLICKHOUSE_DATA_PATH = CLICKHOUSE_PATH + "/data"
+CLICKHOUSE_METADATA_PATH = CLICKHOUSE_PATH + "/metadata"
 
 
 @group("data-store")
@@ -147,3 +149,91 @@ def remove_data(path: str) -> None:
         logging.error("ERROR: %s", "\n".join(errors))
 
     shutil.rmtree(path=path, onerror=onerror)
+
+
+@data_store_group.command("cleanup-data-dir")
+@pass_context
+@option(
+    "--remove",
+    is_flag=True,
+    default=False,
+    help="Flag to REMOVE data from store subdirectories.",
+)
+@option(
+    "--disk",
+    "disk",
+    default="default",
+    help="Set the data subdirectory path.",
+)
+@option(
+    "--keep-going",
+    is_flag=True,
+    default=False,
+    help="Flag to REMOVE data from store subdirectories.",
+)
+def cleanup_data_dir(ctx, remove, disk, keep_going):
+    lost_data: List[dict] = []
+    path_to_disk = CLICKHOUSE_PATH + (f"/disks/{disk}" if disk != "default" else "")
+    data_path = path_to_disk + "/data"
+
+    collect_orphaned_sql_objects_recursive(
+        CLICKHOUSE_METADATA_PATH, data_path, lost_data, 0, 1
+    )
+
+    if remove:
+        for data in lost_data:
+            path = data["path"]
+            try:
+                if not path.startswith(path_to_disk):
+                    raise RuntimeError(
+                        f"Path {path} on fs does not math with disk {disk}"
+                    )
+                relative_path_on_disk = path[len(path_to_disk) + 1 :]
+                retcode, stderr = remove_from_disk(disk, relative_path_on_disk)
+                if retcode:
+                    raise RuntimeError(
+                        f"clickhouse-disks remove command has failed: retcode {retcode}, stderr: {stderr.decode()}"
+                    )
+                data["deleted"] = "Yes"
+            except Exception as e:
+                if keep_going:
+                    continue
+                raise e
+
+    print_response(ctx, lost_data, default_format="table")
+
+
+def collect_orphaned_sql_objects_recursive(
+    metadata_path: str, data_path: str, lost_data: list, depth: int, max_depth: int
+) -> None:
+    sql_suff = ".sql"
+    # Extract all active sql object from metadata dir
+    list_sql_objects = [
+        entry.name[: -len(sql_suff)]
+        for entry in os.scandir(metadata_path)
+        if entry.is_file() and entry.name.endswith(sql_suff)
+    ]
+
+    for entry in os.scandir(data_path):
+        if not entry.is_dir():
+            continue
+        if entry.name not in list_sql_objects:
+            lost_data.append({"path": entry.path, "deleted": "No"})
+            continue
+        if max_depth >= depth + 1:
+            collect_orphaned_sql_objects_recursive(
+                metadata_path + "/" + entry.name,
+                entry.path,
+                lost_data,
+                depth + 1,
+                max_depth,
+            )
+
+
+def remove_from_disk(disk: str, path: str) -> Tuple[int, bytes]:
+    cmd = f"clickhouse-disks --disk {disk} remove {path}"
+    logging.debug("Run : %s", cmd)
+    proc = subprocess.run(
+        cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+    return (proc.returncode, proc.stderr)
