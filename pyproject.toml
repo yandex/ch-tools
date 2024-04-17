@@ -114,11 +114,11 @@ pytest = "*"
 pyfakefs = "*"
 
 # lint
-black = { version = "^22.0.0", python = ">=3.10" }
+black = { version = "^22.0", python = ">=3.10" }
 ruff = { version = "*", python = ">=3.10" }
-isort = { version = "^5.0.0", extras = ["pyproject"], python = ">=3.10" }
+isort = { version = "^5.0", extras = ["pyproject"], python = ">=3.10" }
 mypy = { version = "~1.5", python = ">=3.10" }
-pylint = { version = "^2.17.5", python = ">=3.10" }
+pylint = { version = "^3.1", python = ">=3.10" }
 types-pyOpenSSL = { version = "*", python = ">=3.10" }
 types-python-dateutil = { version = "*", python = ">=3.10" }
 types-pyyaml = { version = "*", python = ">=3.10" }

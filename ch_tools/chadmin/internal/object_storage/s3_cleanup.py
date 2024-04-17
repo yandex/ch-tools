@@ -3,9 +3,10 @@ from typing import Any, Iterator, List, Tuple
 import boto3
 from botocore.client import Config
 
-from ch_tools.chadmin.internal.object_storage import ObjListItem
 from ch_tools.chadmin.internal.utils import chunked
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
+
+from .obj_list_item import ObjListItem
 
 BULK_DELETE_CHUNK_SIZE = 1000
 
