@@ -60,7 +60,7 @@ jobs:
       - run: make test-unit
       - run: make test-integration
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: ${{ failure() }}
         with:
           name: integration-test-logs-py${{ matrix.target.python }}-clickhouse-${{ matrix.clickhouse }}
@@ -82,7 +82,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: login to dockerhub
-      uses: docker/login-action@v2
+      uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -114,14 +114,14 @@ jobs:
       run: make build-python-packages
 
     - name: upload wheel
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ env.PROJECT_NAME_UNDESCORE }}_py${{ matrix.target.python }}.whl
         path: ${{ env.BUILD_PYTHON_OUTPUT_DIR }}/*.whl
         if-no-files-found: error
 
     - name: upload sdist
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ env.PROJECT_NAME_UNDESCORE }}_py${{ matrix.target.python }}.tar.gz
         path: ${{ env.BUILD_PYTHON_OUTPUT_DIR }}/*.tar.gz
@@ -148,7 +148,7 @@ jobs:
         sudo ch-s3-credentials --help
 
     - name: upload DEB package artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ env.PROJECT_NAME }}_py-${{ matrix.target.python }}_ubuntu-${{ matrix.target.ubuntu }}.deb
         path: ${{ env.BUILD_DEB_OUTPUT_DIR }}/*.deb
