@@ -65,10 +65,8 @@ class KeeperChecks(cloup.Group):
                 status.append(repr(e))
                 status.set_code(1)
 
-            if status.code == 1:
-                status.code = 2
             log_message = f"Completed with {status.code};{status.message}"
-            logging.log_status(status.code, log_message)
+            logging.log_status(status.code if status.code <= 1 else 2, log_message)
 
             if ctx.obj and ctx.obj.get("status_mode", False):
                 return status

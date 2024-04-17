@@ -1,12 +1,16 @@
 """
 Behave entry point.
 """
-import logging
+
 import re
+import sys
 
 import env_control
 from modules.logs import save_logs
 from modules.utils import version_ge, version_lt
+
+from ch_tools.common import logging
+from ch_tools.common.config import load_config
 
 try:
     import ipdb as pdb
@@ -18,6 +22,13 @@ def before_all(context):
     """
     Prepare environment for tests.
     """
+    config = load_config()
+    logging.configure(config["loguru"], "test")
+    logging.add(
+        sys.stdout,
+        level="INFO",
+        format_="{time:YYYY-MM-DD HH:mm:ss,SSS} [{level:8}]:\t{message}",
+    )
     if not context.config.userdata.getbool("skip_setup"):
         env_control.create(context)
 

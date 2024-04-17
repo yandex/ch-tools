@@ -127,6 +127,13 @@ DEFAULT_CONFIG = {
                     "format": "monrun",
                 },
             },
+            "test": {
+                "boto3": S3_LOG_CONFIG,
+                "botocore": S3_LOG_CONFIG,
+                "kazoo": S3_LOG_CONFIG,
+                "s3transfer": S3_LOG_CONFIG,
+                "urllib3": S3_LOG_CONFIG,
+            },
         },
     },
 }

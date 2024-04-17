@@ -2,11 +2,11 @@
 ClickHouse client.
 """
 
-import logging
 from typing import Any, Optional, Sequence, Tuple
 
 from requests import HTTPError
 
+from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import (
     ClickhouseClient,
     ClickhousePort,

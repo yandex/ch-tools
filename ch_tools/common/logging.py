@@ -73,7 +73,7 @@ def configure(config_loguru: dict, module: str, cmd_name: Optional[str] = None) 
     this["cmd_name"] = cmd_name
     loguru_handlers = []
 
-    for name, value in config_loguru["handlers"][module].items():
+    for name, value in config_loguru["handlers"].get(module, {}).items():
         format_ = config_loguru["formatters"][value["format"]]
         handler = {
             "sink": value["sink"],
@@ -108,7 +108,7 @@ def critical(msg, *args, **kwargs):
     """
     with_exception = kwargs.get("exc_info", False)
     getLogger(this["module"]).opt(exception=with_exception).critical(
-        msg, *args, **kwargs, cmd_name=this["cmd_name"]
+        msg, *args, **kwargs
     )
 
 
@@ -117,9 +117,7 @@ def error(msg, *args, **kwargs):
     Log a message with severity 'ERROR'.
     """
     with_exception = kwargs.get("exc_info", False)
-    getLogger(this["module"]).opt(exception=with_exception).error(
-        msg, *args, **kwargs, cmd_name=this["cmd_name"]
-    )
+    getLogger(this["module"]).opt(exception=with_exception).error(msg, *args, **kwargs)
 
 
 def exception(msg, *args, **kwargs):
@@ -128,9 +126,7 @@ def exception(msg, *args, **kwargs):
     """
 
     with_exception = kwargs.get("exc_info", False)
-    getLogger(this["module"]).opt(exception=with_exception).debug(
-        msg, *args, **kwargs, cmd_name=this["cmd_name"]
-    )
+    getLogger(this["module"]).opt(exception=with_exception).debug(msg, *args, **kwargs)
 
 
 def warning(msg, *args, **kwargs):
@@ -139,7 +135,7 @@ def warning(msg, *args, **kwargs):
     """
     with_exception = kwargs.get("exc_info", False)
     getLogger(this["module"]).opt(exception=with_exception).warning(
-        msg, *args, **kwargs, cmd_name=this["cmd_name"]
+        msg, *args, **kwargs
     )
 
 
@@ -148,9 +144,7 @@ def info(msg, *args, **kwargs):
     Log a message with severity 'INFO'.
     """
     with_exception = kwargs.get("exc_info", False)
-    getLogger(this["module"]).opt(exception=with_exception).info(
-        msg, *args, **kwargs, cmd_name=this["cmd_name"]
-    )
+    getLogger(this["module"]).opt(exception=with_exception).info(msg, *args, **kwargs)
 
 
 def debug(msg, *args, **kwargs):
@@ -158,9 +152,7 @@ def debug(msg, *args, **kwargs):
     Log a message with severity 'DEBUG'.
     """
     with_exception = kwargs.get("exc_info", False)
-    getLogger(this["module"]).opt(exception=with_exception).debug(
-        msg, *args, **kwargs, cmd_name=this["cmd_name"]
-    )
+    getLogger(this["module"]).opt(exception=with_exception).debug(msg, *args, **kwargs)
 
 
 def log_status(status, msg):
@@ -180,7 +172,7 @@ def getLogger(name: str) -> Any:
     """
     Get logger with specific name.
     """
-    return logger.bind(logger_name=name)
+    return logger.bind(logger_name=name, cmd_name=this.get("cmd_name", ""))
 
 
 def add(sink, level, format_):

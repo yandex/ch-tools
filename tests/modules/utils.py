@@ -2,7 +2,6 @@
 Utility functions.
 """
 
-import logging
 import string
 from functools import wraps
 from random import choice as random_choise
@@ -10,6 +9,8 @@ from types import SimpleNamespace
 from typing import Mapping, MutableMapping
 
 from pkg_resources import parse_version
+
+from ch_tools.common import logging
 
 from .typing import ContextT
 

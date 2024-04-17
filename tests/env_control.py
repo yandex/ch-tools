@@ -4,12 +4,13 @@ Manage test environment.
 """
 
 import argparse
-import logging
 import pickle
 from types import SimpleNamespace
 
 import configuration
 from modules import compose, docker, minio, templates
+
+from ch_tools.common import logging
 
 SESSION_STATE_CONF = ".session_conf.sav"
 STAGES = {
@@ -105,11 +106,6 @@ def cli_main():
         "start": start,
         "stop": stop,
     }
-
-    logging.basicConfig(
-        format="%(asctime)s [%(levelname)s]:\t%(message)s",
-        level=logging.INFO,
-    )
 
     args = _parse_args(commands)
 
