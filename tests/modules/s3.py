@@ -7,8 +7,6 @@ import boto3
 from botocore.client import Config
 from botocore.errorfactory import ClientError
 
-from ch_tools.common import logging
-
 from . import docker
 from .typing import ContextT
 

@@ -9,8 +9,6 @@ from kazoo.client import KazooClient
 from modules.docker import get_container, get_exposed_port
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-from ch_tools.common import logging
-
 
 @given("a working zookeeper")
 @retry(wait=wait_fixed(0.5), stop=stop_after_attempt(40))
