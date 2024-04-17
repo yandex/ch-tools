@@ -180,3 +180,10 @@ def add(sink, level, format_):
     Add new log handler.
     """
     logger.add(sink=sink, level=level, format=format_)
+
+
+def set_module_log_level(module, level):
+    """
+    Set level for logging's logger. Might be used to control logs from other libraries.
+    """
+    logging.getLogger(module).setLevel(level)
