@@ -7,7 +7,7 @@ from ch_tools.common.clickhouse.client.clickhouse_client import (
     ClickhousePort,
     clickhouse_client,
 )
-from ch_tools.common.result import Result
+from ch_tools.common.result import CRIT, OK, WARNING, Result
 
 
 @click.command("ping")
@@ -99,7 +99,7 @@ def ping_command(ctx, number, crit, warn):
             has_fails = True
 
         if not has_fails:  # when all ports are ok on first time
-            return Result(0, "OK")
+            return Result(OK)
 
         time.sleep(1)
 
@@ -117,9 +117,9 @@ def ping_command(ctx, number, crit, warn):
     error = ", ".join(errors)
 
     if state == 2:
-        return Result(2, f"ClickHouse is dead ({error})")
+        return Result(CRIT, f"ClickHouse is dead ({error})")
 
     if state == 1:
-        return Result(1, f"ClickHouse is sick ({error})")
+        return Result(WARNING, f"ClickHouse is sick ({error})")
 
-    return Result(0, f"OK ({error})")
+    return Result(OK, f"OK ({error})")

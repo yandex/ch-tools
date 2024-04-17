@@ -4,7 +4,7 @@ import click
 import requests
 
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
-from ch_tools.common.result import Result
+from ch_tools.common.result import CRIT, OK, Result
 
 
 @click.command("geobase")
@@ -21,9 +21,9 @@ def geobase_command(ctx):
         expected = "Москва и Московская область"
         if response != expected:
             return Result(
-                2, f"Geobase error, expected ({expected}), but got ({response})"
+                CRIT, f"Geobase error, expected ({expected}), but got ({response})"
             )
     except requests.exceptions.HTTPError as exc:
-        return Result(2, repr(exc))
+        return Result(CRIT, repr(exc))
 
-    return Result(0, "OK")
+    return Result(OK)

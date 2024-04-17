@@ -42,7 +42,7 @@ Feature: ch-monitoring tool
     """
     Then we get response
     """
-    2;Readonly replica tables: [['test', 'table 01']]
+    2;Readonly replica tables: test.table_01
     """
 
   Scenario: Check CoreDumps

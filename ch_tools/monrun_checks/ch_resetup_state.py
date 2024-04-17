@@ -9,7 +9,7 @@ import requests
 
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_credentials
 from ch_tools.common.clickhouse.config.path import CLICKHOUSE_RESETUP_CONFIG_PATH
-from ch_tools.common.result import Result
+from ch_tools.common.result import CRIT, OK, Result
 from ch_tools.monrun_checks.exceptions import die
 
 
@@ -29,12 +29,12 @@ def resetup_state_command(ctx, port, ssl, ca_bundle):
 
     host = socket.getfqdn()
     if request(ctx, host, port, ssl, ca_bundle):
-        return Result(2, "ClickHouse is listening on ports reserved for resetup")
+        return Result(CRIT, "ClickHouse is listening on ports reserved for resetup")
 
     if os.path.isfile(CLICKHOUSE_RESETUP_CONFIG_PATH):
-        return Result(2, "Detected resetup config, but ch-backup is not running")
+        return Result(CRIT, "Detected resetup config, but ch-backup is not running")
 
-    return Result(0, "OK")
+    return Result(OK)
 
 
 def check_resetup_running():

@@ -12,7 +12,7 @@ from ch_tools.common.clickhouse.client.clickhouse_client import (
     ClickhousePort,
     clickhouse_client,
 )
-from ch_tools.common.result import Result
+from ch_tools.common.result import CRIT, OK, WARNING, Result
 
 CERTIFICATE_PATH = "/etc/clickhouse-server/ssl/server.crt"
 
@@ -51,34 +51,37 @@ def tls_command(
             cert: str = ssl.get_server_certificate(addr)
             certificate, days_to_expire = load_certificate_info(str.encode(cert))
         except Exception as e:
-            return Result(1, f"Failed to get certificate: {repr(e)}")
+            return Result(WARNING, f"Failed to get certificate: {repr(e)}")
 
         if certificate != file_certificate:
             return Result(
-                2, f"certificates on {port} and {CERTIFICATE_PATH} are different"
+                CRIT,
+                f"certificates on {port} and {CERTIFICATE_PATH} are different",
             )
         if chain:
             try:
                 socket_chain = get_client_cert_chain(addr)
                 if len(socket_chain) != len(file_chain):
                     return Result(
-                        2,
+                        CRIT,
                         f"certificates on {port} and {CERTIFICATE_PATH} have different chain length",
                     )
                 for file_cert, socket_cert in zip(file_chain, socket_chain):
                     if file_cert != socket_cert:
                         return Result(
-                            2,
+                            CRIT,
                             f"certificates on {port} and {CERTIFICATE_PATH} have different chains",
                         )
             except Exception as e:
-                return Result(1, f"Failed to get certificate chain: {repr(e)}")
+                return Result(WARNING, f"Failed to get certificate chain: {repr(e)}")
         if days_to_expire < crit:
-            return Result(2, f"certificate {port} expires in {days_to_expire} days")
+            return Result(CRIT, f"certificate {port} expires in {days_to_expire} days")
         if days_to_expire < warn:
-            return Result(1, f"certificate {port} expires in {days_to_expire} days")
+            return Result(
+                WARNING, f"certificate {port} expires in {days_to_expire} days"
+            )
 
-    return Result(0, "OK")
+    return Result(OK)
 
 
 def get_ports(ctx: click.Context, ports: Optional[str]) -> List[str]:

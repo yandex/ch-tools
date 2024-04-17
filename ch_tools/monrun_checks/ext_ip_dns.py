@@ -7,7 +7,7 @@ import click
 import dns.resolver
 import requests
 
-from ch_tools.common.result import Result
+from ch_tools.common.result import CRIT, OK, Result
 
 IP_METADATA_PATHS = {
     "public_v4": "http://169.254.169.254/latest/meta-data/public-ipv4",
@@ -47,9 +47,9 @@ def ext_ip_dns_command(
         err.extend(_check_fqdn(record, ipv6, imdsv2))
 
     if not err:
-        return Result(0, "OK")
+        return Result(OK)
 
-    return Result(2, ", ".join(err))
+    return Result(CRIT, ", ".join(err))
 
 
 def _check_fqdn(target: _TargetRecord, ipv6: bool, imdsv2: bool) -> list:
