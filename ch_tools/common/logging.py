@@ -4,11 +4,11 @@ Logging module.
 
 import inspect
 import logging
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from loguru import logger
 
-this = {}
+this: Dict[str, Any] = {}
 
 
 class Filter:
