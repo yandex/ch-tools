@@ -138,10 +138,10 @@ def execute_query(
     client = clickhouse_client(context, node)
 
     try:
-        logging.debug("Executing ClickHouse query: %s", query)
+        logging.debug(f"Executing ClickHouse query: {query}")
         response = client.query(query, format_=format_)
     except HTTPError as e:
-        logging.critical("Error while performing request: %s", e.response.text)
+        logging.critical(f"Error while performing request: {e.response.text}")
         raise
 
     return response

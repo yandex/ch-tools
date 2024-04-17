@@ -1,5 +1,4 @@
 import json
-import logging
 import subprocess
 import xml.etree.ElementTree as xml
 from datetime import timedelta
@@ -10,6 +9,7 @@ import requests
 from jinja2 import Environment
 from typing_extensions import Self
 
+from ch_tools.common import logging
 from ch_tools.common.clickhouse.config.path import (
     CLICKHOUSE_CERT_CONFIG_PATH,
     CLICKHOUSE_CERT_PATH_DEFAULT,
@@ -229,7 +229,7 @@ class ClickhouseClient:
             if found_port == ClickhousePort.AUTO:
                 raise UserWarning(2, "Can't find any port in clickhouse-server config")
 
-        logging.debug("Executing query: %s", query)
+        logging.debug(f"Executing query: {query}")
         if found_port in [ClickhousePort.HTTPS, ClickhousePort.HTTP]:
             return self._execute_http(
                 query,

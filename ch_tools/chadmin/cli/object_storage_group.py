@@ -176,11 +176,7 @@ def _clean_object_storage(
 
     if not use_saved_list:
         logging.info(
-            "Collecting objects... (Disk: '%s', Endpoint '%s', Bucket: '%s', Prefix: '%s')",
-            disk_conf.name,
-            disk_conf.endpoint_url,
-            disk_conf.bucket_name,
-            prefix,
+            f"Collecting objects... (Disk: '{disk_conf.name}', Endpoint '{disk_conf.endpoint_url}', Bucket: '{disk_conf.bucket_name}', Prefix: '{disk_conf.prefix}')",
         )
         _traverse_object_storage(ctx, listing_table, from_time, to_time, prefix)
 
@@ -196,7 +192,7 @@ def _clean_object_storage(
           ON object_table.remote_path = object_storage.obj_path
             AND object_table.disk_name = '{disk_conf.name}'
     """
-    logging.info("Antijoin query: %s", antijoin_query)
+    logging.info(f"Antijoin query: {antijoin_query}")
 
     if dry_run:
         logging.info("Counting orphaned objects...")
@@ -221,12 +217,7 @@ def _clean_object_storage(
         deleted, total_size = cleanup_s3_object_storage(disk_conf, keys, dry_run)
 
     logging.info(
-        "%s %s objects with total size %s from bucket [%s] with prefix %s",
-        "Would delete" if dry_run else "Deleted",
-        deleted,
-        format_size(total_size, binary=True),
-        disk_conf.bucket_name,
-        prefix,
+        f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
     )
     _print_response(ctx, dry_run, deleted, total_size)
 
@@ -288,7 +279,7 @@ def _traverse_object_storage(
     if obj_paths_batch:
         _insert_listing_batch(ctx, obj_paths_batch, listing_table)
 
-    logging.info("Collected %s objects", counter)
+    logging.info(f"Collected {counter} objects")
 
 
 def _insert_listing_batch(

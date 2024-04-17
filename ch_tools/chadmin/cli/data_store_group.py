@@ -67,7 +67,7 @@ def process_path(
     column: str,
     remove: bool,
 ) -> dict:
-    logging.info("Processing path %s with prefix %s:", path, prefix)
+    logging.info(f"Processing path {path} with prefix {prefix}:")
 
     result = {
         "path": path,
@@ -77,13 +77,13 @@ def process_path(
     }
 
     size = du(path)
-    logging.info("Size of path %s: %s", path, size)
+    logging.info(f"Size of path {path}: {size}")
     result["size"] = size
 
     file = prefix_exists_in_metadata(prefix)
 
     if file:
-        logging.info('Prefix "%s" is used in metadata file "%s"', prefix, file)
+        logging.info(f'Prefix "{prefix}" is used in metadata file "{file}"')
         result["status"] = "used"
         return result
 
@@ -92,18 +92,17 @@ def process_path(
         result["status"] = "not_passed_column_check"
         return result
 
-    logging.info('Prefix "%s" is NOT used in any metadata file', prefix)
+    logging.info(f'Prefix "{prefix}" is NOT used in any metadata file')
     result["status"] = "not_used"
 
     if remove:
-        logging.info('Trying to remove path "%s"', path)
+        logging.info(f'Trying to remove path "{path}"')
 
         remove_data(path)
         result["removed"] = True
     else:
         logging.info(
-            'Path "%s" is not removed because of remove-parameter is not specified',
-            path,
+            f'Path "{path}" is not removed because of remove-parameter is not specified'
         )
         result["removed"] = False
 
@@ -143,7 +142,7 @@ def du(path: str) -> str:
 
 def remove_data(path: str) -> None:
     def onerror(*args):
-        errors = list(args)
-        logging.error("ERROR: %s", "\n".join(errors))
+        errors = "\n".join(list(args))
+        logging.error(f"ERROR: {errors}")
 
     shutil.rmtree(path=path, onerror=onerror)

@@ -172,7 +172,6 @@ def getLogger(name: str) -> Any:
     """
     Get logger with specific name.
     """
-
     return logger.bind(logger_name=name)
 
 
