@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional, Tuple
 
 from click import group, option, pass_context
@@ -176,7 +177,12 @@ def remove_data(path: str) -> None:
     default=1000000,
     help="Restriction for max count of sql objects.",
 )
-def cleanup_data_dir(ctx, remove, disk, keep_going, max_sql_objects):
+@option(
+    "--max-workers",
+    default=4,
+    help="Max workers for removing.",
+)
+def cleanup_data_dir(ctx, remove, disk, keep_going, max_sql_objects, max_workers):
     lost_data: List[dict] = []
     path_to_disk = CLICKHOUSE_PATH + (f"/disks/{disk}" if disk != "default" else "")
     data_path = path_to_disk + "/data"
@@ -191,26 +197,43 @@ def cleanup_data_dir(ctx, remove, disk, keep_going, max_sql_objects):
     )
 
     if remove:
-        for data in lost_data:
-            path = data["path"]
-            try:
-                if not path.startswith(path_to_disk):
-                    raise RuntimeError(
-                        f"Path {path} on fs does not math with disk {disk}"
-                    )
-                relative_path_on_disk = path[len(path_to_disk) + 1 :]
-                retcode, stderr = remove_from_disk(disk, relative_path_on_disk)
-                if retcode:
-                    raise RuntimeError(
-                        f"clickhouse-disks remove command has failed: retcode {retcode}, stderr: {stderr.decode()}"
-                    )
-                data["deleted"] = "Yes"
-            except Exception as e:
-                if keep_going:
-                    continue
-                raise e
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Can't use map function here. The map method returns a generator
+            # and it is not possible to resume a generator after an exception occurs.
+            # https://peps.python.org/pep-0255/#specification-generators-and-exception-propagation
+            futures_to_part = {
+                executor.submit(
+                    remove_orphaned_sql_object, disk, data, path_to_disk
+                ): data
+                for data in lost_data
+            }
+            for future in as_completed(futures_to_part):
+                try:
+                    future.result()
+                except Exception as e:
+                    if keep_going:
+                        logging.exception(
+                            "Ignoring the exception due to keep-going flag : %s ",
+                            repr(e),
+                        )
+                    else:
+                        raise
 
     print_response(ctx, lost_data, default_format="table")
+
+
+def remove_orphaned_sql_object(disk, data, path_to_disk):
+
+    path = data["path"]
+    if not path.startswith(path_to_disk):
+        raise RuntimeError(f"Path {path} on fs does not math with disk {disk}")
+    relative_path_on_disk = path[len(path_to_disk) + 1 :]
+    retcode, stderr = remove_from_disk(disk, relative_path_on_disk)
+    if retcode:
+        raise RuntimeError(
+            f"clickhouse-disks remove command has failed: retcode {retcode}, stderr: {stderr.decode()}"
+        )
+    data["deleted"] = "Yes"
 
 
 def collect_orphaned_sql_objects_recursive(
