@@ -77,7 +77,7 @@ class KeeperChecks(cloup.Group):
 
             if ctx.obj and ctx.obj.get("status_mode", False):
                 return status
-            status.report()
+            status.report(ctx)
 
         cmd.callback = wrapper
         super().add_command(

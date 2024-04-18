@@ -5,7 +5,7 @@ import click
 from file_read_backwards import FileReadBackwards
 
 from ch_tools.common.cli.parameters import RegexpParamType
-from ch_tools.common.result import Result
+from ch_tools.common.result import CRIT, OK, WARNING, Result
 
 REGEXP = re.compile(
     r"^([0-9]{4}\.[0-9]{2}\.[0-9]{2}\ [0-9]{2}\:[0-9]{2}\:[0-9]{2}).*?<(Error|Fatal)>"
@@ -56,7 +56,7 @@ def log_errors_command(crit, warn, watch_seconds, exclude, logfile):
 
     msg = f"{errors} errors for last {watch_seconds} seconds"
     if errors >= crit:
-        return Result(2, msg)
+        return Result(CRIT, msg)
     if errors >= warn:
-        return Result(1, msg)
-    return Result(0, "OK, " + msg)
+        return Result(WARNING, msg)
+    return Result(OK, f"OK, {msg}")
