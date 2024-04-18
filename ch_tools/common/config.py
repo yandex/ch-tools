@@ -51,7 +51,7 @@ DEFAULT_CONFIG = {
             "escaping_rules": [
                 {
                     "pattern": "\n",
-                    "replacement": "",
+                    "replacement": " ",
                 },
             ],
         },
