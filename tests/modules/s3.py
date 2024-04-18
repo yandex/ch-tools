@@ -47,7 +47,7 @@ class S3Client:
         self._s3_bucket_name = bucket if bucket else config["bucket"]
 
         for module_logger in ("boto3", "botocore", "s3transfer", "urllib3"):
-            logging.set_module_log_level(module_logger, logging.logging.CRITICAL)
+            logging.set_module_log_level(module_logger, logging.CRITICAL)
 
     def upload_data(self, data: bytes, remote_path: str) -> None:
         """

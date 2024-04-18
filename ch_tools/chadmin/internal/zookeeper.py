@@ -493,7 +493,7 @@ def _get_zk_client(ctx):
         connect_str,
         auth_data=auth_data,
         timeout=timeout,
-        logger=logging.logging.getLogger(),
+        logger=logging.getLogger("chadmin"),
         use_ssl=use_ssl,
         verify_certs=verify_ssl_certs,
         randomize_hosts=zk_randomize_hosts,

@@ -64,7 +64,9 @@ class MonrunChecks(cloup.Group):
         @wraps(cmd_callback)
         @pass_context
         def callback_wrapper(ctx, *args, **kwargs):
-            logging.configure(ctx.obj["config"]["loguru"], "ch-monitoring", cmd.name)
+            logging.configure(
+                ctx.obj["config"]["loguru"], "ch-monitoring", {"cmd_name": cmd.name}
+            )
 
             logging.debug("Start executing")
 

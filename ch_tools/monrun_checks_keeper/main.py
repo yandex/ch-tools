@@ -49,7 +49,7 @@ class KeeperChecks(cloup.Group):
         @cloup.pass_context
         def wrapper(ctx, *a, **kw):
             logging.configure(
-                ctx.obj["config"]["loguru"], "keeper-monitoring", cmd.name
+                ctx.obj["config"]["loguru"], "keeper-monitoring", {"cmd_name": cmd.name}
             )
 
             logging.debug("Start executing")
@@ -66,7 +66,7 @@ class KeeperChecks(cloup.Group):
                 status.set_code(1)
 
             log_message = f"Completed with {status.code};{status.message}"
-            logging.log_status(status.code if status.code <= 1 else 2, log_message)
+            logging.log_status(status.code, log_message)
 
             if ctx.obj and ctx.obj.get("status_mode", False):
                 return status

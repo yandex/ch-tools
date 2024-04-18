@@ -65,7 +65,7 @@ def clean_zk_tables_metadata_for_host(context, node):
 
 
 def _zk_client(context, instance_name="zookeeper01", port=2181, use_ssl=False):
-    logging.set_module_log_level("kazoo", logging.logging.CRITICAL)
+    logging.set_module_log_level("kazoo", logging.CRITICAL)
 
     zk_container = get_container(context, instance_name)
     host, port = get_exposed_port(zk_container, port)
