@@ -171,13 +171,23 @@ def remove_data(path: str) -> None:
     default=False,
     help="Flag to REMOVE data from store subdirectories.",
 )
-def cleanup_data_dir(ctx, remove, disk, keep_going):
+@option(
+    "--max-sql-objects",
+    default=1000000,
+    help="Restriction for max count of sql objects.",
+)
+def cleanup_data_dir(ctx, remove, disk, keep_going, max_sql_objects):
     lost_data: List[dict] = []
     path_to_disk = CLICKHOUSE_PATH + (f"/disks/{disk}" if disk != "default" else "")
     data_path = path_to_disk + "/data"
 
     collect_orphaned_sql_objects_recursive(
-        CLICKHOUSE_METADATA_PATH, data_path, lost_data, 0, 1
+        CLICKHOUSE_METADATA_PATH,
+        data_path,
+        lost_data,
+        0,
+        1,
+        max_sql_objects,
     )
 
     if remove:
@@ -204,10 +214,18 @@ def cleanup_data_dir(ctx, remove, disk, keep_going):
 
 
 def collect_orphaned_sql_objects_recursive(
-    metadata_path: str, data_path: str, lost_data: list, depth: int, max_depth: int
+    metadata_path: str,
+    data_path: str,
+    lost_data: list,
+    depth: int,
+    max_depth: int,
+    max_sql_objects: int,
 ) -> None:
     sql_suff = ".sql"
     # Extract all active sql object from metadata dir
+    if max_sql_objects == len(lost_data):
+        return
+
     list_sql_objects = [
         entry.name[: -len(sql_suff)]
         for entry in os.scandir(metadata_path)
@@ -215,6 +233,9 @@ def collect_orphaned_sql_objects_recursive(
     ]
 
     for entry in os.scandir(data_path):
+        if max_sql_objects == len(lost_data):
+            return
+
         if not entry.is_dir():
             continue
         if entry.name not in list_sql_objects:
@@ -227,12 +248,13 @@ def collect_orphaned_sql_objects_recursive(
                 lost_data,
                 depth + 1,
                 max_depth,
+                max_sql_objects,
             )
 
 
 def remove_from_disk(disk: str, path: str) -> Tuple[int, bytes]:
     cmd = f"clickhouse-disks --disk {disk} remove {path}"
-    logging.debug("Run : %s", cmd)
+    logging.info("Run : %s", cmd)
     proc = subprocess.run(
         cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
