@@ -1,12 +1,12 @@
 from click import command, option, pass_context
 
-from ch_tools.chadmin.cli import get_cluster_name
 from ch_tools.chadmin.internal.table_replica import (
     restart_table_replica,
     restore_table_replica,
 )
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common.clickhouse.client import ClickhouseError
+from ch_tools.common.clickhouse.config import get_cluster_name
 
 
 @command("restore-replica")

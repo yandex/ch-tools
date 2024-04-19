@@ -3,7 +3,6 @@ import os
 from cloup import Choice, Context, argument, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
 
-from ch_tools.chadmin.cli import get_cluster_name
 from ch_tools.chadmin.internal.table import (
     attach_table,
     delete_table,
@@ -15,6 +14,7 @@ from ch_tools.chadmin.internal.table import (
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.cli.parameters import StringParamType
+from ch_tools.common.clickhouse.config import get_cluster_name
 
 
 @group("table")

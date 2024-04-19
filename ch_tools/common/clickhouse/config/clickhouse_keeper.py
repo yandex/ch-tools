@@ -1,10 +1,11 @@
 import os
 
+from ...utils import first_value
 from .path import (
     CLICKHOUSE_KEEPER_CONFIG_PATH,
     CLICKHOUSE_SERVER_PREPROCESSED_CONFIG_PATH,
 )
-from .utils import _dump_config, _load_config
+from .utils import dump_config, load_config
 
 
 class ClickhouseKeeperConfig:
@@ -18,7 +19,7 @@ class ClickhouseKeeperConfig:
 
     @property
     def _clickhouse(self):
-        return self._config.get("clickhouse", self._config.get("yandex", {}))
+        return first_value(self._config)
 
     @property
     def _keeper_server(self):
@@ -53,10 +54,10 @@ class ClickhouseKeeperConfig:
         return self._config_path == CLICKHOUSE_KEEPER_CONFIG_PATH
 
     def dump(self, mask_secrets=True):
-        return _dump_config(self._config, mask_secrets=mask_secrets)
+        return dump_config(self._config, mask_secrets=mask_secrets)
 
     def dump_xml(self, mask_secrets=True):
-        return _dump_config(self._config, mask_secrets=mask_secrets, xml_format=True)
+        return dump_config(self._config, mask_secrets=mask_secrets, xml_format=True)
 
     @staticmethod
     def load():
@@ -65,5 +66,5 @@ class ClickhouseKeeperConfig:
         else:
             config_path = CLICKHOUSE_SERVER_PREPROCESSED_CONFIG_PATH
 
-        config = _load_config(config_path)
+        config = load_config(config_path)
         return ClickhouseKeeperConfig(config, config_path)
