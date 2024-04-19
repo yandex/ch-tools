@@ -51,6 +51,9 @@ class ClickhouseStorageConfiguration:
             prefix=prefix,
         )
 
+    def get_disk_config(self, disk: str) -> dict:
+        return (self._config.get("disks", {})).get(disk, {})
+
 
 def _parse_endpoint(endpoint: str) -> tuple:
     """

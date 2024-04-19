@@ -5,9 +5,11 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional, Tuple
 
+import xmltodict
 from click import group, option, pass_context
 
 from ch_tools.common.cli.formatting import print_response
+from ch_tools.common.clickhouse.config import ClickhouseConfig
 
 CLICKHOUSE_PATH = "/var/lib/clickhouse"
 CLICKHOUSE_STORE_PATH = CLICKHOUSE_PATH + "/store"
@@ -197,13 +199,30 @@ def cleanup_data_dir(ctx, remove, disk, keep_going, max_sql_objects, max_workers
     )
 
     if remove:
+        disk_conig = ClickhouseConfig.load().storage_configuration.get_disk_config(disk)
+        disk_config_path = "/tmp/chadmin-ch-disks.xml"
+        with open(disk_config_path, "w", encoding="utf-8") as f:
+            xmltodict.unparse(
+                {
+                    "yandex": {
+                        "storage_configuration": {"disks": {disk: disk_conig}},
+                    }
+                },
+                f,
+                pretty=True,
+            )
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Can't use map function here. The map method returns a generator
             # and it is not possible to resume a generator after an exception occurs.
             # https://peps.python.org/pep-0255/#specification-generators-and-exception-propagation
             futures_to_part = {
                 executor.submit(
-                    remove_orphaned_sql_object, disk, data, path_to_disk
+                    remove_orphaned_sql_object,
+                    disk,
+                    data,
+                    path_to_disk,
+                    disk_config_path,
                 ): data
                 for data in lost_data
             }
@@ -222,13 +241,13 @@ def cleanup_data_dir(ctx, remove, disk, keep_going, max_sql_objects, max_workers
     print_response(ctx, lost_data, default_format="table")
 
 
-def remove_orphaned_sql_object(disk, data, path_to_disk):
+def remove_orphaned_sql_object(disk, data, path_to_disk, disks_config_path):
 
     path = data["path"]
     if not path.startswith(path_to_disk):
         raise RuntimeError(f"Path {path} on fs does not math with disk {disk}")
     relative_path_on_disk = path[len(path_to_disk) + 1 :]
-    retcode, stderr = remove_from_disk(disk, relative_path_on_disk)
+    retcode, stderr = remove_from_disk(disk, relative_path_on_disk, disks_config_path)
     if retcode:
         raise RuntimeError(
             f"clickhouse-disks remove command has failed: retcode {retcode}, stderr: {stderr.decode()}"
@@ -275,8 +294,10 @@ def collect_orphaned_sql_objects_recursive(
             )
 
 
-def remove_from_disk(disk: str, path: str) -> Tuple[int, bytes]:
-    cmd = f"clickhouse-disks --disk {disk} remove {path}"
+def remove_from_disk(
+    disk: str, path: str, disk_config_path: Optional[str] = None
+) -> Tuple[int, bytes]:
+    cmd = f"clickhouse-disks { '-C ' + disk_config_path if disk_config_path else ''} --disk {disk} remove {path}"
     logging.info("Run : %s", cmd)
     proc = subprocess.run(
         cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
