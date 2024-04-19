@@ -76,12 +76,18 @@ class InterceptHandler(logging.Handler):
         ).log(level, record.getMessage())
 
 
-def configure(config_loguru: dict, module: str, extra: Optional[dict] = None) -> None:
+def configure(
+    config_loguru: dict,
+    module: str,
+    extra: Optional[dict] = None,
+    opt: Optional[dict] = None,
+) -> None:
     """
     Configure logger.
     """
     logger_config["module"] = module
     logger_config["extra"] = extra if extra else {}
+    logger_config["opt"] = opt if opt else {}
     loguru_handlers = []
 
     for name, value in config_loguru["handlers"].get(module, {}).items():
@@ -113,65 +119,64 @@ def configure(config_loguru: dict, module: str, extra: Optional[dict] = None) ->
     logging.basicConfig(handlers=[InterceptHandler()], level=0)
 
 
+def _log(level, msg, *args, **kwargs):
+    # Make a copy so we can rewrite exception option
+    opt = dict(logger_config["opt"])
+    if "exc_info" in kwargs:
+        opt["exc_info"] = kwargs["exc_info"]
+
+    if level == CRITICAL:
+        getLogger(logger_config["module"]).opt(**opt).critical(msg, *args, **kwargs)
+    elif level == ERROR:
+        getLogger(logger_config["module"]).opt(**opt).error(msg, *args, **kwargs)
+    elif level == WARNING:
+        getLogger(logger_config["module"]).opt(**opt).warning(msg, *args, **kwargs)
+    elif level == INFO:
+        getLogger(logger_config["module"]).opt(**opt).info(msg, *args, **kwargs)
+    elif level == DEBUG:
+        getLogger(logger_config["module"]).opt(**opt).debug(msg, *args, **kwargs)
+
+
 def critical(msg, *args, **kwargs):
     """
     Log a message with severity 'CRITICAL'.
     """
-    with_exception = kwargs.get("exc_info", False)
-    getLogger(logger_config["module"]).opt(exception=with_exception).critical(
-        msg, *args, **kwargs
-    )
+    _log(CRITICAL, msg, *args, **kwargs)
 
 
 def error(msg, *args, **kwargs):
     """
     Log a message with severity 'ERROR'.
     """
-    with_exception = kwargs.get("exc_info", False)
-    getLogger(logger_config["module"]).opt(exception=with_exception).error(
-        msg, *args, **kwargs
-    )
+    _log(ERROR, msg, *args, **kwargs)
 
 
-def exception(msg, *args, **kwargs):
+def exception(msg, *args, exc_info=True, **kwargs):
     """
     Log a message with severity 'ERROR' with exception information.
     """
-
-    with_exception = kwargs.get("exc_info", False)
-    getLogger(logger_config["module"]).opt(exception=with_exception).debug(
-        msg, *args, **kwargs
-    )
+    _log(ERROR, msg, *args, exc_info=exc_info, **kwargs)
 
 
 def warning(msg, *args, **kwargs):
     """
     Log a message with severity 'WARNING'.
     """
-    with_exception = kwargs.get("exc_info", False)
-    getLogger(logger_config["module"]).opt(exception=with_exception).warning(
-        msg, *args, **kwargs
-    )
+    _log(WARNING, msg, *args, **kwargs)
 
 
 def info(msg, *args, **kwargs):
     """
     Log a message with severity 'INFO'.
     """
-    with_exception = kwargs.get("exc_info", False)
-    getLogger(logger_config["module"]).opt(exception=with_exception).info(
-        msg, *args, **kwargs
-    )
+    _log(INFO, msg, *args, **kwargs)
 
 
 def debug(msg, *args, **kwargs):
     """
     Log a message with severity 'DEBUG'.
     """
-    with_exception = kwargs.get("exc_info", False)
-    getLogger(logger_config["module"]).opt(exception=with_exception).debug(
-        msg, *args, **kwargs
-    )
+    _log(DEBUG, msg, *args, **kwargs)
 
 
 def log_status(status, msg):
