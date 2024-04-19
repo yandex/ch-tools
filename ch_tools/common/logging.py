@@ -123,7 +123,7 @@ def _log(level, msg, *args, **kwargs):
     # Make a copy so we can rewrite exception option
     opt = dict(logger_config["opt"])
     if "exc_info" in kwargs:
-        opt["exc_info"] = kwargs["exc_info"]
+        opt["exception"] = kwargs["exc_info"]
 
     if level == CRITICAL:
         getLogger(logger_config["module"]).opt(**opt).critical(msg, *args, **kwargs)
