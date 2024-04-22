@@ -8,9 +8,9 @@ from click import BadParameter
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError, NotEmptyError
 
-from ch_tools.chadmin.cli import get_clickhouse_config, get_macros
 from ch_tools.chadmin.internal.utils import chunked, replace_macros
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
 
 
 def get_zk_node(ctx, path, binary=False):
@@ -472,7 +472,7 @@ def _get_zk_client(ctx):
     else:
         # Intentionally don't try to load preprocessed.
         # We are not sure here if zookeeper-servers's changes already have been reloaded by CH.
-        zk_config = get_clickhouse_config(ctx, try_preprocessed=False).zookeeper
+        zk_config = get_clickhouse_config(ctx).zookeeper
         connect_str = ",".join(
             f'{host if host else node["host"]}:{port if port else node["port"]}'
             for node in zk_config.nodes

@@ -88,7 +88,7 @@ class MonrunChecks(cloup.Group):
 
             if ctx.obj and ctx.obj.get("status_mode", False):
                 return status
-            status.report()
+            status.report(ctx)
 
         cmd.callback = callback_wrapper
         super().add_command(

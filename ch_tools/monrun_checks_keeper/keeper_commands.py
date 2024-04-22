@@ -9,7 +9,7 @@ from click import command, pass_context
 from kazoo.client import KazooClient
 
 from ch_tools.common.clickhouse.config import ClickhouseKeeperConfig
-from ch_tools.common.result import Result
+from ch_tools.common.result import CRIT, OK, WARNING, Result
 
 ZOOKEEPER_CFG_FILE = "/etc/zookeeper/conf/zoo.cfg"
 DEFAULT_ZOOKEEPER_DATA_DIR = "/var/lib/zookeeper"
@@ -40,51 +40,51 @@ def alive_command(ctx):
         client.stop()
         client.close()
     except Exception as e:
-        return Result(2, repr(e))
+        return Result(CRIT, repr(e))
 
-    return Result(0, "OK")
+    return Result(OK)
 
 
 @command("avg_latency")
 @pass_context
 def avg_latency_command(ctx):
     """Check average (Zoo)Keeper latency"""
-    return Result(0, keeper_mntr(ctx)["zk_avg_latency"])
+    return Result(OK, keeper_mntr(ctx)["zk_avg_latency"])
 
 
 @command("min_latency")
 @pass_context
 def min_latency_command(ctx):
     """Check minimum (Zoo)Keeper latency"""
-    return Result(0, keeper_mntr(ctx)["zk_min_latency"])
+    return Result(OK, keeper_mntr(ctx)["zk_min_latency"])
 
 
 @command("max_latency")
 @pass_context
 def max_latency_command(ctx):
     """Check maximum (Zoo)Keeper latency"""
-    return Result(0, keeper_mntr(ctx)["zk_max_latency"])
+    return Result(OK, keeper_mntr(ctx)["zk_max_latency"])
 
 
 @command("queue")
 @pass_context
 def queue_command(ctx):
     """Check number of queued requests on (Zoo)Keeper server"""
-    return Result(0, keeper_mntr(ctx)["zk_outstanding_requests"])
+    return Result(OK, keeper_mntr(ctx)["zk_outstanding_requests"])
 
 
 @command("descriptors")
 @pass_context
 def descriptors_command(ctx):
     """Check number of open file descriptors on (Zoo)Keeper server"""
-    return Result(0, keeper_mntr(ctx)["zk_open_file_descriptor_count"])
+    return Result(OK, keeper_mntr(ctx)["zk_open_file_descriptor_count"])
 
 
 @command("version")
 @pass_context
 def get_version_command(ctx):
     """Check (Zoo)Keeper version"""
-    return Result(0, keeper_mntr(ctx)["zk_version"])
+    return Result(OK, keeper_mntr(ctx)["zk_version"])
 
 
 @command("snapshot")
@@ -99,7 +99,7 @@ def check_snapshots():
         files = get_keeper_snapshot_files()
     if len(files) > 0:
         latest = sorted(files, key=os.path.getctime, reverse=True)[0]
-    return Result(0, latest)
+    return Result(OK, latest)
 
 
 @command("last_null_pointer")
@@ -108,11 +108,11 @@ def check_last_null_pointer_exc():
     Get moment from Zookeeper logs then NullPointerException appeared during last 24 hours
     """
     if not os.path.exists(ZOOKEEPER_CFG_FILE):
-        return Result(0, "OK")
+        return Result(OK)
 
     files = get_zookeeper_log_files_for_last_day()
     if len(files) == 0:
-        return Result(0, "OK")
+        return Result(OK)
     prev_line = time.strftime(
         "%Y-%m-%d %H:%M:%S", time.localtime(os.path.getctime(files[0]))
     )
@@ -124,8 +124,8 @@ def check_last_null_pointer_exc():
                     latest = prev_line.split("[")[0].strip()
                 prev_line = line
     if latest:
-        return Result(1, latest)
-    return Result(0, "OK")
+        return Result(WARNING, latest)
+    return Result(OK)
 
 
 def get_zookeeper_log_files_for_last_day():

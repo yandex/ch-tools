@@ -6,7 +6,6 @@ import click
 from click import Context, group, option, pass_context
 from humanfriendly import format_size
 
-from ch_tools.chadmin.cli import get_clickhouse_config
 from ch_tools.chadmin.internal.object_storage import (
     ObjListItem,
     cleanup_s3_object_storage,
@@ -16,6 +15,7 @@ from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.cli.parameters import TimeSpanParamType
+from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 
 # The guard interval is used for S3 objects for which metadata is not found.

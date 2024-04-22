@@ -21,7 +21,7 @@ def diagnose(ctx: Context, output_format: str, normalize_queries: bool) -> None:
     timestamp = datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")
     client = clickhouse_client(ctx)
     dbaas_config = DbaasConfig.load()
-    ch_config = ClickhouseConfig.load()
+    ch_config = ClickhouseConfig.load(try_preprocessed=True)
     keeper_config = ClickhouseKeeperConfig.load()
     ch_users_config = ClickhouseUsersConfig.load()
     version = client.get_clickhouse_version()

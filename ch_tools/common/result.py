@@ -1,3 +1,5 @@
+import re
+
 OK = 0
 WARNING = 1
 CRIT = 2
@@ -26,11 +28,6 @@ class Status:
         if not message and self.code == 0:
             message = "OK"
 
-        # strip underscores and newlines.
-        message = message.replace("_", " ").replace("\n", "")
-        # this is for prometheus labels, see thread:
-        # https://groups.google.com/g/prometheus-users/c/kWxGNfd4dlE/m/veNLgMCLAgAJ
-        message = message.replace('"', "'")
         return message
 
     def set_code(self, new_code):
@@ -46,9 +43,13 @@ class Status:
         """Add detail info."""
         self.verbose.append(new_text)
 
-    def report(self):
+    def report(self, ctx):
         """Output formatted status message."""
-        print(f"{self.code};{self.message}")
+        message = self.message
+        for rule in ctx.obj["config"]["monitoring"]["output"]["escaping_rules"]:
+            message = re.sub(rule["pattern"], rule["replacement"], message)
+
+        print(f"{self.code};{message}")
         if self.verbose:
             for v in self.verbose:
                 if v:

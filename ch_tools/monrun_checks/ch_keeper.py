@@ -3,7 +3,7 @@ from kazoo.client import KazooClient, KazooException
 from kazoo.handlers.threading import KazooTimeoutError
 
 from ch_tools.common.clickhouse.config import ClickhouseKeeperConfig
-from ch_tools.common.result import Result
+from ch_tools.common.result import CRIT, OK, Result
 
 
 @cloup.command("keeper")
@@ -37,7 +37,7 @@ def keeper_command(retries: int, timeout: int, no_verify_ssl_certs: bool) -> Res
     """
     keeper_port, use_ssl = ClickhouseKeeperConfig.load().port_pair
     if not keeper_port:
-        return Result(0, "Disabled")
+        return Result(OK, "Disabled")
 
     client = KazooClient(
         f"127.0.0.1:{keeper_port}",
@@ -52,6 +52,6 @@ def keeper_command(retries: int, timeout: int, no_verify_ssl_certs: bool) -> Res
         client.get("/")
         client.stop()
     except (KazooException, KazooTimeoutError) as e:
-        return Result(2, repr(e))
+        return Result(CRIT, repr(e))
 
-    return Result(0, "OK")
+    return Result(OK)

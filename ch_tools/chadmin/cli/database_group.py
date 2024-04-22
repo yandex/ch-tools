@@ -1,8 +1,8 @@
 from cloup import argument, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
 
-from ch_tools.chadmin.cli import get_cluster_name
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common.clickhouse.config import get_cluster_name
 
 
 @group("database")

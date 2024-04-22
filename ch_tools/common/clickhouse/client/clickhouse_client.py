@@ -1,8 +1,6 @@
 import json
 import subprocess
-import xml.etree.ElementTree as xml
 from datetime import timedelta
-from enum import Enum
 from typing import Any, Dict, Optional
 
 import requests
@@ -10,43 +8,20 @@ from jinja2 import Environment
 from typing_extensions import Self
 
 from ch_tools.common import logging
-from ch_tools.common.clickhouse.config.path import (
-    CLICKHOUSE_CERT_CONFIG_PATH,
-    CLICKHOUSE_CERT_PATH_DEFAULT,
-    CLICKHOUSE_SERVER_PREPROCESSED_CONFIG_PATH,
-)
 from ch_tools.common.utils import version_ge
 
+from ..config import get_clickhouse_config
+from ..config.clickhouse import ClickhousePort
 from .error import ClickhouseError
 from .retry import retry
 from .utils import _format_str_imatch, _format_str_match
 
-
-class ClickhousePort(Enum):
-    HTTPS = 4
-    HTTP = 3
-    TCP_SECURE = 2
-    TCP = 1
-    AUTO = 0  # Select any available port
-
-
-class ClickhousePortHelper:
-    _map = {
-        "https_port": ClickhousePort.HTTPS,
-        "http_port": ClickhousePort.HTTP,
-        "tcp_port_secure": ClickhousePort.TCP_SECURE,
-        "tcp_port": ClickhousePort.TCP,
-    }
-
-    @classmethod
-    def get(
-        cls, port: str, default: ClickhousePort = ClickhousePort.AUTO
-    ) -> ClickhousePort:
-        return cls._map.get(port, default)
-
-    @classmethod
-    def list(cls):
-        return cls._map.keys()
+PORTS_PRIORITY = [
+    ClickhousePort.HTTPS,
+    ClickhousePort.HTTP,
+    ClickhousePort.TCP_SECURE,
+    ClickhousePort.TCP,
+]
 
 
 class ClickhouseClient:
@@ -61,7 +36,7 @@ class ClickhouseClient:
         insecure: bool = False,
         user: Optional[str] = None,
         password: Optional[str] = None,
-        ports: Dict[ClickhousePort, str],
+        ports: Dict[ClickhousePort, int],
         cert_path: Optional[str] = None,
         timeout: int,
         settings: Optional[Dict[str, Any]] = None,
@@ -154,7 +129,7 @@ class ClickhouseClient:
             "--host",
             self.host,
             "--port",
-            self.ports[port],
+            str(self.ports[port]),
         ]
         if self.user is not None:
             cmd.extend(("--user", self.user))
@@ -198,7 +173,7 @@ class ClickhouseClient:
         dry_run: bool = False,
         stream: bool = False,
         settings: Optional[dict] = None,
-        port: ClickhousePort = ClickhousePort.AUTO,
+        port: Optional[ClickhousePort] = None,
     ) -> Any:
         """
         Execute query.
@@ -220,17 +195,17 @@ class ClickhouseClient:
 
         per_query_settings = settings or {}
 
-        found_port = port
-        if found_port == ClickhousePort.AUTO:
-            for port_ in ClickhousePort:
-                if self.check_port(port_):
-                    found_port = port_
+        if port is None:
+            for i_port in PORTS_PRIORITY:
+                if self.check_port(i_port):
+                    port = i_port
                     break
-            if found_port == ClickhousePort.AUTO:
+
+            if port is None:
                 raise UserWarning(2, "Can't find any port in clickhouse-server config")
 
         logging.debug(f"Executing query: {query}")
-        if found_port in [ClickhousePort.HTTPS, ClickhousePort.HTTP]:
+        if port in [ClickhousePort.HTTPS, ClickhousePort.HTTP]:
             return self._execute_http(
                 query,
                 format_,
@@ -238,9 +213,9 @@ class ClickhouseClient:
                 timeout,
                 stream,
                 per_query_settings,
-                found_port,
+                port,
             )
-        return self._execute_tcp(query, format_, found_port)
+        return self._execute_tcp(query, format_, port)
 
     def query_json_data(
         self: Self,
@@ -253,7 +228,7 @@ class ClickhouseClient:
         dry_run: bool = False,
         stream: bool = False,
         settings: Optional[dict] = None,
-        port: ClickhousePort = ClickhousePort.AUTO,
+        port: Optional[ClickhousePort] = None,
     ) -> Any:
         """
         Execute ClickHouse query formatted as JSON and return data.
@@ -287,15 +262,13 @@ class ClickhouseClient:
         template = env.from_string(query)
         return template.render(kwargs)
 
-    def check_port(self, port=ClickhousePort.AUTO):
-        if port == ClickhousePort.AUTO:
-            return bool(self.ports)  # Has any port
+    def check_port(self, port: ClickhousePort) -> bool:
         return port in self.ports
 
-    def get_port(self, port):
-        return self.ports.get(port, 0)
+    def get_port(self, port: ClickhousePort) -> int:
+        return self.ports[port]
 
-    def ping(self, port=ClickhousePort.AUTO):
+    def ping(self, port: ClickhousePort) -> str:
         return self.query(query=None, port=port)
 
 
@@ -305,18 +278,18 @@ def clickhouse_client(ctx):
     Init ClickHouse client and store to the context if it doesn't exist.
     """
     if not ctx.obj.get("chcli"):
-        ports, cert_path = get_ports()
-        config = ctx.obj["config"]["clickhouse"]
+        ch_server_config = get_clickhouse_config(ctx)
+        tools_config = ctx.obj["config"]["clickhouse"]
         user, password = clickhouse_credentials(ctx)
         ctx.obj["chcli"] = ClickhouseClient(
-            host=config["host"],
-            insecure=config["insecure"],
+            host=tools_config["host"],
+            ports=ch_server_config.ports,
             user=user,
             password=password,
-            ports=ports,
-            cert_path=cert_path,
-            timeout=config["timeout"],
-            settings=config["settings"],
+            cert_path=ch_server_config.cert_path,
+            insecure=tools_config["insecure"],
+            timeout=tools_config["timeout"],
+            settings=tools_config["settings"],
         )
 
     return ctx.obj["chcli"]
@@ -335,27 +308,3 @@ def clickhouse_credentials(ctx):
         password = config["monitoring_password"]
 
     return user, password
-
-
-def get_ports():
-    ports: Dict[ClickhousePort, str] = {}
-    try:
-        root = xml.parse(CLICKHOUSE_SERVER_PREPROCESSED_CONFIG_PATH)
-        for setting in ClickhousePortHelper.list():
-            node = root.find(setting)
-            if node is not None:
-                ports[ClickhousePortHelper.get(setting)] = str(node.text)
-        if not ports:
-            raise UserWarning(2, "Can't find any port in clickhouse-server config")
-        node = root.find(CLICKHOUSE_CERT_CONFIG_PATH)
-        cert_path = CLICKHOUSE_CERT_PATH_DEFAULT
-        if node is not None:
-            cert_path = str(node.text)
-
-    except FileNotFoundError as e:
-        raise UserWarning(2, f"clickhouse-server config not found: {e.filename}")
-
-    except Exception as e:
-        raise UserWarning(2, f"Failed to parse clickhouse-server config: {e}")
-
-    return ports, cert_path

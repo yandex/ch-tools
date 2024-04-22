@@ -1,10 +1,10 @@
 from cloup import Choice, argument, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
 
-from ch_tools.chadmin.cli import get_cluster_name
 from ch_tools.chadmin.internal.process import get_process, kill_process, list_processes
 from ch_tools.chadmin.internal.utils import format_query
 from ch_tools.common.cli.formatting import print_response
+from ch_tools.common.clickhouse.config import get_cluster_name
 
 FIELD_FORMATTERS = {
     "query": format_query,

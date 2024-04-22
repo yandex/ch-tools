@@ -57,6 +57,16 @@ DEFAULT_CONFIG = {
             },
         },
     },
+    "monitoring": {
+        "output": {
+            "escaping_rules": [
+                {
+                    "pattern": "\n",
+                    "replacement": " ",
+                },
+            ],
+        },
+    },
     "ch-monitoring": {
         "log-errors": {
             "crit": 60,
