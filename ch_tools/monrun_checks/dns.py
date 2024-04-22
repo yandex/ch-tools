@@ -29,22 +29,27 @@ class _TargetRecord:
         self.strict = strict
 
 
-@click.command("ext_ip_dns")
+@click.command("dns")
 @click.option("--cluster", "cluster", is_flag=True, help="Check cluster DNS records")
 @click.option("--private", "private", is_flag=True, help="Check private DNS records")
+@click.option("--ipv4", "ipv4", is_flag=True, help="Check A DNS records")
 @click.option("--ipv6", "ipv6", is_flag=True, help="Check AAAA DNS records")
 @click.option(
     "--imdsv2", "imdsv2", is_flag=True, help="Use imdsv2 token for non gcp hosts"
 )
-def ext_ip_dns_command(
-    cluster: bool, private: bool, ipv6: bool, imdsv2: bool
+def dns_command(
+    cluster: bool,
+    private: bool,
+    ipv4: bool,
+    ipv6: bool,
+    imdsv2: bool,
 ) -> Result:
     """
-    Check that all DNS records consistent.
+    Check presence and correctness of DNS records.
     """
     err = []
     for record in _get_host_dns(cluster, private):
-        err.extend(_check_fqdn(record, ipv6, imdsv2))
+        err.extend(_check_fqdn(record, ipv4, ipv6, imdsv2))
 
     if not err:
         return Result(OK)
@@ -52,7 +57,7 @@ def ext_ip_dns_command(
     return Result(CRIT, ", ".join(err))
 
 
-def _check_fqdn(target: _TargetRecord, ipv6: bool, imdsv2: bool) -> list:
+def _check_fqdn(target: _TargetRecord, ipv4: bool, ipv6: bool, imdsv2: bool) -> list:
     err = []
     resolver = dns.resolver.Resolver()
 
@@ -68,13 +73,13 @@ def _check_fqdn(target: _TargetRecord, ipv6: bool, imdsv2: bool) -> list:
             return target_addr == actual_addr, target_addr, actual_addr
         return actual_addr.issuperset(target_addr), target_addr, actual_addr
 
-    ok, target_addr, actual_addr = _compare(
-        "A", "private_v4" if target.private else "public_v4"
-    )
-    if not ok:
-        err.append(
-            f"{target.fqdn}: invalid A: expected {target_addr}, actual {actual_addr}"
-        )
+    if ipv4:
+        ip_type = "private_v4" if target.private else "public_v4"
+        ok, target_addr, actual_addr = _compare("A", ip_type)
+        if not ok:
+            err.append(
+                f"{target.fqdn}: invalid A: expected {target_addr}, actual {actual_addr}"
+            )
     if ipv6:
         ok, target_addr, actual_addr = _compare("AAAA", "ipv6")
         if not ok:

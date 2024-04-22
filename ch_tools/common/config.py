@@ -87,6 +87,13 @@ DEFAULT_CONFIG = {
             "inserts_in_queue_warn": 10,
             "inserts_in_queue_crit": 20,
         },
+        "dns": {
+            "ipv4": True,
+            "ipv6": False,
+            "cluster": False,
+            "private": False,
+            "imdsv2": False,
+        },
     },
     "keeper-monitoring": {},
 }

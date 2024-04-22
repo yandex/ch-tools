@@ -33,8 +33,8 @@ from ch_tools.monrun_checks.ch_ro_replica import ro_replica_command
 from ch_tools.monrun_checks.ch_s3_backup_orphaned import orphaned_backups_command
 from ch_tools.monrun_checks.ch_system_queues import system_queues_command
 from ch_tools.monrun_checks.ch_tls import tls_command
+from ch_tools.monrun_checks.dns import dns_command
 from ch_tools.monrun_checks.exceptions import translate_to_status
-from ch_tools.monrun_checks.ext_ip_dns import ext_ip_dns_command
 from ch_tools.monrun_checks.status import status_command
 
 LOG_FILE = "/var/log/clickhouse-monitoring/clickhouse-monitoring.log"
@@ -146,7 +146,7 @@ CLI_COMMANDS = [
     orphaned_backups_command,
     tls_command,
     keeper_command,
-    ext_ip_dns_command,
+    dns_command,
 ]
 
 cli.add_command(status_command(CLI_COMMANDS))
