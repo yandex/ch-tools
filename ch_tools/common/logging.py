@@ -80,14 +80,11 @@ def configure(
     config_loguru: dict,
     module: str,
     extra: Optional[dict] = None,
-    opt: Optional[dict] = None,
 ) -> None:
     """
     Configure logger.
     """
     logger_config["module"] = module
-    logger_config["extra"] = extra if extra else {}
-    logger_config["opt"] = opt if opt else {}
     loguru_handlers = []
 
     for name, value in config_loguru["handlers"].get(module, {}).items():
@@ -113,28 +110,17 @@ def configure(
             handler["filter"] = make_filter(name)
         loguru_handlers.append(handler)
 
-    logger.configure(handlers=loguru_handlers, activation=[("", True)])
+    logger.configure(handlers=loguru_handlers, activation=[("", True)], extra=extra)
 
     # Configure logging.
     logging.basicConfig(handlers=[InterceptHandler()], level=0)
 
 
 def _log(level, msg, *args, **kwargs):
-    # Make a copy so we can rewrite exception option
-    opt = dict(logger_config["opt"])
-    if "exc_info" in kwargs:
-        opt["exception"] = kwargs["exc_info"]
-
-    if level == CRITICAL:
-        getLogger(logger_config["module"]).opt(**opt).critical(msg, *args, **kwargs)
-    elif level == ERROR:
-        getLogger(logger_config["module"]).opt(**opt).error(msg, *args, **kwargs)
-    elif level == WARNING:
-        getLogger(logger_config["module"]).opt(**opt).warning(msg, *args, **kwargs)
-    elif level == INFO:
-        getLogger(logger_config["module"]).opt(**opt).info(msg, *args, **kwargs)
-    elif level == DEBUG:
-        getLogger(logger_config["module"]).opt(**opt).debug(msg, *args, **kwargs)
+    exc_info = kwargs.get("exc_info", False)
+    getLogger(logger_config["module"]).opt(exception=exc_info).log(
+        level, msg, *args, **kwargs
+    )
 
 
 def critical(msg, *args, **kwargs):
@@ -196,7 +182,7 @@ def getLogger(name: str) -> Any:
     """
     Get logger with specific name.
     """
-    return logger.bind(logger_name=name, **logger_config["extra"])
+    return logger.bind(logger_name=name)
 
 
 def add(sink, level, format_):
