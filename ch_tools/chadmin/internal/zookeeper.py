@@ -1,4 +1,3 @@
-import logging
 import os
 import re
 from collections import deque
@@ -10,6 +9,7 @@ from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError, NotEmptyError
 
 from ch_tools.chadmin.internal.utils import chunked, replace_macros
+from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
 
 
@@ -493,7 +493,7 @@ def _get_zk_client(ctx):
         connect_str,
         auth_data=auth_data,
         timeout=timeout,
-        logger=logging.getLogger(),
+        logger=logging.getLogger("chadmin"),
         use_ssl=use_ssl,
         verify_certs=verify_ssl_certs,
         randomize_hosts=zk_randomize_hosts,

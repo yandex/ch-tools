@@ -102,6 +102,7 @@ termcolor = "*"
 tqdm = "*"
 typing-extensions = "~4.1.1"
 xmltodict = "*"
+loguru = "*"
 
 [tool.poetry.dev-dependencies]
 # TODO: use groups in a modern version of poetry

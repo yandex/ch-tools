@@ -1,5 +1,4 @@
 import json
-import logging
 import subprocess
 from datetime import timedelta
 from typing import Any, Dict, Optional
@@ -8,6 +7,7 @@ import requests
 from jinja2 import Environment
 from typing_extensions import Self
 
+from ch_tools.common import logging
 from ch_tools.common.utils import version_ge
 
 from ..config import get_clickhouse_config
@@ -204,7 +204,7 @@ class ClickhouseClient:
             if port is None:
                 raise UserWarning(2, "Can't find any port in clickhouse-server config")
 
-        logging.debug("Executing query: %s", query)
+        logging.debug(f"Executing query: {query}")
         if port in [ClickhousePort.HTTPS, ClickhousePort.HTTP]:
             return self._execute_http(
                 query,

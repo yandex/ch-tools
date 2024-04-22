@@ -1,13 +1,15 @@
 """
 Steps for interacting with ZooKeeper or Clickhouse Keeper.
 """
-import logging
+
 import os
 
 from behave import given
 from kazoo.client import KazooClient
 from modules.docker import get_container, get_exposed_port
 from tenacity import retry, stop_after_attempt, wait_fixed
+
+from ch_tools.common import logging
 
 
 @given("a working zookeeper")
@@ -63,8 +65,7 @@ def clean_zk_tables_metadata_for_host(context, node):
 
 
 def _zk_client(context, instance_name="zookeeper01", port=2181, use_ssl=False):
-    # disable logging
-    logging.getLogger("kazoo").setLevel(logging.CRITICAL)
+    logging.set_module_log_level("kazoo", logging.CRITICAL)
 
     zk_container = get_container(context, instance_name)
     host, port = get_exposed_port(zk_container, port)

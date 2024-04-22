@@ -2,7 +2,6 @@
 Utility functions.
 """
 
-import logging
 import string
 from functools import wraps
 from random import choice as random_choise
@@ -10,6 +9,8 @@ from types import SimpleNamespace
 from typing import Mapping, MutableMapping
 
 from pkg_resources import parse_version
+
+from ch_tools.common import logging
 
 from .typing import ContextT
 
@@ -40,11 +41,11 @@ def env_stage(event, fail=False):
         @wraps(fun)
         def _wrapped_fun(*args, **kwargs):
             stage_name = f"{fun.__module__}.{fun.__name__}"
-            logging.info("initiating %s stage %s", event, stage_name)
+            logging.info(f"initiating {event} stage {stage_name}")
             try:
                 return fun(*args, **kwargs)
             except Exception as e:
-                logging.error("%s failed: %s", stage_name, e)
+                logging.error(f"{stage_name} failed: {repr(e)}")
                 if fail:
                     raise
 

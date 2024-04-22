@@ -1,8 +1,8 @@
-import logging
 import time
 
 import click
 
+from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import (
     ClickhousePort,
     clickhouse_client,
@@ -47,7 +47,7 @@ def ping_command(ctx, number, crit, warn):
                 fails[ClickhousePort.TCP] += 1
                 has_fails = True
         except Exception as e:
-            logging.debug("Error on tcp port: %s", repr(e))
+            logging.debug(f"Error on tcp port: {repr(e)}")
             fails[ClickhousePort.TCP] += 1
             has_fails = True
 
@@ -62,7 +62,7 @@ def ping_command(ctx, number, crit, warn):
                     fails[ClickhousePort.TCP_SECURE] += 1
                     has_fails = True
         except Exception as e:
-            logging.debug("Error on tcps port: %s", repr(e))
+            logging.debug(f"Error on tcps port: {repr(e)}")
             fails[ClickhousePort.TCP_SECURE] += 1
             has_fails = True
 
@@ -78,7 +78,7 @@ def ping_command(ctx, number, crit, warn):
                     fails[ClickhousePort.HTTP] += 1
                     has_fails = True
         except Exception as e:
-            logging.debug("Error on http port: %s", repr(e))
+            logging.debug(f"Error on http port: {repr(e)}")
             fails[ClickhousePort.HTTP] += 1
             has_fails = True
 
@@ -94,7 +94,7 @@ def ping_command(ctx, number, crit, warn):
                     fails[ClickhousePort.HTTPS] += 1
                     has_fails = True
         except Exception as e:
-            logging.debug("Error on https port: %s", repr(e))
+            logging.debug(f"Error on https port: {repr(e)}")
             fails[ClickhousePort.HTTPS] += 1
             has_fails = True
 

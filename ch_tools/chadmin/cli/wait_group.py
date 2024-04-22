@@ -1,4 +1,3 @@
-import logging
 import os
 import sys
 import time
@@ -7,6 +6,7 @@ from click import FloatRange, group, option, pass_context
 from requests.exceptions import ReadTimeout
 
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.client.error import ClickhouseError
 from ch_tools.common.commands.replication_lag import estimate_replication_lag
@@ -148,7 +148,7 @@ def wait_replication_sync_command(
 def wait_started_command(ctx, timeout, quiet):
     """Wait for ClickHouse server to start up."""
     if not quiet:
-        logging.basicConfig(level="INFO", format="%(message)s")
+        logging.add(sys.stdout, level="INFO", format_="{message}")
 
     if not timeout:
         timeout = get_timeout()
@@ -217,7 +217,7 @@ def is_clickhouse_alive():
             return True
 
     except Exception as e:
-        logging.error("Failed to perform ch_ping check: %s", repr(e))
+        logging.error(f"Failed to perform ch_ping check: {repr(e)}")
 
     return False
 

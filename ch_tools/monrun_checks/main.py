@@ -1,4 +1,3 @@
-import logging
 import os
 import pwd
 import sys
@@ -10,7 +9,8 @@ import click
 import cloup
 from cloup import group, option, pass_context, version_option
 
-from ch_tools.common.config import load_config
+from ch_tools.common import logging
+from ch_tools.common.config import CH_MONITORING_LOG_FILE, load_config
 
 warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
 
@@ -37,7 +37,6 @@ from ch_tools.monrun_checks.dns import dns_command
 from ch_tools.monrun_checks.exceptions import translate_to_status
 from ch_tools.monrun_checks.status import status_command
 
-LOG_FILE = "/var/log/clickhouse-monitoring/clickhouse-monitoring.log"
 DEFAULT_USER = "monitor"
 
 # pylint: disable=too-many-ancestors
@@ -65,13 +64,9 @@ class MonrunChecks(cloup.Group):
         @wraps(cmd_callback)
         @pass_context
         def callback_wrapper(ctx, *args, **kwargs):
-            os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
-            logging.basicConfig(
-                filename=LOG_FILE,
-                level=logging.DEBUG,
-                format=f"%(asctime)s %(process)-5d [%(levelname)s] {cmd.name}: %(message)s",
+            logging.configure(
+                ctx.obj["config"]["loguru"], "ch-monitoring", {"cmd_name": cmd.name}
             )
-            logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
 
             logging.debug("Start executing")
 
@@ -89,10 +84,7 @@ class MonrunChecks(cloup.Group):
                 status = translate_to_status(exc, status)
 
             log_message = f"Completed with {status.code};{status.message}"
-            log_level = {0: logging.DEBUG, 1: logging.WARNING}.get(
-                status.code, logging.ERROR
-            )
-            logging.log(log_level, log_message)
+            logging.log_status(status.code, log_message)
 
             if ctx.obj and ctx.obj.get("status_mode", False):
                 return status
@@ -174,8 +166,8 @@ def _ensure_monitoring_user():
         else:
             try:
                 pw = pwd.getpwnam(DEFAULT_USER)
-                if os.path.isfile(LOG_FILE):
-                    os.chown(LOG_FILE, pw.pw_uid, pw.pw_gid)
+                if os.path.isfile(CH_MONITORING_LOG_FILE):
+                    os.chown(CH_MONITORING_LOG_FILE, pw.pw_uid, pw.pw_gid)
                 groups = os.getgrouplist(DEFAULT_USER, pw.pw_gid)
                 os.setgroups(groups)
                 os.setgid(pw.pw_gid)

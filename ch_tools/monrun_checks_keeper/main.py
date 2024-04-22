@@ -1,5 +1,3 @@
-import logging
-import os
 from functools import wraps
 from typing import Optional
 
@@ -7,6 +5,7 @@ import click
 import cloup
 
 from ch_tools import __version__
+from ch_tools.common import logging
 from ch_tools.common.cli.context_settings import CONTEXT_SETTINGS
 from ch_tools.common.cli.locale_resolver import LocaleResolver
 from ch_tools.common.config import load_config
@@ -23,8 +22,6 @@ from ch_tools.monrun_checks_keeper.keeper_commands import (
     queue_command,
 )
 from ch_tools.monrun_checks_keeper.status import status_command
-
-LOG_FILE = "/var/log/keeper-monitoring/keeper-monitoring.log"
 
 # pylint: disable=too-many-ancestors
 
@@ -51,12 +48,10 @@ class KeeperChecks(cloup.Group):
         @wraps(cmd_callback)
         @cloup.pass_context
         def wrapper(ctx, *a, **kw):
-            os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
-            logging.basicConfig(
-                filename=LOG_FILE,
-                level=logging.DEBUG,
-                format=f"%(asctime)s %(process)-5d [%(levelname)s] {cmd.name}: %(message)s",
+            logging.configure(
+                ctx.obj["config"]["loguru"], "keeper-monitoring", {"cmd_name": cmd.name}
             )
+
             logging.debug("Start executing")
 
             status = Status()
@@ -71,9 +66,7 @@ class KeeperChecks(cloup.Group):
                 status.set_code(1)
 
             log_message = f"Completed with {status.code};{status.message}"
-            logging.log(
-                logging.DEBUG if status.code == 0 else logging.ERROR, log_message
-            )
+            logging.log_status(status.code, log_message)
 
             if ctx.obj and ctx.obj.get("status_mode", False):
                 return status

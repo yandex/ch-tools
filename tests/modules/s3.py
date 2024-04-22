@@ -1,12 +1,14 @@
 """
 S3 client.
 """
-import logging
+
 from typing import List, Optional
 
 import boto3
 from botocore.client import Config
 from botocore.errorfactory import ClientError
+
+from ch_tools.common import logging
 
 from . import docker
 from .typing import ContextT
@@ -45,7 +47,7 @@ class S3Client:
         self._s3_bucket_name = bucket if bucket else config["bucket"]
 
         for module_logger in ("boto3", "botocore", "s3transfer", "urllib3"):
-            logging.getLogger(module_logger).setLevel(logging.CRITICAL)
+            logging.set_module_log_level(module_logger, logging.CRITICAL)
 
     def upload_data(self, data: bytes, remote_path: str) -> None:
         """
