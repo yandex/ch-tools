@@ -120,6 +120,11 @@ def list_partitions_command(ctx, **kwargs):
     ),
     option("--min-partition", "min_partition_id"),
     option("--max-partition", "max_partition_id"),
+    option(
+        "--disk",
+        "disk_name",
+        help="Filter in partitions to attach by the specified disk.",
+    ),
     constraint=RequireAtLeast(1),
 )
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
