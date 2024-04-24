@@ -2,6 +2,7 @@ from cloup import argument, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
 
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_cluster_name
 
 
@@ -22,7 +23,7 @@ def database_group():
 )
 @pass_context
 def get_database_command(ctx, database, active_parts):
-    print(
+    logging.info(
         get_databases(
             ctx, database=database, active_parts=active_parts, format_="Vertical"
         )
@@ -41,7 +42,7 @@ def get_database_command(ctx, database, active_parts):
 )
 @pass_context
 def list_databases_command(ctx, **kwargs):
-    print(get_databases(ctx, **kwargs, format_="PrettyCompact"))
+    logging.info(get_databases(ctx, **kwargs, format_="PrettyCompact"))
 
 
 @database_group.command("delete")

@@ -1,6 +1,7 @@
 from click import ClickException
 
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
 
 
 def get_process(ctx, query_id):
@@ -118,7 +119,7 @@ def kill_process(ctx, query_id=None, user=None, exclude_user=None):
           AND query_id = '{{ query_id }}'
         {% endif %}
         """
-    print(
+    logging.info(
         execute_query(
             ctx, query_str, query_id=query_id, user=user, exclude_user=exclude_user
         )

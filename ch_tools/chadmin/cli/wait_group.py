@@ -117,11 +117,11 @@ def wait_replication_sync_command(
                 settings={"receive_timeout": timeout},
             )
         except ReadTimeout:
-            print(f"Timeout while running SYNC REPLICA on {full_name}.")
+            logging.error(f"Timeout while running SYNC REPLICA on {full_name}.")
             sys.exit(1)
         except ClickhouseError as e:
             if "TIMEOUT_EXCEEDED" in str(e):
-                print(f"Timeout while running SYNC REPLICA on {full_name}.")
+                logging.error(f"Timeout while running SYNC REPLICA on {full_name}.")
                 sys.exit(1)
             raise
 
@@ -132,7 +132,7 @@ def wait_replication_sync_command(
             sys.exit(0)
         time.sleep(pause.total_seconds())
 
-    print("Timeout while waiting on replication-lag command.")
+    logging.error("Timeout while waiting on replication-lag command.")
     sys.exit(1)
 
 
@@ -147,9 +147,8 @@ def wait_replication_sync_command(
 @pass_context
 def wait_started_command(ctx, timeout, quiet):
     """Wait for ClickHouse server to start up."""
-    if not quiet:
-        logging.add(sys.stdout, level="INFO", format_="{message}")
-
+    if quiet:
+        logging.disable_stdout_logger()
     if not timeout:
         timeout = get_timeout()
 

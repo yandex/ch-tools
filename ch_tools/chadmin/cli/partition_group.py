@@ -9,6 +9,7 @@ from ch_tools.chadmin.internal.partition import (
     optimize_partition,
 )
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
 from ch_tools.common.cli.parameters import BytesParamType
 
 
@@ -86,7 +87,7 @@ def partition_group():
 @pass_context
 def list_partitions_command(ctx, **kwargs):
     """List partitions."""
-    print(get_partitions(ctx, format_="PrettyCompact", **kwargs))
+    logging.info(get_partitions(ctx, format_="PrettyCompact", **kwargs))
 
 
 @partition_group.command("attach")
@@ -162,7 +163,7 @@ def attach_partitions_command(
             )
         except Exception as e:
             if keep_going:
-                print(repr(e))
+                logging.warning(repr(e))
             else:
                 raise
 
@@ -256,7 +257,7 @@ def detach_partitions_command(
             )
         except Exception as e:
             if keep_going:
-                print(repr(e))
+                logging.warning(repr(e))
             else:
                 raise
 

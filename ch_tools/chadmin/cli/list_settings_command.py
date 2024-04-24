@@ -1,6 +1,7 @@
 from click import command, option, pass_context
 
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
 
 
 @command("settings")
@@ -22,4 +23,4 @@ def list_settings_command(ctx, name, changed):
           AND changed
         {% endif %}
         """
-    print(execute_query(ctx, query, name=name, changed=changed))
+    logging.info(execute_query(ctx, query, name=name, changed=changed))

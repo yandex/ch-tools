@@ -12,6 +12,7 @@ from ch_tools.chadmin.internal.table import (
     materialize_ttl,
 )
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.cli.parameters import StringParamType
 from ch_tools.common.clickhouse.config import get_cluster_name
@@ -109,7 +110,7 @@ def columns_command(ctx, database, table):
         WHERE database = '{{ database }}'
           AND table = '{{ table }}'
         """
-    print(execute_query(ctx, query, database=database, table=table))
+    logging.info(execute_query(ctx, query, database=database, table=table))
 
 
 @table_group.command("delete")
@@ -527,4 +528,4 @@ def set_flag_command(
 
     if verbose:
         for table_, flag_path in zip(tables, flag_paths):
-            print(f"{table_['table']}: {flag_path}")
+            logging.info(f"{table_['table']}: {flag_path}")

@@ -4,6 +4,7 @@ from click import group, option, pass_context
 
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import delete_zk_node
+from ch_tools.common import logging
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config import get_cluster_name
 
@@ -77,7 +78,7 @@ def list_replication_queue_command(ctx, **kwargs):
     """
     List replication queue tasks.
     """
-    print(get_replication_queue_tasks(ctx, **kwargs, format_="Vertical"))
+    logging.info(get_replication_queue_tasks(ctx, **kwargs, format_="Vertical"))
 
 
 @replication_queue_group.command("delete")
@@ -136,7 +137,7 @@ def delete_command(ctx, **kwargs):
     for table, tasks in group_tasks_by_table(tasks).items():
         database, table = table
 
-        print(f"Detaching table `{database}`.`{table}`")
+        logging.info(f"Detaching table `{database}`.`{table}`")
         execute_query(
             ctx,
             f"""DETACH TABLE `{database}`.`{table}`""",
@@ -147,10 +148,10 @@ def delete_command(ctx, **kwargs):
 
         for task in tasks:
             zk_path = task["zk_path"]
-            print(f"Deleting task from ZooKeeper: {zk_path}")
+            logging.info(f"Deleting task from ZooKeeper: {zk_path}")
             delete_zk_node(ctx, zk_path)
 
-        print(f"Attaching table `{database}`.`{table}`")
+        logging.info(f"Attaching table `{database}`.`{table}`")
         execute_query(
             ctx,
             f"""ATTACH TABLE `{database}`.`{table}`""",

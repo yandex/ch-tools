@@ -8,6 +8,7 @@ from typing import Any, Dict, List
 import yaml
 from requests.exceptions import RequestException
 
+from ch_tools.common import logging
 from ch_tools.common.clickhouse.client import ClickhouseClient, OutputFormat
 
 from .utils import delayed
@@ -74,7 +75,7 @@ class DiagnosticsData:
             compressor = gzip.GzipFile(mode="wb", fileobj=sys.stdout.buffer)
             compressor.write(result.encode())
         else:
-            print(result)
+            logging.info(result)
 
     def _section(self, name=None):
         if self._sections[-1]["section"] != name:

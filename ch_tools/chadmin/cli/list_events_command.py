@@ -1,6 +1,7 @@
 from click import command, pass_context
 
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
 
 
 @command("events")
@@ -9,4 +10,4 @@ def list_events_command(ctx):
     """
     Show metrics from system.events.
     """
-    print(execute_query(ctx, "SELECT * FROM system.events"))
+    logging.info(execute_query(ctx, "SELECT * FROM system.events"))

@@ -1,6 +1,7 @@
 from click import group, option, pass_context
 
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_cluster_name
 
 
@@ -41,4 +42,4 @@ def list_crashes_command(ctx, on_cluster):
         {% endif %}
         ORDER BY event_time DESC
         """
-    print(execute_query(ctx, query_str, cluster=cluster, format_="Vertical"))
+    logging.info(execute_query(ctx, query_str, cluster=cluster, format_="Vertical"))

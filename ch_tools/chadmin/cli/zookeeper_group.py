@@ -16,6 +16,7 @@ from ch_tools.chadmin.internal.zookeeper import (
     update_acls_zk_node,
     update_zk_nodes,
 )
+from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_json, print_response
 from ch_tools.common.cli.parameters import ListParamType, StringParamType
 from ch_tools.common.config import load_config
@@ -99,7 +100,7 @@ def get_command(ctx, path, binary):
 
     Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
     """
-    print(get_zk_node(ctx, path, binary=binary))
+    logging.info(get_zk_node(ctx, path, binary=binary))
 
 
 @zookeeper_group.command("exists")
@@ -111,9 +112,9 @@ def exists_command(ctx, path):
     Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
     """
     if check_zk_node(ctx, path):
-        print(True)
+        logging.info(True)
         return
-    print(False)
+    logging.error(False)
     sys.exit(1)
 
 
@@ -141,7 +142,7 @@ def list_command(ctx, path, verbose):
     if verbose:
         print_response(ctx, nodes, format_="table")
     else:
-        print("\n".join(nodes))
+        logging.info("\n".join(nodes))
 
 
 @zookeeper_group.command("stat")
@@ -152,7 +153,7 @@ def stat_command(ctx, path):
 
     Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
     """
-    print(get_zk_node_acls(ctx, path)[1])
+    logging.info(get_zk_node_acls(ctx, path)[1])
 
 
 @zookeeper_group.command("create")
@@ -207,7 +208,7 @@ def get_table_metadata_command(ctx, database, table):
     """Get table metadata stored in ZooKeeper."""
     table_replica = get_table_replica(ctx, database, table)
     path = table_replica["zookeeper_path"] + "/metadata"
-    print(get_zk_node(ctx, path))
+    logging.info(get_zk_node(ctx, path))
 
 
 @zookeeper_group.command("update-table-metadata")
@@ -274,7 +275,7 @@ def get_table_replica_metadata_command(ctx, database, table):
     """Get table replica metadata stored in ZooKeeper."""
     table_replica = get_table_replica(ctx, database, table)
     path = table_replica["replica_path"] + "/metadata"
-    print(get_zk_node(ctx, path))
+    logging.info(get_zk_node(ctx, path))
 
 
 @zookeeper_group.command("get-ddl-task")
@@ -283,7 +284,7 @@ def get_table_replica_metadata_command(ctx, database, table):
 def get_ddl_task_command(ctx, task):
     """Get DDL queue task metadata stored in ZooKeeper."""
     path = f"/clickhouse/task_queue/ddl/{task}"
-    print(get_zk_node(ctx, path))
+    logging.info(get_zk_node(ctx, path))
 
 
 @zookeeper_group.command("delete-ddl-task")

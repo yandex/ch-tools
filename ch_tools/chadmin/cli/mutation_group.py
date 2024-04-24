@@ -1,6 +1,7 @@
 from click import argument, group, option, pass_context
 
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_cluster_name
 
 
@@ -31,7 +32,7 @@ def get_mutation(ctx, mutation, last):
         LIMIT 1
         {% endif %}
         """
-    print(execute_query(ctx, query, mutation=mutation, format_="Vertical"))
+    logging.info(execute_query(ctx, query, mutation=mutation, format_="Vertical"))
 
 
 @mutation_group.command("list")
@@ -102,7 +103,7 @@ def list_mutations(ctx, is_done, command_pattern, on_cluster, limit):
         limit=limit,
         format_="Vertical",
     )
-    print(response)
+    logging.info(response)
 
 
 @mutation_group.command("kill")
@@ -138,4 +139,4 @@ def kill_mutation(ctx, command_pattern, on_cluster):
         echo=True,
         format_="PrettyCompact",
     )
-    print(response)
+    logging.info(response)

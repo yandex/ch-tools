@@ -230,9 +230,8 @@ def cleanup_data_dir(ctx, remove, disk, keep_going, max_sql_objects, max_workers
                     future.result()
                 except Exception as e:
                     if keep_going:
-                        logging.exception(
-                            "Ignoring the exception due to keep-going flag : %s ",
-                            repr(e),
+                        logging.warning(
+                            f"Ignoring the exception due to keep-going flag : {repr(e)}",
                         )
                     else:
                         raise
@@ -297,7 +296,7 @@ def remove_from_disk(
     disk: str, path: str, disk_config_path: Optional[str] = None
 ) -> Tuple[int, bytes]:
     cmd = f"clickhouse-disks { '-C ' + disk_config_path if disk_config_path else ''} --disk {disk} remove {path}"
-    logging.info("Run : %s", cmd)
+    logging.info(f"Run : {cmd}")
     proc = subprocess.run(
         cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
