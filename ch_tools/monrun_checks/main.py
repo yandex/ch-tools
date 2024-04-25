@@ -80,7 +80,7 @@ class MonrunChecks(cloup.Group):
                         status.add_verbose(result.verbose)
             except Exception as exc:
                 if not isinstance(exc, UserWarning):
-                    logging.exception(f"Got error:")
+                    logging.exception("Got error:")
                 status = translate_to_status(exc, status)
 
             log_message = f"Completed with {status.code};{status.message}"
