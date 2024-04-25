@@ -18,9 +18,11 @@ def list_tables(
     ctx,
     *,
     database=None,
+    exclude_database=None,
     table=None,
     exclude_table=None,
     engine=None,
+    exclude_engine=None,
     active_parts=None,
     verbose=None,
     order_by=None,
@@ -41,6 +43,7 @@ def list_tables(
             parts,
             rows,
             metadata_mtime,
+            data_paths,
             {%- if verbose %}
             engine,
             create_table_query
@@ -53,6 +56,7 @@ def list_tables(
                 name "table",
                 metadata_modification_time "metadata_mtime",
                 engine,
+                data_paths,
                 create_table_query
              FROM system.tables
         ) tables
@@ -72,8 +76,11 @@ def list_tables(
         ) parts USING database, table
         {% if database -%}
         WHERE database {{ format_str_match(database) }}
-        {% else -%}
+        {% else %}
         WHERE database NOT IN ('system', 'INFORMATION_SCHEMA')
+        {% endif -%}
+        {% if exclude_database -%}
+          AND database NOT {{ format_str_match(exclude_database) }}
         {% endif -%}
         {% if table -%}
           AND table {{ format_str_match(table) }}
@@ -84,6 +91,9 @@ def list_tables(
         {% if engine -%}
           AND engine {{ format_str_match(engine) }}
         {% endif -%}
+        {% if exclude_engine -%}
+          AND engine NOT {{ format_str_match(exclude_engine) }}
+        {% endif -%}
         ORDER BY {{ order_by }}
         {% if limit is not none -%}
         LIMIT {{ limit }}
@@ -93,9 +103,11 @@ def list_tables(
         ctx,
         query,
         database=database,
+        exclude_database=exclude_database,
         table=table,
         exclude_table=exclude_table,
         engine=engine,
+        exclude_engine=exclude_engine,
         active_parts=active_parts,
         verbose=verbose,
         order_by=order_by,

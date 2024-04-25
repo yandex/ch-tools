@@ -3,10 +3,11 @@ Logs management.
 """
 
 import json
-import logging
 import os
 
 from docker.models.containers import Container
+
+from ch_tools.common import logging
 
 from .docker import copy_container_dir, get_containers
 from .minio import export_s3_data

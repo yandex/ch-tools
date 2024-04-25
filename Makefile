@@ -157,7 +157,7 @@ fix-codespell-errors: install-deps
 
 .PHONY: ruff
 ruff: install-deps
-	$(POETRY) run ruff $(SRC_DIR) $(TESTS_DIR)
+	$(POETRY) run ruff check $(SRC_DIR) $(TESTS_DIR)
 
 
 .PHONY: pylint
@@ -184,6 +184,7 @@ test-unit: install-deps
 .PHONY: test-integration
 test-integration: install-deps build-python-packages	
 	cd $(TESTS_DIR)
+	export PYTHONPATH=$(CURDIR):$$PATH
 	$(POETRY) run behave --show-timings --stop --junit $(BEHAVE_ARGS)
 
 

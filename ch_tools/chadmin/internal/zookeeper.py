@@ -1,15 +1,16 @@
-import logging
 import os
 import re
 from collections import deque
 from contextlib import contextmanager
 from math import sqrt
 
+from click import BadParameter
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError, NotEmptyError
 
-from ch_tools.chadmin.cli import get_clickhouse_config, get_macros
-from ch_tools.chadmin.internal.utils import chunked
+from ch_tools.chadmin.internal.utils import chunked, replace_macros
+from ch_tools.common import logging
+from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
 
 
 def get_zk_node(ctx, path, binary=False):
@@ -100,7 +101,7 @@ def _format_path(ctx, path):
     no_ch_config = args.get("no_ch_config", False)
     if no_ch_config:
         return path
-    return path.format_map(get_macros(ctx))
+    return replace_macros(path, get_macros(ctx))
 
 
 def _set_node_value(zk, path, value):
@@ -243,7 +244,16 @@ def escape_for_zookeeper(s: str) -> str:
     return "".join(result)
 
 
-def clean_zk_metadata_for_hosts(ctx, nodes, zk_ddl_query_path):
+# pylint: disable=too-many-statements
+def clean_zk_metadata_for_hosts(
+    ctx,
+    nodes,
+    zk_cleanup_root_path="/",
+    cleanup_tables=True,
+    cleanup_database=True,
+    cleanup_ddl_queue=True,
+    zk_ddl_query_path=None,
+):
     """
     Perform cleanup in zookeeper after deleting hosts in the cluster or whole cluster deleting.
     """
@@ -395,21 +405,36 @@ def clean_zk_metadata_for_hosts(ctx, nodes, zk_ddl_query_path):
 
         for ddl_task in _get_children(zk, _format_path(ctx, zk_ddl_query_path)):
             ddl_task_full = os.path.join(zk_ddl_query_path, ddl_task)
+            print(f"DDL task full path: {ddl_task_full}")
             for host in nodes:
                 host_mention = get_host_mention_in_task(zk, host, ddl_task_full)
                 if not host_mention:
+                    print("Host is not mentioned in DDL task value")
                     continue
                 finished_path = os.path.join(ddl_task_full, f"finished/{host_mention}")
                 if zk.exists(finished_path):
+                    print(f"Finished path already exists: {finished_path}")
                     continue
                 print(f"Add {host} to finished for ddl_task: {ddl_task}")
                 zk.create(finished_path, b"0\n")
+        print("Finish mark ddl query")
 
-    zk_root_path = _format_path(ctx, "/")
+    zk_root_path = _format_path(ctx, zk_cleanup_root_path)
+
     with zk_client(ctx) as zk:
-        tables_cleanup(zk, zk_root_path)
-        databases_cleanups(zk, zk_root_path)
-        mark_finished_ddl_query(zk)
+        if cleanup_tables:
+            tables_cleanup(zk, zk_root_path)
+
+        if cleanup_database:
+            databases_cleanups(zk, zk_root_path)
+
+        if cleanup_ddl_queue:
+            if not zk_ddl_query_path:
+                raise BadParameter(
+                    "Trying to clean ddl queue, but the ddl queue path is not specified."
+                )
+
+            mark_finished_ddl_query(zk)
 
 
 @contextmanager
@@ -436,6 +461,9 @@ def _get_zk_client(ctx):
     no_chroot = args.get("no_chroot", False)
     no_ch_config = args.get("no_ch_config", False)
     zk_root_path = args.get("zk_root_path", None)
+    zk_randomize_hosts = (
+        ctx.obj["config"].get("zookeeper", {}).get("randomize_hosts", True)
+    )
 
     if no_ch_config:
         if not host:
@@ -444,7 +472,7 @@ def _get_zk_client(ctx):
     else:
         # Intentionally don't try to load preprocessed.
         # We are not sure here if zookeeper-servers's changes already have been reloaded by CH.
-        zk_config = get_clickhouse_config(ctx, try_preprocessed=False).zookeeper
+        zk_config = get_clickhouse_config(ctx).zookeeper
         connect_str = ",".join(
             f'{host if host else node["host"]}:{port if port else node["port"]}'
             for node in zk_config.nodes
@@ -465,7 +493,8 @@ def _get_zk_client(ctx):
         connect_str,
         auth_data=auth_data,
         timeout=timeout,
-        logger=logging.getLogger(),
+        logger=logging.getLogger("chadmin"),
         use_ssl=use_ssl,
         verify_certs=verify_ssl_certs,
+        randomize_hosts=zk_randomize_hosts,
     )

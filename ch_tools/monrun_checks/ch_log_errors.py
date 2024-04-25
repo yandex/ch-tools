@@ -5,25 +5,21 @@ import click
 from file_read_backwards import FileReadBackwards
 
 from ch_tools.common.cli.parameters import RegexpParamType
-from ch_tools.common.result import Result
+from ch_tools.common.result import CRIT, OK, WARNING, Result
 
 REGEXP = re.compile(
     r"^([0-9]{4}\.[0-9]{2}\.[0-9]{2}\ [0-9]{2}\:[0-9]{2}\:[0-9]{2}).*?<(Error|Fatal)>"
 )
-DEFAULT_EXCLUDE = r"e\.displayText\(\) = No message received"
 
 
 @click.command("log-errors")
-@click.option(
-    "-c", "--critical", "crit", type=int, default=60, help="Critical threshold."
-)
-@click.option("-w", "--warning", "warn", type=int, default=6, help="Warning threshold.")
+@click.option("-c", "--critical", "crit", type=int, help="Critical threshold.")
+@click.option("-w", "--warning", "warn", type=int, help="Warning threshold.")
 @click.option(
     "-n",
     "--watch-seconds",
     "watch_seconds",
     type=int,
-    default=600,
     help="Watch seconds.",
 )
 @click.option(
@@ -31,14 +27,12 @@ DEFAULT_EXCLUDE = r"e\.displayText\(\) = No message received"
     "--exclude",
     "exclude",
     type=RegexpParamType(),
-    default=DEFAULT_EXCLUDE,
     help="Excluded error.",
 )
 @click.option(
     "-f",
     "--logfile",
     "logfile",
-    default="/var/log/clickhouse-server/clickhouse-server.err.log",
     help="Log file path.",
 )
 def log_errors_command(crit, warn, watch_seconds, exclude, logfile):
@@ -62,7 +56,7 @@ def log_errors_command(crit, warn, watch_seconds, exclude, logfile):
 
     msg = f"{errors} errors for last {watch_seconds} seconds"
     if errors >= crit:
-        return Result(2, msg)
+        return Result(CRIT, msg)
     if errors >= warn:
-        return Result(1, msg)
-    return Result(0, "OK, " + msg)
+        return Result(WARNING, msg)
+    return Result(OK, f"OK, {msg}")

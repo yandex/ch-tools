@@ -42,7 +42,7 @@ Feature: ch-monitoring tool
     """
     Then we get response
     """
-    2;Readonly replica tables: [['test', 'table 01']]
+    2;Readonly replica tables: test.table_01
     """
 
   Scenario: Check CoreDumps
@@ -98,7 +98,7 @@ Feature: ch-monitoring tool
     """
     Then we get response contains
     """
-    2;HTTPError('500 Server Error: Internal Server Error
+    1;Unknown error: Code: 156. DB::Exception: Embedded dictionaries were not loaded.
     """
     When we execute command on clickhouse01
     """

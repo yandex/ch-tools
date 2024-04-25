@@ -19,6 +19,7 @@ def status_command(commands):
         """
         checks_status = []
         ctx.obj.update({"status_mode": True})
+        ctx.default_map = ctx.obj["config"]["keeper-monitoring"]
         for cmd in commands:
             status = ctx.invoke(cmd)
             checks_status.append(

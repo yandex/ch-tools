@@ -1,4 +1,3 @@
-import logging
 import re
 from datetime import datetime, timedelta, timezone
 from tempfile import TemporaryFile
@@ -6,15 +5,19 @@ from typing import List, Optional
 
 import click
 from click import Context, group, option, pass_context
+from humanfriendly import format_size
 
-from ch_tools.chadmin.cli import get_clickhouse_config
 from ch_tools.chadmin.internal.object_storage import (
+    ObjListItem,
     cleanup_s3_object_storage,
     s3_object_storage_iterator,
 )
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
+from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.cli.parameters import TimeSpanParamType
+from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 
 # The guard interval is used for S3 objects for which metadata is not found.
@@ -40,9 +43,6 @@ STREAM_TIMEOUT = 10 * 60
 @pass_context
 def object_storage_group(ctx: Context, disk_name: str) -> None:
     """Commands to manage S3 objects and their metadata."""
-    # Restrict excessive boto logging
-    _set_boto_log_level(logging.WARNING)
-
     ch_config = get_clickhouse_config(ctx)
     ctx.obj[
         "disk_configuration"
@@ -139,7 +139,7 @@ def clean_command(
     try:
         execute_query(
             ctx,
-            f"CREATE TABLE IF NOT EXISTS {listing_table} (obj_path String) ENGINE MergeTree ORDER BY obj_path",
+            f"CREATE TABLE IF NOT EXISTS {listing_table} (obj_path String, obj_size UInt64) ENGINE MergeTree ORDER BY obj_path SETTINGS storage_policy = '{config['storage_policy']}'",
         )
         _clean_object_storage(
             ctx,
@@ -155,7 +155,7 @@ def clean_command(
     finally:
         if not keep_paths:
             execute_query(
-                ctx, f"TRUNCATE TABLE IF EXISTS {listing_table}", format_=None
+                ctx, f"DROP TABLE IF EXISTS {listing_table} SYNC", format_=None
             )
 
 
@@ -180,16 +180,15 @@ def _clean_object_storage(
     else:
         prefix = disk_conf.prefix
         # Yandex cloud specific
-        # Remove last shard section from prefix
+        # Remove the last shard section from prefix
         if on_cluster:
             match = re.match(r"(.*)shard\d+/$", prefix)
             if match:
                 prefix = match[1]
 
     if not use_saved_list:
-        click.echo(
-            f"Collecting objects... (Disk: '{disk_conf.name}', Endpoint '{disk_conf.endpoint_url}', "
-            f"Bucket: {disk_conf.bucket_name}, Prefix: '{prefix}')"
+        logging.info(
+            f"Collecting objects... (Disk: '{disk_conf.name}', Endpoint '{disk_conf.endpoint_url}', Bucket: '{disk_conf.bucket_name}', Prefix: '{disk_conf.prefix}')",
         )
         _traverse_object_storage(ctx, listing_table, from_time, to_time, prefix)
 
@@ -204,20 +203,21 @@ def _clean_object_storage(
         settings = "SETTINGS traverse_shadow_remote_data_paths=1"
 
     antijoin_query = f"""
-        SELECT obj_path FROM {listing_table} AS object_storage
+        SELECT obj_path, obj_size FROM {listing_table} AS object_storage
           LEFT ANTI JOIN {remote_data_paths_table} AS object_table
           ON object_table.remote_path = object_storage.obj_path
             AND object_table.disk_name = '{disk_conf.name}'
         {settings}
     """
-    logging.info("Antijoin query: %s", antijoin_query)
+    logging.info(f"Antijoin query: {antijoin_query}")
 
     if dry_run:
-        click.echo("Counting orphaned objects...")
+        logging.info("Counting orphaned objects...")
     else:
-        click.echo("Deleting orphaned objects...")
+        logging.info("Deleting orphaned objects...")
 
     deleted = 0
+    total_size = 0
     with TemporaryFile() as keys_file:
         with execute_query(
             ctx, antijoin_query, stream=True, format_="TabSeparated"
@@ -227,11 +227,40 @@ def _clean_object_storage(
                 keys_file.write(chunk)
 
         keys_file.seek(0)  # rewind file pointer to the beginning
-        keys = (line.decode().strip() for line in keys_file)
-        deleted = cleanup_s3_object_storage(disk_conf, keys, dry_run)
 
-    click.echo(
-        f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects from bucket [{disk_conf.bucket_name}] with prefix {prefix}"
+        keys = (
+            ObjListItem.from_tab_separated(line.decode().strip()) for line in keys_file
+        )
+        deleted, total_size = cleanup_s3_object_storage(disk_conf, keys, dry_run)
+
+    logging.info(
+        f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
+    )
+    _print_response(ctx, dry_run, deleted, total_size)
+
+
+def _print_response(ctx: Context, dry_run: bool, deleted: int, total_size: int) -> None:
+    """
+    Outputs result of cleaning.
+    """
+    # List of dicts for print_response()
+    clean_stats = [
+        {"WouldDelete" if dry_run else "Deleted": deleted, "TotalSize": total_size}
+    ]
+
+    def _table_formatter(stats):
+        result = {}
+
+        if "Deleted" in stats:
+            result["Deleted"] = stats["Deleted"]
+        if "WouldDeleted" in stats:
+            result["WouldDeleted"] = stats["WouldDeleted"]
+        result["TotalSize"] = format_size(stats["TotalSize"], binary=True)
+
+        return result
+
+    print_response(
+        ctx, clean_stats, default_format="table", table_formatter=_table_formatter
     )
 
 
@@ -245,7 +274,7 @@ def _traverse_object_storage(
     """
     Traverse S3 disk's bucket and put object names to the ClickHouse table.
     """
-    obj_paths_batch = []
+    obj_paths_batch: List[ObjListItem] = []
     counter = 0
     now = datetime.now(timezone.utc)
 
@@ -257,7 +286,7 @@ def _traverse_object_storage(
         if from_time is not None and obj.last_modified < now - from_time:
             continue
 
-        obj_paths_batch.append(obj.key)
+        obj_paths_batch.append(ObjListItem(obj.key, obj.size))
         counter += 1
         if len(obj_paths_batch) >= INSERT_BATCH_SIZE:
             _insert_listing_batch(ctx, obj_paths_batch, listing_table)
@@ -267,29 +296,18 @@ def _traverse_object_storage(
     if obj_paths_batch:
         _insert_listing_batch(ctx, obj_paths_batch, listing_table)
 
-    click.echo(f"Collected {counter} objects")
+    logging.info(f"Collected {counter} objects")
 
 
 def _insert_listing_batch(
-    ctx: Context, obj_paths_batch: List[str], listing_table: str
+    ctx: Context, obj_paths_batch: List[ObjListItem], listing_table: str
 ) -> None:
     """
     Insert batch of object names to the listing table.
     """
-    batch_values = ",".join(f"('{obj_path}')" for obj_path in obj_paths_batch)
+    batch_values = ",".join(f"('{item.path}',{item.size})" for item in obj_paths_batch)
     execute_query(
         ctx,
-        f"INSERT INTO {listing_table} (obj_path) VALUES {batch_values}",
+        f"INSERT INTO {listing_table} (obj_path, obj_size) VALUES {batch_values}",
         format_=None,
     )
-
-
-def _set_boto_log_level(level: int) -> None:
-    """
-    Set log level for libraries involved in communications with S3.
-    """
-    logging.getLogger("boto3").setLevel(level)
-    logging.getLogger("botocore").setLevel(level)
-    logging.getLogger("nose").setLevel(level)
-    logging.getLogger("s3transfer").setLevel(level)
-    logging.getLogger("urllib3").setLevel(level)

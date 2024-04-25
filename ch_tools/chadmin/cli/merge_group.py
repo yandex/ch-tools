@@ -2,7 +2,6 @@ from collections import OrderedDict
 
 from click import group, option, pass_context
 
-from ch_tools.chadmin.cli import get_cluster_name
 from ch_tools.chadmin.internal.process import list_merges
 from ch_tools.common.cli.formatting import (
     format_bytes,
@@ -10,6 +9,7 @@ from ch_tools.common.cli.formatting import (
     format_percents,
     print_response,
 )
+from ch_tools.common.clickhouse.config import get_cluster_name
 
 FIELD_FORMATTERS = {
     "total_size_bytes_compressed": format_bytes,
@@ -27,7 +27,7 @@ def merge_group():
     pass
 
 
-@merge_group.command(name="list")
+@merge_group.command("list")
 @option(
     "-d", "--database", help="Filter in merges to output by the specified database."
 )

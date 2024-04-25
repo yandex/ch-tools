@@ -429,6 +429,8 @@ confidence=HIGH,
 # --disable=W".
 disable=broad-except,
         consider-using-f-string,
+        consider-using-max-builtin,
+        duplicate-code,
         fixme,
         inconsistent-return-statements,
         line-too-long,

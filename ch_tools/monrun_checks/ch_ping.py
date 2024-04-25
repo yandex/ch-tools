@@ -1,10 +1,13 @@
-import logging
 import time
 
 import click
 
-from ch_tools.common.result import Result
-from ch_tools.monrun_checks.clickhouse_client import ClickhouseClient, ClickhousePort
+from ch_tools.common import logging
+from ch_tools.common.clickhouse.client.clickhouse_client import (
+    ClickhousePort,
+    clickhouse_client,
+)
+from ch_tools.common.result import CRIT, OK, WARNING, Result
 
 
 @click.command("ping")
@@ -22,7 +25,7 @@ def ping_command(ctx, number, crit, warn):
     """
     # pylint: disable=too-many-branches
 
-    ch_client = ClickhouseClient(ctx)
+    ch_client = clickhouse_client(ctx)
 
     fails = {
         ClickhousePort.TCP: 0,
@@ -35,24 +38,31 @@ def ping_command(ctx, number, crit, warn):
 
     for _ in range(number):
         try:
-            if ch_client.execute("SELECT 1", port=ClickhousePort.TCP)[0][0] != 1:
+            if (
+                ch_client.query_json_data(query="SELECT 1", port=ClickhousePort.TCP)[0][
+                    0
+                ]
+                != 1
+            ):
                 fails[ClickhousePort.TCP] += 1
                 has_fails = True
         except Exception as e:
-            logging.debug("Error on tcp port: %s", repr(e))
+            logging.debug(f"Error on tcp port: {repr(e)}")
             fails[ClickhousePort.TCP] += 1
             has_fails = True
 
         try:
             if ch_client.check_port(ClickhousePort.TCP_SECURE):
                 if (
-                    ch_client.execute("SELECT 1", port=ClickhousePort.TCP_SECURE)[0][0]
+                    ch_client.query_json_data(
+                        query="SELECT 1", port=ClickhousePort.TCP_SECURE
+                    )[0][0]
                     != 1
                 ):
                     fails[ClickhousePort.TCP_SECURE] += 1
                     has_fails = True
         except Exception as e:
-            logging.debug("Error on tcps port: %s", repr(e))
+            logging.debug(f"Error on tcps port: {repr(e)}")
             fails[ClickhousePort.TCP_SECURE] += 1
             has_fails = True
 
@@ -60,13 +70,15 @@ def ping_command(ctx, number, crit, warn):
             if ch_client.check_port(ClickhousePort.HTTP):
                 if (
                     ch_client.ping(ClickhousePort.HTTP) != "Ok."
-                    or ch_client.execute("SELECT 1", port=ClickhousePort.HTTP)[0][0]
+                    or ch_client.query_json_data(
+                        query="SELECT 1", port=ClickhousePort.HTTP
+                    )[0][0]
                     != 1
                 ):
                     fails[ClickhousePort.HTTP] += 1
                     has_fails = True
         except Exception as e:
-            logging.debug("Error on http port: %s", repr(e))
+            logging.debug(f"Error on http port: {repr(e)}")
             fails[ClickhousePort.HTTP] += 1
             has_fails = True
 
@@ -74,18 +86,20 @@ def ping_command(ctx, number, crit, warn):
             if ch_client.check_port(ClickhousePort.HTTPS):
                 if (
                     ch_client.ping(ClickhousePort.HTTPS) != "Ok."
-                    or ch_client.execute("SELECT 1", port=ClickhousePort.HTTPS)[0][0]
+                    or ch_client.query_json_data(
+                        query="SELECT 1", port=ClickhousePort.HTTPS
+                    )[0][0]
                     != 1
                 ):
                     fails[ClickhousePort.HTTPS] += 1
                     has_fails = True
         except Exception as e:
-            logging.debug("Error on https port: %s", repr(e))
+            logging.debug(f"Error on https port: {repr(e)}")
             fails[ClickhousePort.HTTPS] += 1
             has_fails = True
 
         if not has_fails:  # when all ports are ok on first time
-            return Result(0, "OK")
+            return Result(OK)
 
         time.sleep(1)
 
@@ -103,9 +117,9 @@ def ping_command(ctx, number, crit, warn):
     error = ", ".join(errors)
 
     if state == 2:
-        return Result(2, f"ClickHouse is dead ({error})")
+        return Result(CRIT, f"ClickHouse is dead ({error})")
 
     if state == 1:
-        return Result(1, f"ClickHouse is sick ({error})")
+        return Result(WARNING, f"ClickHouse is sick ({error})")
 
-    return Result(0, f"OK ({error})")
+    return Result(OK, f"OK ({error})")

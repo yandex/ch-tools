@@ -62,3 +62,18 @@ def chunked(iterable: Iterable, n: int) -> Iterator[list]:
         if not chunk:
             break
         yield chunk
+
+
+def replace_macros(string: str, macros: dict) -> str:
+    """
+    Substitute macros in the specified string. Macros in string are specified in the form "{macro_name}".
+
+    Example:
+    >>> replace_macros('{a} and {b}', {'a': '1', 'b': '2'})
+    1 and 2
+    """
+    return re.sub(
+        string=string,
+        pattern=r"{([^{}]+)}",
+        repl=lambda m: macros.get(m.group(1), m.group(0)),
+    )

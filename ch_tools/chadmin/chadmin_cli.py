@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-import logging
-import os
 import warnings
 from typing import Any, List
 
 import cloup
 
+from ch_tools.common import logging
 from ch_tools.common.config import load_config
 
 warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
@@ -51,8 +50,6 @@ from ch_tools.common.cli.context_settings import CONTEXT_SETTINGS
 from ch_tools.common.cli.locale_resolver import LocaleResolver
 from ch_tools.common.cli.parameters import TimeSpanParamType
 
-LOG_FILE = "/var/log/chadmin/chadmin.log"
-
 
 @cloup.group(
     "chadmin",
@@ -82,18 +79,10 @@ LOG_FILE = "/var/log/chadmin/chadmin.log"
 @cloup.pass_context
 def cli(ctx, format_, settings, timeout, port, debug):
     """ClickHouse administration tool."""
-    os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
-    handlers: List[logging.Handler] = [logging.FileHandler(LOG_FILE)]
-    if debug:
-        handlers.append(logging.StreamHandler())
-
-    logging.basicConfig(
-        level=logging.DEBUG if debug else logging.INFO,
-        format="%(asctime)s [%(levelname)s]:%(message)s",
-        handlers=handlers,
-    )
-
     config = load_config()
+
+    logging.configure(config["loguru"], "chadmin")
+
     if port:
         config["clickhouse"]["port"] = port
     if timeout:
@@ -106,6 +95,7 @@ def cli(ctx, format_, settings, timeout, port, debug):
         "format": format_,
         "debug": debug,
     }
+    ctx.default_map = config["chadmin"]
 
 
 commands: List[Any] = [

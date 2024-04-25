@@ -3,16 +3,16 @@ Check ClickHouse backups: its state, age and count.
 """
 
 import json
-import logging
 import os.path
 from datetime import datetime, timedelta, timezone
 from os.path import exists
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from click import Context
 from cloup import command, option, pass_context
 from dateutil.parser import parse as dateutil_parse
 
+from ch_tools.common import logging
 from ch_tools.common.backup import get_backups
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
@@ -79,20 +79,38 @@ def backup_command(
     """
     Check ClickHouse backups: its state, age and count.
     """
-    backups, result = _get_backups()
+    try:
+        backups = get_backups()
+        result = Result(OK)
+    except Exception:
+        backups = []
+        result = Result(CRIT, "Failed to get backups")
+        logging.exception(result.message)
 
-    if result.code == OK:
-        result = _merge_results(
-            _check_valid_backups_exist(backups),
-            _check_last_backup_not_failed(backups, failed_backup_count_crit_threshold),
-            _check_backup_age(
-                backups, backup_age_warn_threshold, backup_age_crit_threshold
-            ),
-            _check_backup_count(backups, backup_count_warn_threshold),
-            _check_restored_data(),
-        )
+    try:
+        if result.code == OK:
+            result = _merge_results(
+                _check_valid_backups_exist(backups),
+                _check_last_backup_not_failed(
+                    backups, failed_backup_count_crit_threshold
+                ),
+                _check_backup_age(
+                    backups, backup_age_warn_threshold, backup_age_crit_threshold
+                ),
+                _check_backup_count(backups, backup_count_warn_threshold),
+                _check_restored_data(),
+            )
+    except Exception:
+        result = Result(CRIT, "Failed to check backups")
+        logging.exception(result.message)
 
-    _suppress_if_required(ctx, result, min_uptime)
+    _suppress_if_required(
+        ctx,
+        result,
+        min_uptime,
+        backups,
+        failed_backup_count_crit_threshold,
+    )
 
     return result
 
@@ -108,19 +126,27 @@ def _check_valid_backups_exist(backups: List[Dict]) -> Result:
     return Result(CRIT, "No valid backups found")
 
 
-def _check_last_backup_not_failed(backups: List[Dict], crit_threshold: int) -> Result:
-    """
-    Check that the last backup is not failed. Its status must be 'created' or 'creating'.
-    """
-    counter = 0
+def _count_failed_backups(backups: List[Dict]) -> Tuple[int, int]:
+    counter, userfault_counter = 0, 0
     for i, backup in enumerate(backups):
         state = backup["state"]
 
         if state == "created":
             break
 
-        if state == "failed" or (state == "creating" and i > 0):
+        if (state == "failed") or (state == "creating" and i > 0):
+            if "exception" in backup and _is_userfault_exception(backup["exception"]):
+                userfault_counter += 1
             counter += 1
+
+    return counter, userfault_counter
+
+
+def _check_last_backup_not_failed(backups: List[Dict], crit_threshold: int) -> Result:
+    """
+    Check that the last backup is not failed. Its status must be 'created' or 'creating'.
+    """
+    counter, _ = _count_failed_backups(backups)
 
     if counter == 0:
         return Result(OK)
@@ -208,7 +234,13 @@ def _check_restored_data() -> Result:
     return Result(OK)
 
 
-def _suppress_if_required(ctx: Context, result: Result, min_uptime: timedelta) -> None:
+def _suppress_if_required(
+    ctx: Context,
+    result: Result,
+    min_uptime: timedelta,
+    backups: List[Dict],
+    failed_backup_count_crit_threshold: int,
+) -> None:
     if result.code == OK:
         return
 
@@ -220,6 +252,14 @@ def _suppress_if_required(ctx: Context, result: Result, min_uptime: timedelta) -
         result.code = WARNING
         result.message += " (suppressed by low ClickHouse uptime)"
 
+    counter, userfault_counter = _count_failed_backups(backups)
+    if (
+        userfault_counter > 0
+        and counter - userfault_counter < failed_backup_count_crit_threshold
+    ):
+        result.code = WARNING
+        result.message += " (suppressed due to user fault backup exceptions)"
+
 
 def _get_uptime(ctx: Context) -> timedelta:
     try:
@@ -227,14 +267,6 @@ def _get_uptime(ctx: Context) -> timedelta:
     except Exception:
         logging.warning("Failed to get ClickHouse uptime", exc_info=True)
         return timedelta()
-
-
-def _get_backups():
-    try:
-        return get_backups(), Result(OK)
-    except Exception:
-        logging.exception("Failed to get backups")
-        return None, Result(CRIT, "Failed to get backups")
 
 
 def _get_backup_age(backup):
@@ -254,3 +286,15 @@ def _merge_results(*results: Result) -> Result:
             merged_result.verbose = result.verbose
 
     return merged_result
+
+
+def _is_userfault_exception(exception):
+    """
+    Check if exception was caused by user.
+    Current list:
+      * Disk quota exceeded
+    """
+    if not exception:
+        return False
+
+    return "Disk quota exceeded" in exception

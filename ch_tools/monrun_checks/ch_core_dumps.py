@@ -12,7 +12,6 @@ from ch_tools.common.result import Result
     "-t",
     "--core-directory",
     "core_directory",
-    default="/var/cores/",
     help="Core dump directory.",
 )
 @click.option(
@@ -20,7 +19,6 @@ from ch_tools.common.result import Result
     "--crit-interval-seconds",
     "crit_seconds",
     type=int,
-    default=60 * 10,
     help="Time interval to check in seconds.",
 )
 def core_dumps_command(core_directory, crit_seconds):

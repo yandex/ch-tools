@@ -1,4 +1,5 @@
-from click import Choice, group, option, pass_context
+from cloup import Choice, group, option, option_group, pass_context
+from cloup.constraints import RequireAtLeast
 
 from ch_tools.chadmin.internal.partition import (
     attach_partition,
@@ -19,7 +20,7 @@ def partition_group():
     pass
 
 
-@partition_group.command(name="list")
+@partition_group.command("list")
 @option(
     "-d",
     "--database",
@@ -88,29 +89,44 @@ def list_partitions_command(ctx, **kwargs):
     print(get_partitions(ctx, format_="PrettyCompact", **kwargs))
 
 
-@partition_group.command(name="attach")
-@option(
-    "-d",
-    "--database",
-    help="Filter in partitions to attach by the specified database."
-    " Multiple values can be specified through a comma.",
+@partition_group.command("attach")
+@option_group(
+    "Partition selection options",
+    option(
+        "-a",
+        "--all",
+        "_all",
+        is_flag=True,
+        help="Filter in all partitions.",
+    ),
+    option(
+        "-d",
+        "--database",
+        help="Filter in partitions to attach by the specified database."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "-t",
+        "--table",
+        help="Filter in partitions to attach by the specified table."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "--id",
+        "--partition",
+        "partition_id",
+        help="Filter in partitions to attach by the specified partition."
+        " Multiple values can be specified through a comma.",
+    ),
+    option("--min-partition", "min_partition_id"),
+    option("--max-partition", "max_partition_id"),
+    option(
+        "--disk",
+        "disk_name",
+        help="Filter in partitions to attach by the specified disk.",
+    ),
+    constraint=RequireAtLeast(1),
 )
-@option(
-    "-t",
-    "--table",
-    help="Filter in partitions to attach by the specified table."
-    " Multiple values can be specified through a comma.",
-)
-@option(
-    "--id",
-    "--partition",
-    "partition_id",
-    help="Filter in partitions to attach by the specified partition."
-    " Multiple values can be specified through a comma.",
-)
-@option("--min-partition", "min_partition_id")
-@option("--max-partition", "max_partition_id")
-@option("-a", "--all", "all_", is_flag=True, help="Attach all partitions.")
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @option(
     "-n",
@@ -121,14 +137,16 @@ def list_partitions_command(ctx, **kwargs):
 )
 @pass_context
 def attach_partitions_command(
-    ctx, all_, database, table, partition_id, keep_going, dry_run, **kwargs
+    ctx,
+    _all,
+    database,
+    table,
+    partition_id,
+    keep_going,
+    dry_run,
+    **kwargs,
 ):
     """Attach one or several partitions."""
-    if not any((all_, database, table, partition_id)):
-        ctx.fail(
-            "At least one of --all, --database, --table, --partition options must be specified."
-        )
-
     partitions = get_partitions(
         ctx,
         database,
@@ -154,40 +172,52 @@ def attach_partitions_command(
                 raise
 
 
-@partition_group.command(name="detach")
-@option(
-    "-d",
-    "--database",
-    help="Filter in partitions to detach by the specified database."
-    " Multiple values can be specified through a comma.",
+@partition_group.command("detach")
+@option_group(
+    "Partition selection options",
+    option(
+        "-a",
+        "--all",
+        "_all",
+        is_flag=True,
+        help="Filter in all partitions.",
+    ),
+    option(
+        "-d",
+        "--database",
+        help="Filter in partitions to detach by the specified database."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "-t",
+        "--table",
+        help="Filter in partitions to detach by the specified table."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "--id",
+        "--partition",
+        "partition_id",
+        help="Filter in partitions to detach by the specified partition."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "--disk",
+        "disk_name",
+        help="Filter in partitions to detach by the specified disk.",
+    ),
+    option(
+        "--merging",
+        is_flag=True,
+        help="Reattach only those partitions that have merging data parts.",
+    ),
+    option(
+        "--mutating",
+        is_flag=True,
+        help="Reattach only those partitions that have mutating data parts.",
+    ),
+    constraint=RequireAtLeast(1),
 )
-@option(
-    "-t",
-    "--table",
-    help="Filter in partitions to detach by the specified table."
-    " Multiple values can be specified through a comma.",
-)
-@option(
-    "--id",
-    "--partition",
-    "partition_id",
-    help="Filter in partitions to detach by the specified partition."
-    " Multiple values can be specified through a comma.",
-)
-@option(
-    "--disk", "disk_name", help="Filter in partitions to detach by the specified disk."
-)
-@option(
-    "--merging",
-    is_flag=True,
-    help="Reattach only those partitions that have merging data parts.",
-)
-@option(
-    "--mutating",
-    is_flag=True,
-    help="Reattach only those partitions that have mutating data parts.",
-)
-@option("-a", "--all", "all_", is_flag=True, help="Detach all partitions.")
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @option(
     "-n",
@@ -199,7 +229,7 @@ def attach_partitions_command(
 @pass_context
 def detach_partitions_command(
     ctx,
-    all_,
+    _all,
     database,
     table,
     partition_id,
@@ -210,11 +240,6 @@ def detach_partitions_command(
     dry_run,
 ):
     """Detach one or several partitions."""
-    if not any((all_, merging, mutating, database, table, partition_id)):
-        ctx.fail(
-            "At least one of --all, --database, --table, --partition, --merging, --mutating options must be specified."
-        )
-
     partitions = get_partitions(
         ctx,
         database,
@@ -241,49 +266,59 @@ def detach_partitions_command(
                 raise
 
 
-@partition_group.command(name="reattach")
-@option(
-    "-d",
-    "--database",
-    help="Filter in partitions to reattach by the specified database."
-    " Multiple values can be specified through a comma.",
-)
-@option(
-    "-t",
-    "--table",
-    help="Filter in partitions to reattach by the specified table."
-    " Multiple values can be specified through a comma.",
-)
-@option(
-    "--id",
-    "--partition",
-    "partition_id",
-    help="Filter in partitions to reattach by the specified partition."
-    " Multiple values can be specified through a comma.",
-)
-@option("--min-partition", "min_partition_id")
-@option("--max-partition", "max_partition_id")
-@option(
-    "--disk",
-    "disk_name",
-    help="Filter in partitions to reattach by the specified disk.",
-)
-@option(
-    "--merging",
-    is_flag=True,
-    help="Reattach only those partitions that have merging data parts.",
-)
-@option(
-    "--mutating",
-    is_flag=True,
-    help="Reattach only those partitions that have mutating data parts.",
-)
-@option("-a", "--all", "all_", is_flag=True, help="Reattach all partitions.")
-@option(
-    "-l",
-    "--limit",
-    type=int,
-    help="Limit the max number of partitions to reaatach in the output.",
+@partition_group.command("reattach")
+@option_group(
+    "Partition selection options",
+    option(
+        "-a",
+        "--all",
+        "_all",
+        is_flag=True,
+        help="Filter in all partitions.",
+    ),
+    option(
+        "-d",
+        "--database",
+        help="Filter in partitions to reattach by the specified database."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "-t",
+        "--table",
+        help="Filter in partitions to reattach by the specified table."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "--id",
+        "--partition",
+        "partition_id",
+        help="Filter in partitions to reattach by the specified partition."
+        " Multiple values can be specified through a comma.",
+    ),
+    option("--min-partition", "min_partition_id"),
+    option("--max-partition", "max_partition_id"),
+    option(
+        "--disk",
+        "disk_name",
+        help="Filter in partitions to reattach by the specified disk.",
+    ),
+    option(
+        "--merging",
+        is_flag=True,
+        help="Reattach only those partitions that have merging data parts.",
+    ),
+    option(
+        "--mutating",
+        is_flag=True,
+        help="Reattach only those partitions that have mutating data parts.",
+    ),
+    option(
+        "-l",
+        "--limit",
+        type=int,
+        help="Limit the max number of partitions to reaatach in the output.",
+    ),
+    constraint=RequireAtLeast(1),
 )
 @option(
     "-n",
@@ -295,8 +330,7 @@ def detach_partitions_command(
 @pass_context
 def reattach_partitions_command(
     ctx,
-    dry_run,
-    all_,
+    _all,
     database,
     table,
     partition_id,
@@ -306,14 +340,9 @@ def reattach_partitions_command(
     merging,
     mutating,
     limit,
+    dry_run,
 ):
     """Perform sequential attach and detach of one or several partitions."""
-    if not any((all_, merging, mutating, database, table, partition_id)):
-        ctx.fail(
-            "At least one of --all, --database, --table, --partition, --min-partition, --max-partition,"
-            " --merging, --mutating options must be specified."
-        )
-
     partitions = get_partitions(
         ctx,
         database,
@@ -336,32 +365,38 @@ def reattach_partitions_command(
         )
 
 
-@partition_group.command(name="delete")
-@option(
-    "-d",
-    "--database",
-    help="Filter in partitions to delete by the specified database."
-    " Multiple values can be specified through a comma.",
-)
-@option(
-    "-t",
-    "--table",
-    help="Filter in partitions to delete by the specified table."
-    " Multiple values can be specified through a comma.",
-)
-@option(
-    "--id",
-    "--partition",
-    "partition_id",
-    help="Filter in partitions to delete by the specified partition."
-    " Multiple values can be specified through a comma.",
-)
-@option("--min-partition", "min_partition_id")
-@option("--max-partition", "max_partition_id")
-@option("--min-date")
-@option("--max-date")
-@option(
-    "--disk", "disk_name", help="Filter in partitions to delete by the specified disk."
+@partition_group.command("delete")
+@option_group(
+    "Partition selection options",
+    option(
+        "-d",
+        "--database",
+        help="Filter in partitions to delete by the specified database."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "-t",
+        "--table",
+        help="Filter in partitions to delete by the specified table."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "--id",
+        "--partition",
+        "partition_id",
+        help="Filter in partitions to delete by the specified partition."
+        " Multiple values can be specified through a comma.",
+    ),
+    option("--min-partition", "min_partition_id"),
+    option("--max-partition", "max_partition_id"),
+    option("--min-date"),
+    option("--max-date"),
+    option(
+        "--disk",
+        "disk_name",
+        help="Filter in partitions to delete by the specified disk.",
+    ),
+    constraint=RequireAtLeast(1),
 )
 @option(
     "-n",
@@ -373,7 +408,6 @@ def reattach_partitions_command(
 @pass_context
 def delete_partitions_command(
     ctx,
-    dry_run,
     database,
     table,
     partition_id,
@@ -382,14 +416,9 @@ def delete_partitions_command(
     min_date,
     max_date,
     disk_name,
+    dry_run,
 ):
     """Delete one or several partitions."""
-    if not any((database, table, partition_id, min_partition_id, max_partition_id)):
-        ctx.fail(
-            "At least one of --database, --table, --partition, --min-partition, --max-partition"
-            " options must be specified."
-        )
-
     partitions = get_partitions(
         ctx,
         database,
@@ -408,34 +437,38 @@ def delete_partitions_command(
         )
 
 
-@partition_group.command(name="optimize")
-@option(
-    "-d",
-    "--database",
-    help="Filter in partitions to optimize by the specified database."
-    " Multiple values can be specified through a comma.",
-)
-@option(
-    "-t",
-    "--table",
-    help="Filter in partitions to optimize by the specified table."
-    " Multiple values can be specified through a comma.",
-)
-@option(
-    "--id",
-    "--partition",
-    "partition_id",
-    help="Filter in partitions to optimize by the specified partition."
-    " Multiple values can be specified through a comma.",
-)
-@option("--min-partition", "min_partition_id")
-@option("--max-partition", "max_partition_id")
-@option("--min-date")
-@option("--max-date")
-@option(
-    "--disk",
-    "disk_name",
-    help="Filter in partitions to optimize by the specified disk.",
+@partition_group.command("optimize")
+@option_group(
+    "Partition selection options",
+    option(
+        "-d",
+        "--database",
+        help="Filter in partitions to optimize by the specified database."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "-t",
+        "--table",
+        help="Filter in partitions to optimize by the specified table."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "--id",
+        "--partition",
+        "partition_id",
+        help="Filter in partitions to optimize by the specified partition."
+        " Multiple values can be specified through a comma.",
+    ),
+    option("--min-partition", "min_partition_id"),
+    option("--max-partition", "max_partition_id"),
+    option("--min-date"),
+    option("--max-date"),
+    option(
+        "--disk",
+        "disk_name",
+        help="Filter in partitions to optimize by the specified disk.",
+    ),
+    constraint=RequireAtLeast(1),
 )
 @option(
     "-n",
@@ -447,7 +480,6 @@ def delete_partitions_command(
 @pass_context
 def optimize_partitions_command(
     ctx,
-    dry_run,
     database,
     table,
     partition_id,
@@ -456,14 +488,9 @@ def optimize_partitions_command(
     min_date,
     max_date,
     disk_name,
+    dry_run,
 ):
     """Optimize partitions."""
-    if not any((database, table, partition_id, min_partition_id, max_partition_id)):
-        ctx.fail(
-            "At least one of --database, --table, --partition, --min-partition, --max-partition"
-            " options must be specified."
-        )
-
     for p in get_partitions(
         ctx,
         database,
@@ -481,34 +508,38 @@ def optimize_partitions_command(
         )
 
 
-@partition_group.command(name="materialize-ttl")
-@option(
-    "-d",
-    "--database",
-    help="Filter in partitions to materialize TTL by the specified database."
-    " Multiple values can be specified through a comma.",
-)
-@option(
-    "-t",
-    "--table",
-    help="Filter in partitions to materialize TTL by the specified table."
-    " Multiple values can be specified through a comma.",
-)
-@option(
-    "--id",
-    "--partition",
-    "partition_id",
-    help="Filter in partitions to materialize TTL by the specified partition."
-    " Multiple values can be specified through a comma.",
-)
-@option("--min-partition", "min_partition_id")
-@option("--max-partition", "max_partition_id")
-@option("--min-date")
-@option("--max-date")
-@option(
-    "--disk",
-    "disk_name",
-    help="Filter in partitions to materialize TTL by the specified disk.",
+@partition_group.command("materialize-ttl")
+@option_group(
+    "Partition selection options",
+    option(
+        "-d",
+        "--database",
+        help="Filter in partitions to materialize TTL by the specified database."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "-t",
+        "--table",
+        help="Filter in partitions to materialize TTL by the specified table."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "--id",
+        "--partition",
+        "partition_id",
+        help="Filter in partitions to materialize TTL by the specified partition."
+        " Multiple values can be specified through a comma.",
+    ),
+    option("--min-partition", "min_partition_id"),
+    option("--max-partition", "max_partition_id"),
+    option("--min-date"),
+    option("--max-date"),
+    option(
+        "--disk",
+        "disk_name",
+        help="Filter in partitions to materialize TTL by the specified disk.",
+    ),
+    constraint=RequireAtLeast(1),
 )
 @option(
     "-n",
@@ -520,7 +551,6 @@ def optimize_partitions_command(
 @pass_context
 def materialize_ttl_command(
     ctx,
-    dry_run,
     database,
     table,
     partition_id,
@@ -529,14 +559,9 @@ def materialize_ttl_command(
     min_date,
     max_date,
     disk_name,
+    dry_run,
 ):
     """Materialize TTL."""
-    if not any((database, table, partition_id, min_partition_id, max_partition_id)):
-        ctx.fail(
-            "At least one of --database, --table, --partition, --min-partition, --max-partition"
-            " options must be specified."
-        )
-
     for p in get_partitions(
         ctx,
         database,

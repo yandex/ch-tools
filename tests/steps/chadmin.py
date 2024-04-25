@@ -33,6 +33,15 @@ def step_host_cleanup(context, node, fqdn):
     assert result.exit_code == 0, f" output:\n {result.output.decode().strip()}"
 
 
+@when(
+    "we do table cleanup on {node} with fqdn {fqdn} from table with {zk_table_path} zookeeper path"
+)
+def step_table_cleanup(context, node, fqdn, zk_table_path):
+    container = get_container(context, node)
+    result = Chadmin(container).zk_cleanup_table(fqdn, zk_table_path)
+    assert result.exit_code == 0, f" output:\n {result.output.decode().strip()}"
+
+
 @then("the list of children on {node:w} for zk node {zk_node} are equal to")
 def step_childen_list(context, node, zk_node):
     container = get_container(context, node)

@@ -1,4 +1,3 @@
-import logging
 import os
 import sys
 import time
@@ -7,6 +6,7 @@ from click import FloatRange, group, option, pass_context
 from requests.exceptions import ReadTimeout
 
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.client.error import ClickhouseError
 from ch_tools.common.commands.replication_lag import estimate_replication_lag
@@ -28,28 +28,24 @@ def wait_group():
     "--replica-timeout",
     "replica_timeout",
     type=TimeSpanParamType(),
-    default="1h",
     help="Timeout for SYNC REPLICA command.",
 )
 @option(
     "--total-timeout",
     "total_timeout",
     type=TimeSpanParamType(),
-    default="3d",
     help="Max amount of time to wait.",
 )
 @option(
     "-s",
     "--status",
     type=int,
-    default=0,
     help="Wait until replication-lag returned status is no worse than given, 0 = OK, 1 = WARN, 2 = CRIT.",
 )
 @option(
     "-p",
     "--pause",
     type=TimeSpanParamType(),
-    default="30s",
     help="Pause between replication lag requests.",
 )
 @option(
@@ -57,7 +53,6 @@ def wait_group():
     "--exec-critical",
     "xcrit",
     type=int,
-    default=3600,
     help="Critical threshold for one task execution.",
 )
 @option(
@@ -65,16 +60,14 @@ def wait_group():
     "--critical",
     "crit",
     type=int,
-    default=600,
     help="Critical threshold for lag with errors.",
 )
-@option("-w", "--warning", "warn", type=int, default=300, help="Warning threshold.")
+@option("-w", "--warning", "warn", type=int, help="Warning threshold.")
 @option(
     "-M",
     "--merges-critical",
     "mcrit",
     type=FloatRange(0.0, 100.0),
-    default=90.0,
     help="Critical threshold in percent of max_replicated_merges_in_queue.",
 )
 @option(
@@ -82,7 +75,6 @@ def wait_group():
     "--merges-warning",
     "mwarn",
     type=FloatRange(0.0, 100.0),
-    default=50.0,
     help="Warning threshold in percent of max_replicated_merges_in_queue.",
 )
 @pass_context
@@ -112,7 +104,7 @@ def wait_replication_sync_command(
 
     # Sync tables in cycle
     for t in tables:
-        full_name = f"{t['database']}.{t['name']}"
+        full_name = f"`{t['database']}`.`{t['name']}`"
         time_left = deadline - time.time()
         timeout = min(replica_timeout.total_seconds(), time_left)
 
@@ -156,7 +148,7 @@ def wait_replication_sync_command(
 def wait_started_command(ctx, timeout, quiet):
     """Wait for ClickHouse server to start up."""
     if not quiet:
-        logging.basicConfig(level="INFO", format="%(message)s")
+        logging.add(sys.stdout, level="INFO", format_="{message}")
 
     if not timeout:
         timeout = get_timeout()
@@ -225,7 +217,7 @@ def is_clickhouse_alive():
             return True
 
     except Exception as e:
-        logging.error("Failed to perform ch_ping check: %s", repr(e))
+        logging.error(f"Failed to perform ch_ping check: {repr(e)}")
 
     return False
 

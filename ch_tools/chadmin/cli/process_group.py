@@ -1,9 +1,10 @@
-from click import Choice, argument, group, option, pass_context
+from cloup import Choice, argument, group, option, option_group, pass_context
+from cloup.constraints import RequireAtLeast
 
-from ch_tools.chadmin.cli import get_cluster_name
 from ch_tools.chadmin.internal.process import get_process, kill_process, list_processes
 from ch_tools.chadmin.internal.utils import format_query
 from ch_tools.common.cli.formatting import print_response
+from ch_tools.common.clickhouse.config import get_cluster_name
 
 FIELD_FORMATTERS = {
     "query": format_query,
@@ -78,16 +79,17 @@ def list_processes_command(
 
 
 @process_group.command("kill")
-@argument("query_id", required=False)
-@option("-u", "--user")
-@option("-U", "--exclude-user")
-@option("-a", "--all", "all_", is_flag=True, help="Kill all processes.")
+@option_group(
+    "Process selection options",
+    option("-a", "--all", "_all", is_flag=True, help="Kill all processes."),
+    option("-q", "--query", "query_id"),
+    option("-u", "--user"),
+    option("-U", "--exclude-user"),
+    constraint=RequireAtLeast(1),
+)
 @pass_context
-def kill_process_command(ctx, query_id, all_, user, exclude_user):
+def kill_process_command(ctx, _all, query_id, user, exclude_user):
     """
     Kill one or several processes using "KILL QUERY" query.
     """
-    if not any((query_id, all_, user)):
-        ctx.fail("At least one of QUERY_ID, --all, --user options must be specified.")
-
     kill_process(ctx, query_id=query_id, user=user, exclude_user=exclude_user)

@@ -1,11 +1,8 @@
-import os.path
-
 import pytest
 
 from ch_tools.common.clickhouse.config import ClickhouseConfig
 from ch_tools.common.clickhouse.config.path import (
-    CLICKHOUSE_SERVER_CONFIGD_PATH,
-    CLICKHOUSE_SERVER_MAIN_CONFIG_PATH,
+    CLICKHOUSE_SERVER_CONFIG_PATH,
     CLICKHOUSE_SERVER_PREPROCESSED_CONFIG_PATH,
 )
 
@@ -17,7 +14,7 @@ from ch_tools.common.clickhouse.config.path import (
     [
         pytest.param(
             {
-                CLICKHOUSE_SERVER_MAIN_CONFIG_PATH: """
+                CLICKHOUSE_SERVER_CONFIG_PATH: """
                     <clickhouse>
                         <path>/var/lib/clickhouse/</path>
                         <tmp_path>/var/lib/clickhouse/tmp/</tmp_path>
@@ -34,7 +31,7 @@ from ch_tools.common.clickhouse.config.path import (
         ),
         pytest.param(
             {
-                CLICKHOUSE_SERVER_MAIN_CONFIG_PATH: """
+                CLICKHOUSE_SERVER_CONFIG_PATH: """
                     <clickhouse>
                         <path>/var/lib/clickhouse/</path>
                         <tmp_path>/var/lib/clickhouse/tmp/</tmp_path>
@@ -61,9 +58,7 @@ from ch_tools.common.clickhouse.config.path import (
                         </zookeeper-config>
                     </clickhouse>
                     """,
-                os.path.join(
-                    CLICKHOUSE_SERVER_CONFIGD_PATH, "rabbitmq.xml"
-                ): """
+                "/etc/clickhouse-server/config.d/rabbitmq.xml": """
                     <clickhouse>
                         <rabbitmq>
                             <username>rabbitmq_user1</username>
@@ -71,9 +66,7 @@ from ch_tools.common.clickhouse.config.path import (
                         </rabbitmq>
                     </clickhouse>
                     """,
-                os.path.join(
-                    CLICKHOUSE_SERVER_CONFIGD_PATH, "empty.xml"
-                ): """
+                "/etc/clickhouse-server/config.d/empty.xml": """
                     <clickhouse/>
                     """,
             },
@@ -133,5 +126,5 @@ def test_config(fs, files, result):
     for file_path, contents in files.items():
         fs.create_file(file_path, contents=contents)
 
-    config = ClickhouseConfig.load()
+    config = ClickhouseConfig.load(try_preprocessed=True)
     assert config.dump() == result

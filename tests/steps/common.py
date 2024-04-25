@@ -1,6 +1,7 @@
 """
 Common steps.
 """
+
 import time
 
 import requests
@@ -57,6 +58,14 @@ def step_command_fail_response_contains(context):
 @then("we get response")
 def step_get_response(context):
     assert_that(context.response, equal_to(context.text))
+
+
+@then("we get query response")
+def step_get_query_response(context):
+    assert_that(
+        context.response,
+        equal_to(context.text.replace("\\t", "\t").replace("\\n", "\n")),
+    )
 
 
 @then("we get response contains")

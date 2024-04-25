@@ -1,7 +1,7 @@
 import click
 
-from ch_tools.common.result import Result
-from ch_tools.monrun_checks.clickhouse_client import ClickhouseClient
+from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
+from ch_tools.common.result import CRIT, OK, Result
 
 
 @click.command("ro-replica")
@@ -10,12 +10,12 @@ def ro_replica_command(ctx):
     """
     Check for readonly replicated tables.
     """
-    ch_client = ClickhouseClient(ctx)
-
-    response = ch_client.execute(
-        "SELECT database, table FROM system.replicas WHERE is_readonly"
-    )
+    query = "SELECT database, table FROM system.replicas WHERE is_readonly"
+    response = clickhouse_client(ctx).query_json_data(query, compact=False)
     if response:
-        return Result(2, f"Readonly replica tables: {response}")
+        tables_str = ", ".join(
+            f"{item['database']}.{item['table']}" for item in response
+        )
+        return Result(CRIT, f"Readonly replica tables: {tables_str}")
 
-    return Result(0, "OK")
+    return Result(OK)
