@@ -1,4 +1,3 @@
-import re
 from datetime import datetime, timedelta, timezone
 from tempfile import TemporaryFile
 from typing import List, Optional
@@ -55,7 +54,7 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     "--prefix",
     "--object_name_prefix",
     "object_name_prefix",
-    default=None,
+    default="",
     help=(
         "Prefix of object name used while listing bucket. By default its value is attempted to parse "
         "from endpoint in clickhouse S3 disk config"
@@ -113,7 +112,7 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
 @pass_context
 def clean_command(
     ctx: Context,
-    object_name_prefix: Optional[str],
+    object_name_prefix: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
     on_cluster: bool,
@@ -161,7 +160,7 @@ def clean_command(
 
 def _clean_object_storage(
     ctx: Context,
-    object_name_prefix: Optional[str],
+    object_name_prefix: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
     on_cluster: bool,
@@ -174,17 +173,7 @@ def _clean_object_storage(
     Delete orphaned objects from object storage.
     """
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
-
-    if object_name_prefix is not None:
-        prefix = object_name_prefix
-    else:
-        prefix = disk_conf.prefix
-        # Yandex cloud specific
-        # Remove the last shard section from prefix
-        if on_cluster:
-            match = re.match(r"(.*)shard\d+/$", prefix)
-            if match:
-                prefix = match[1]
+    prefix = object_name_prefix or disk_conf.prefix
 
     if not use_saved_list:
         logging.info(
