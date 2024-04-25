@@ -13,6 +13,9 @@ from ch_tools.common.clickhouse.config import get_cluster_name
 @option("-d", "--database")
 @option("-t", "--table")
 @option(
+    "--exclude-table", help="Filter out tables to restore by the specified table name."
+)
+@option(
     "--cluster",
     "--on-cluster",
     "on_cluster",
@@ -20,7 +23,7 @@ from ch_tools.common.clickhouse.config import get_cluster_name
     help="Run RESTORE REPLICA on cluster ",
 )
 @pass_context
-def restore_replica_command(ctx, database, table, on_cluster):
+def restore_replica_command(ctx, database, table, exclude_table, on_cluster):
     query = """
         SELECT database, table
         FROM system.replicas
@@ -31,9 +34,17 @@ def restore_replica_command(ctx, database, table, on_cluster):
         {% if table %}
           AND table {{ format_str_match(table) }}
         {% endif %}
+        {% if exclude_table %}
+          AND table NOT {{ format_str_match(exclude_table) }}
+        {% endif %}
         """
     ro_replicas = execute_query(
-        ctx, query, database=database, table=table, format_="JSON"
+        ctx,
+        query,
+        database=database,
+        table=table,
+        exclude_table=exclude_table,
+        format_="JSON",
     )["data"]
 
     cluster = get_cluster_name(ctx) if on_cluster else None
