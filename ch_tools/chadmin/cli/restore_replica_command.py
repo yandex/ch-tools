@@ -34,9 +34,9 @@ def restore_replica_command(ctx, database, table, exclude_table, on_cluster):
         {% if table %}
           AND table {{ format_str_match(table) }}
         {% endif %}
-        {% if exclude_table -%}
+        {% if exclude_table %}
           AND table NOT {{ format_str_match(exclude_table) }}
-        {% endif -%}
+        {% endif %}
         """
     ro_replicas = execute_query(
         ctx,
