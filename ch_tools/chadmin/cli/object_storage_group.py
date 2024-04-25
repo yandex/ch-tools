@@ -11,6 +11,7 @@ from ch_tools.chadmin.internal.object_storage import (
     cleanup_s3_object_storage,
     s3_object_storage_iterator,
 )
+from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
@@ -186,11 +187,16 @@ def _clean_object_storage(
             f"clusterAllReplicas('{cluster_name}', {remote_data_paths_table})"
         )
 
+    settings = ""
+    if match_ch_version(ctx, min_version="24.3"):
+        settings = "SETTINGS traverse_shadow_remote_data_paths=1"
+
     antijoin_query = f"""
         SELECT obj_path, obj_size FROM {listing_table} AS object_storage
           LEFT ANTI JOIN {remote_data_paths_table} AS object_table
           ON object_table.remote_path = object_storage.obj_path
             AND object_table.disk_name = '{disk_conf.name}'
+        {settings}
     """
     logging.info(f"Antijoin query: {antijoin_query}")
 
