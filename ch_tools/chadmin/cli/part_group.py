@@ -432,6 +432,12 @@ def delete_parts_command(
 @option("--new-disk", "new_disk_name", required=True)
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @option(
+    "--sync/--async",
+    "sync_mode",
+    default=True,
+    help="Enable/Disable synchronous query execution.",
+)
+@option(
     "-n",
     "--dry-run",
     is_flag=True,
@@ -443,6 +449,7 @@ def move_parts_command(
     ctx,
     new_disk_name,
     keep_going,
+    sync_mode,
     dry_run,
     **kwargs,
 ):
@@ -456,6 +463,7 @@ def move_parts_command(
                 part["table"],
                 part["name"],
                 new_disk_name,
+                sync_mode=sync_mode,
                 dry_run=dry_run,
             )
         except Exception as e:
