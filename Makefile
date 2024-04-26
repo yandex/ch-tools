@@ -112,10 +112,11 @@ install-poetry:
 	curl -sSL https://install.python-poetry.org | POETRY_HOME=$(POETRY_HOME) $(PYTHON) - --version $(POETRY_VERSION)
 
 	# TODO: remove after getting rid of support Python 3.6
-	# Fix "cannot import name 'appengine' from 'urllib3.contrib'..." error 
+	# 1. Fix "cannot import name 'appengine' from 'urllib3.contrib'..." error
 	# while 'poetry publish' for version poetry 1.1.15 due to incompatibility with urllib3 >= 2.0.0
 	# https://urllib3.readthedocs.io/en/stable/v2-migration-guide.html#importerror-cannot-import-name-gaecontrib-from-requests-toolbelt-compat
-	$(POETRY_HOME)/venv/bin/python -m pip install "urllib3<2.0.0"
+	# 2. Fix "ModuleNotFoundError: No module named 'six.moves'"
+	$(POETRY_HOME)/venv/bin/python -m pip install "urllib3<2.0.0" "six"
 
 
 .PHONY: uninstall-poetry
