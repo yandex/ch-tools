@@ -7,7 +7,7 @@ def get_table_replica(ctx, database, table):
     """
     Get replica of replicated table.
     """
-    replicas = list_table_replicas(ctx, database=database, table=table)
+    replicas = list_table_replicas(ctx, database=database, table=table, verbose=True)
 
     if not replicas:
         raise ClickException(f"Replicated table `{database}`.`{table}` not found.")
@@ -15,7 +15,7 @@ def get_table_replica(ctx, database, table):
     return replicas[0]
 
 
-def list_table_replicas(ctx, *, database=None, table=None, limit=None):
+def list_table_replicas(ctx, *, database=None, table=None, verbose=False, limit=None):
     """
     List replicas of replicated tables.
     """
@@ -26,6 +26,9 @@ def list_table_replicas(ctx, *, database=None, table=None, limit=None):
             engine,
             zookeeper_path,
             replica_name,
+        {% if not verbose -%}
+            replica_path
+        {% else -%}
             replica_path,
             is_leader,
             can_become_leader,
@@ -44,23 +47,25 @@ def list_table_replicas(ctx, *, database=None, table=None, limit=None):
             total_replicas,
             active_replicas,
             replica_is_active
+        {% endif -%}
         FROM system.replicas
         WHERE true
-        {% if database %}
+        {% if database -%}
           AND database {{ format_str_match(database) }}
-        {% endif %}
-        {% if table %}
+        {% endif -%}
+        {% if table -%}
           AND table {{ format_str_match(table) }}
-        {% endif %}
-        {% if limit is not none %}
+        {% endif -%}
+        {% if limit is not none -%}
         LIMIT {{ limit }}
-        {% endif %}
+        {% endif -%}
         """
     return execute_query(
         ctx,
         query,
         database=database,
         table=table,
+        verbose=verbose,
         limit=limit,
         format_="JSON",
     )["data"]
