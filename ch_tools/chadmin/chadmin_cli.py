@@ -4,6 +4,7 @@ from typing import Any, List
 
 import cloup
 
+from ch_tools.chadmin.cli.move_group import move_group
 from ch_tools.common import logging
 from ch_tools.common.config import load_config
 
@@ -119,6 +120,7 @@ groups: List[Any] = [
     dictionary_group,
     disks_group,
     merge_group,
+    move_group,
     mutation_group,
     object_storage_group,
     part_group,
