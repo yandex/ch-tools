@@ -238,13 +238,34 @@ def detach_part(ctx, database, table, part_name, dry_run=False):
     execute_query(ctx, query, timeout=timeout, format_=None, echo=True, dry_run=dry_run)
 
 
-def move_part(ctx, database, table, part_name, new_disk_name, dry_run=False):
+def move_part(
+    ctx,
+    database,
+    table,
+    part_name,
+    new_disk_name,
+    sync_mode=True,
+    dry_run=False,
+):
     """
     Move the specified data part.
     """
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
+
+    settings = {}
+    if sync_mode is False:
+        settings["alter_move_to_space_execute_async"] = 1
+
     query = f"ALTER TABLE `{database}`.`{table}` MOVE PART '{part_name}' TO DISK '{new_disk_name}'"
-    execute_query(ctx, query, timeout=timeout, format_=None, echo=True, dry_run=dry_run)
+    execute_query(
+        ctx,
+        query,
+        settings=settings,
+        timeout=timeout,
+        format_=None,
+        echo=True,
+        dry_run=dry_run,
+    )
 
 
 def drop_part(ctx, database, table, part_name, dry_run=False):
