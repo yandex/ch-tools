@@ -192,7 +192,7 @@ def _clean_object_storage(
           ON object_table.remote_path = object_storage.obj_path
             AND object_table.disk_name = '{disk_conf.name}'
     """
-    logging.info(f"Antijoin query: {antijoin_query}")
+    logging.info("Antijoin query: {}", antijoin_query)
 
     if dry_run:
         logging.info("Counting orphaned objects...")
@@ -279,7 +279,7 @@ def _traverse_object_storage(
     if obj_paths_batch:
         _insert_listing_batch(ctx, obj_paths_batch, listing_table)
 
-    logging.info(f"Collected {counter} objects")
+    logging.info("Collected {} objects", counter)
 
 
 def _insert_listing_batch(

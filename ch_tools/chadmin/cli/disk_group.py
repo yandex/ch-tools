@@ -30,12 +30,12 @@ def check_dir(path, cleanup):
     for dirpath, _, filenames in os.walk(path):
         for filename in filenames:
             if not check_file(f"{dirpath}/{filename}"):
-                logging.info(f"{dirpath}/{filename}")
+                logging.info("{}/{}", dirpath, filename)
                 if dirpath not in corrupted_dirs:
                     corrupted_dirs.append(dirpath)
     if cleanup:
         for dirpath in corrupted_dirs:
-            logging.info(f'Remove directory "{dirpath}"')
+            logging.info('Remove directory "{}"', dirpath)
             shutil.rmtree(dirpath)
 
 

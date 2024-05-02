@@ -199,7 +199,7 @@ def attach_parts_command(ctx, _all, keep_going, dry_run, **kwargs):
             )
         except Exception as e:
             if keep_going:
-                logging.warning(repr(e))
+                logging.warning("{!r}\n", e)
             else:
                 raise
 
@@ -272,7 +272,7 @@ def detach_parts_command(ctx, _all, keep_going, dry_run, **kwargs):
             )
         except Exception as e:
             if keep_going:
-                logging.warning(repr(e))
+                logging.warning("{!r}\n", e)
             else:
                 raise
 
@@ -383,7 +383,7 @@ def delete_parts_command(
                 )
         except Exception as e:
             if keep_going:
-                logging.warning(repr(e))
+                logging.warning("{!r}\n", e)
             else:
                 raise
 
@@ -461,6 +461,6 @@ def move_parts_command(
             )
         except Exception as e:
             if keep_going:
-                logging.warning(repr(e))
+                logging.warning("{!r}\n", e)
             else:
                 raise

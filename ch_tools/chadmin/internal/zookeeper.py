@@ -112,7 +112,7 @@ def _set_node_value(zk, path, value):
         try:
             zk.set(path, value.encode())
         except NoNodeError:
-            logging.warning(f"Can not set for node: {path}  value : {value}")
+            logging.warning("Can not set for node: {}  value : {}", path, value)
 
 
 def _find_paths(zk, root_path, included_paths_regexp, excluded_paths_regexp=None):
@@ -170,7 +170,7 @@ def _delete_nodes_transaction(zk, to_delete_in_trasaction):
                 successful_delete = True
             except NoNodeError:
                 #  Someone deleted node before us. Do nothing.
-                logging.error(f"Node {node} is already absent, skipped")
+                logging.error("Node {} is already absent, skipped", node)
                 successful_delete = True
             except NotEmptyError:
                 # Someone created a node while we deleting. Restart the operation.
@@ -210,7 +210,7 @@ def _delete_recursive(zk, paths):
 
     if len(paths) == 0:
         return
-    logging.info(f"Node to recursive delete {paths}")
+    logging.info("Node to recursive delete {}", paths)
     paths = _remove_subpaths(paths)
     nodes_to_delete = []
     queue = deque(paths)
@@ -317,7 +317,7 @@ def clean_zk_metadata_for_hosts(
 
             for node in nodes:
                 is_lost_flag_path = os.path.join(replica_path, node, "is_lost")
-                logging.info(f"Set is_lost_flag {is_lost_flag_path}")
+                logging.info("Set is_lost_flag {}", is_lost_flag_path)
                 _set_node_value(zk, is_lost_flag_path, "1")
 
     def _remove_replicas_queues(zk, paths, replica_names):
@@ -405,7 +405,7 @@ def clean_zk_metadata_for_hosts(
 
         for ddl_task in _get_children(zk, _format_path(ctx, zk_ddl_query_path)):
             ddl_task_full = os.path.join(zk_ddl_query_path, ddl_task)
-            logging.info(f"DDL task full path: {ddl_task_full}")
+            logging.info("DDL task full path: {}", ddl_task_full)
             for host in nodes:
                 host_mention = get_host_mention_in_task(zk, host, ddl_task_full)
                 if not host_mention:
@@ -413,9 +413,9 @@ def clean_zk_metadata_for_hosts(
                     continue
                 finished_path = os.path.join(ddl_task_full, f"finished/{host_mention}")
                 if zk.exists(finished_path):
-                    logging.info(f"Finished path already exists: {finished_path}")
+                    logging.info("Finished path already exists: {}", finished_path)
                     continue
-                logging.info(f"Add {host} to finished for ddl_task: {ddl_task}")
+                logging.info("Add {} to finished for ddl_task: {}", host, ddl_task)
                 zk.create(finished_path, b"0\n")
         logging.info("Finish mark ddl query")
 

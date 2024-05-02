@@ -37,7 +37,7 @@ def reload_command(ctx, name, status):
     """
     dictionaries = list_dictionaries(ctx, name=name, status=status)
     for dictionary in dictionaries:
-        logging.info(f"Reloading dictionary {_full_name(dictionary)}")
+        logging.info("Reloading dictionary {}", _full_name(dictionary))
         reload_dictionary(ctx, database=dictionary["database"], name=dictionary["name"])
 
 

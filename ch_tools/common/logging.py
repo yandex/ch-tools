@@ -223,9 +223,10 @@ def enable_stdout_logger():
     """
     Adds stdout logger.
     """
-    logger_config["stdout_logger_id"] = logger.add(
-        sink=sys.stdout,
-        level="INFO",
-        format="{message}",
-        filter=make_filter(logger_config["module"]),
-    )
+    if logger_config.get("stdout_logger_id", None) is None:
+        logger_config["stdout_logger_id"] = logger.add(
+            sink=sys.stdout,
+            level="INFO",
+            format="{message}",
+            filter=make_filter(logger_config["module"]),
+        )

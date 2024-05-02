@@ -117,11 +117,11 @@ def wait_replication_sync_command(
                 settings={"receive_timeout": timeout},
             )
         except ReadTimeout:
-            logging.error(f"Timeout while running SYNC REPLICA on {full_name}.")
+            logging.error("Timeout while running SYNC REPLICA on {}.", full_name)
             sys.exit(1)
         except ClickhouseError as e:
             if "TIMEOUT_EXCEEDED" in str(e):
-                logging.error(f"Timeout while running SYNC REPLICA on {full_name}.")
+                logging.error("Timeout while running SYNC REPLICA on {}.", full_name)
                 sys.exit(1)
             raise
 
@@ -216,7 +216,7 @@ def is_clickhouse_alive():
             return True
 
     except Exception as e:
-        logging.error(f"Failed to perform ch_ping check: {repr(e)}")
+        logging.error("Failed to perform ch_ping check: {!r}", e)
 
     return False
 

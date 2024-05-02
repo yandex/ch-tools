@@ -72,7 +72,7 @@ def process_path(
     column: str,
     remove: bool,
 ) -> dict:
-    logging.info(f"Processing path {path} with prefix {prefix}:")
+    logging.info("Processing path {} with prefix {}:", path, prefix)
 
     result = {
         "path": path,
@@ -82,13 +82,13 @@ def process_path(
     }
 
     size = du(path)
-    logging.info(f"Size of path {path}: {size}")
+    logging.info("Size of path {}: {}", path, size)
     result["size"] = size
 
     file = prefix_exists_in_metadata(prefix)
 
     if file:
-        logging.info(f'Prefix "{prefix}" is used in metadata file "{file}"')
+        logging.info('Prefix "{}" is used in metadata file "{}"', prefix, file)
         result["status"] = "used"
         return result
 
@@ -97,17 +97,18 @@ def process_path(
         result["status"] = "not_passed_column_check"
         return result
 
-    logging.info(f'Prefix "{prefix}" is NOT used in any metadata file')
+    logging.info('Prefix "{}" is NOT used in any metadata file', prefix)
     result["status"] = "not_used"
 
     if remove:
-        logging.info(f'Trying to remove path "{path}"')
+        logging.info('Trying to remove path "{}"', path)
 
         remove_data(path)
         result["removed"] = True
     else:
         logging.info(
-            f'Path "{path}" is not removed because of remove-parameter is not specified'
+            'Path "{}" is not removed because of remove-parameter is not specified',
+            path,
         )
         result["removed"] = False
 
@@ -148,7 +149,7 @@ def du(path: str) -> str:
 def remove_data(path: str) -> None:
     def onerror(*args):
         errors = "\n".join(list(args))
-        logging.error(f"ERROR: {errors}")
+        logging.error("ERROR: {}", errors)
 
     shutil.rmtree(path=path, onerror=onerror)
 
@@ -231,7 +232,7 @@ def cleanup_data_dir(ctx, remove, disk, keep_going, max_sql_objects, max_workers
                 except Exception as e:
                     if keep_going:
                         logging.warning(
-                            f"Ignoring the exception due to keep-going flag : {repr(e)}",
+                            "Ignoring the exception due to keep-going flag : {!r}", e
                         )
                     else:
                         raise
@@ -296,7 +297,7 @@ def remove_from_disk(
     disk: str, path: str, disk_config_path: Optional[str] = None
 ) -> Tuple[int, bytes]:
     cmd = f"clickhouse-disks { '-C ' + disk_config_path if disk_config_path else ''} --disk {disk} remove {path}"
-    logging.info(f"Run : {cmd}")
+    logging.info("Run : {}", cmd)
     proc = subprocess.run(
         cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )

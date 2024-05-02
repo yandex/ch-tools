@@ -163,7 +163,7 @@ def attach_partitions_command(
             )
         except Exception as e:
             if keep_going:
-                logging.warning(repr(e))
+                logging.warning("{!r}\n", e)
             else:
                 raise
 
@@ -257,7 +257,7 @@ def detach_partitions_command(
             )
         except Exception as e:
             if keep_going:
-                logging.warning(repr(e))
+                logging.warning("{!r}\n", e)
             else:
                 raise
 

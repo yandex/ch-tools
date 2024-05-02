@@ -137,7 +137,7 @@ def delete_command(ctx, **kwargs):
     for table, tasks in group_tasks_by_table(tasks).items():
         database, table = table
 
-        logging.info(f"Detaching table `{database}`.`{table}`")
+        logging.info("Detaching table `{}`.`{}`", database, table)
         execute_query(
             ctx,
             f"""DETACH TABLE `{database}`.`{table}`""",
@@ -148,10 +148,10 @@ def delete_command(ctx, **kwargs):
 
         for task in tasks:
             zk_path = task["zk_path"]
-            logging.info(f"Deleting task from ZooKeeper: {zk_path}")
+            logging.info("Deleting task from ZooKeeper: {}", zk_path)
             delete_zk_node(ctx, zk_path)
 
-        logging.info(f"Attaching table `{database}`.`{table}`")
+        logging.info("Attaching table `{}`.`{}`", database, table)
         execute_query(
             ctx,
             f"""ATTACH TABLE `{database}`.`{table}`""",

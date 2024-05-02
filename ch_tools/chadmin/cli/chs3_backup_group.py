@@ -87,7 +87,7 @@ def _delete_chs3_backups(ctx, chs3_backups, *, keep_going, dry_run):
             unfreeze_backup(ctx, chs3_backup, dry_run=dry_run)
         except Exception as e:
             if keep_going:
-                logging.warning(f"{e!r}\n")
+                logging.warning("{!r}\n", e)
             else:
                 raise
 
@@ -99,7 +99,7 @@ def _delete_chs3_backups_comp(ctx, chs3_backups, *, dry_run):
     """
     tables = get_tables_dict(ctx)
     for chs3_backup in chs3_backups:
-        logging.info(f"Removing backup: {chs3_backup}")
+        logging.info("Removing backup: {}", chs3_backup)
         for table in tables:
             try:
                 unfreeze_table(
@@ -111,7 +111,9 @@ def _delete_chs3_backups_comp(ctx, chs3_backups, *, dry_run):
                 )
             except requests.exceptions.HTTPError:
                 logging.error(
-                    f"Can't unfreeze table {table} in backup {chs3_backup}. Maybe it was deleted."
+                    "Can't unfreeze table {} in backup {}. Maybe it was deleted.",
+                    table,
+                    chs3_backup,
                 )
             if not dry_run:
                 clear_empty_backup(chs3_backup)
@@ -132,6 +134,6 @@ def clear_empty_backup(orphaned_chs3_backup):
             os.rmdir(backup_directory)
     except FileNotFoundError:
         logging.error(
-            f"Cannot remove backup directory {backup_directory} as it doesn`t exist. "
-            f"Maybe it was already removed."
+            "Cannot remove backup directory {} as it doesn`t exist.\nMaybe it was already removed.",
+            backup_directory,
         )
