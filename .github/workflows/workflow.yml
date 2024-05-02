@@ -48,8 +48,9 @@ jobs:
           - { python: "3.10", ubuntu: "latest" }
         clickhouse:
           - "22.8.21.38"
-          - "23.3.19.32"
-          - "23.8.9.54"
+          - "23.3.22.3"
+          - "23.8.13.25"
+          - "24.3.2.23"
           - "latest"
     steps:
       - uses: actions/checkout@v4
