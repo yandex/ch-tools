@@ -1,6 +1,7 @@
 from click import command, option, pass_context
 
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
 
 
 @command("functions")
@@ -17,4 +18,4 @@ def list_functions_command(ctx, name):
         WHERE lower(name) {{ format_str_imatch(name) }}
         {% endif %}
         """
-    print(execute_query(ctx, query, name=name))
+    logging.info(execute_query(ctx, query, name=name))

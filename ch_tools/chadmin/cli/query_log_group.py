@@ -3,6 +3,7 @@ import datetime
 from click import Choice, argument, group, option, pass_context
 
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_cluster_name
 
 
@@ -25,11 +26,8 @@ def query_log_group():
 )
 @pass_context
 def get_query_command(ctx, **kwargs):
-    print(get_queries(ctx, **kwargs, verbose=True))
-    print("\nProfileEvents:")
-    print(get_query_metrics(ctx, **kwargs))
-    print("\nSettings:")
-    print(get_query_settings(ctx, **kwargs))
+    result = f"{get_queries(ctx, **kwargs, verbose=True)}\nProfileEvents:{get_query_metrics(ctx, **kwargs)}\nSettings:{get_query_settings(ctx, **kwargs)}"
+    logging.info(result)
 
 
 @query_log_group.command("list")
@@ -112,7 +110,7 @@ def list_queries_command(
     max_date = max_date or date
     min_time = min_time or time
     max_time = max_time or time
-    print(
+    logging.info(
         get_queries(
             ctx,
             min_date=min_date,
@@ -206,7 +204,7 @@ def get_statistics_command(
           AND lower(exception) LIKE lower('{{ error }}')
         {% endif -%}
     """
-    print(
+    logging.info(
         execute_query(
             ctx,
             query_str,
@@ -249,7 +247,7 @@ def get_query_settings_command(ctx, query_id, on_cluster):
         WHERE type != 1
           AND query_id = '{{ query_id }}'
         """
-    print(execute_query(ctx, query_str, query_id=query_id, cluster=cluster))
+    logging.info(execute_query(ctx, query_str, query_id=query_id, cluster=cluster))
 
 
 @query_log_group.command("get-metrics")
@@ -278,7 +276,7 @@ def get_query_metrics_command(ctx, query_id, on_cluster):
           AND query_id = '{{ query_id }}'
         ORDER BY name
         """
-    print(execute_query(ctx, query_str, query_id=query_id, cluster=cluster))
+    logging.info(execute_query(ctx, query_str, query_id=query_id, cluster=cluster))
 
 
 def get_queries(

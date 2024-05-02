@@ -1,6 +1,7 @@
 from click import group, option, pass_context
 
 from ch_tools.chadmin.internal.dictionary import list_dictionaries, reload_dictionary
+from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
 
 
@@ -36,7 +37,7 @@ def reload_command(ctx, name, status):
     """
     dictionaries = list_dictionaries(ctx, name=name, status=status)
     for dictionary in dictionaries:
-        print(f"Reloading dictionary {_full_name(dictionary)}")
+        logging.info("Reloading dictionary {}", _full_name(dictionary))
         reload_dictionary(ctx, database=dictionary["database"], name=dictionary["name"])
 
 

@@ -1,6 +1,7 @@
 from click import argument, group, option, pass_context
 
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
 
 
 @group("thread-log")
@@ -25,7 +26,7 @@ def list_threads_command(
 ):
     min_date = min_date or date
     max_date = max_date or date
-    print(
+    logging.info(
         get_threads(
             ctx,
             query_id=query_id,
@@ -135,7 +136,7 @@ def get_thread_metrics_command(
         {% endif %}
         ORDER BY thread_name, thread_number, name
         """
-    print(
+    logging.info(
         execute_query(
             ctx,
             query_str,

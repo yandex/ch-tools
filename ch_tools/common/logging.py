@@ -4,6 +4,7 @@ Logging module.
 
 import inspect
 import logging
+import sys
 from logging import (  # noqa # pylint:disable=unused-import
     CRITICAL,
     DEBUG,
@@ -112,6 +113,8 @@ def configure(
 
     logger.configure(handlers=loguru_handlers, activation=[("", True)], extra=extra)
 
+    enable_stdout_logger()
+
     # Configure logging.
     logging.basicConfig(handlers=[InterceptHandler()], level=0)
 
@@ -127,47 +130,47 @@ def critical(msg, *args, **kwargs):
     """
     Log a message with severity 'CRITICAL'.
     """
-    _log(CRITICAL, msg, *args, **kwargs)
+    _log("CRITICAL", msg, *args, **kwargs)
 
 
 def error(msg, *args, **kwargs):
     """
     Log a message with severity 'ERROR'.
     """
-    _log(ERROR, msg, *args, **kwargs)
+    _log("ERROR", msg, *args, **kwargs)
 
 
 def exception(msg, *args, exc_info=True, **kwargs):
     """
     Log a message with severity 'ERROR' with exception information.
     """
-    _log(ERROR, msg, *args, exc_info=exc_info, **kwargs)
+    _log("ERROR", msg, *args, exc_info=exc_info, **kwargs)
 
 
 def warning(msg, *args, **kwargs):
     """
     Log a message with severity 'WARNING'.
     """
-    _log(WARNING, msg, *args, **kwargs)
+    _log("WARNING", msg, *args, **kwargs)
 
 
 def info(msg, *args, **kwargs):
     """
     Log a message with severity 'INFO'.
     """
-    _log(INFO, msg, *args, **kwargs)
+    _log("INFO", msg, *args, **kwargs)
 
 
 def debug(msg, *args, **kwargs):
     """
     Log a message with severity 'DEBUG'.
     """
-    _log(DEBUG, msg, *args, **kwargs)
+    _log("DEBUG", msg, *args, **kwargs)
 
 
 def log_status(status, msg):
     """
-    Log a message with by status code.
+    Log a message by status code.
     """
     if status == result.OK:
         debug(msg)
@@ -185,6 +188,14 @@ def getLogger(name: str) -> Any:
     return logger.bind(logger_name=name)
 
 
+# pylint: disable=invalid-name
+def getNativeLogger(name: str) -> Any:
+    """
+    Get logging logger with specific name. Might be used for interaction with other libraries.
+    """
+    return logging.getLogger(name)
+
+
 def add(sink, level, format_):
     """
     Add new log handler.
@@ -196,4 +207,26 @@ def set_module_log_level(module, level):
     """
     Set level for logging's logger. Might be used to control logs from other libraries.
     """
-    logging.getLogger(module).setLevel(level)
+    getNativeLogger(module).setLevel(level)
+
+
+def disable_stdout_logger():
+    """
+    Removes stdout handler. May be used for commands with "quiet" option.
+    """
+    if logger_config["stdout_logger_id"]:
+        logger.remove(logger_config["stdout_logger_id"])
+        logger_config["stdout_logger_id"] = None
+
+
+def enable_stdout_logger():
+    """
+    Adds stdout logger.
+    """
+    if logger_config.get("stdout_logger_id", None) is None:
+        logger_config["stdout_logger_id"] = logger.add(
+            sink=sys.stdout,
+            level="INFO",
+            format="{message}",
+            filter=make_filter(logger_config["module"]),
+        )

@@ -124,6 +124,7 @@ DEFAULT_CONFIG = {
                 "nose": S3_LOG_CONFIG,
                 "s3transfer": S3_LOG_CONFIG,
                 "urllib3": S3_LOG_CONFIG,
+                "kazoo": S3_LOG_CONFIG,
             },
             "ch-monitoring": {
                 "ch-monitoring": {

@@ -7,7 +7,7 @@ class Chadmin:
 
     def exec_cmd(self, cmd):
         ch_admin_cmd = f"chadmin {cmd}"
-        logging.debug(f"chadmin command: {ch_admin_cmd}")
+        logging.debug("chadmin command: {}", ch_admin_cmd)
 
         result = self._container.exec_run(["bash", "-c", ch_admin_cmd], user="root")
         return result

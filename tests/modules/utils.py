@@ -41,11 +41,11 @@ def env_stage(event, fail=False):
         @wraps(fun)
         def _wrapped_fun(*args, **kwargs):
             stage_name = f"{fun.__module__}.{fun.__name__}"
-            logging.info(f"initiating {event} stage {stage_name}")
+            logging.info("initiating {} stage {}", event, stage_name)
             try:
                 return fun(*args, **kwargs)
             except Exception as e:
-                logging.error(f"{stage_name} failed: {repr(e)}")
+                logging.error("{} failed: {!r}", stage_name, e)
                 if fail:
                     raise
 

@@ -1,6 +1,7 @@
 from click import command, pass_context
 
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
 
 
 @command("stack-trace")
@@ -25,4 +26,4 @@ def stack_trace_command(ctx):
         GROUP BY thread_name, trace
         ORDER BY min_thread_id
     """
-    print(execute_query(ctx, query_str, format_="Vertical"))
+    logging.info(execute_query(ctx, query_str, format_="Vertical"))
