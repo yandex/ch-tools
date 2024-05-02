@@ -298,6 +298,7 @@ def remove_from_disk(
 ) -> Tuple[int, bytes]:
     cmd = f"clickhouse-disks { '-C ' + disk_config_path if disk_config_path else ''} --disk {disk} remove {path}"
     logging.info("Run : {}", cmd)
+
     proc = subprocess.run(
         cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )

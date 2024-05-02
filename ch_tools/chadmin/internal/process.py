@@ -127,7 +127,13 @@ def kill_process(ctx, query_id=None, user=None, exclude_user=None):
 
 
 def list_merges(
-    ctx, *, database=None, table=None, is_mutation=None, cluster=None, limit=None
+    ctx,
+    *,
+    database=None,
+    table=None,
+    is_mutation=None,
+    cluster=None,
+    limit=None,
 ):
     """
     Get list of executing merges from system.merges table.
@@ -192,8 +198,64 @@ def list_merges(
     )["data"]
 
 
+def list_moves(
+    ctx,
+    *,
+    database=None,
+    table=None,
+    cluster=None,
+    limit=None,
+):
+    """
+    Get list of executing moves from system.moves table.
+    """
+    query = """
+        SELECT
+        {% if cluster %}
+            hostName() "host",
+        {% endif %}
+            database,
+            table,
+            elapsed,
+            target_disk_name,
+            target_disk_path,
+            part_name,
+            part_size,
+            thread_id
+        {% if cluster %}
+        FROM clusterAllReplicas({{ cluster }}, system.moves)
+        {% else %}
+        FROM system.moves
+        {% endif %}
+        WHERE 1
+        {% if database %}
+          AND database {{ format_str_match(database) }}
+        {% endif %}
+        {% if table %}
+          AND table {{ format_str_match(table) }}
+        {% endif %}
+        {% if limit %}
+        LIMIT {{ limit }}
+        {% endif %}
+        """
+    return execute_query(
+        ctx,
+        query,
+        database=database,
+        table=table,
+        cluster=cluster,
+        limit=limit,
+        format_="JSON",
+    )["data"]
+
+
 def list_replicated_fetches(
-    ctx, *, database=None, table=None, cluster=None, limit=None
+    ctx,
+    *,
+    database=None,
+    table=None,
+    cluster=None,
+    limit=None,
 ):
     """
     Get list of executing fetches from system.replicated_fetches table.

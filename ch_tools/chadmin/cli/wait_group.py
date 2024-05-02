@@ -5,6 +5,7 @@ import time
 from click import FloatRange, group, option, pass_context
 from requests.exceptions import ReadTimeout
 
+from ch_tools.chadmin.internal.table_replica import list_table_replicas
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.cli.parameters import TimeSpanParamType
@@ -95,16 +96,9 @@ def wait_replication_sync_command(
     start_time = time.time()
     deadline = start_time + total_timeout.total_seconds()
 
-    # Get replicated tables
-    tables = execute_query(
-        ctx,
-        "SELECT name, database FROM system.tables WHERE engine LIKE 'Replicated%' AND engine LIKE '%MergeTree'",
-        format_="JSON",
-    )["data"]
-
     # Sync tables in cycle
-    for t in tables:
-        full_name = f"`{t['database']}`.`{t['name']}`"
+    for replica in list_table_replicas(ctx):
+        full_name = f"`{replica['database']}`.`{replica['table']}`"
         time_left = deadline - time.time()
         timeout = min(replica_timeout.total_seconds(), time_left)
 
