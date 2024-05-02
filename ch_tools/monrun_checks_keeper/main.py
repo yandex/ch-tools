@@ -57,16 +57,17 @@ class KeeperChecks(cloup.Group):
             status = Status()
             try:
                 result = ctx.invoke(cmd_callback, *a, **kw)
+                logging.disable_stdout_logger()
                 if result:
                     status.append(result.message)
                     status.set_code(result.code)
             except Exception as e:
+                logging.disable_stdout_logger()
                 logging.exception("Error occurred while executing:")
                 status.append(repr(e))
                 status.set_code(1)
 
             log_message = f"Completed with {status.code};{status.message}"
-            logging.disable_stdout_logger()
             logging.log_status(status.code, log_message)
 
             if ctx.obj and ctx.obj.get("status_mode", False):

@@ -73,18 +73,19 @@ class MonrunChecks(cloup.Group):
             status = Status()
             try:
                 result = ctx.invoke(cmd_callback, *args, **kwargs)
+                logging.disable_stdout_logger()
                 if result:
                     status.append(result.message)
                     status.set_code(result.code)
                     if result.verbose:
                         status.add_verbose(result.verbose)
             except Exception as exc:
+                logging.disable_stdout_logger()
                 if not isinstance(exc, UserWarning):
                     logging.exception("Got error:")
                 status = translate_to_status(exc, status)
 
             log_message = f"Completed with {status.code};{status.message}"
-            logging.disable_stdout_logger()
             logging.log_status(status.code, log_message)
 
             if ctx.obj and ctx.obj.get("status_mode", False):

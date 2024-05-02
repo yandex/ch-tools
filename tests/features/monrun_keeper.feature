@@ -45,7 +45,7 @@ Feature: keeper-monitoring tool
     """
     keeper-monitoring version
     """
-    Then we get response contains
+    Then we get response
     """
     1;ConnectionRefusedError(111, 'Connection refused')
     """
