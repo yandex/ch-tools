@@ -75,7 +75,6 @@
             <session_timeout_ms>10000</session_timeout_ms>
         </coordination_settings>
         <raft_configuration>
-            <secure>true</secure>
             <server>
                 <hostname>127.0.0.1</hostname>
                 <id>1</id>
