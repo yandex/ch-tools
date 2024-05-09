@@ -1,10 +1,8 @@
 import os
 
-import requests
 from click import ClickException, argument, group, option, pass_context
 
-from ch_tools.chadmin.internal.backup import unfreeze_backup, unfreeze_table
-from ch_tools.chadmin.internal.system import match_ch_version
+from ch_tools.chadmin.internal.backup import unfreeze_backup
 from ch_tools.chadmin.internal.table import list_tables
 from ch_tools.common import logging
 from ch_tools.common.backup import (
@@ -71,17 +69,6 @@ def delete_chs3_backups(ctx, chs3_backups, *, keep_going=False, dry_run=False):
     """
     Delete CHS3 backups.
     """
-    if match_ch_version(ctx, min_version="22.6"):
-        _delete_chs3_backups(ctx, chs3_backups, keep_going=keep_going, dry_run=dry_run)
-    else:
-        _delete_chs3_backups_comp(ctx, chs3_backups, dry_run=dry_run)
-
-
-def _delete_chs3_backups(ctx, chs3_backups, *, keep_going, dry_run):
-    """
-    Implementation of delete_chs3_backups() for ClickHouse versions greater or equal to 22.6 that
-    support SYSTEM UNFREEZE query.
-    """
     for chs3_backup in chs3_backups:
         try:
             unfreeze_backup(ctx, chs3_backup, dry_run=dry_run)
@@ -90,33 +77,6 @@ def _delete_chs3_backups(ctx, chs3_backups, *, keep_going, dry_run):
                 logging.warning("{!r}\n", e)
             else:
                 raise
-
-
-def _delete_chs3_backups_comp(ctx, chs3_backups, *, dry_run):
-    """
-    Implementation of delete_chs3_backups() for ClickHouse versions lower 22.6 that
-    do not support SYSTEM UNFREEZE query.
-    """
-    tables = get_tables_dict(ctx)
-    for chs3_backup in chs3_backups:
-        logging.info("Removing backup: {}", chs3_backup)
-        for table in tables:
-            try:
-                unfreeze_table(
-                    ctx,
-                    database=table["database"],
-                    table=table["table"],
-                    backup_name=chs3_backup,
-                    dry_run=dry_run,
-                )
-            except requests.exceptions.HTTPError:
-                logging.error(
-                    "Can't unfreeze table {} in backup {}. Maybe it was deleted.",
-                    table,
-                    chs3_backup,
-                )
-            if not dry_run:
-                clear_empty_backup(chs3_backup)
 
 
 def get_tables_dict(ctx):

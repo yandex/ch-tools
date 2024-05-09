@@ -1,10 +1,6 @@
 ARG CLICKHOUSE_VERSION
 FROM clickhouse/clickhouse-server:${CLICKHOUSE_VERSION}
 
-# Clickhouse changed deb package url so old builds' paths (e.g 21.8.15.7) yield an error on update
-# TODO this should be removed once 21.8 is not supported
-RUN rm /etc/apt/sources.list.d/clickhouse.list || true
-
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     apt-get install -y supervisor python3-pip && \
     rm -rf /var/lib/apt/lists/* /var/cache/debconf && \

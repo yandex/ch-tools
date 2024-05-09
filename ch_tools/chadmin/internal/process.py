@@ -52,15 +52,8 @@ def list_processes(
                             toString(client_version_patch))) "client"
         {% else %}
                             toString(client_version_patch))) "client",
-        {%     if version_ge('21.8') -%}
         ProfileEvents,
         Settings
-        {%     else -%}
-        ProfileEvents.Names,
-        ProfileEvents.Values,
-        Settings.Names,
-        Settings.Values
-        {%     endif -%}
         {% endif %}
         {% if cluster %}
         FROM clusterAllReplicas({{ cluster }}, system.processes)
@@ -148,10 +141,8 @@ def list_merges(
             elapsed,
             progress,
             is_mutation,
-        {% if version_ge('21.3') -%}
             merge_type,
             merge_algorithm,
-        {% endif %}
             partition_id,
             num_parts,
             source_part_names,

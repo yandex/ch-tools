@@ -61,8 +61,7 @@ def get_threads(
              master_thread_number
         {% else %}
              master_thread_number,
-             ProfileEvents.Names,
-             ProfileEvents.Values
+             ProfileEvents
         {% endif %}
         FROM system.query_thread_log
         WHERE query_id = '{{ query_id }}'
