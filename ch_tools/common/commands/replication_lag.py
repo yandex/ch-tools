@@ -33,66 +33,61 @@ def estimate_replication_lag(ctx, xcrit, crit, warn, mwarn, mcrit, verbose=0):
             "Merges with 1000+ tries",
         ]
         for key, item in chart.items():
-            if item.get("multi_replicas", False):
-                tabletab = [
-                    key,
-                    item.get("delay", 0),
-                    item.get("tasks", 0),
-                    item.get("max_execution", 0),
-                    item.get("errors", 0),
-                    item.get("user_fault", False),
-                    item.get("retried_merges", 0),
-                ]
-                verbtab.append(tabletab)
-                if verbose >= 2:
-                    exceptions_retrayable = ""
-                    exceptions_non_retrayable = ""
-                    exceptions_ignored = ""
-                    for exception in item.get("exceptions", []):
-                        if exception:
-                            if is_userfault_exception(exception):
-                                exceptions_ignored += "\t" + exception[5:] + "\n"
-                            elif exception.startswith("<pr> "):
-                                exceptions_retrayable += "\t" + exception[5:] + "\n"
-                            else:
-                                exceptions_non_retrayable += "\t" + exception[5:] + "\n"
-                    max_execution_part = (
-                        item.get("max_execution_part", "")
-                        if item.get("max_execution", 0)
-                        else 0
+            tabletab = [
+                key,
+                item.get("delay", 0),
+                item.get("tasks", 0),
+                item.get("max_execution", 0),
+                item.get("errors", 0),
+                item.get("user_fault", False),
+                item.get("re    tried_merges", 0),
+            ]
+            verbtab.append(tabletab)
+            if verbose >= 2:
+                exceptions_retrayable = ""
+                exceptions_non_retrayable = ""
+                exceptions_ignored = ""
+                for exception in item.get("exceptions", []):
+                    if exception:
+                        if is_userfault_exception(exception):
+                            exceptions_ignored += "\t" + exception[5:] + "\n"
+                        elif exception.startswith("<pr> "):
+                            exceptions_retrayable += "\t" + exception[5:] + "\n"
+                        else:
+                            exceptions_non_retrayable += "\t" + exception[5:] + "\n"
+                max_execution_part = (
+                    item.get("max_execution_part", "")
+                    if item.get("max_execution", 0)
+                    else 0
+                )
+                if (
+                    exceptions_retrayable
+                    or exceptions_non_retrayable
+                    or exceptions_ignored
+                    or max_execution_part
+                ):
+                    msg_verbose_2 = msg_verbose_2 + key + ":\n"
+                if exceptions_non_retrayable:
+                    msg_verbose_2 = (
+                        msg_verbose_2
+                        + "  Non-retrayable errors:\n"
+                        + exceptions_non_retrayable
                     )
-                    if (
-                        exceptions_retrayable
-                        or exceptions_non_retrayable
-                        or exceptions_ignored
-                        or max_execution_part
-                    ):
-                        msg_verbose_2 = msg_verbose_2 + key + ":\n"
-                    if exceptions_non_retrayable:
-                        msg_verbose_2 = (
-                            msg_verbose_2
-                            + "  Non-retrayable errors:\n"
-                            + exceptions_non_retrayable
-                        )
-                    if exceptions_retrayable:
-                        msg_verbose_2 = (
-                            msg_verbose_2
-                            + "  Retrayable errors:\n"
-                            + exceptions_retrayable
-                        )
-                    if exceptions_ignored:
-                        msg_verbose_2 = (
-                            msg_verbose_2
-                            + "  User fault errors:\n"
-                            + exceptions_ignored
-                        )
-                    if max_execution_part:
-                        msg_verbose_2 = (
-                            msg_verbose_2
-                            + "  Result part of task with max execution time: "
-                            + max_execution_part
-                            + "\n"
-                        )
+                if exceptions_retrayable:
+                    msg_verbose_2 = (
+                        msg_verbose_2 + "  Retrayable errors:\n" + exceptions_retrayable
+                    )
+                if exceptions_ignored:
+                    msg_verbose_2 = (
+                        msg_verbose_2 + "  User fault errors:\n" + exceptions_ignored
+                    )
+                if max_execution_part:
+                    msg_verbose_2 = (
+                        msg_verbose_2
+                        + "  Result part of task with max execution time: "
+                        + max_execution_part
+                        + "\n"
+                    )
         msg_verbose = tabulate(verbtab, headers=headers)
         if verbose >= 2:
             msg_verbose = msg_verbose + msg_verbose_2
@@ -132,10 +127,6 @@ def get_replication_lag(ch_client):
         key = "{database}.{table}".format(database=t["database"], table=t["table"])
         chart[key] = {}
         chart[key]["delay"] = int(t["absolute_delay"])
-    tables = filter_out_single_replica_tables(ch_client, tables)
-    for t in tables:
-        key = "{database}.{table}".format(database=t["database"], table=t["table"])
-        chart[key]["multi_replicas"] = True
     tables = count_errors(ch_client, tables, -1)
 
     max_merges = 0
@@ -157,48 +148,35 @@ def get_replication_lag(ch_client):
     lag_with_errors = 0
     max_execution = 0
     for key, item in chart.items():
-        if item.get("multi_replicas", False):
-            delay = item.get("delay", 0)
-            if delay > lag:
-                lag = delay
-            if (
-                delay > lag_with_errors
-                and item.get("errors", 0) > 0
-                and not item.get("userfault", False)
-            ):
-                lag_with_errors = delay
-            execution = item.get("max_execution", 0)
-            if execution > max_execution:
-                max_execution = execution
+        delay = item.get("delay", 0)
+        if delay > lag:
+            lag = delay
+        if (
+            delay > lag_with_errors
+            and item.get("errors", 0) > 0
+            and not item.get("userfault", False)
+        ):
+            lag_with_errors = delay
+        execution = item.get("max_execution", 0)
+        if execution > max_execution:
+            max_execution = execution
 
     return lag, lag_with_errors, max_execution, max_merges, chart
 
 
 def get_tables_with_replication_delay(ch_client):
     """
-    Get tables with absolute_delay > 0.
+    Get tables with absolute_delay > 0 and total_replicas > 1.
     """
-    query = "SELECT database, table, zookeeper_path, absolute_delay FROM system.replicas WHERE absolute_delay > 0"
-    return ch_client.query_json_data(query=query, compact=False)
-
-
-def filter_out_single_replica_tables(ch_client, tables):
-    if not tables:
-        return tables
-
     query = """
         SELECT
             database,
             table,
-            zookeeper_path
+            zookeeper_path,
+            absolute_delay
         FROM system.replicas
-        WHERE (database, table) IN ({tables})
-        AND total_replicas > 1
-        """.format(
-        tables=",".join(
-            "('{0}', '{1}')".format(t["database"], t["table"]) for t in tables
-        )
-    )
+        WHERE absolute_delay > 0 AND total_replicas > 1
+    """
     return ch_client.query_json_data(query=query, compact=False)
 
 
