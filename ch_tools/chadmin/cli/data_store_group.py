@@ -184,7 +184,15 @@ def remove_data(path: str) -> None:
     default=4,
     help="Max workers for removing.",
 )
-def cleanup_data_dir(ctx, remove, disk, keep_going, max_sql_objects, max_workers):
+@option(
+    "--remove-only-metadata",
+    is_flag=True,
+    default=False,
+    help="Flag to remove only local metadata.",
+)
+def cleanup_data_dir(
+    ctx, remove, disk, keep_going, max_sql_objects, max_workers, remove_only_metadata
+):
     lost_data: List[dict] = []
     path_to_disk = CLICKHOUSE_PATH + (f"/disks/{disk}" if disk != "default" else "")
     data_path = path_to_disk + "/data"
@@ -216,16 +224,25 @@ def cleanup_data_dir(ctx, remove, disk, keep_going, max_sql_objects, max_workers
             # Can't use map function here. The map method returns a generator
             # and it is not possible to resume a generator after an exception occurs.
             # https://peps.python.org/pep-0255/#specification-generators-and-exception-propagation
-            futures_to_part = {
-                executor.submit(
-                    remove_orphaned_sql_object,
-                    disk,
-                    data,
-                    path_to_disk,
-                    disk_config_path,
-                ): data
-                for data in lost_data
-            }
+            if remove_only_metadata:
+                futures_to_part = {
+                    executor.submit(
+                        remove_orphaned_sql_object_metadata,
+                        data,
+                    ): data
+                    for data in lost_data
+                }
+            else:
+                futures_to_part = {
+                    executor.submit(
+                        remove_orphaned_sql_object_full,
+                        data,
+                        disk,
+                        path_to_disk,
+                        disk_config_path,
+                    ): data
+                    for data in lost_data
+                }
             for future in as_completed(futures_to_part):
                 try:
                     future.result()
@@ -240,17 +257,32 @@ def cleanup_data_dir(ctx, remove, disk, keep_going, max_sql_objects, max_workers
     print_response(ctx, lost_data, default_format="table")
 
 
-def remove_orphaned_sql_object(disk, data, path_to_disk, disks_config_path):
+def remove_orphaned_sql_object_metadata(data):
+    path = data["path"]
+
+    retcode, stderr = remove_from_disk(path)
+    if retcode:
+        raise RuntimeError(
+            f"Metadata remove command has failed: retcode {retcode}, stderr: {stderr.decode()}"
+        )
+    data["deleted"] = "Yes"
+
+
+def remove_orphaned_sql_object_full(data, disk, path_to_disk, disks_config_path):
 
     path = data["path"]
+
     if not path.startswith(path_to_disk):
         raise RuntimeError(f"Path {path} on fs does not math with disk {disk}")
     relative_path_on_disk = path[len(path_to_disk) + 1 :]
-    retcode, stderr = remove_from_disk(disk, relative_path_on_disk, disks_config_path)
+    retcode, stderr = remove_from_ch_disk(
+        disk, relative_path_on_disk, disks_config_path
+    )
     if retcode:
         raise RuntimeError(
             f"clickhouse-disks remove command has failed: retcode {retcode}, stderr: {stderr.decode()}"
         )
+
     data["deleted"] = "Yes"
 
 
@@ -293,10 +325,20 @@ def collect_orphaned_sql_objects_recursive(
             )
 
 
-def remove_from_disk(
+def remove_from_ch_disk(
     disk: str, path: str, disk_config_path: Optional[str] = None
 ) -> Tuple[int, bytes]:
     cmd = f"clickhouse-disks { '-C ' + disk_config_path if disk_config_path else ''} --disk {disk} remove {path}"
+    logging.info("Run : {}", cmd)
+
+    proc = subprocess.run(
+        cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+    return (proc.returncode, proc.stderr)
+
+
+def remove_from_disk(path):
+    cmd = f"rm -rf {path}"
     logging.info("Run : {}", cmd)
 
     proc = subprocess.run(
