@@ -236,8 +236,8 @@ def cleanup_data_dir(
                 futures_to_part = {
                     executor.submit(
                         remove_orphaned_sql_object_full,
-                        disk,
                         data,
+                        disk,
                         path_to_disk,
                         disk_config_path,
                     ): data
