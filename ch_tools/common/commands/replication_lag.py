@@ -40,7 +40,7 @@ def estimate_replication_lag(ctx, xcrit, crit, warn, mwarn, mcrit, verbose=0):
                 item.get("max_execution", 0),
                 item.get("errors", 0),
                 item.get("user_fault", False),
-                item.get("re    tried_merges", 0),
+                item.get("retried_merges", 0),
             ]
             verbtab.append(tabletab)
             if verbose >= 2:
