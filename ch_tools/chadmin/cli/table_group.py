@@ -1,4 +1,6 @@
 import os
+from collections import OrderedDict
+from typing import Any
 
 from cloup import Choice, Context, argument, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
@@ -8,14 +10,19 @@ from ch_tools.chadmin.internal.table import (
     delete_table,
     detach_table,
     get_table,
+    list_table_columns,
     list_tables,
     materialize_ttl,
 )
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
-from ch_tools.common.cli.formatting import print_response
-from ch_tools.common.cli.parameters import StringParamType
+from ch_tools.common.cli.formatting import format_bytes, print_response
 from ch_tools.common.clickhouse.config import get_cluster_name
+
+FIELD_FORMATTERS = {
+    "disk_size": format_bytes,
+    "uncompressed_size": format_bytes,
+}
 
 
 @group("table")
@@ -25,8 +32,8 @@ def table_group():
 
 
 @table_group.command("get")
-@argument("database")
-@argument("table")
+@argument("database_name", metavar="DATABASE")
+@argument("table_name", metavar="TABLE")
 @option(
     "--active",
     "--active-parts",
@@ -35,23 +42,64 @@ def table_group():
     help="Account only active data parts.",
 )
 @pass_context
-def get_command(ctx, database, table, active_parts):
+def get_command(ctx, database_name, table_name, active_parts):
     """
     Get table.
     """
-    table = get_table(ctx, database, table, active_parts=active_parts)
-    print_response(ctx, table, default_format="yaml")
+    table = get_table(ctx, database_name, table_name, active_parts=active_parts)
+    print_response(
+        ctx,
+        table,
+        default_format="yaml",
+        field_formatters=FIELD_FORMATTERS,
+    )
 
 
 @table_group.command("list")
 @option(
-    "-d", "--database", help="Filter tables to output by the specified database name."
+    "-d",
+    "--database",
+    "database_pattern",
+    help="Filter in tables to output by the specified database name pattern."
+    " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
 )
-@option("-t", "--table", help="Filter in tables to output by the specified table name.")
 @option(
-    "--exclude-table", help="Filter out tables to output by the specified table name."
+    "--exclude-database",
+    "exclude_database_pattern",
+    help="Filter out tables to output by the specified database name pattern."
+    " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
 )
-@option("--engine", help="Filter tables to output by the specified engine.")
+@option(
+    "-t",
+    "--table",
+    "table_pattern",
+    help="Filter in tables to output by the specified table name."
+    " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+)
+@option(
+    "--exclude-table",
+    "exclude_table_pattern",
+    help="Filter out tables to output by the specified table name."
+    " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+)
+@option(
+    "--engine",
+    "engine_pattern",
+    help="Filter in tables to output by the specified engine."
+    " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+)
+@option(
+    "--exclude-engine",
+    "exclude_engine_pattern",
+    help="Filter out tables to output by the specified engine."
+    " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+)
+@option(
+    "--read-only",
+    "is_readonly",
+    is_flag=True,
+    help="Filter in tables in read-only state only.",
+)
 @option(
     "--active",
     "--active-parts",
@@ -59,8 +107,11 @@ def get_command(ctx, database, table, active_parts):
     is_flag=True,
     help="Account only active data parts.",
 )
-@option("-v", "--verbose", is_flag=True, help="Verbose mode.")
-@option("--order-by", type=Choice(["size", "parts", "rows"]), help="Sorting order.")
+@option(
+    "--order-by",
+    type=Choice(["size", "parts", "rows"]),
+    help="Sorting order.",
+)
 @option(
     "-l",
     "--limit",
@@ -69,48 +120,50 @@ def get_command(ctx, database, table, active_parts):
     help="Limit the max number of objects in the output.",
 )
 @pass_context
-def list_command(
-    ctx, database, table, exclude_table, engine, active_parts, verbose, order_by, limit
-):
+def list_command(ctx, **kwargs):
     """
     List tables.
     """
-    tables = list_tables(
+
+    def _table_formatter(item):
+        return OrderedDict(
+            (
+                ("database", item["database"]),
+                ("name", item["name"]),
+                ("disk_size", item["disk_size"]),
+                ("partitions", item["partitions"]),
+                ("parts", item["parts"]),
+                ("rows", item["rows"]),
+                ("metadata_mtime", item["metadata_modification_time"]),
+                ("engine", item["engine"]),
+            )
+        )
+
+    tables = list_tables(ctx, **kwargs)
+    print_response(
         ctx,
-        database=database,
-        table=table,
-        exclude_table=exclude_table,
-        engine=engine,
-        active_parts=active_parts,
-        verbose=verbose,
-        order_by=order_by,
-        limit=limit,
+        tables,
+        default_format="table",
+        table_formatter=_table_formatter,
+        field_formatters=FIELD_FORMATTERS,
     )
-    print_response(ctx, tables, default_format="table")
 
 
 @table_group.command("columns")
-@argument("database")
-@argument("table")
+@argument("database_name", metavar="DATABASE")
+@argument("table_name", metavar="TABLE")
 @pass_context
-def columns_command(ctx, database, table):
+def columns_command(ctx, database_name, table_name):
     """
     Describe columns for table.
     """
-    query = """
-        SELECT
-            name,
-            type,
-            default_kind,
-            default_expression,
-            formatReadableSize(data_compressed_bytes) "disk_size",
-            formatReadableSize(data_uncompressed_bytes) "uncompressed_size",
-            marks_bytes
-        FROM system.columns
-        WHERE database = '{{ database }}'
-          AND table = '{{ table }}'
-        """
-    logging.info(execute_query(ctx, query, database=database, table=table))
+    table_columns = list_table_columns(ctx, database_name, table_name)
+    print_response(
+        ctx,
+        table_columns,
+        default_format="table",
+        field_formatters=FIELD_FORMATTERS,
+    )
 
 
 @table_group.command("delete")
@@ -126,16 +179,46 @@ def columns_command(ctx, database, table):
     option(
         "-d",
         "--database",
-        help="Filter in tables to delete by the specified database name.",
+        "database_pattern",
+        help="Filter in tables to delete by the specified database name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--exclude-database",
+        "exclude_database_pattern",
+        help="Filter out tables to delete by the specified database name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
     option(
         "-t",
         "--table",
-        help="Filter in tables to delete by the specified table name.",
+        "table_pattern",
+        help="Filter in tables to delete by the specified table name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
     option(
         "--exclude-table",
-        help="Filter out tables to delete by the specified table name.",
+        "exclude_table_pattern",
+        help="Filter out tables to delete by the specified table name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--engine",
+        "engine_pattern",
+        help="Filter in tables to delete by the specified engine pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--exclude-engine",
+        "exclude_engine_pattern",
+        help="Filter out tables to delete by the specified engine pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--read-only",
+        "is_readonly",
+        is_flag=True,
+        help="Filter in tables in read-only state only.",
     ),
     constraint=RequireAtLeast(1),
 )
@@ -163,28 +246,21 @@ def columns_command(ctx, database, table):
 def delete_command(
     ctx,
     _all,
-    database,
-    table,
-    exclude_table,
     on_cluster,
     sync_mode,
     dry_run,
+    **kwargs,
 ):
     """
     Delete one or several tables.
     """
     cluster = get_cluster_name(ctx) if on_cluster else None
 
-    for t in list_tables(
-        ctx,
-        database=database,
-        table=table,
-        exclude_table=exclude_table,
-    ):
+    for t in list_tables(ctx, **kwargs):
         delete_table(
             ctx,
-            database=t["database"],
-            table=t["table"],
+            database_name=t["database"],
+            table_name=t["name"],
             cluster=cluster,
             sync_mode=sync_mode,
             echo=True,
@@ -205,16 +281,46 @@ def delete_command(
     option(
         "-d",
         "--database",
-        help="Filter in tables to recreate by the specified database name.",
+        "database_pattern",
+        help="Filter in tables to recreate by the specified database name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--exclude-database",
+        "exclude_database_pattern",
+        help="Filter out tables to recreate by the specified database name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
     option(
         "-t",
         "--table",
-        help="Filter in tables to recreate by the specified table name.",
+        "table_pattern",
+        help="Filter in tables to recreate by the specified table name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
     option(
         "--exclude-table",
-        help="Filter out tables to recreate by the specified table name.",
+        "exclude_table_pattern",
+        help="Filter out tables to recreate by the specified table name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--engine",
+        "engine_pattern",
+        help="Filter in tables to recreate by the specified engine pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--exclude-engine",
+        "exclude_engine_pattern",
+        help="Filter out tables to recreate by the specified engine pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--read-only",
+        "is_readonly",
+        is_flag=True,
+        help="Filter in tables in read-only state only.",
     ),
     constraint=RequireAtLeast(1),
 )
@@ -226,44 +332,81 @@ def delete_command(
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 @pass_context
-def recreate_command(ctx, database, table, exclude_table, dry_run):
+def recreate_command(ctx, dry_run, **kwargs):
     """
     Recreate one or several tables.
     """
-    for t in list_tables(
-        ctx,
-        database=database,
-        table=table,
-        exclude_table=exclude_table,
-        verbose=True,
-    ):
+    for t in list_tables(ctx, **kwargs):
         delete_table(
-            ctx, database=t["database"], table=t["table"], echo=True, dry_run=dry_run
+            ctx,
+            database_name=t["database"],
+            table_name=t["name"],
+            echo=True,
+            dry_run=dry_run,
         )
         execute_query(
-            ctx, t["create_table_query"], echo=True, format_=None, dry_run=dry_run
+            ctx,
+            t["create_table_query"],
+            echo=True,
+            format_=None,
+            dry_run=dry_run,
         )
 
 
 @table_group.command("detach")
 @option_group(
     "Table selection options",
-    option("-a", "--all", "_all", is_flag=True, help="Filter in all tables."),
+    option(
+        "-a",
+        "--all",
+        "_all",
+        is_flag=True,
+        help="Filter in all tables.",
+    ),
     option(
         "-d",
         "--database",
-        help="Filter in tables to detach by the specified database name.",
+        "database_pattern",
+        help="Filter in tables to detach by the specified database name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--exclude-database",
+        "exclude_database_pattern",
+        help="Filter out tables to detach by the specified database name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
     option(
         "-t",
         "--table",
-        help="Filter in tables to detach by the specified table name.",
+        "table_pattern",
+        help="Filter in tables to detach by the specified table name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
     option(
         "--exclude-table",
-        help="Filter out tables to reattach by the specified table name.",
+        "exclude_table_pattern",
+        help="Filter out tables to detach by the specified table name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
-    option("--engine", help="Filter tables to detach by the specified engine."),
+    option(
+        "--engine",
+        "engine_pattern",
+        help="Filter in tables to detach by the specified engine pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--exclude-engine",
+        "exclude_engine_pattern",
+        help="Filter out tables to detach by the specified engine pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--read-only",
+        "is_readonly",
+        is_flag=True,
+        help="Filter in tables in read-only state only.",
+    ),
     constraint=RequireAtLeast(1),
 )
 @option(
@@ -271,7 +414,7 @@ def recreate_command(ctx, database, table, exclude_table, dry_run):
     "--on-cluster",
     "on_cluster",
     is_flag=True,
-    help="Perform detach queries with ON CLUSTER modificator.",
+    help="Detach tables on all hosts of the cluster.",
 )
 @option(
     "-n",
@@ -284,29 +427,20 @@ def recreate_command(ctx, database, table, exclude_table, dry_run):
 def detach_command(
     ctx,
     _all,
-    database,
-    table,
-    engine,
-    exclude_table,
     on_cluster,
     dry_run,
+    **kwargs,
 ):
     """
     Detach one or several tables.
     """
     cluster = get_cluster_name(ctx) if on_cluster else None
 
-    for t in list_tables(
-        ctx,
-        database=database,
-        table=table,
-        engine=engine,
-        exclude_table=exclude_table,
-    ):
+    for t in list_tables(ctx, **kwargs):
         detach_table(
             ctx,
-            database=t["database"],
-            table=t["table"],
+            database_name=t["database"],
+            table_name=t["name"],
             cluster=cluster,
             echo=True,
             dry_run=dry_run,
@@ -326,18 +460,47 @@ def detach_command(
     option(
         "-d",
         "--database",
-        help="Filter in tables to reattach by the specified database name.",
+        "database_pattern",
+        help="Filter in tables to reattach by the specified database name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--exclude-database",
+        "exclude_database_pattern",
+        help="Filter out tables to reattach by the specified database name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
     option(
         "-t",
         "--table",
-        help="Filter in tables to reattach by the specified table name.",
+        "table_pattern",
+        help="Filter in tables to reattach by the specified table name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
     option(
         "--exclude-table",
-        help="Filter out tables to reattach by the specified table name.",
+        "exclude_table_pattern",
+        help="Filter out tables to reattach by the specified table name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
-    option("--engine", help="Filter tables to reattach by the specified engine."),
+    option(
+        "--engine",
+        "engine_pattern",
+        help="Filter in tables to reattach by the specified engine pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--exclude-engine",
+        "exclude_engine_pattern",
+        help="Filter out tables to reattach by the specified engine pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--read-only",
+        "is_readonly",
+        is_flag=True,
+        help="Filter in tables in read-only state only.",
+    ),
     constraint=RequireAtLeast(1),
 )
 @option(
@@ -345,7 +508,7 @@ def detach_command(
     "--on-cluster",
     "on_cluster",
     is_flag=True,
-    help="Perform attach and detach queries with ON CLUSTER modificator.",
+    help="Reattach tables on all hosts of the cluster.",
 )
 @option(
     "-n",
@@ -358,37 +521,28 @@ def detach_command(
 def reattach_command(
     ctx,
     _all,
-    database,
-    table,
-    engine,
-    exclude_table,
     on_cluster,
     dry_run,
+    **kwargs,
 ):
     """
     Reattach one or several tables.
     """
     cluster = get_cluster_name(ctx) if on_cluster else None
 
-    for t in list_tables(
-        ctx,
-        database=database,
-        table=table,
-        engine=engine,
-        exclude_table=exclude_table,
-    ):
+    for t in list_tables(ctx, **kwargs):
         detach_table(
             ctx,
-            database=t["database"],
-            table=t["table"],
+            database_name=t["database"],
+            table_name=t["name"],
             cluster=cluster,
             echo=True,
             dry_run=dry_run,
         )
         attach_table(
             ctx,
-            database=t["database"],
-            table=t["table"],
+            database_name=t["database"],
+            table_name=t["name"],
             cluster=cluster,
             echo=True,
             dry_run=dry_run,
@@ -408,16 +562,46 @@ def reattach_command(
     option(
         "-d",
         "--database",
-        help="Filter in tables to materialize TTL by the specified database name.",
+        "database_pattern",
+        help="Filter in tables to materialize TTL by the specified database name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--exclude-database",
+        "exclude_database_pattern",
+        help="Filter out tables to materialize TTL by the specified database name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
     option(
         "-t",
         "--table",
-        help="Filter in tables to materialize TTL by the specified table name.",
+        "table_pattern",
+        help="Filter in tables to materialize TTL by the specified table name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
     option(
         "--exclude-table",
-        help="Filter out tables to materialize TTL by the specified table name.",
+        "exclude_table_pattern",
+        help="Filter out tables to materialize TTL by the specified table name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--engine",
+        "engine_pattern",
+        help="Filter in tables to materialize TTL by the specified engine pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--exclude-engine",
+        "exclude_engine_pattern",
+        help="Filter out tables to materialize TTL by the specified engine pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--read-only",
+        "is_readonly",
+        is_flag=True,
+        help="Filter in tables in read-only state only.",
     ),
     constraint=RequireAtLeast(1),
 )
@@ -429,18 +613,17 @@ def reattach_command(
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 @pass_context
-def materialize_ttl_command(ctx, _all, database, table, exclude_table, dry_run):
+def materialize_ttl_command(ctx, _all, dry_run, **kwargs):
     """
     Materialize TTL for one or several tables.
     """
-    for t in list_tables(
-        ctx,
-        database=database,
-        table=table,
-        exclude_table=exclude_table,
-    ):
+    for t in list_tables(ctx, **kwargs):
         materialize_ttl(
-            ctx, database=t["database"], table=t["table"], echo=True, dry_run=dry_run
+            ctx,
+            database_name=t["database"],
+            table_name=t["name"],
+            echo=True,
+            dry_run=dry_run,
         )
 
 
@@ -456,34 +639,48 @@ def materialize_ttl_command(ctx, _all, database, table, exclude_table, dry_run):
         help="Filter in all tables.",
     ),
     option(
+        "-d",
         "--database",
-        type=StringParamType(),
-        help="Filter in tables to set the flag by the specified database name.",
+        "database_pattern",
+        help="Filter in tables to set the flag by the specified database name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
     option(
         "--exclude-database",
-        type=StringParamType(),
-        help="Filter out tables to set the flag by the specified database name.",
+        "exclude_database_pattern",
+        help="Filter out tables to set the flag by the specified database name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
     option(
+        "-t",
         "--table",
-        type=StringParamType(),
-        help="Filter in tables by the specified table name.",
+        "table_pattern",
+        help="Filter in tables to set the flag by the specified table name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
     option(
         "--exclude-table",
-        type=StringParamType(),
-        help="Filter out tables by the specified table name.",
+        "exclude_table_pattern",
+        help="Filter out tables to set the flag by the specified table name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
     option(
         "--engine",
-        type=StringParamType(),
-        help="Filter in tables by the specified engine.",
+        "engine_pattern",
+        help="Filter in tables to set the flag by the specified engine pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
     option(
         "--exclude-engine",
-        type=StringParamType(),
-        help="Filter out tables by the specified engine.",
+        "exclude_engine_pattern",
+        help="Filter out tables to set the flag by the specified engine pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--read-only",
+        "is_readonly",
+        is_flag=True,
+        help="Filter in tables in read-only state only.",
     ),
     constraint=RequireAtLeast(1),
 )
@@ -498,27 +695,14 @@ def materialize_ttl_command(ctx, _all, database, table, exclude_table, dry_run):
 def set_flag_command(
     ctx: Context,
     _all: bool,
-    database: str,
-    exclude_database: str,
-    table: str,
-    exclude_table: str,
-    engine: str,
-    exclude_engine: str,
     flag: str,
     verbose: bool,
+    **kwargs: Any,
 ) -> None:
     """
     Create a flag with the specified name inside the data directory of the table.
     """
-    tables = list_tables(
-        ctx,
-        database=database,
-        exclude_database=exclude_database,
-        table=table,
-        exclude_table=exclude_table,
-        engine=engine,
-        exclude_engine=exclude_engine,
-    )
+    tables = list_tables(ctx, **kwargs)
     data_paths = [table["data_paths"][0] for table in tables]
     flag_paths = [os.path.join(data_path, flag) for data_path in data_paths]
 
