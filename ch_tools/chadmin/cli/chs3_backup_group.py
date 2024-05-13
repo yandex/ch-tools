@@ -3,7 +3,6 @@ import os
 from click import ClickException, argument, group, option, pass_context
 
 from ch_tools.chadmin.internal.backup import unfreeze_backup
-from ch_tools.chadmin.internal.table import list_tables
 from ch_tools.common import logging
 from ch_tools.common.backup import (
     CHS3_BACKUPS_DIRECTORY,
@@ -77,11 +76,6 @@ def delete_chs3_backups(ctx, chs3_backups, *, keep_going=False, dry_run=False):
                 logging.warning("{!r}\n", e)
             else:
                 raise
-
-
-def get_tables_dict(ctx):
-    tables = list_tables(ctx, engine="%MergeTree%")
-    return [{"database": item["database"], "table": item["table"]} for item in tables]
 
 
 def clear_empty_backup(orphaned_chs3_backup):
