@@ -85,3 +85,45 @@ Feature: chadmin commands.
     """
     chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4
     """
+
+  Scenario: Sanity check
+    When we execute command on clickhouse01
+    """
+    chadmin config
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin settings
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin functions
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin metrics
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin async-metrics
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin events
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin query-log list
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin query-log list --cluster --limit 10
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin part-log list
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin part-log list --cluster --limit 10
+    """
