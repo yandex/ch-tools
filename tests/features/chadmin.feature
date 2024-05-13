@@ -6,26 +6,69 @@ Feature: chadmin commands.
     And a working zookeeper
     And a working clickhouse on clickhouse01
     And a working clickhouse on clickhouse02
-    Given we have executed queries on clickhouse01
-    """
-    CREATE DATABASE IF NOT EXISTS test ON CLUSTER 'cluster';
 
-    CREATE TABLE IF NOT EXISTS test.table_01 ON CLUSTER 'cluster' (n Int32)
-    ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n;
+  Scenario: Sanity check
+    Given we have executed queries on clickhouse01
+    # force creation of system log tables
     """
+    SYSTEM FLUSH LOGS ON CLUSTER '{cluster}';
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin config
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin settings
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin functions
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin metrics
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin async-metrics
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin events
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin query-log list
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin query-log list --cluster --limit 10
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin part-log list
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin part-log list --cluster --limit 10
+    """
+    Then it completes successfully
 
   @require_version_24.2
   Scenario Outline: Check set-flag with convert_to_replicated
     Given we have executed queries on clickhouse01
     """
-    CREATE DATABASE IF NOT EXISTS test1;
-
-    CREATE TABLE IF NOT EXISTS test.table_02 (n Int32)
+    CREATE DATABASE IF NOT EXISTS db1;
+    CREATE TABLE IF NOT EXISTS db1.table_01 (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n;
+    CREATE TABLE IF NOT EXISTS db1.table_02 (n Int32)
     ENGINE = MergeTree() PARTITION BY n ORDER BY n;
 
-    CREATE TABLE IF NOT EXISTS test1.table_03 (n Int32)
+    CREATE DATABASE IF NOT EXISTS db2;
+    CREATE TABLE IF NOT EXISTS db2.table_03 (n Int32)
     ENGINE = MergeTree() PARTITION BY n ORDER BY n;
-    CREATE TABLE IF NOT EXISTS test1.table_04 (n Int32)
+    CREATE TABLE IF NOT EXISTS db2.table_04 (n Int32)
     ENGINE = MergeTree() PARTITION BY n ORDER BY n;
     """
     When we execute command on clickhouse01
@@ -39,23 +82,30 @@ Feature: chadmin commands.
     Given a working clickhouse on clickhouse01
     When we execute query on clickhouse01
     """
-    SELECT name, engine FROM system.tables WHERE database LIKE 'test%'
+    SELECT name, engine FROM system.tables WHERE database LIKE 'db%'
     """
     Then we get query response
     """
     <result>
     """
     Examples:
-      | options                                                 | result                                                                                                                      |
-      | --all --exclude-database=system                         | table_01\tReplicatedMergeTree\ntable_02\tReplicatedMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tReplicatedMergeTree  |
-      | --database=test,test1                                   | table_01\tReplicatedMergeTree\ntable_02\tReplicatedMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tReplicatedMergeTree  |
-      | --database=test,test1        --table=table_02,table_03  | table_01\tReplicatedMergeTree\ntable_02\tReplicatedMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tMergeTree            |
-      | --database=test,test1        --exclude-table=table_04   | table_01\tReplicatedMergeTree\ntable_02\tReplicatedMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tMergeTree            |
-      | --database=test,test1        --table=table_03           | table_01\tReplicatedMergeTree\ntable_02\tMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tMergeTree                      |
-      | --database=test1                                        | table_01\tReplicatedMergeTree\ntable_02\tMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tReplicatedMergeTree            |
-      | --database=test1             --table=table_01           | table_01\tReplicatedMergeTree\ntable_02\tMergeTree\ntable_03\tMergeTree\ntable_04\tMergeTree                                |
+      | options                                              | result                                                                                                                      |
+      | --all --exclude-database=system                      | table_01\tReplicatedMergeTree\ntable_02\tReplicatedMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tReplicatedMergeTree  |
+      | --database=db1,db2                                   | table_01\tReplicatedMergeTree\ntable_02\tReplicatedMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tReplicatedMergeTree  |
+      | --database=db1,db2        --table=table_02,table_03  | table_01\tReplicatedMergeTree\ntable_02\tReplicatedMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tMergeTree            |
+      | --database=db1,db2        --exclude-table=table_04   | table_01\tReplicatedMergeTree\ntable_02\tReplicatedMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tMergeTree            |
+      | --database=db1,db2        --table=table_03           | table_01\tReplicatedMergeTree\ntable_02\tMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tMergeTree                      |
+      | --database=db2                                       | table_01\tReplicatedMergeTree\ntable_02\tMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tReplicatedMergeTree            |
+      | --database=db2            --table=table_01           | table_01\tReplicatedMergeTree\ntable_02\tMergeTree\ntable_03\tMergeTree\ntable_04\tMergeTree                                |
 
   Scenario: Check wait replication sync
+    Given we have executed queries on clickhouse01
+    """
+    CREATE DATABASE IF NOT EXISTS test ON CLUSTER 'cluster';
+
+    CREATE TABLE IF NOT EXISTS test.table_01 ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n;
+    """
     When we execute command on clickhouse01
     """
     chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4
@@ -84,46 +134,4 @@ Feature: chadmin commands.
     When we execute command on clickhouse01
     """
     chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4
-    """
-
-  Scenario: Sanity check
-    When we execute command on clickhouse01
-    """
-    chadmin config
-    """
-    When we execute command on clickhouse01
-    """
-    chadmin settings
-    """
-    When we execute command on clickhouse01
-    """
-    chadmin functions
-    """
-    When we execute command on clickhouse01
-    """
-    chadmin metrics
-    """
-    When we execute command on clickhouse01
-    """
-    chadmin async-metrics
-    """
-    When we execute command on clickhouse01
-    """
-    chadmin events
-    """
-    When we execute command on clickhouse01
-    """
-    chadmin query-log list
-    """
-    When we execute command on clickhouse01
-    """
-    chadmin query-log list --cluster --limit 10
-    """
-    When we execute command on clickhouse01
-    """
-    chadmin part-log list
-    """
-    When we execute command on clickhouse01
-    """
-    chadmin part-log list --cluster --limit 10
     """

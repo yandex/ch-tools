@@ -40,6 +40,11 @@ def step_command(context, node):
     )
 
 
+@then("it completes successfully")
+def step_complete_successfully(context):
+    assert context.exit_code == 0
+
+
 @then("it fails")
 def step_command_fail(context):
     assert (
