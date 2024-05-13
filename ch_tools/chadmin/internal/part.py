@@ -65,7 +65,7 @@ def list_parts(
         {% if database -%}
         WHERE database {{ format_str_match(database) }}
         {% else -%}
-        WHERE database NOT IN ('system', 'INFORMATION_SCHEMA')
+        WHERE database NOT IN ('system', 'information_schema', 'INFORMATION_SCHEMA')
         {% endif -%}
         {% if partition_id -%}
           AND partition_id {{ format_str_match(partition_id) }}
@@ -164,7 +164,7 @@ def list_detached_parts(
         {% if database -%}
         WHERE database {{ format_str_match(database) }}
         {% else -%}
-        WHERE database NOT IN ('system', 'INFORMATION_SCHEMA')
+        WHERE database NOT IN ('system', 'information_schema', 'INFORMATION_SCHEMA')
         {% endif -%}
         {% if partition_id -%}
           AND partition_id {{ format_str_match(partition_id) }}
@@ -288,6 +288,7 @@ def drop_detached_part(ctx, database, table, part_name, dry_run=False):
 
 def list_part_log(
     ctx,
+    cluster=None,
     database=None,
     table=None,
     partition=None,
@@ -310,6 +311,9 @@ def list_part_log(
 
     query = """
         SELECT
+        {% if cluster %}
+             hostName() "host",
+        {% endif %}
              event_time,
              event_type,
              merge_reason,
@@ -327,11 +331,15 @@ def list_part_log(
              read_bytes,
              peak_memory_usage,
              exception
+        {% if cluster %}
+        FROM clusterAllReplicas({{ cluster }}, system.part_log)
+        {% else %}
         FROM system.part_log
+        {% endif %}
         {% if database %}
         WHERE database {{ format_str_match(database) }}
         {% else %}
-        WHERE database NOT IN ('system', 'INFORMATION_SCHEMA')
+        WHERE database NOT IN ('system', 'information_schema', 'INFORMATION_SCHEMA')
         {% endif %}
         {% if table %}
           AND table {{ format_str_match(table) }}
@@ -374,6 +382,7 @@ def list_part_log(
     return execute_query(
         ctx,
         query,
+        cluster=cluster,
         database=database,
         table=table,
         partition=partition,
