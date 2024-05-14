@@ -17,7 +17,7 @@ def ro_replica_command(ctx, verbose=False):
     Check for readonly replicated tables.
     """
     query = """
-        SELECT database, table, last_queue_update_exception, zookeeper_exception 
+        SELECT database, table, last_queue_update_exception, zookeeper_exception
         FROM system.replicas WHERE is_readonly
     """
     response = clickhouse_client(ctx).query_json_data(query, compact=False)
