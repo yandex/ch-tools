@@ -549,6 +549,32 @@ def reattach_command(
         )
 
 
+@table_group.command("attach")
+@argument("database_name", metavar="DATABASE")
+@argument("table_name", metavar="TABLE")
+@option(
+    "--cluster",
+    "--on-cluster",
+    "on_cluster",
+    is_flag=True,
+    help="Reattach tables on all hosts of the cluster.",
+)
+@option(
+    "-n",
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Enable dry run mode and do not perform any modifying actions.",
+)
+@pass_context
+def attach_command(ctx, database_name, table_name, on_cluster, dry_run):
+    """
+    Attach table.
+    """
+    cluster = get_cluster_name(ctx) if on_cluster else None
+    attach_table(ctx, database_name, table_name, cluster=cluster, dry_run=dry_run)
+
+
 @table_group.command("materialize-ttl")
 @option_group(
     "Table selection options",
