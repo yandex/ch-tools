@@ -3,19 +3,36 @@ from click import ClickException
 from ch_tools.chadmin.internal.utils import execute_query
 
 
-def get_table_replica(ctx, database, table):
+def get_table_replica(ctx, database_name, table_name):
     """
     Get replica of replicated table.
     """
-    replicas = list_table_replicas(ctx, database=database, table=table, verbose=True)
+    replicas = list_table_replicas(
+        ctx,
+        database_pattern=database_name,
+        table_pattern=table_name,
+        verbose=True,
+    )
 
     if not replicas:
-        raise ClickException(f"Replicated table `{database}`.`{table}` not found.")
+        raise ClickException(
+            f"Replicated table `{database_name}`.`{table_name}` not found."
+        )
 
     return replicas[0]
 
 
-def list_table_replicas(ctx, *, database=None, table=None, verbose=False, limit=None):
+def list_table_replicas(
+    ctx,
+    *,
+    database_pattern=None,
+    exclude_database_pattern=None,
+    table_pattern=None,
+    exclude_table_pattern=None,
+    is_readonly=None,
+    verbose=False,
+    limit=None,
+):
     """
     List replicas of replicated tables.
     """
@@ -50,11 +67,20 @@ def list_table_replicas(ctx, *, database=None, table=None, verbose=False, limit=
         {% endif -%}
         FROM system.replicas
         WHERE true
-        {% if database -%}
-          AND database {{ format_str_match(database) }}
+        {% if database_pattern -%}
+            AND database {{ format_str_match(database_pattern) }}
         {% endif -%}
-        {% if table -%}
-          AND table {{ format_str_match(table) }}
+        {% if exclude_database_pattern -%}
+            AND database NOT {{ format_str_match(exclude_database_pattern) }}
+        {% endif -%}
+        {% if table_pattern -%}
+            AND table {{ format_str_match(table_pattern) }}
+        {% endif -%}
+        {% if exclude_table_pattern -%}
+            AND table NOT {{ format_str_match(exclude_table_pattern) }}
+        {% endif -%}
+        {% if is_readonly -%}
+           AND is_readonly
         {% endif -%}
         {% if limit is not none -%}
         LIMIT {{ limit }}
@@ -63,29 +89,48 @@ def list_table_replicas(ctx, *, database=None, table=None, verbose=False, limit=
     return execute_query(
         ctx,
         query,
-        database=database,
-        table=table,
+        database_pattern=database_pattern,
+        exclude_database_pattern=exclude_database_pattern,
+        table_pattern=table_pattern,
+        exclude_table_pattern=exclude_table_pattern,
+        is_readonly=is_readonly,
         verbose=verbose,
         limit=limit,
         format_="JSON",
     )["data"]
 
 
-def restart_table_replica(ctx, database, table, *, cluster=None):
+def restart_table_replica(
+    ctx,
+    database_name,
+    table_name,
+    *,
+    cluster=None,
+    dry_run=False,
+):
     """
     Perform "SYSTEM RESTART REPLICA" for the specified replicated table.
     """
-    query = f"SYSTEM RESTART REPLICA `{database}`.`{table}`"
+    timeout = ctx.obj["config"]["clickhouse"]["restart_replica_timeout"]
+    query = f"SYSTEM RESTART REPLICA `{database_name}`.`{table_name}`"
     if cluster:
         query += f" ON CLUSTER '{cluster}'"
-    execute_query(ctx, query, timeout=300, echo=True, format_=None)
+    execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
 
 
-def restore_table_replica(ctx, database, table, *, cluster=None):
+def restore_table_replica(
+    ctx,
+    database_name,
+    table_name,
+    *,
+    cluster=None,
+    dry_run=False,
+):
     """
     Perform "SYSTEM RESTORE REPLICA" for the specified replicated table.
     """
-    query = f"SYSTEM RESTORE REPLICA `{database}`.`{table}`"
+    timeout = ctx.obj["config"]["clickhouse"]["restore_replica_timeout"]
+    query = f"SYSTEM RESTORE REPLICA `{database_name}`.`{table_name}`"
     if cluster:
         query += f" ON CLUSTER '{cluster}'"
-    execute_query(ctx, query, timeout=600, echo=True, format_=None)
+    execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)

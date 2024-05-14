@@ -201,24 +201,24 @@ def delete_command(ctx, paths):
 
 
 @zookeeper_group.command("get-table-metadata")
-@argument("database")
-@argument("table")
+@argument("database_name", metavar="DATABASE")
+@argument("table_name", metavar="TABLE")
 @pass_context
-def get_table_metadata_command(ctx, database, table):
+def get_table_metadata_command(ctx, database_name, table_name):
     """Get table metadata stored in ZooKeeper."""
-    table_replica = get_table_replica(ctx, database, table)
+    table_replica = get_table_replica(ctx, database_name, table_name)
     path = table_replica["zookeeper_path"] + "/metadata"
     logging.info(get_zk_node(ctx, path))
 
 
 @zookeeper_group.command("update-table-metadata")
-@argument("database")
-@argument("table")
+@argument("database_name", metavar="DATABASE")
+@argument("table_name", metavar="TABLE")
 @argument("value", type=StringParamType())
 @pass_context
-def update_table_metadata_command(ctx, database, table, value):
+def update_table_metadata_command(ctx, database_name, table_name, value):
     """Update table metadata stored in ZooKeeper."""
-    table_replica = get_table_replica(ctx, database, table)
+    table_replica = get_table_replica(ctx, database_name, table_name)
     table_path = table_replica["zookeeper_path"]
     metadata_paths = [f"{table_path}/metadata"]
     for path in list_zk_nodes(ctx, table_replica["zookeeper_path"] + "/replicas"):

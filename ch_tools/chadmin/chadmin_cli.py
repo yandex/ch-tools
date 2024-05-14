@@ -38,12 +38,12 @@ from ch_tools.chadmin.cli.part_log_group import part_log_group
 from ch_tools.chadmin.cli.partition_group import partition_group
 from ch_tools.chadmin.cli.process_group import process_group
 from ch_tools.chadmin.cli.query_log_group import query_log_group
+from ch_tools.chadmin.cli.replica_group import replica_group
 from ch_tools.chadmin.cli.replicated_fetch_group import replicated_fetch_group
 from ch_tools.chadmin.cli.replication_queue_group import replication_queue_group
 from ch_tools.chadmin.cli.restore_replica_command import restore_replica_command
 from ch_tools.chadmin.cli.stack_trace_command import stack_trace_command
 from ch_tools.chadmin.cli.table_group import table_group
-from ch_tools.chadmin.cli.table_replica_group import table_replica_group
 from ch_tools.chadmin.cli.thread_log_group import thread_log_group
 from ch_tools.chadmin.cli.wait_group import wait_group
 from ch_tools.chadmin.cli.zookeeper_group import zookeeper_group
@@ -131,7 +131,7 @@ groups: List[Any] = [
     replicated_fetch_group,
     replication_queue_group,
     table_group,
-    table_replica_group,
+    replica_group,
     thread_log_group,
     wait_group,
     zookeeper_group,
