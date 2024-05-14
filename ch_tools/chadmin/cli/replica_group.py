@@ -8,6 +8,7 @@ from ch_tools.chadmin.internal.table_replica import (
     restart_table_replica,
     restore_table_replica,
 )
+from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.clickhouse.client import ClickhouseError
 from ch_tools.common.clickhouse.config import get_cluster_name
@@ -239,6 +240,10 @@ def restore_command(ctx, _all, on_cluster, dry_run, **kwargs):
         except ClickhouseError as e:
             msg = e.response.text
             if "Replica has metadata in ZooKeeper" in msg or "NO_ZOOKEEPER" in msg:
+                logging.warning(
+                    'Failed to restore replica with error "{}", attempting to recover by restarting replica and retrying restore',
+                    msg,
+                )
                 restart_table_replica(
                     ctx,
                     replica["database"],
@@ -254,6 +259,10 @@ def restore_command(ctx, _all, on_cluster, dry_run, **kwargs):
                     dry_run=dry_run,
                 )
             elif "Replica path is present" in msg:
+                logging.warning(
+                    'Failed to restore replica with error "{}", attempting to recover by restarting replica',
+                    msg,
+                )
                 restart_table_replica(
                     ctx,
                     replica["database"],
