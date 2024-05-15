@@ -89,7 +89,7 @@ Feature: chadmin commands.
     """
     When we execute command on clickhouse01
     """
-    chadmin table set-flag <options> --engine %MergeTree --exclude-engine Replicated% convert_to_replicated
+    chadmin table set-flag <options> -v --engine %MergeTree --exclude-engine Replicated% convert_to_replicated
     """
     And we execute command on clickhouse01
     """

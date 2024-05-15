@@ -715,6 +715,7 @@ def materialize_ttl_command(ctx, _all, dry_run, **kwargs):
     "--verbose",
     type=bool,
     is_flag=True,
+    default=True,
     help="Show tables and flag paths.",
 )
 @pass_context
@@ -738,4 +739,4 @@ def set_flag_command(
 
     if verbose:
         for table_, flag_path in zip(tables, flag_paths):
-            logging.info("{}: {}", table_["table"], flag_path)
+            logging.info("{}: {}", table_["name"], flag_path)
