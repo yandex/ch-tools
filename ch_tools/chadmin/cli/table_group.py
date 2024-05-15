@@ -738,4 +738,4 @@ def set_flag_command(
 
     if verbose:
         for table_, flag_path in zip(tables, flag_paths):
-            logging.info("{}: {}", table_["table"], flag_path)
+            logging.info("{}: {}", table_["name"], flag_path)
