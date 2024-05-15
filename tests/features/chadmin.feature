@@ -53,6 +53,22 @@ Feature: chadmin commands.
     """
     chadmin part-log list --cluster --limit 10
     """
+    And we execute command on clickhouse01
+    """
+    chadmin database list
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin table list
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin replica list
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin dictionary list
+    """
     Then it completes successfully
 
   @require_version_24.2

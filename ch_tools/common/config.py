@@ -35,6 +35,8 @@ DEFAULT_CONFIG = {
         "alter_table_timeout": 10 * 60,
         "drop_table_timeout": 10 * 60,
         "unfreeze_timeout": 10 * 60,
+        "restart_replica_timeout": 10 * 60,
+        "restore_replica_timeout": 10 * 60,
     },
     "object_storage": {
         "clean": {
