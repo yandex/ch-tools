@@ -7,6 +7,7 @@ from cloup.constraints import RequireAtLeast
 
 from ch_tools.chadmin.internal.table import (
     attach_table,
+    delete_detached_table,
     delete_table,
     detach_table,
     get_table,
@@ -242,6 +243,11 @@ def columns_command(ctx, database_name, table_name):
     default=False,
     help="Enable dry run mode and do not perform any modifying actions.",
 )
+@option(
+    "--detached",
+    is_flag=True,
+    help="Delete detached tables.",
+)
 @pass_context
 def delete_command(
     ctx,
@@ -249,12 +255,33 @@ def delete_command(
     on_cluster,
     sync_mode,
     dry_run,
+    detached,
     **kwargs,
 ):
     """
     Delete one or several tables.
     """
     cluster = get_cluster_name(ctx) if on_cluster else None
+
+    if detached:
+        logging.info("delete detached table")
+
+        database_name = kwargs.get("database_pattern")
+
+        if database_name is None:
+            raise RuntimeError("For drop detached table need specify database.")
+
+        table_name = kwargs.get("table_pattern")
+        if table_name is None:
+            raise RuntimeError("For drop detached table need specify table.")
+
+        delete_detached_table(
+            ctx,
+            database_name=database_name,
+            table_name=table_name,
+            echo=True,
+        )
+        return
 
     for t in list_tables(ctx, **kwargs):
         delete_table(

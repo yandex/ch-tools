@@ -15,6 +15,7 @@ CLICKHOUSE_PATH = "/var/lib/clickhouse"
 CLICKHOUSE_STORE_PATH = CLICKHOUSE_PATH + "/store"
 CLICKHOUSE_DATA_PATH = CLICKHOUSE_PATH + "/data"
 CLICKHOUSE_METADATA_PATH = CLICKHOUSE_PATH + "/metadata"
+S3_METADATA_STORE_PATH = CLICKHOUSE_PATH + "/disks/object_storage/store"
 
 
 @group("data-store")

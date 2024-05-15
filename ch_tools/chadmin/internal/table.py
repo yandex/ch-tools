@@ -1,6 +1,18 @@
+import os
+
+import xmltodict
 from click import ClickException
 
+from ch_tools.chadmin.cli.data_store_group import (
+    CLICKHOUSE_DATA_PATH,
+    CLICKHOUSE_METADATA_PATH,
+    S3_METADATA_STORE_PATH,
+    remove_from_ch_disk,
+    remove_from_disk,
+)
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
+from ch_tools.common.clickhouse.config import ClickhouseConfig
 
 
 def get_table(ctx, database_name, table_name, active_parts=None):
@@ -247,6 +259,118 @@ def delete_table(
         dry_run=dry_run,
         format_=None,
     )
+
+
+def _get_uuid_table(database_name: str, table_name: str) -> str:
+    table_uuid = ""
+
+    table_metadata_path = (
+        CLICKHOUSE_METADATA_PATH + "/" + database_name + "/" + table_name + ".sql"
+    )
+
+    with open(table_metadata_path, "r") as metadata_file:
+        for line in metadata_file:
+            if "UUID" in line:
+                parts = line.split()
+                try:
+                    uuid_index = parts.index("UUID")
+                    # check size
+                    table_uuid = parts[uuid_index + 1].strip("'")
+                except ValueError:
+                    raise RuntimeError(
+                        f"Failed parse UUID for '{database_name}'.'{table_name}'"
+                    )
+                break
+        else:
+            raise RuntimeError(f"No UUID for '{database_name}'.'{table_name}'")
+
+    # check is_valid_uuid
+    return table_uuid
+
+
+def delete_detached_table(
+    ctx,
+    database_name,
+    table_name,
+    echo=False,
+):
+    query = """
+        SELECT
+            count(uuid) AS count_tables
+        FROM system.tables
+        WHERE database = '{{ database_name }}'
+          AND table = '{{ table_name }}'
+    """
+    result = execute_query(
+        ctx,
+        query,
+        database_name=database_name,
+        table_name=table_name,
+        echo=echo,
+        format_="JSON",
+    )
+
+    logging.info("delete_detached_table #1")
+    assert 1 == len(result["data"])
+
+    if result["data"][0].get("count_tables", "0") != "0":
+        raise RuntimeError(
+            f"Table '{database_name}'.'{table_name}' is attach. Use delete without --detach flag."
+        )
+
+    local_metadata_table_path = (
+        CLICKHOUSE_METADATA_PATH + "/" + database_name + "/" + table_name + ".sql"
+    )
+
+    if not os.path.exists(local_metadata_table_path):
+        raise RuntimeError(
+            f"No metadata file for table '{database_name}'.'{table_name}'."
+        )
+
+    link_to_local_data = CLICKHOUSE_DATA_PATH + "/" + database_name + "/" + table_name
+    # remove data from local storage
+    local_table_data_path = link_to_local_data + "/"
+    remove_from_disk(local_table_data_path)
+
+    disk = "object_storage"
+    table_uuid = _get_uuid_table(database_name, table_name)
+    object_storage_table_data_path = (
+        S3_METADATA_STORE_PATH + "/" + table_uuid[:3] + "/" + table_uuid
+    )
+
+    # remove data from object storage
+    # @TODO copy paste
+    disk_config = ClickhouseConfig.load().storage_configuration.get_disk_config(disk)
+
+    disk_config_path = "/tmp/chadmin-ch-disks.xml"
+    with open(disk_config_path, "w", encoding="utf-8") as f:
+        xmltodict.unparse(
+            {
+                "yandex": {
+                    "storage_configuration": {"disks": {disk: disk_config}},
+                }
+            },
+            f,
+            pretty=True,
+        )
+
+    code, stderr = remove_from_ch_disk(
+        disk=disk,
+        path=object_storage_table_data_path,
+        disk_config_path=disk_config_path,
+    )
+    if code:
+        raise RuntimeError(
+            f"clickhouse-disks remove command has failed: retcode {code}, stderr: {stderr.decode()}"
+        )
+
+    # remove link to local data
+    remove_from_disk(link_to_local_data)
+
+    # remove table metadata file
+    remove_from_disk(local_metadata_table_path)
+
+    logging.info("Detached table {}.{} deleted.", database_name, table_name)
 
 
 def materialize_ttl(ctx, database_name, table_name, echo=False, dry_run=False):

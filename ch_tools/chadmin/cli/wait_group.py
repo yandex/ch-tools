@@ -5,6 +5,7 @@ import time
 from click import FloatRange, group, option, pass_context
 from requests.exceptions import ReadTimeout
 
+from ch_tools.chadmin.cli.data_store_group import S3_METADATA_STORE_PATH
 from ch_tools.chadmin.internal.table_replica import list_table_replicas
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
@@ -188,13 +189,12 @@ def get_s3_data_part_count():
     """
     Return approximate number of data parts stored in S3.
     """
-    s3_metadata_store_path = "/var/lib/clickhouse/disks/object_storage/store"
-    if not os.path.exists(s3_metadata_store_path):
+    if not os.path.exists(S3_METADATA_STORE_PATH):
         return 0
 
     return int(
         execute(
-            f"find -L {s3_metadata_store_path} -mindepth 3 -maxdepth 3 -type d | wc -l"
+            f"find -L {S3_METADATA_STORE_PATH} -mindepth 3 -maxdepth 3 -type d | wc -l"
         )
     )
 
