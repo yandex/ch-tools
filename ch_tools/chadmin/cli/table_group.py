@@ -275,12 +275,7 @@ def delete_command(
         if table_name is None:
             raise RuntimeError("For drop detached table need specify table.")
 
-        delete_detached_table(
-            ctx,
-            database_name=database_name,
-            table_name=table_name,
-            echo=True,
-        )
+        delete_detached_table(ctx, database_name=database_name, table_name=table_name)
         return
 
     for t in list_tables(ctx, **kwargs):

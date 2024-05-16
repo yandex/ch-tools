@@ -155,6 +155,22 @@ def remove_data(path: str) -> None:
     shutil.rmtree(path=path, onerror=onerror)
 
 
+def make_ch_disks_config(disk: str) -> str:
+    disk_config = ClickhouseConfig.load().storage_configuration.get_disk_config(disk)
+    disk_config_path = "/tmp/chadmin-ch-disks.xml"
+    with open(disk_config_path, "w", encoding="utf-8") as f:
+        xmltodict.unparse(
+            {
+                "yandex": {
+                    "storage_configuration": {"disks": {disk: disk_config}},
+                }
+            },
+            f,
+            pretty=True,
+        )
+    return disk_config_path
+
+
 @data_store_group.command("cleanup-data-dir")
 @pass_context
 @option(
@@ -208,18 +224,7 @@ def cleanup_data_dir(
     )
 
     if remove:
-        disk_conig = ClickhouseConfig.load().storage_configuration.get_disk_config(disk)
-        disk_config_path = "/tmp/chadmin-ch-disks.xml"
-        with open(disk_config_path, "w", encoding="utf-8") as f:
-            xmltodict.unparse(
-                {
-                    "yandex": {
-                        "storage_configuration": {"disks": {disk: disk_conig}},
-                    }
-                },
-                f,
-                pretty=True,
-            )
+        disk_config_path = make_ch_disks_config(disk)
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Can't use map function here. The map method returns a generator

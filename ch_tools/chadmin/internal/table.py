@@ -1,18 +1,18 @@
 import os
+import uuid
 
-import xmltodict
 from click import ClickException
 
 from ch_tools.chadmin.cli.data_store_group import (
     CLICKHOUSE_DATA_PATH,
     CLICKHOUSE_METADATA_PATH,
     S3_METADATA_STORE_PATH,
+    make_ch_disks_config,
     remove_from_ch_disk,
     remove_from_disk,
 )
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
-from ch_tools.common.clickhouse.config import ClickhouseConfig
 
 
 def get_table(ctx, database_name, table_name, active_parts=None):
@@ -261,14 +261,18 @@ def delete_table(
     )
 
 
-def _get_uuid_table(database_name: str, table_name: str) -> str:
+def _is_valid_uuid(uuid_str):
+    try:
+        val = uuid.UUID(uuid_str)
+    except ValueError:
+        return False
+    return str(val) == uuid_str
+
+
+def _get_uuid_table(table_metadata_path: str) -> str:
     table_uuid = ""
 
-    table_metadata_path = (
-        CLICKHOUSE_METADATA_PATH + "/" + database_name + "/" + table_name + ".sql"
-    )
-
-    with open(table_metadata_path, "r") as metadata_file:
+    with open(table_metadata_path, "r", encoding="utf-8") as metadata_file:
         for line in metadata_file:
             if "UUID" in line:
                 parts = line.split()
@@ -278,81 +282,69 @@ def _get_uuid_table(database_name: str, table_name: str) -> str:
                     table_uuid = parts[uuid_index + 1].strip("'")
                 except ValueError:
                     raise RuntimeError(
-                        f"Failed parse UUID for '{database_name}'.'{table_name}'"
+                        f"Failed parse UUID from '{table_metadata_path}'"
                     )
                 break
         else:
-            raise RuntimeError(f"No UUID for '{database_name}'.'{table_name}'")
+            raise RuntimeError(f"No UUID in '{table_metadata_path}'")
 
-    # check is_valid_uuid
+    assert _is_valid_uuid(table_uuid)
+
     return table_uuid
 
 
-def delete_detached_table(
-    ctx,
-    database_name,
-    table_name,
-    echo=False,
-):
+def check_table_dettached(ctx, database_name, table_name):
     query = """
         SELECT
-            count(uuid) AS count_tables
+            1
         FROM system.tables
         WHERE database = '{{ database_name }}'
           AND table = '{{ table_name }}'
     """
-    result = execute_query(
+
+    response = execute_query(
         ctx,
         query,
         database_name=database_name,
         table_name=table_name,
-        echo=echo,
         format_="JSON",
-    )
+    )["data"]
 
-    logging.info("delete_detached_table #1")
-    assert 1 == len(result["data"])
-
-    if result["data"][0].get("count_tables", "0") != "0":
+    if 0 != len(response):
         raise RuntimeError(
             f"Table '{database_name}'.'{table_name}' is attach. Use delete without --detach flag."
         )
 
-    local_metadata_table_path = (
-        CLICKHOUSE_METADATA_PATH + "/" + database_name + "/" + table_name + ".sql"
-    )
 
-    if not os.path.exists(local_metadata_table_path):
-        raise RuntimeError(
-            f"No metadata file for table '{database_name}'.'{table_name}'."
-        )
+def _has_object_storage(ctx) -> bool:
+    query = """
+        SELECT 1 FROM system.disks WHERE name = 'object_storage'
+    """
+    response = execute_query(
+        ctx,
+        query,
+        format_="JSON",
+    )["data"]
 
-    link_to_local_data = CLICKHOUSE_DATA_PATH + "/" + database_name + "/" + table_name
-    # remove data from local storage
-    local_table_data_path = link_to_local_data + "/"
-    remove_from_disk(local_table_data_path)
+    if 0 == len(response):
+        logging.info("No object storage.")
+        return False
 
-    disk = "object_storage"
-    table_uuid = _get_uuid_table(database_name, table_name)
+    logging.info("There is an object storage.")
+    return True
+
+
+def _remove_table_data_from_object_storage(local_metadata_table_path):
+    table_uuid = _get_uuid_table(local_metadata_table_path)
+
+    logging.info("Table has UUID {}.", table_uuid)
+
     object_storage_table_data_path = (
         S3_METADATA_STORE_PATH + "/" + table_uuid[:3] + "/" + table_uuid
     )
 
-    # remove data from object storage
-    # @TODO copy paste
-    disk_config = ClickhouseConfig.load().storage_configuration.get_disk_config(disk)
-
-    disk_config_path = "/tmp/chadmin-ch-disks.xml"
-    with open(disk_config_path, "w", encoding="utf-8") as f:
-        xmltodict.unparse(
-            {
-                "yandex": {
-                    "storage_configuration": {"disks": {disk: disk_config}},
-                }
-            },
-            f,
-            pretty=True,
-        )
+    disk = "object_storage"
+    disk_config_path = make_ch_disks_config(disk)
 
     code, stderr = remove_from_ch_disk(
         disk=disk,
@@ -364,8 +356,34 @@ def delete_detached_table(
             f"clickhouse-disks remove command has failed: retcode {code}, stderr: {stderr.decode()}"
         )
 
+
+def delete_detached_table(ctx, database_name, table_name):
+    check_table_dettached(ctx, database_name, table_name)
+
+    local_metadata_table_path = (
+        CLICKHOUSE_METADATA_PATH + "/" + database_name + "/" + table_name + ".sql"
+    )
+
+    if not os.path.exists(local_metadata_table_path):
+        raise RuntimeError(
+            f"No metadata file for table '{database_name}'.'{table_name}' by path {local_metadata_table_path}."
+        )
+
+    link_to_local_data = CLICKHOUSE_DATA_PATH + "/" + database_name + "/" + table_name
+
+    # remove data from local storage
+    local_table_data_dir = link_to_local_data + "/"
+    remove_from_disk(local_table_data_dir)
+
+    if _has_object_storage(ctx):
+        _remove_table_data_from_object_storage(local_metadata_table_path)
+
     # remove link to local data
     remove_from_disk(link_to_local_data)
+
+    permanently_flag = local_metadata_table_path + ".detached"
+    if os.path.exists(permanently_flag):
+        remove_from_disk(permanently_flag)
 
     # remove table metadata file
     remove_from_disk(local_metadata_table_path)
