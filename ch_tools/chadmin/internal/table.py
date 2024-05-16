@@ -1,12 +1,11 @@
 import os
 import uuid
 
-from click import ClickException
+from click import ClickException, Context
 
 from ch_tools.chadmin.cli.data_store_group import (
     CLICKHOUSE_DATA_PATH,
     CLICKHOUSE_METADATA_PATH,
-    S3_METADATA_STORE_PATH,
     make_ch_disks_config,
     remove_from_ch_disk,
     remove_from_disk,
@@ -316,7 +315,7 @@ def check_table_dettached(ctx, database_name, table_name):
         )
 
 
-def _has_object_storage(ctx) -> bool:
+def _has_object_storage(ctx: Context) -> bool:
     query = """
         SELECT 1 FROM system.disks WHERE name = 'object_storage'
     """
@@ -337,10 +336,10 @@ def _has_object_storage(ctx) -> bool:
 def _remove_table_data_from_object_storage(local_metadata_table_path):
     table_uuid = _get_uuid_table(local_metadata_table_path)
 
-    logging.info("Table has UUID {}.", table_uuid)
+    object_storage_table_data_path = "store" + "/" + table_uuid[:3] + "/" + table_uuid
 
-    object_storage_table_data_path = (
-        S3_METADATA_STORE_PATH + "/" + table_uuid[:3] + "/" + table_uuid
+    logging.info(
+        "Table has UUID {}, path in S3: {}.", table_uuid, object_storage_table_data_path
     )
 
     disk = "object_storage"

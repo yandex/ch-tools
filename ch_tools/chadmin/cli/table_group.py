@@ -246,7 +246,7 @@ def columns_command(ctx, database_name, table_name):
 @option(
     "--detached",
     is_flag=True,
-    help="Delete detached tables.",
+    help="Delete detached tables (with nonreplicated engine).",
 )
 @pass_context
 def delete_command(
