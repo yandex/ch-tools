@@ -3,7 +3,14 @@ from collections import OrderedDict
 from typing import Any
 
 from cloup import Choice, Context, argument, group, option, option_group, pass_context
-from cloup.constraints import RequireAtLeast
+from cloup.constraints import (
+    If,
+    IsSet,
+    RequireAtLeast,
+    accept_none,
+    constraint,
+    require_all,
+)
 
 from ch_tools.chadmin.internal.table import (
     attach_table,
@@ -168,6 +175,8 @@ def columns_command(ctx, database_name, table_name):
 
 
 @table_group.command("delete")
+@argument("database_name", metavar="DATABASE", required=False)
+@argument("table_name", metavar="TABLE", required=False)
 @option_group(
     "Table selection options",
     option(
@@ -221,14 +230,14 @@ def columns_command(ctx, database_name, table_name):
         is_flag=True,
         help="Filter in tables in read-only state only.",
     ),
-    constraint=RequireAtLeast(1),
+    constraint=If(IsSet("detached"), then=accept_none, else_=RequireAtLeast(1)),
 )
 @option(
     "--cluster",
     "--on-cluster",
     "on_cluster",
     is_flag=True,
-    help="Delete tables on all hosts of the cluster.",
+    help="Delete tables on all hosts of the cluster. Doesn't work with --detached flag.",
 )
 @option(
     "--sync/--async",
@@ -248,6 +257,19 @@ def columns_command(ctx, database_name, table_name):
     is_flag=True,
     help="Delete detached tables (with nonreplicated engine).",
 )
+@constraint(
+    If(IsSet("detached"), then=require_all),
+    [
+        "database_name",
+        "table_name",
+    ],
+)
+@constraint(
+    If(IsSet("detached"), then=accept_none),
+    [
+        "on_cluster",
+    ],
+)
 @pass_context
 def delete_command(
     ctx,
@@ -256,6 +278,8 @@ def delete_command(
     sync_mode,
     dry_run,
     detached,
+    database_name,
+    table_name,
     **kwargs,
 ):
     """
@@ -264,18 +288,11 @@ def delete_command(
     cluster = get_cluster_name(ctx) if on_cluster else None
 
     if detached:
-        logging.info("delete detached table")
-
-        database_name = kwargs.get("database_pattern")
-
-        if database_name is None:
-            raise RuntimeError("For drop detached table need specify database.")
-
-        table_name = kwargs.get("table_pattern")
-        if table_name is None:
-            raise RuntimeError("For drop detached table need specify table.")
-
-        delete_detached_table(ctx, database_name=database_name, table_name=table_name)
+        delete_detached_table(
+            ctx,
+            database_name=database_name,
+            table_name=table_name,
+        )
         return
 
     for t in list_tables(ctx, **kwargs):

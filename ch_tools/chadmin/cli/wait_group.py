@@ -5,7 +5,7 @@ import time
 from click import FloatRange, group, option, pass_context
 from requests.exceptions import ReadTimeout
 
-from ch_tools.chadmin.cli.data_store_group import S3_METADATA_STORE_PATH
+from ch_tools.chadmin.internal.clickhouse_disks import S3_METADATA_STORE_PATH
 from ch_tools.chadmin.internal.table_replica import list_table_replicas
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging

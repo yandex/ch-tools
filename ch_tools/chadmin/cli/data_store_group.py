@@ -2,20 +2,20 @@ import os
 import shutil
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
-import xmltodict
 from click import group, option, pass_context
 
+from ch_tools.chadmin.internal.clickhouse_disks import (
+    CLICKHOUSE_METADATA_PATH,
+    CLICKHOUSE_PATH,
+    CLICKHOUSE_STORE_PATH,
+    make_ch_disks_config,
+    remove_from_ch_disk,
+    remove_from_disk,
+)
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
-from ch_tools.common.clickhouse.config import ClickhouseConfig
-
-CLICKHOUSE_PATH = "/var/lib/clickhouse"
-CLICKHOUSE_STORE_PATH = CLICKHOUSE_PATH + "/store"
-CLICKHOUSE_DATA_PATH = CLICKHOUSE_PATH + "/data"
-CLICKHOUSE_METADATA_PATH = CLICKHOUSE_PATH + "/metadata"
-S3_METADATA_STORE_PATH = CLICKHOUSE_PATH + "/disks/object_storage/store"
 
 
 @group("data-store")
@@ -153,22 +153,6 @@ def remove_data(path: str) -> None:
         logging.error("ERROR: {}", errors)
 
     shutil.rmtree(path=path, onerror=onerror)
-
-
-def make_ch_disks_config(disk: str) -> str:
-    disk_config = ClickhouseConfig.load().storage_configuration.get_disk_config(disk)
-    disk_config_path = "/tmp/chadmin-ch-disks.xml"
-    with open(disk_config_path, "w", encoding="utf-8") as f:
-        xmltodict.unparse(
-            {
-                "yandex": {
-                    "storage_configuration": {"disks": {disk: disk_config}},
-                }
-            },
-            f,
-            pretty=True,
-        )
-    return disk_config_path
 
 
 @data_store_group.command("cleanup-data-dir")
@@ -329,25 +313,3 @@ def collect_orphaned_sql_objects_recursive(
                 max_depth,
                 max_sql_objects,
             )
-
-
-def remove_from_ch_disk(
-    disk: str, path: str, disk_config_path: Optional[str] = None
-) -> Tuple[int, bytes]:
-    cmd = f"clickhouse-disks { '-C ' + disk_config_path if disk_config_path else ''} --disk {disk} remove {path}"
-    logging.info("Run : {}", cmd)
-
-    proc = subprocess.run(
-        cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
-    return (proc.returncode, proc.stderr)
-
-
-def remove_from_disk(path):
-    cmd = f"rm -rf {path}"
-    logging.info("Run : {}", cmd)
-
-    proc = subprocess.run(
-        cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
-    return (proc.returncode, proc.stderr)
