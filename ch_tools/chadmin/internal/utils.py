@@ -2,9 +2,11 @@
 Utility functions.
 """
 import re
+import subprocess
 from itertools import islice
 from typing import Iterable, Iterator
 
+from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 
 
@@ -17,7 +19,7 @@ def execute_query(
     format_="default",
     stream=False,
     settings=None,
-    **kwargs
+    **kwargs,
 ):
     """
     Execute ClickHouse query.
@@ -77,3 +79,13 @@ def replace_macros(string: str, macros: dict) -> str:
         pattern=r"{([^{}]+)}",
         repl=lambda m: macros.get(m.group(1), m.group(0)),
     )
+
+
+def remove_from_disk(path):
+    cmd = f"rm -rf {path}"
+    logging.info("Run : {}", cmd)
+
+    proc = subprocess.run(
+        cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+    return (proc.returncode, proc.stderr)

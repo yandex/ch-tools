@@ -40,13 +40,3 @@ def remove_from_ch_disk(
         cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
     return (proc.returncode, proc.stderr)
-
-
-def remove_from_disk(path):
-    cmd = f"rm -rf {path}"
-    logging.info("Run : {}", cmd)
-
-    proc = subprocess.run(
-        cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
-    return (proc.returncode, proc.stderr)

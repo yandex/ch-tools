@@ -9,9 +9,8 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
     CLICKHOUSE_METADATA_PATH,
     make_ch_disks_config,
     remove_from_ch_disk,
-    remove_from_disk,
 )
-from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.chadmin.internal.utils import execute_query, remove_from_disk
 from ch_tools.common import logging
 
 
@@ -360,17 +359,20 @@ def _remove_table_data_from_disk(table_uuid: str, disk: str) -> None:
         disk,
     )
 
-    object_storage_table_data_path = "store" + "/" + table_uuid[:3] + "/" + table_uuid
+    table_data_path = "store" + "/" + table_uuid[:3] + "/" + table_uuid
 
     logging.info(
-        "Table has UUID {}, path in S3: {}.", table_uuid, object_storage_table_data_path
+        "Table has UUID: {}, disk: {}, data path: {}.",
+        table_uuid,
+        disk,
+        table_data_path,
     )
 
     disk_config_path = make_ch_disks_config(disk)
 
     code, stderr = remove_from_ch_disk(
         disk=disk,
-        path=object_storage_table_data_path,
+        path=table_data_path,
         disk_config_path=disk_config_path,
     )
     if code:

@@ -12,8 +12,8 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
     CLICKHOUSE_STORE_PATH,
     make_ch_disks_config,
     remove_from_ch_disk,
-    remove_from_disk,
 )
+from ch_tools.chadmin.internal.utils import remove_from_disk
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
 
