@@ -33,7 +33,10 @@ def make_ch_disks_config(disk: str) -> str:
 def remove_from_ch_disk(
     disk: str, path: str, disk_config_path: Optional[str] = None
 ) -> Tuple[int, bytes]:
-    cmd = f"clickhouse-disks { '-C ' + disk_config_path if disk_config_path else ''} --disk {disk} remove {path}"
+    cmd = (
+        f"clickhouse-disks { '-C ' + disk_config_path if disk_config_path else ''} --disk {disk} --log-level trace "
+        f"remove {path}"
+    )
     logging.info("Run : {}", cmd)
 
     proc = subprocess.run(
