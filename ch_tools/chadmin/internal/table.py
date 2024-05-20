@@ -382,9 +382,9 @@ def _remove_table_data_from_disk(ctx: Context, table_uuid: str, disk: str) -> No
 
     disk_config_path = make_ch_disks_config(disk)
 
-    if equal_ch_version(ctx, version="22.8.21.38") and not _is_should_use_ch_disk_remover(
-        disk, table_data_path
-    ):
+    if equal_ch_version(
+        ctx, version="22.8.21.38"
+    ) and not _is_should_use_ch_disk_remover(disk, table_data_path):
         logging.info(
             "Dir not exists. Skip launch clickhouse-disks for Clickhouse 22.8."
         )
