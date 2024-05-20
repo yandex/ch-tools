@@ -15,7 +15,7 @@ S3_METADATA_STORE_PATH = CLICKHOUSE_PATH + "/disks/object_storage/store"
 
 def make_ch_disks_config(disk: str) -> str:
     disk_config = ClickhouseConfig.load().storage_configuration.get_disk_config(disk)
-    disk_config_path = f"/tmp/chadmin-ch-disks-{disk}.xml"
+    disk_config_path = "/tmp/chadmin-ch-disks.xml"
     logging.info("Create a conf for {} disk: {}", disk, disk_config_path)
     with open(disk_config_path, "w", encoding="utf-8") as f:
         xmltodict.unparse(
