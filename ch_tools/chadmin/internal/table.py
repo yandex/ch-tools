@@ -12,6 +12,7 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
     make_ch_disks_config,
     remove_from_ch_disk,
 )
+from ch_tools.chadmin.internal.system import equal_ch_version
 from ch_tools.chadmin.internal.utils import execute_query, remove_from_disk
 from ch_tools.common import logging
 
@@ -363,7 +364,7 @@ def _is_should_use_ch_disk_remover(disk: str, table_data_path: str) -> bool:
     return True
 
 
-def _remove_table_data_from_disk(table_uuid: str, disk: str) -> None:
+def _remove_table_data_from_disk(ctx: Context, table_uuid: str, disk: str) -> None:
     logging.info(
         "_remove_table_data_from_disk: UUID={}, disk={}",
         table_uuid,
@@ -381,8 +382,12 @@ def _remove_table_data_from_disk(table_uuid: str, disk: str) -> None:
 
     disk_config_path = make_ch_disks_config(disk)
 
-    if not _is_should_use_ch_disk_remover(disk, table_data_path):
-        logging.info("Not exists. Skip.")
+    if equal_ch_version(ctx, version="22.8") and not _is_should_use_ch_disk_remover(
+        disk, table_data_path
+    ):
+        logging.info(
+            "Dir not exists. Skip launch clickhouse-disks for Clickhouse 22.8."
+        )
         return
 
     code, stderr = remove_from_ch_disk(
@@ -424,7 +429,7 @@ def delete_detached_table(ctx, database_name, table_name):
 
     table_uuid = _get_uuid_table(local_metadata_table_path)
     for disk in _get_disk_names(ctx):
-        _remove_table_data_from_disk(table_uuid=table_uuid, disk=disk["name"])
+        _remove_table_data_from_disk(ctx, table_uuid=table_uuid, disk=disk["name"])
 
     link_to_local_data = (
         CLICKHOUSE_DATA_PATH + "/" + escaped_database_name + "/" + escaped_table_name
