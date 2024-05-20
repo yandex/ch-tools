@@ -7,6 +7,8 @@ from click import ClickException, Context
 from ch_tools.chadmin.internal.clickhouse_disks import (
     CLICKHOUSE_DATA_PATH,
     CLICKHOUSE_METADATA_PATH,
+    CLICKHOUSE_PATH,
+    S3_PATH,
     make_ch_disks_config,
     remove_from_ch_disk,
 )
@@ -352,6 +354,15 @@ def _get_disk_names(ctx: Context) -> List:
     return response
 
 
+def _is_should_use_ch_disk_remover(disk: str, table_data_path: str) -> bool:
+    if disk == "default":
+        return os.path.exists(CLICKHOUSE_PATH + table_data_path)
+    if disk == "object_storage":
+        return os.path.exists(S3_PATH + table_data_path)
+
+    return True
+
+
 def _remove_table_data_from_disk(table_uuid: str, disk: str) -> None:
     logging.info(
         "_remove_table_data_from_disk: UUID={}, disk={}",
@@ -369,6 +380,10 @@ def _remove_table_data_from_disk(table_uuid: str, disk: str) -> None:
     )
 
     disk_config_path = make_ch_disks_config(disk)
+
+    if not _is_should_use_ch_disk_remover(disk, table_data_path):
+        logging.info("Not exists. Skip.")
+        return
 
     code, stderr = remove_from_ch_disk(
         disk=disk,
