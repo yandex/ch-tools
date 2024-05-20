@@ -40,6 +40,6 @@ def remove_from_ch_disk(
     logging.info("Run : {}", cmd)
 
     proc = subprocess.run(
-        cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True
     )
     return (proc.returncode, proc.stderr)
