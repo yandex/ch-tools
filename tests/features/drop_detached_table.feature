@@ -7,35 +7,72 @@ Feature: chadmin delete detached table commands
     And a working clickhouse on clickhouse01
     Given we have executed queries on clickhouse01
     """
-    CREATE DATABASE IF NOT EXISTS test_db;
-
-    CREATE TABLE IF NOT EXISTS test_db.test_table (n Int32)
-    ENGINE = MergeTree
-    ORDER BY n;
-
-    INSERT INTO test_db.test_table (n) SELECT number FROM system.numbers LIMIT 10;
-    DETACH TABLE test_db.test_table;
+    CREATE DATABASE IF NOT EXISTS test_drop_detach_db;
     """
 
   Scenario: Drop detached table from local disk
+    Given we have executed queries on clickhouse01
+    """
+    CREATE TABLE IF NOT EXISTS test_drop_detach_db.test_table_local (n Int32)
+    ENGINE = MergeTree
+    ORDER BY n;
+
+    INSERT INTO test_drop_detach_db.test_table_local (n) SELECT number FROM system.numbers LIMIT 10;
+    DETACH TABLE test_drop_detach_db.test_table_local SYNC;
+    """
     When we execute command on clickhouse01
     """
-    ls /var/lib/clickhouse/data/test_db/test_table/ | wc -l
+    ls /var/lib/clickhouse/data/test_drop_detach_db/
     """
     Then we get response
     """
-    3
+    test_table_local
     """
     When we execute command on clickhouse01
     """
-    chadmin table delete --detached test_db test_table
+    chadmin table delete --detached test_drop_detach_db test_table_local
     """
     Then we get response contains
     """
     """
     When we execute command on clickhouse01
     """
-    ls -l /var/lib/clickhouse/data/test_db/
+    ls -l /var/lib/clickhouse/data/test_drop_detach_db/
+    """
+    Then we get response
+    """
+    total 0
+    """
+
+  Scenario: Drop detached table from object_storage
+    Given we have executed queries on clickhouse01
+    """
+    CREATE TABLE IF NOT EXISTS test_drop_detach_db.test_table_object_storage (n Int32)
+    ENGINE = MergeTree
+    ORDER BY n
+    SETTINGS storage_policy = 'object_storage';
+
+    INSERT INTO test_drop_detach_db.test_table_object_storage (n) SELECT number FROM system.numbers LIMIT 10;
+    DETACH TABLE test_drop_detach_db.test_table_object_storage SYNC;
+    """
+    When we execute command on clickhouse01
+    """
+    ls /var/lib/clickhouse/data/test_drop_detach_db/
+    """
+    Then we get response
+    """
+    test_table_object_storage
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin table delete --detached test_drop_detach_db test_table_object_storage
+    """
+    Then we get response contains
+    """
+    """
+    When we execute command on clickhouse01
+    """
+    ls -l /var/lib/clickhouse/data/test_drop_detach_db/
     """
     Then we get response
     """

@@ -330,7 +330,7 @@ def check_table_engine_supported(table_metadata_path: str) -> None:
     engine = _get_engine_table(table_metadata_path)
     logging.info("Found engine {} in metadata {}", engine, table_metadata_path)
 
-    if "Replic" in engine:
+    if "MergeTree" not in engine:
         raise RuntimeError(
             f"Doesn't support removing detached table with engine {engine}"
         )
