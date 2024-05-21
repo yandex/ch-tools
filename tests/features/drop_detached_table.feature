@@ -18,7 +18,6 @@ Feature: chadmin delete detached table commands
     ORDER BY n;
 
     INSERT INTO test_drop_detach_db.test_table_local (n) SELECT number FROM system.numbers LIMIT 10;
-    DETACH TABLE test_drop_detach_db.test_table_local SYNC;
     """
     When we execute command on clickhouse01
     """
@@ -27,6 +26,10 @@ Feature: chadmin delete detached table commands
     Then we get response
     """
     test_table_local
+    """
+    When we execute queries on clickhouse01
+    """
+    DETACH TABLE test_drop_detach_db.test_table_local SYNC;
     """
     When we execute command on clickhouse01
     """
@@ -52,7 +55,6 @@ Feature: chadmin delete detached table commands
     ORDER BY n;
 
     INSERT INTO test_drop_detach_db.test_table_local (n) SELECT number FROM system.numbers LIMIT 10;
-    DETACH TABLE test_drop_detach_db.test_table_local PERMANENTLY SYNC;
     """
     When we execute command on clickhouse01
     """
@@ -61,6 +63,10 @@ Feature: chadmin delete detached table commands
     Then we get response
     """
     test_table_local
+    """
+    When we execute queries on clickhouse01
+    """
+    DETACH TABLE test_drop_detach_db.test_table_local PERMANENTLY SYNC;
     """
     When we execute command on clickhouse01
     """
