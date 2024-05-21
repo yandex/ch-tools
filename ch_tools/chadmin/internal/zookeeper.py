@@ -1,5 +1,7 @@
+import ast
 import os
 import re
+import time
 from collections import deque
 from contextlib import contextmanager
 from math import sqrt
@@ -370,10 +372,9 @@ def clean_zk_metadata_for_hosts(
         _delete_recursive(zk, hosts_paths)
         _remove_if_no_hosts_in_replicas(zk, databases_paths)
 
-    def get_host_mention_in_task(zk, host, ddl_task_path):
+    def _get_hosts_from_ddl(zk, ddl_task_path):
         """
-        Predicate for indicating that host must execute this task.
-        If there is a host mention in the ddl, then returns the escaped hostname with port.
+        Extract hostnames from the ddl task. Returns in dict format as { 'escaped_hostname'  : 'escaped_hostname:port' }
         Example of ddl:
 
         version: 5
@@ -386,15 +387,54 @@ def clean_zk_metadata_for_hosts(
         try:
             for line in zk.get(ddl_task_path)[0].decode().strip().splitlines():
                 if "hosts: " in line:
-                    escaped_host = escape_for_zookeeper(host)
-                    pos = line.find(escaped_host)
-                    # Not found
-                    if pos == -1:
-                        return None
-
-                    return line[pos : line.find("'", pos)]
+                    host_names_with_ports = ast.literal_eval(line[len("hosts: ") :])
+                    result = {
+                        hosts_with_port[: hosts_with_port.find(":")]: hosts_with_port
+                        for hosts_with_port in host_names_with_ports
+                    }
+                    return result
         except NoNodeError:
             pass
+
+    def _check_ddl_task_finished(zk, ddl_number_of_hosts, ddl_path):
+        """
+        Check that ddl is finished.
+        """
+        if not zk.exists(ddl_path):
+            return True
+
+        return ddl_number_of_hosts == len(
+            _get_children(zk, os.path.join(ddl_path, "finished/"))
+        )
+
+    def _ensure_ddl_tasks_finished(zk, dll_tasks_to_remove):
+        """
+        Go thought list of tasks to remove and tries to wait until all of them finish.
+        """
+        wait_time = 0.3
+        max_attemps = 20
+        all_tasks_finished: bool
+        for _ in range(0, max_attemps):
+            all_tasks_finished = True
+            for ddl_data in dll_tasks_to_remove:
+                ddl_path = ddl_data[0]
+                ddl_size = ddl_data[1]
+                if not _check_ddl_task_finished(zk, ddl_size, ddl_path):
+                    all_tasks_finished = False
+                    break
+
+            if all_tasks_finished:
+                break
+            time.sleep(wait_time)
+
+        # Even if ddl task not finished, we must remove it. So just warn it.
+        if not all_tasks_finished:
+            for ddl_data in dll_tasks_to_remove:
+                if not _check_ddl_task_finished(zk, ddl_data[1], ddl_data[0]):
+                    logging.warning(
+                        "DDL task {} is not finished. Will remove it anyway.",
+                        ddl_data[0],
+                    )
 
     def mark_finished_ddl_query(zk):
         """
@@ -402,22 +442,42 @@ def clean_zk_metadata_for_hosts(
         then we pretend that the host has completed this task.
 
         """
+        ddl_tasks_to_remove = []
 
         for ddl_task in _get_children(zk, _format_path(ctx, zk_ddl_query_path)):
             ddl_task_full = os.path.join(zk_ddl_query_path, ddl_task)
             logging.info("DDL task full path: {}", ddl_task_full)
+
+            have_mention = False
+            ddl_hosts_dict = _get_hosts_from_ddl(zk, ddl_task_full)
+
             for host in nodes:
-                host_mention = get_host_mention_in_task(zk, host, ddl_task_full)
-                if not host_mention:
+                escaped_host_name = escape_for_zookeeper(host)
+                if escaped_host_name not in ddl_hosts_dict:
                     logging.info("Host is not mentioned in DDL task value")
                     continue
-                finished_path = os.path.join(ddl_task_full, f"finished/{host_mention}")
+
+                have_mention = True
+                finished_path = os.path.join(
+                    ddl_task_full, f"finished/{ddl_hosts_dict[escaped_host_name]}"
+                )
+
                 if zk.exists(finished_path):
                     logging.info("Finished path already exists: {}", finished_path)
                     continue
                 logging.info("Add {} to finished for ddl_task: {}", host, ddl_task)
                 zk.create(finished_path, b"0\n")
+
+            if have_mention:
+                ddl_tasks_to_remove.append([ddl_task_full, len(ddl_hosts_dict)])
+
         logging.info("Finish mark ddl query")
+        chunk_size = 100
+        for ddl_task_chunk in chunked(ddl_tasks_to_remove, chunk_size):
+            _ensure_ddl_tasks_finished(zk, ddl_task_chunk)
+            delete_zk_nodes(ctx, [ddl_data[0] for ddl_data in ddl_task_chunk])
+
+        logging.info("DDL queue cleanup finished")
 
     zk_root_path = _format_path(ctx, zk_cleanup_root_path)
 

@@ -128,7 +128,15 @@ Feature: chadmin zookeeper commands.
   
     And we do hosts cleanup on clickhouse02 with fqdn zone-host.db.asd.net
     Then there are no unfinished dll queries on clickhouse02
-
+    When we sleep for 5 seconds
+    And we execute command on clickhouse01
+    """
+    ch-monitoring log-errors -n 5
+    """
+    Then we get response
+    """
+    0;OK, 0 errors for last 5 seconds
+    """
 
   Scenario: Remove host from table in zookeeper
     When we execute queries on clickhouse01
