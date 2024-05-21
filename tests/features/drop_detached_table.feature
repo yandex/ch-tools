@@ -44,6 +44,40 @@ Feature: chadmin delete detached table commands
     total 0
     """
 
+  Scenario: Drop permanently detached table
+    Given we have executed queries on clickhouse01
+    """
+    CREATE TABLE IF NOT EXISTS test_drop_detach_db.test_table_local (n Int32)
+    ENGINE = MergeTree
+    ORDER BY n;
+
+    INSERT INTO test_drop_detach_db.test_table_local (n) SELECT number FROM system.numbers LIMIT 10;
+    DETACH TABLE test_drop_detach_db.test_table_local PERMANENTLY SYNC;
+    """
+    When we execute command on clickhouse01
+    """
+    ls /var/lib/clickhouse/data/test_drop_detach_db/
+    """
+    Then we get response
+    """
+    test_table_local
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin table delete --detached test_drop_detach_db test_table_local
+    """
+    Then we get response contains
+    """
+    """
+    When we execute command on clickhouse01
+    """
+    ls -l /var/lib/clickhouse/data/test_drop_detach_db/
+    """
+    Then we get response
+    """
+    total 0
+    """
+
   Scenario: Drop detached table from object_storage
     Given we have executed queries on clickhouse01
     """

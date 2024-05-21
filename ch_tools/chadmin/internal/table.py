@@ -1,6 +1,5 @@
 import os
 import uuid
-from typing import List
 
 from click import ClickException, Context
 
@@ -15,6 +14,9 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
 from ch_tools.chadmin.internal.system import equal_ch_version
 from ch_tools.chadmin.internal.utils import execute_query, remove_from_disk
 from ch_tools.common import logging
+
+DISK_LOCAL_KEY = "local"
+DISK_OBJECT_STORAGE_KEY = "object_storage"
 
 
 def get_table(ctx, database_name, table_name, active_parts=None):
@@ -272,19 +274,19 @@ def _is_valid_uuid(uuid_str):
 
 
 def _get_uuid_table(table_metadata_path: str) -> str:
-    table_uuid = _get_data_table(table_metadata_path, pattern="UUID", offset=1)
+    table_uuid = _get_table_data(table_metadata_path, pattern="UUID", offset=1)
     assert _is_valid_uuid(table_uuid)
 
     return table_uuid
 
 
-def _get_engine_table(table_metadata_path: str) -> str:
-    engine = _get_data_table(table_metadata_path, pattern="ENGINE", offset=2)
+def _get_table_engine(table_metadata_path: str) -> str:
+    engine = _get_table_data(table_metadata_path, pattern="ENGINE", offset=2)
 
     return engine
 
 
-def _get_data_table(table_metadata_path: str, pattern: str, offset: int) -> str:
+def _get_table_data(table_metadata_path: str, pattern: str, offset: int) -> str:
     result = ""
 
     with open(table_metadata_path, "r", encoding="utf-8") as metadata_file:
@@ -330,7 +332,7 @@ def check_table_dettached(ctx, database_name, table_name):
 
 
 def check_table_engine_supported(table_metadata_path: str) -> None:
-    engine = _get_engine_table(table_metadata_path)
+    engine = _get_table_engine(table_metadata_path)
     logging.info("Found engine {} in metadata {}", engine, table_metadata_path)
 
     if "MergeTree" not in engine:
@@ -339,10 +341,10 @@ def check_table_engine_supported(table_metadata_path: str) -> None:
         )
 
 
-def _get_disk_names(ctx: Context) -> List:
+def _get_disks_data(ctx: Context) -> dict:
     # Disk type 'cache' of disk object_storage_cache is not supported by clickhouse-disks
     query = """
-        SELECT name FROM system.disks
+        SELECT name, type FROM system.disks
         WHERE name!='object_storage_cache'
     """
     response = execute_query(
@@ -352,23 +354,36 @@ def _get_disk_names(ctx: Context) -> List:
     )["data"]
 
     logging.info("Found disks: {}", response)
-    return response
+
+    result = {}
+
+    for data_disk in response:
+        if data_disk.get("type") == "s3":
+            result[DISK_OBJECT_STORAGE_KEY] = data_disk["name"]
+        else:
+            result[DISK_LOCAL_KEY] = data_disk["name"]
+
+    logging.info("Table disks: {}", result)
+
+    return result
 
 
-def _is_should_use_ch_disk_remover(disk: str, table_data_path: str) -> bool:
-    if disk == "default":
+def _is_should_use_ch_disk_remover(table_data_path: str, disk_type: str) -> bool:
+    if disk_type == DISK_LOCAL_KEY:
         return os.path.exists(CLICKHOUSE_PATH + table_data_path)
-    if disk == "object_storage":
+    if disk_type == DISK_OBJECT_STORAGE_KEY:
         return os.path.exists(S3_PATH + table_data_path)
 
     return True
 
 
-def _remove_table_data_from_disk(ctx: Context, table_uuid: str, disk: str) -> None:
+def _remove_table_data_from_disk(
+    ctx: Context, table_uuid: str, disk_name: str, disk_type: str
+) -> None:
     logging.info(
         "_remove_table_data_from_disk: UUID={}, disk={}",
         table_uuid,
-        disk,
+        disk_name,
     )
 
     table_data_path = "store" + "/" + table_uuid[:3] + "/" + table_uuid
@@ -376,22 +391,22 @@ def _remove_table_data_from_disk(ctx: Context, table_uuid: str, disk: str) -> No
     logging.info(
         "Table has UUID: {}, disk: {}, data path: {}.",
         table_uuid,
-        disk,
+        disk_name,
         table_data_path,
     )
 
-    disk_config_path = make_ch_disks_config(disk)
+    disk_config_path = make_ch_disks_config(disk_name)
 
     if equal_ch_version(
         ctx, version="22.8.21.38"
-    ) and not _is_should_use_ch_disk_remover(disk, table_data_path):
+    ) and not _is_should_use_ch_disk_remover(table_data_path, disk_type):
         logging.info(
-            "Dir not exists. Skip launch clickhouse-disks for Clickhouse 22.8."
+            f"Dir {table_data_path} doesn't exist on disk {disk_name}. Skip launch clickhouse-disks for Clickhouse 22.8."
         )
         return
 
     code, stderr = remove_from_ch_disk(
-        disk=disk,
+        disk=disk_name,
         path=table_data_path,
         disk_config_path=disk_config_path,
     )
@@ -428,8 +443,10 @@ def delete_detached_table(ctx, database_name, table_name):
     check_table_engine_supported(local_metadata_table_path)
 
     table_uuid = _get_uuid_table(local_metadata_table_path)
-    for disk in _get_disk_names(ctx):
-        _remove_table_data_from_disk(ctx, table_uuid=table_uuid, disk=disk["name"])
+    for disk_type, disk_name in _get_disks_data(ctx).items():
+        _remove_table_data_from_disk(
+            ctx, table_uuid=table_uuid, disk_name=disk_name, disk_type=disk_type
+        )
 
     link_to_local_data = (
         CLICKHOUSE_DATA_PATH + "/" + escaped_database_name + "/" + escaped_table_name

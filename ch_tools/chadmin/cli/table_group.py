@@ -237,7 +237,7 @@ def columns_command(ctx, database_name, table_name):
     "--on-cluster",
     "on_cluster",
     is_flag=True,
-    help="Delete tables on all hosts of the cluster. Doesn't work with --detached flag.",
+    help="Delete tables on all hosts of the cluster.",
 )
 @option(
     "--sync/--async",
@@ -262,12 +262,14 @@ def columns_command(ctx, database_name, table_name):
     [
         "database_name",
         "table_name",
+        "sync_mode",
     ],
 )
 @constraint(
     If(IsSet("detached"), then=accept_none),
     [
         "on_cluster",
+        "dry_run",
     ],
 )
 @pass_context
