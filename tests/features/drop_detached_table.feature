@@ -10,6 +10,7 @@ Feature: chadmin delete detached table commands
     CREATE DATABASE IF NOT EXISTS test_drop_detach_db;
     """
 
+  @require_version_23.3
   Scenario: Drop detached table from local disk
     Given we have executed queries on clickhouse01
     """
@@ -47,6 +48,7 @@ Feature: chadmin delete detached table commands
     total 0
     """
 
+  @require_version_23.3
   Scenario: Drop permanently detached table
     Given we have executed queries on clickhouse01
     """
@@ -84,6 +86,7 @@ Feature: chadmin delete detached table commands
     total 0
     """
 
+  @require_version_23.3
    Scenario: Drop detached table from object_storage
     Given we have executed queries on clickhouse01
     """
