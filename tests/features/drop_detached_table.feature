@@ -89,6 +89,8 @@ Feature: chadmin delete detached table commands
     INSERT INTO test_drop_detach_db.test_table_object_storage (n) SELECT number FROM system.numbers LIMIT 10;
     DETACH TABLE test_drop_detach_db.test_table_object_storage SYNC;
     """
+    Then S3 contains greater than 0 objects
+
     When we execute command on clickhouse01
     """
     ls /var/lib/clickhouse/data/test_drop_detach_db/
@@ -112,3 +114,4 @@ Feature: chadmin delete detached table commands
     """
     total 0
     """
+    Then S3 contains 0 objects
