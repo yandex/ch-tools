@@ -413,29 +413,23 @@ def clean_zk_metadata_for_hosts(
         """
         Go thought list of tasks to remove and tries to wait until all of them finish.
         """
-        all_tasks_finished = True
         for _ in range(0, max_attemps):
             for ddl_data in dll_tasks_to_remove:
                 ddl_path = ddl_data[0]
                 ddl_size = ddl_data[1]
                 if not _is_ddl_task_finished(zk, ddl_size, ddl_path):
-                    all_tasks_finished = False
                     break
             else:
-                all_tasks_finished = True
-
-            if all_tasks_finished:
-                break
+                return
             time.sleep(wait_time)
 
         # Even if ddl task not finished, we must remove it. So just warn it.
-        if not all_tasks_finished:
-            for ddl_data in dll_tasks_to_remove:
-                if not _is_ddl_task_finished(zk, ddl_data[1], ddl_data[0]):
-                    logging.warning(
-                        "DDL task {} is not finished. Will remove it anyway.",
-                        ddl_data[0],
-                    )
+        for ddl_data in dll_tasks_to_remove:
+            if not _is_ddl_task_finished(zk, ddl_data[1], ddl_data[0]):
+                logging.warning(
+                    "DDL task {} is not finished. Will remove it anyway.",
+                    ddl_data[0],
+                )
 
     def mark_finished_ddl_query(zk):
         """

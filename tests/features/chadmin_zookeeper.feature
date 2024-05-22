@@ -128,6 +128,12 @@ Feature: chadmin zookeeper commands.
   
     And we do hosts cleanup on clickhouse02 with fqdn zone-host.db.asd.net
     Then there are no unfinished dll queries on clickhouse02
+    # It is not necessary, just to do not increase sleep time in nexts steps.
+    # We are doing it to reload DDL queue in clickhouse-server
+    When we execute command on clickhouse01
+    """
+    supervisorctl restart clickhouse-server
+    """
     When we sleep for 10 seconds
     And we execute command on clickhouse01
     """
