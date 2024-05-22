@@ -87,7 +87,7 @@ Feature: chadmin delete detached table commands
     """
 
   @require_version_23.3
-   Scenario: Drop detached table from object_storage
+  Scenario: Drop detached table from object_storage
     Given we have executed queries on clickhouse01
     """
     CREATE TABLE IF NOT EXISTS test_drop_detach_db.test_table_object_storage (n Int32)

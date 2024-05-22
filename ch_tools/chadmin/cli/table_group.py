@@ -230,7 +230,7 @@ def columns_command(ctx, database_name, table_name):
         is_flag=True,
         help="Filter in tables in read-only state only.",
     ),
-    constraint=If(IsSet("detached"), then=accept_none, else_=RequireAtLeast(1)),
+    constraint=If(IsSet("detached"), then=accept_none),
 )
 @option(
     "--cluster",
@@ -272,6 +272,32 @@ def columns_command(ctx, database_name, table_name):
         "dry_run",
     ],
 )
+@constraint(
+    If(IsSet("database_name"), then=accept_none),
+    [
+        "database_pattern",
+        "exclude_database_pattern",
+    ],
+)
+@constraint(
+    If(IsSet("database_name"), then=require_all),
+    [
+        "table_name",
+    ],
+)
+@constraint(
+    If(IsSet("table_name"), then=accept_none),
+    [
+        "table_pattern",
+        "exclude_table_pattern",
+    ],
+)
+@constraint(
+    If(IsSet("table_name"), then=require_all),
+    [
+        "database_name",
+    ],
+)
 @pass_context
 def delete_command(
     ctx,
@@ -297,7 +323,26 @@ def delete_command(
         )
         return
 
-    for t in list_tables(ctx, **kwargs):
+    if database_name is not None and table_name is not None:
+        logging.info("Delete particular table: {}.{}", database_name, table_name)
+        delete_table(
+            ctx,
+            database_name=database_name,
+            table_name=table_name,
+            cluster=cluster,
+            sync_mode=sync_mode,
+            echo=True,
+            dry_run=dry_run,
+        )
+        return
+
+    tables = list_tables(ctx, **kwargs)
+    if 0 == len(tables):
+        logging.warning("No tables by pattern.")
+        return
+
+    for t in tables:
+        logging.info("Delete table by pattern: {}.{}", t["database"], t["name"])
         delete_table(
             ctx,
             database_name=t["database"],
