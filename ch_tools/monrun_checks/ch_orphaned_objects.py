@@ -5,13 +5,11 @@ from ch_tools.chadmin.internal.object_storage.obj_list_item import ObjListItem
 from ch_tools.chadmin.internal.object_storage.s3_cleanup import cleanup_s3_object_storage
 from ch_tools.chadmin.internal.object_storage.utils import DEFAULT_GUARD_INTERVAL, get_orphaned_objects_query, get_remote_data_paths_table, get_traverse_shadow_settings, traverse_object_storage
 from ch_tools.chadmin.internal.utils import execute_query
-from ch_tools.common.cli.utils import parse_timespan
 from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.common.result import CRIT, OK, WARNING, Result
+from ch_tools.common.cli.parameters import TimeSpanParamType
 
-FROM_TIME = None
-TO_TIME = parse_timespan(DEFAULT_GUARD_INTERVAL)
 DRY_RUN = True
 ON_CLUSTER = True
 CLUSTER_NAME = "{cluster}"
@@ -38,14 +36,33 @@ OBJECT_NAME_PREFIX = None
 @click.option(
     "-w", "--warning", "warn", type=int, default=600, help="Warning threshold."
 )
+@click.option(
+    "--from-time",
+    "from_time",
+    default=None,
+    type=TimeSpanParamType(),
+    help=(
+        "Begin of inspecting interval in human-friendly format. "
+        "Objects with a modification time falling interval [now - from_time, now - to_time] are considered."
+    ),
+)
+@click.option(
+    "-g",
+    "--guard-interval",
+    "--to-time",
+    "to_time",
+    default=DEFAULT_GUARD_INTERVAL,
+    type=TimeSpanParamType(),
+    help=("End of inspecting interval in human-friendly format."),
+)
 @click.pass_context
-def orphaned_objects_command(ctx: click.Context, keep_paths: bool, use_saved_list: bool, crit: int, warn: int):
+def orphaned_objects_command(ctx: click.Context, keep_paths: bool, use_saved_list: bool, crit: int, warn: int, from_time: TimeSpanParamType, to_time: TimeSpanParamType):
     ch_config = get_clickhouse_config(ctx)
     ctx.obj[
         "disk_configuration"
     ] = ch_config.storage_configuration.s3_disk_configuaration(DIST_NAME)
 
-    if FROM_TIME is not None and FROM_TIME <= TO_TIME:
+    if from_time is not None and from_time <= to_time:
         raise click.BadParameter(
             "'to_time' parameter must be greater than 'from_time'",
             param_hint="--from-time",
@@ -63,6 +80,8 @@ def orphaned_objects_command(ctx: click.Context, keep_paths: bool, use_saved_lis
         )
         total_size = _get_total_size(
             ctx,
+            from_time, 
+            to_time,
             listing_table,
             use_saved_list,
         )
@@ -82,6 +101,8 @@ def orphaned_objects_command(ctx: click.Context, keep_paths: bool, use_saved_lis
 
 def _get_total_size(
     ctx: click.Context,
+    from_time: TimeSpanParamType,
+    to_time: TimeSpanParamType,
     listing_table: str,
     use_saved_list: bool,
 ) -> None:
@@ -92,7 +113,7 @@ def _get_total_size(
     prefix = OBJECT_NAME_PREFIX or disk_conf.prefix
 
     if not use_saved_list:
-        _ = traverse_object_storage(ctx, listing_table, FROM_TIME, TO_TIME, prefix)
+        _ = traverse_object_storage(ctx, listing_table, from_time, to_time, prefix)
 
     remote_data_paths_table = get_remote_data_paths_table(ON_CLUSTER, CLUSTER_NAME)
     settings = get_traverse_shadow_settings(ctx)
