@@ -396,7 +396,7 @@ def clean_zk_metadata_for_hosts(
         except NoNodeError:
             pass
 
-    def _check_ddl_task_finished(zk, ddl_number_of_hosts, ddl_path):
+    def _is_ddl_task_finished(zk, ddl_number_of_hosts, ddl_path):
         """
         Check that ddl is finished.
         """
@@ -407,21 +407,22 @@ def clean_zk_metadata_for_hosts(
             _get_children(zk, os.path.join(ddl_path, "finished/"))
         )
 
-    def _ensure_ddl_tasks_finished(zk, dll_tasks_to_remove):
+    def _wait_ddl_tasks_finished(
+        zk, dll_tasks_to_remove, wait_time=0.3, max_attemps=20
+    ):
         """
         Go thought list of tasks to remove and tries to wait until all of them finish.
         """
-        wait_time = 0.3
-        max_attemps = 20
-        all_tasks_finished: bool
+        all_tasks_finished = True
         for _ in range(0, max_attemps):
-            all_tasks_finished = True
             for ddl_data in dll_tasks_to_remove:
                 ddl_path = ddl_data[0]
                 ddl_size = ddl_data[1]
-                if not _check_ddl_task_finished(zk, ddl_size, ddl_path):
+                if not _is_ddl_task_finished(zk, ddl_size, ddl_path):
                     all_tasks_finished = False
                     break
+            else:
+                all_tasks_finished = True
 
             if all_tasks_finished:
                 break
@@ -430,7 +431,7 @@ def clean_zk_metadata_for_hosts(
         # Even if ddl task not finished, we must remove it. So just warn it.
         if not all_tasks_finished:
             for ddl_data in dll_tasks_to_remove:
-                if not _check_ddl_task_finished(zk, ddl_data[1], ddl_data[0]):
+                if not _is_ddl_task_finished(zk, ddl_data[1], ddl_data[0]):
                     logging.warning(
                         "DDL task {} is not finished. Will remove it anyway.",
                         ddl_data[0],
@@ -474,7 +475,7 @@ def clean_zk_metadata_for_hosts(
         logging.info("Finish mark ddl query")
         chunk_size = 100
         for ddl_task_chunk in chunked(ddl_tasks_to_remove, chunk_size):
-            _ensure_ddl_tasks_finished(zk, ddl_task_chunk)
+            _wait_ddl_tasks_finished(zk, ddl_task_chunk)
             delete_zk_nodes(ctx, [ddl_data[0] for ddl_data in ddl_task_chunk])
 
         logging.info("DDL queue cleanup finished")
