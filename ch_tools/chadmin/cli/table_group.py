@@ -3,10 +3,18 @@ from collections import OrderedDict
 from typing import Any
 
 from cloup import Choice, Context, argument, group, option, option_group, pass_context
-from cloup.constraints import RequireAtLeast
+from cloup.constraints import (
+    If,
+    IsSet,
+    RequireAtLeast,
+    accept_none,
+    constraint,
+    require_all,
+)
 
 from ch_tools.chadmin.internal.table import (
     attach_table,
+    delete_detached_table,
     delete_table,
     detach_table,
     get_table,
@@ -167,6 +175,8 @@ def columns_command(ctx, database_name, table_name):
 
 
 @table_group.command("delete")
+@argument("database_name", metavar="DATABASE", required=False)
+@argument("table_name", metavar="TABLE", required=False)
 @option_group(
     "Table selection options",
     option(
@@ -220,7 +230,7 @@ def columns_command(ctx, database_name, table_name):
         is_flag=True,
         help="Filter in tables in read-only state only.",
     ),
-    constraint=RequireAtLeast(1),
+    constraint=If(IsSet("detached"), then=accept_none, else_=RequireAtLeast(1)),
 )
 @option(
     "--cluster",
@@ -242,6 +252,26 @@ def columns_command(ctx, database_name, table_name):
     default=False,
     help="Enable dry run mode and do not perform any modifying actions.",
 )
+@option(
+    "--detached",
+    is_flag=True,
+    help="Delete detached tables (with nonreplicated engine).",
+)
+@constraint(
+    If(IsSet("detached"), then=require_all),
+    [
+        "database_name",
+        "table_name",
+        "sync_mode",
+    ],
+)
+@constraint(
+    If(IsSet("detached"), then=accept_none),
+    [
+        "on_cluster",
+        "dry_run",
+    ],
+)
 @pass_context
 def delete_command(
     ctx,
@@ -249,12 +279,23 @@ def delete_command(
     on_cluster,
     sync_mode,
     dry_run,
+    detached,
+    database_name,
+    table_name,
     **kwargs,
 ):
     """
     Delete one or several tables.
     """
     cluster = get_cluster_name(ctx) if on_cluster else None
+
+    if detached:
+        delete_detached_table(
+            ctx,
+            database_name=database_name,
+            table_name=table_name,
+        )
+        return
 
     for t in list_tables(ctx, **kwargs):
         delete_table(
