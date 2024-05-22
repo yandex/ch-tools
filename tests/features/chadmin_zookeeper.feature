@@ -128,7 +128,7 @@ Feature: chadmin zookeeper commands.
   
     And we do hosts cleanup on clickhouse02 with fqdn zone-host.db.asd.net
     Then there are no unfinished dll queries on clickhouse02
-    When we sleep for 5 seconds
+    When we sleep for 10 seconds
     And we execute command on clickhouse01
     """
     ch-monitoring log-errors -n 5
