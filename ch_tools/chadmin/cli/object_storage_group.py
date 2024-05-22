@@ -1,6 +1,6 @@
 from datetime import timedelta
 from tempfile import TemporaryFile
-from typing import List, Optional
+from typing import Optional
 
 import click
 from click import Context, group, option, pass_context
@@ -10,7 +10,13 @@ from ch_tools.chadmin.internal.object_storage import (
     ObjListItem,
     cleanup_s3_object_storage,
 )
-from ch_tools.chadmin.internal.object_storage.utils import get_orphaned_objects_query, get_remote_data_paths_table, get_traverse_shadow_settings, traverse_object_storage, DEFAULT_GUARD_INTERVAL
+from ch_tools.chadmin.internal.object_storage.utils import (
+    DEFAULT_GUARD_INTERVAL,
+    get_orphaned_objects_query,
+    get_remote_data_paths_table,
+    get_traverse_shadow_settings,
+    traverse_object_storage,
+)
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
@@ -170,12 +176,16 @@ def _clean_object_storage(
         logging.info(
             f"Collecting objects... (Disk: '{disk_conf.name}', Endpoint '{disk_conf.endpoint_url}', Bucket: '{disk_conf.bucket_name}', Prefix: '{disk_conf.prefix}')",
         )
-        counter = traverse_object_storage(ctx, listing_table, from_time, to_time, prefix)
+        counter = traverse_object_storage(
+            ctx, listing_table, from_time, to_time, prefix
+        )
         logging.info("Collected {} objects", counter)
 
     remote_data_paths_table = get_remote_data_paths_table(on_cluster, cluster_name)
     settings = get_traverse_shadow_settings(ctx)
-    antijoin_query = get_orphaned_objects_query(listing_table, remote_data_paths_table, disk_conf, settings)
+    antijoin_query = get_orphaned_objects_query(
+        listing_table, remote_data_paths_table, disk_conf, settings
+    )
     logging.info("Antijoin query: {}", antijoin_query)
 
     if dry_run:

@@ -1,14 +1,25 @@
+from datetime import timedelta
 from tempfile import TemporaryFile
+from typing import Optional
+
 import click
 
 from ch_tools.chadmin.internal.object_storage.obj_list_item import ObjListItem
-from ch_tools.chadmin.internal.object_storage.s3_cleanup import cleanup_s3_object_storage
-from ch_tools.chadmin.internal.object_storage.utils import DEFAULT_GUARD_INTERVAL, get_orphaned_objects_query, get_remote_data_paths_table, get_traverse_shadow_settings, traverse_object_storage
+from ch_tools.chadmin.internal.object_storage.s3_cleanup import (
+    cleanup_s3_object_storage,
+)
+from ch_tools.chadmin.internal.object_storage.utils import (
+    DEFAULT_GUARD_INTERVAL,
+    get_orphaned_objects_query,
+    get_remote_data_paths_table,
+    get_traverse_shadow_settings,
+    traverse_object_storage,
+)
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.common.result import CRIT, OK, WARNING, Result
-from ch_tools.common.cli.parameters import TimeSpanParamType
 
 DRY_RUN = True
 ON_CLUSTER = True
@@ -56,7 +67,15 @@ OBJECT_NAME_PREFIX = None
     help=("End of inspecting interval in human-friendly format."),
 )
 @click.pass_context
-def orphaned_objects_command(ctx: click.Context, keep_paths: bool, use_saved_list: bool, crit: int, warn: int, from_time: TimeSpanParamType, to_time: TimeSpanParamType):
+def orphaned_objects_command(
+    ctx: click.Context,
+    keep_paths: bool,
+    use_saved_list: bool,
+    crit: int,
+    warn: int,
+    from_time: Optional[timedelta],
+    to_time: timedelta,
+) -> Result:
     ch_config = get_clickhouse_config(ctx)
     ctx.obj[
         "disk_configuration"
@@ -72,7 +91,7 @@ def orphaned_objects_command(ctx: click.Context, keep_paths: bool, use_saved_lis
     config = ctx.obj["config"]["object_storage"]["clean"]
 
     listing_table = f"{config['listing_table_database']}.{config['listing_table_prefix']}{disk_conf.name}"
-    #Create listing table for storing paths from object storage
+    # Create listing table for storing paths from object storage
     try:
         execute_query(
             ctx,
@@ -80,7 +99,7 @@ def orphaned_objects_command(ctx: click.Context, keep_paths: bool, use_saved_lis
         )
         total_size = _get_total_size(
             ctx,
-            from_time, 
+            from_time,
             to_time,
             listing_table,
             use_saved_list,
@@ -101,11 +120,11 @@ def orphaned_objects_command(ctx: click.Context, keep_paths: bool, use_saved_lis
 
 def _get_total_size(
     ctx: click.Context,
-    from_time: TimeSpanParamType,
-    to_time: TimeSpanParamType,
+    from_time: Optional[timedelta],
+    to_time: timedelta,
     listing_table: str,
     use_saved_list: bool,
-) -> None:
+) -> int:
     """
     Delete orphaned objects from object storage.
     """
@@ -117,7 +136,9 @@ def _get_total_size(
 
     remote_data_paths_table = get_remote_data_paths_table(ON_CLUSTER, CLUSTER_NAME)
     settings = get_traverse_shadow_settings(ctx)
-    antijoin_query = get_orphaned_objects_query(listing_table, remote_data_paths_table, disk_conf, settings)
+    antijoin_query = get_orphaned_objects_query(
+        listing_table, remote_data_paths_table, disk_conf, settings
+    )
 
     total_size = 0
     with TemporaryFile() as keys_file:

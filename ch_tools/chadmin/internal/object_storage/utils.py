@@ -1,9 +1,12 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
+
 from click import Context
 
 from ch_tools.chadmin.internal.object_storage.obj_list_item import ObjListItem
-from ch_tools.chadmin.internal.object_storage.s3_iterator import s3_object_storage_iterator
+from ch_tools.chadmin.internal.object_storage.s3_iterator import (
+    s3_object_storage_iterator,
+)
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
@@ -34,7 +37,12 @@ def get_traverse_shadow_settings(ctx: Context) -> str:
     return settings
 
 
-def get_orphaned_objects_query(listing_table: str, remote_data_paths_table: str, disk_conf: S3DiskConfiguration, settings: str) -> str:
+def get_orphaned_objects_query(
+    listing_table: str,
+    remote_data_paths_table: str,
+    disk_conf: S3DiskConfiguration,
+    settings: str,
+) -> str:
     query = f"""
         SELECT obj_path, obj_size FROM {listing_table} AS object_storage
           LEFT ANTI JOIN {remote_data_paths_table} AS object_table
@@ -76,7 +84,7 @@ def traverse_object_storage(
     # Insert the last batch (might be shorter)
     if obj_paths_batch:
         _insert_listing_batch(ctx, obj_paths_batch, listing_table)
-    
+
     return counter
 
 

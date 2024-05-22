@@ -26,6 +26,7 @@ from ch_tools.monrun_checks.ch_dist_tables import dist_tables_command
 from ch_tools.monrun_checks.ch_geobase import geobase_command
 from ch_tools.monrun_checks.ch_keeper import keeper_command
 from ch_tools.monrun_checks.ch_log_errors import log_errors_command
+from ch_tools.monrun_checks.ch_orphaned_objects import orphaned_objects_command
 from ch_tools.monrun_checks.ch_ping import ping_command
 from ch_tools.monrun_checks.ch_replication_lag import replication_lag_command
 from ch_tools.monrun_checks.ch_resetup_state import resetup_state_command
@@ -36,7 +37,6 @@ from ch_tools.monrun_checks.ch_tls import tls_command
 from ch_tools.monrun_checks.dns import dns_command
 from ch_tools.monrun_checks.exceptions import translate_to_status
 from ch_tools.monrun_checks.status import status_command
-from ch_tools.monrun_checks.ch_orphaned_objects import orphaned_objects_command
 
 DEFAULT_USER = "monitor"
 
