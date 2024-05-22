@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from tempfile import TemporaryFile
 from typing import List, Optional
 
@@ -9,9 +9,8 @@ from humanfriendly import format_size
 from ch_tools.chadmin.internal.object_storage import (
     ObjListItem,
     cleanup_s3_object_storage,
-    s3_object_storage_iterator,
 )
-from ch_tools.chadmin.internal.object_storage.utils import get_orphaned_objects_query, get_remote_data_paths_table, get_traverse_shadow_settings, traverse_object_storage
+from ch_tools.chadmin.internal.object_storage.utils import get_orphaned_objects_query, get_remote_data_paths_table, get_traverse_shadow_settings, traverse_object_storage, DEFAULT_GUARD_INTERVAL
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
@@ -19,10 +18,6 @@ from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 
-# The guard interval is used for S3 objects for which metadata is not found.
-# And for metadata for which object is not found in S3.
-# These objects are not counted if their last modified time fall in the interval from the moment of starting analyzing.
-DEFAULT_GUARD_INTERVAL = "24h"
 # Use big enough timeout for stream HTTP query
 STREAM_TIMEOUT = 10 * 60
 

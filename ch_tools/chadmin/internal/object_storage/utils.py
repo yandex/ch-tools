@@ -12,6 +12,10 @@ from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfig
 # Set not very big value due to default ClickHouse 'http_max_field_value_size' settings value 128Kb
 # TODO: streaming upload in POST body while INSERT
 INSERT_BATCH_SIZE = 500
+# The guard interval is used for S3 objects for which metadata is not found.
+# And for metadata for which object is not found in S3.
+# These objects are not counted if their last modified time fall in the interval from the moment of starting analyzing.
+DEFAULT_GUARD_INTERVAL = "24h"
 
 
 def get_remote_data_paths_table(on_cluster: bool, cluster_name: str) -> str:
