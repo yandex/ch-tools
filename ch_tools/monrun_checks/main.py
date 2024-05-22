@@ -36,6 +36,7 @@ from ch_tools.monrun_checks.ch_tls import tls_command
 from ch_tools.monrun_checks.dns import dns_command
 from ch_tools.monrun_checks.exceptions import translate_to_status
 from ch_tools.monrun_checks.status import status_command
+from ch_tools.monrun_checks.ch_orphaned_objects import orphaned_objects_command
 
 DEFAULT_USER = "monitor"
 
@@ -141,6 +142,7 @@ CLI_COMMANDS = [
     tls_command,
     keeper_command,
     dns_command,
+    orphaned_objects_command,
 ]
 
 cli.add_command(status_command(CLI_COMMANDS))
