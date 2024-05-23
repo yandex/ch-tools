@@ -323,7 +323,7 @@ def delete_command(
         )
         return
 
-    if database_name is not None and table_name is not None:
+    if database_name and table_name:
         logging.info("Delete particular table: {}.{}", database_name, table_name)
         delete_table(
             ctx,
