@@ -337,7 +337,7 @@ def delete_command(
         return
 
     tables = list_tables(ctx, **kwargs)
-    if not len(tables):
+    if 0 == len(tables):
         logging.warning("No tables by pattern.")
         return
 
