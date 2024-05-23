@@ -80,7 +80,7 @@ class TableMetadata:
         return result
 
     @staticmethod
-    def _parse_engine(line) -> str:
+    def _parse_engine(line: str) -> str:
         pattern = re.compile(r"ENGINE = (\w+)")
 
         match = pattern.search(line)
