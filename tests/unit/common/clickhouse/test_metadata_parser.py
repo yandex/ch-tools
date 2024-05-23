@@ -2,6 +2,8 @@ import pytest
 
 from ch_tools.chadmin.cli.table_metadata import TableMetadata
 
+PATH_TO_TESTS = "tests/unit/common/clickhouse/"
+
 
 @pytest.mark.parametrize(
     "file,expected",
@@ -65,7 +67,7 @@ from ch_tools.chadmin.cli.table_metadata import TableMetadata
     ],
 )
 def test_metadata_parser(file, expected):
-    metadata = TableMetadata(table_metadata_path=file)
+    metadata = TableMetadata(table_metadata_path=PATH_TO_TESTS + file)
     assert metadata.table_uuid == expected["table_uuid"]
     assert metadata.table_engine == expected["table_engine"]
 
@@ -85,7 +87,7 @@ def test_metadata_parser(file, expected):
         ),
         pytest.param(
             "metadata/broken_no_uuid_full.sql",
-            "Empty UUID from metadata: 'metadata/broken_no_uuid_full.sql'",
+            f"Empty UUID from metadata: '{PATH_TO_TESTS}metadata/broken_no_uuid_full.sql'",
             id="No UUID full",
         ),
         pytest.param(
@@ -95,11 +97,11 @@ def test_metadata_parser(file, expected):
         ),
         pytest.param(
             "metadata/broken_no_engine_full.sql",
-            "Empty table engine from metadata: 'metadata/broken_no_engine_full.sql'",
+            f"Empty table engine from metadata: '{PATH_TO_TESTS}metadata/broken_no_engine_full.sql'",
             id="No engine full",
         ),
     ],
 )
 def test_broken_metadata(file, exception_msg):
     with pytest.raises(RuntimeError, match=exception_msg):
-        _ = TableMetadata(table_metadata_path=file)
+        _ = TableMetadata(table_metadata_path=PATH_TO_TESTS + file)
