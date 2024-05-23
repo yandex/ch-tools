@@ -294,7 +294,6 @@ def _get_table_data(table_metadata_path: str, pattern: str, offset: int) -> str:
                 parts = line.split()
                 try:
                     index = parts.index(pattern)
-                    # check size?
                     result = parts[index + offset].strip("'")
                 except ValueError:
                     raise RuntimeError(
@@ -324,7 +323,7 @@ def check_table_dettached(ctx, database_name, table_name):
         format_="JSON",
     )["data"]
 
-    if 0 != len(response):
+    if len(response):
         raise RuntimeError(
             f"Table '{database_name}'.'{table_name}' is attached. Use delete without --detach flag."
         )
