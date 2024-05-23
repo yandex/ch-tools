@@ -21,8 +21,8 @@ DISK_OBJECT_STORAGE_KEY = "object_storage"
 def get_table(ctx, database_name, table_name, active_parts=None):
     tables = list_tables(
         ctx,
-        database_pattern=database_name,
-        table_pattern=table_name,
+        database_name=database_name,
+        table_name=table_name,
         active_parts=active_parts,
     )
 
@@ -35,8 +35,10 @@ def get_table(ctx, database_name, table_name, active_parts=None):
 def list_tables(
     ctx,
     *,
+    database_name=None,
     database_pattern=None,
     exclude_database_pattern=None,
+    table_name=None,
     table_pattern=None,
     exclude_table_pattern=None,
     engine_pattern=None,
@@ -65,13 +67,21 @@ def list_tables(
         {% if is_readonly -%}
             LEFT JOIN system.replicas r ON r.database = t.database AND r.table = t.name
         {% endif -%}
+            WHERE true
+        {% if database_name -%}
+            AND t.database = '{{ database_name }}'
+        {% endif -%}
         {% if database_pattern -%}
-            WHERE t.database {{ format_str_match(database_pattern) }}
-        {% else %}
-            WHERE t.database NOT IN ('system', 'information_schema', 'INFORMATION_SCHEMA')
+            AND t.database {{ format_str_match(database_pattern) }}
+        {% endif -%}
+        {% if not database_name and not database_pattern  -%}
+            AND t.database NOT IN ('system', 'information_schema', 'INFORMATION_SCHEMA')
         {% endif -%}
         {% if exclude_database_pattern -%}
             AND t.database NOT {{ format_str_match(exclude_database_pattern) }}
+        {% endif -%}
+        {% if table_name -%}
+            AND t.name = '{{ table_name }}'
         {% endif -%}
         {% if table_pattern -%}
             AND t.name {{ format_str_match(table_pattern) }}
@@ -125,8 +135,10 @@ def list_tables(
     return execute_query(
         ctx,
         query,
+        database_name=database_name,
         database_pattern=database_pattern,
         exclude_database_pattern=exclude_database_pattern,
+        table_name=table_name,
         table_pattern=table_pattern,
         exclude_table_pattern=exclude_table_pattern,
         engine_pattern=engine_pattern,
@@ -174,6 +186,7 @@ def detach_table(
     """
     Perform "DETACH TABLE" for the specified table.
     """
+    logging.info("Detaching table `{}`.`{}`", database_name, table_name)
     timeout = ctx.obj["config"]["clickhouse"]["detach_table_timeout"]
     query = """
         DETACH TABLE `{{ database_name }}`.`{{ table_name }}`
@@ -207,6 +220,7 @@ def attach_table(
     """
     Perform "ATTACH TABLE" for the specified table.
     """
+    logging.info("Attaching table `{}`.`{}`", database_name, table_name)
     timeout = ctx.obj["config"]["clickhouse"]["attach_table_timeout"]
     query = """
         ATTACH TABLE `{{ database_name }}`.`{{ table_name }}`
@@ -240,6 +254,7 @@ def delete_table(
     """
     Perform "DROP TABLE" for the specified table.
     """
+    logging.info("Deleting table `{}`.`{}`", database_name, table_name)
     timeout = ctx.obj["config"]["clickhouse"]["drop_table_timeout"]
     query = """
         DROP TABLE `{{ database_name }}`.`{{ table_name }}`

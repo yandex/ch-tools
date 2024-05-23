@@ -4,8 +4,8 @@ from typing import Any
 
 from cloup import Choice, Context, argument, group, option, option_group, pass_context
 from cloup.constraints import (
+    AnySet,
     If,
-    IsSet,
     RequireAtLeast,
     accept_none,
     constraint,
@@ -177,6 +177,7 @@ def columns_command(ctx, database_name, table_name):
 @table_group.command("delete")
 @argument("database_name", metavar="DATABASE", required=False)
 @argument("table_name", metavar="TABLE", required=False)
+@constraint(If("database_name", then=require_all), ["table_name"])
 @option_group(
     "Table selection options",
     option(
@@ -230,7 +231,11 @@ def columns_command(ctx, database_name, table_name):
         is_flag=True,
         help="Filter in tables in read-only state only.",
     ),
-    constraint=If(IsSet("detached"), then=accept_none),
+    constraint=If(
+        AnySet("detached", "database_name", "table_name"),
+        then=accept_none,
+        else_=RequireAtLeast(1),
+    ),
 )
 @option(
     "--cluster",
@@ -258,46 +263,9 @@ def columns_command(ctx, database_name, table_name):
     help="Delete detached tables (with nonreplicated engine).",
 )
 @constraint(
-    If(IsSet("detached"), then=require_all),
-    [
-        "database_name",
-        "table_name",
-        "sync_mode",
-    ],
+    If("detached", then=require_all), ["database_name", "table_name", "sync_mode"]
 )
-@constraint(
-    If(IsSet("detached"), then=accept_none),
-    [
-        "on_cluster",
-        "dry_run",
-    ],
-)
-@constraint(
-    If(IsSet("database_name"), then=accept_none),
-    [
-        "database_pattern",
-        "exclude_database_pattern",
-    ],
-)
-@constraint(
-    If(IsSet("database_name"), then=require_all),
-    [
-        "table_name",
-    ],
-)
-@constraint(
-    If(IsSet("table_name"), then=accept_none),
-    [
-        "table_pattern",
-        "exclude_table_pattern",
-    ],
-)
-@constraint(
-    If(IsSet("table_name"), then=require_all),
-    [
-        "database_name",
-    ],
-)
+@constraint(If("detached", then=accept_none), ["on_cluster", "dry_run"])
 @pass_context
 def delete_command(
     ctx,
@@ -324,29 +292,15 @@ def delete_command(
         return
 
     if database_name and table_name:
-        logging.info("Delete particular table: {}.{}", database_name, table_name)
+        tables = [get_table(ctx, database_name, table_name)]
+    else:
+        tables = list_tables(ctx, **kwargs)
+
+    for table in tables:
         delete_table(
             ctx,
-            database_name=database_name,
-            table_name=table_name,
-            cluster=cluster,
-            sync_mode=sync_mode,
-            echo=True,
-            dry_run=dry_run,
-        )
-        return
-
-    tables = list_tables(ctx, **kwargs)
-    if not tables:
-        logging.warning("No tables by pattern.")
-        return
-
-    for t in tables:
-        logging.info("Delete table by pattern: {}.{}", t["database"], t["name"])
-        delete_table(
-            ctx,
-            database_name=t["database"],
-            table_name=t["name"],
+            database_name=table["database"],
+            table_name=table["name"],
             cluster=cluster,
             sync_mode=sync_mode,
             echo=True,
@@ -355,6 +309,9 @@ def delete_command(
 
 
 @table_group.command("recreate")
+@argument("database_name", metavar="DATABASE", required=False)
+@argument("table_name", metavar="TABLE", required=False)
+@constraint(If("database_name", then=require_all), ["table_name"])
 @option_group(
     "Table selection options",
     option(
@@ -408,7 +365,11 @@ def delete_command(
         is_flag=True,
         help="Filter in tables in read-only state only.",
     ),
-    constraint=RequireAtLeast(1),
+    constraint=If(
+        AnySet("database_name", "table_name"),
+        then=accept_none,
+        else_=RequireAtLeast(1),
+    ),
 )
 @option(
     "-n",
@@ -418,21 +379,26 @@ def delete_command(
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 @pass_context
-def recreate_command(ctx, dry_run, **kwargs):
+def recreate_command(ctx, _all, database_name, table_name, dry_run, **kwargs):
     """
     Recreate one or several tables.
     """
-    for t in list_tables(ctx, **kwargs):
+    if database_name and table_name:
+        tables = [get_table(ctx, database_name, table_name)]
+    else:
+        tables = list_tables(ctx, **kwargs)
+
+    for table in tables:
         delete_table(
             ctx,
-            database_name=t["database"],
-            table_name=t["name"],
+            database_name=table["database"],
+            table_name=table["name"],
             echo=True,
             dry_run=dry_run,
         )
         execute_query(
             ctx,
-            t["create_table_query"],
+            table["create_table_query"],
             echo=True,
             format_=None,
             dry_run=dry_run,
@@ -440,6 +406,9 @@ def recreate_command(ctx, dry_run, **kwargs):
 
 
 @table_group.command("detach")
+@argument("database_name", metavar="DATABASE", required=False)
+@argument("table_name", metavar="TABLE", required=False)
+@constraint(If("database_name", then=require_all), ["table_name"])
 @option_group(
     "Table selection options",
     option(
@@ -493,7 +462,11 @@ def recreate_command(ctx, dry_run, **kwargs):
         is_flag=True,
         help="Filter in tables in read-only state only.",
     ),
-    constraint=RequireAtLeast(1),
+    constraint=If(
+        AnySet("database_name", "table_name"),
+        then=accept_none,
+        else_=RequireAtLeast(1),
+    ),
 )
 @option(
     "--cluster",
@@ -513,6 +486,8 @@ def recreate_command(ctx, dry_run, **kwargs):
 def detach_command(
     ctx,
     _all,
+    database_name,
+    table_name,
     on_cluster,
     dry_run,
     **kwargs,
@@ -522,11 +497,16 @@ def detach_command(
     """
     cluster = get_cluster_name(ctx) if on_cluster else None
 
-    for t in list_tables(ctx, **kwargs):
+    if database_name and table_name:
+        tables = [get_table(ctx, database_name, table_name)]
+    else:
+        tables = list_tables(ctx, **kwargs)
+
+    for table in tables:
         detach_table(
             ctx,
-            database_name=t["database"],
-            table_name=t["name"],
+            database_name=table["database"],
+            table_name=table["name"],
             cluster=cluster,
             echo=True,
             dry_run=dry_run,
@@ -534,6 +514,9 @@ def detach_command(
 
 
 @table_group.command("reattach")
+@argument("database_name", metavar="DATABASE", required=False)
+@argument("table_name", metavar="TABLE", required=False)
+@constraint(If("database_name", then=require_all), ["table_name"])
 @option_group(
     "Table selection options",
     option(
@@ -587,7 +570,11 @@ def detach_command(
         is_flag=True,
         help="Filter in tables in read-only state only.",
     ),
-    constraint=RequireAtLeast(1),
+    constraint=If(
+        AnySet("database_name", "table_name"),
+        then=accept_none,
+        else_=RequireAtLeast(1),
+    ),
 )
 @option(
     "--cluster",
@@ -607,6 +594,8 @@ def detach_command(
 def reattach_command(
     ctx,
     _all,
+    database_name,
+    table_name,
     on_cluster,
     dry_run,
     **kwargs,
@@ -616,19 +605,24 @@ def reattach_command(
     """
     cluster = get_cluster_name(ctx) if on_cluster else None
 
-    for t in list_tables(ctx, **kwargs):
+    if database_name and table_name:
+        tables = [get_table(ctx, database_name, table_name)]
+    else:
+        tables = list_tables(ctx, **kwargs)
+
+    for table in tables:
         detach_table(
             ctx,
-            database_name=t["database"],
-            table_name=t["name"],
+            database_name=table["database"],
+            table_name=table["name"],
             cluster=cluster,
             echo=True,
             dry_run=dry_run,
         )
         attach_table(
             ctx,
-            database_name=t["database"],
-            table_name=t["name"],
+            database_name=table["database"],
+            table_name=table["name"],
             cluster=cluster,
             echo=True,
             dry_run=dry_run,
@@ -662,6 +656,9 @@ def attach_command(ctx, database_name, table_name, on_cluster, dry_run):
 
 
 @table_group.command("materialize-ttl")
+@argument("database_name", metavar="DATABASE", required=False)
+@argument("table_name", metavar="TABLE", required=False)
+@constraint(If("database_name", then=require_all), ["table_name"])
 @option_group(
     "Table selection options",
     option(
@@ -715,7 +712,11 @@ def attach_command(ctx, database_name, table_name, on_cluster, dry_run):
         is_flag=True,
         help="Filter in tables in read-only state only.",
     ),
-    constraint=RequireAtLeast(1),
+    constraint=If(
+        AnySet("database_name", "table_name"),
+        then=accept_none,
+        else_=RequireAtLeast(1),
+    ),
 )
 @option(
     "-n",
@@ -725,15 +726,20 @@ def attach_command(ctx, database_name, table_name, on_cluster, dry_run):
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 @pass_context
-def materialize_ttl_command(ctx, _all, dry_run, **kwargs):
+def materialize_ttl_command(ctx, _all, database_name, table_name, dry_run, **kwargs):
     """
     Materialize TTL for one or several tables.
     """
-    for t in list_tables(ctx, **kwargs):
+    if database_name and table_name:
+        tables = [get_table(ctx, database_name, table_name)]
+    else:
+        tables = list_tables(ctx, **kwargs)
+
+    for table in tables:
         materialize_ttl(
             ctx,
-            database_name=t["database"],
-            table_name=t["name"],
+            database_name=table["database"],
+            table_name=table["name"],
             echo=True,
             dry_run=dry_run,
         )
