@@ -1,8 +1,8 @@
 import os
-import uuid
 
 from click import ClickException, Context
 
+from ch_tools.chadmin.cli.table_metadata import TableMetadata
 from ch_tools.chadmin.internal.clickhouse_disks import (
     CLICKHOUSE_DATA_PATH,
     CLICKHOUSE_METADATA_PATH,
@@ -279,48 +279,6 @@ def delete_table(
     )
 
 
-def _is_valid_uuid(uuid_str):
-    try:
-        val = uuid.UUID(uuid_str)
-    except ValueError:
-        return False
-    return str(val) == uuid_str
-
-
-def _get_uuid_table(table_metadata_path: str) -> str:
-    table_uuid = _get_table_data(table_metadata_path, pattern="UUID", offset=1)
-    assert _is_valid_uuid(table_uuid)
-
-    return table_uuid
-
-
-def _get_table_engine(table_metadata_path: str) -> str:
-    engine = _get_table_data(table_metadata_path, pattern="ENGINE", offset=2)
-
-    return engine
-
-
-def _get_table_data(table_metadata_path: str, pattern: str, offset: int) -> str:
-    result = ""
-
-    with open(table_metadata_path, "r", encoding="utf-8") as metadata_file:
-        for line in metadata_file:
-            if pattern in line:
-                parts = line.split()
-                try:
-                    index = parts.index(pattern)
-                    result = parts[index + offset].strip("'")
-                except ValueError:
-                    raise RuntimeError(
-                        f"Failed parse {pattern} from '{table_metadata_path}'"
-                    )
-                break
-        else:
-            raise RuntimeError(f"No {pattern} in '{table_metadata_path}'")
-
-    return result
-
-
 def check_table_dettached(ctx, database_name, table_name):
     query = """
         SELECT
@@ -344,10 +302,7 @@ def check_table_dettached(ctx, database_name, table_name):
         )
 
 
-def check_table_engine_supported(table_metadata_path: str) -> None:
-    engine = _get_table_engine(table_metadata_path)
-    logging.info("Found engine {} in metadata {}", engine, table_metadata_path)
-
+def check_table_engine_supported(engine: str) -> None:
     if "MergeTree" not in engine:
         raise RuntimeError(
             f"Doesn't support removing detached table with engine {engine}"
@@ -450,12 +405,14 @@ def delete_detached_table(ctx, database_name, table_name):
             f"No metadata file for table '{escaped_database_name}'.'{escaped_table_name}' by path {local_metadata_table_path}."
         )
 
-    check_table_engine_supported(local_metadata_table_path)
+    table_metadata = TableMetadata(local_metadata_table_path)
+    check_table_engine_supported(engine=table_metadata.table_engine)
 
-    table_uuid = _get_uuid_table(local_metadata_table_path)
     for disk_type, disk_name in _get_disks_data(ctx).items():
         _remove_table_data_from_disk(
-            table_uuid=table_uuid, disk_name=disk_name, disk_type=disk_type
+            table_uuid=table_metadata.table_uuid,
+            disk_name=disk_name,
+            disk_type=disk_type,
         )
 
     link_to_local_data = (
