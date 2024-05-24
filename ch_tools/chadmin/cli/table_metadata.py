@@ -65,10 +65,6 @@ def parse_table_metadata(table_metadata_path: str) -> TableMetadata:
             if line.startswith("ENGINE ="):
                 assert table_engine is None
                 table_engine = _parse_engine(line)
-
-                print(
-                    f"test #1 {table_engine} is {table_engine.is_table_engine_replicated()}"
-                )
                 if table_engine.is_table_engine_replicated():
                     replica_path, replica_name = _parse_replica_params(line)
 
