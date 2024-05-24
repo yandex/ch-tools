@@ -9,8 +9,8 @@ def get_table_replica(ctx, database_name, table_name):
     """
     replicas = list_table_replicas(
         ctx,
-        database_pattern=database_name,
-        table_pattern=table_name,
+        database_name=database_name,
+        table_name=table_name,
         verbose=True,
     )
 
@@ -25,8 +25,10 @@ def get_table_replica(ctx, database_name, table_name):
 def list_table_replicas(
     ctx,
     *,
+    database_name=None,
     database_pattern=None,
     exclude_database_pattern=None,
+    table_name=None,
     table_pattern=None,
     exclude_table_pattern=None,
     is_readonly=None,
@@ -67,11 +69,17 @@ def list_table_replicas(
         {% endif -%}
         FROM system.replicas
         WHERE true
+        {% if database_name -%}
+            AND database = '{{ database_name }}'
+        {% endif -%}
         {% if database_pattern -%}
             AND database {{ format_str_match(database_pattern) }}
         {% endif -%}
         {% if exclude_database_pattern -%}
             AND database NOT {{ format_str_match(exclude_database_pattern) }}
+        {% endif -%}
+        {% if table_name -%}
+            AND table = '{{ table_name }}'
         {% endif -%}
         {% if table_pattern -%}
             AND table {{ format_str_match(table_pattern) }}
@@ -89,8 +97,10 @@ def list_table_replicas(
     return execute_query(
         ctx,
         query,
+        database_name=database_name,
         database_pattern=database_pattern,
         exclude_database_pattern=exclude_database_pattern,
+        table_name=table_name,
         table_pattern=table_pattern,
         exclude_table_pattern=exclude_table_pattern,
         is_readonly=is_readonly,
