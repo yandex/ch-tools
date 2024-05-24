@@ -12,6 +12,7 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
     remove_from_ch_disk,
 )
 from ch_tools.chadmin.internal.utils import execute_query, remove_from_disk
+from ch_tools.chadmin.internal.zookeeper import delete_zk_node, list_zk_nodes
 from ch_tools.common import logging
 
 DISK_LOCAL_KEY = "local"
@@ -400,17 +401,22 @@ def delete_detached_table(ctx, database_name, table_name):
 
     table_metadata = parse_table_metadata(local_metadata_table_path)
 
-    if table_metadata.table_engine.is_table_engine_replicated():
-        raise RuntimeError(
-            "Drop detached table with replicated engine doesn't supported yet."
-        )
-
     for disk_type, disk_name in _get_disks_data(ctx).items():
         _remove_table_data_from_disk(
             table_uuid=table_metadata.table_uuid,
             disk_name=disk_name,
             disk_type=disk_type,
         )
+
+    if table_metadata.table_engine.is_table_engine_replicated():
+        current_node = table_metadata.replica_path + "/replicas/"
+        current_replica = current_node + table_metadata.replica_name
+
+        logging.info("Remove replica: {}", current_replica)
+        delete_zk_node(ctx, current_replica)
+        if not list_zk_nodes(ctx, current_node):
+            logging.info("No replicas, remove node: {}", current_node)
+            delete_zk_node(ctx, table_metadata.replica_path)
 
     link_to_local_data = (
         CLICKHOUSE_DATA_PATH + "/" + escaped_database_name + "/" + escaped_table_name

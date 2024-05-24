@@ -259,3 +259,118 @@ Feature: chadmin delete detached table commands
     total 0
     """
     Then S3 contains 0 objects
+
+  Scenario: Drop replicated table from single host
+    Given we have executed queries on clickhouse01
+    """
+    CREATE TABLE test_drop_db.test_repl
+    (n Int32)
+    ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/test_repl', '{replica}')
+    ORDER BY n;
+
+    INSERT INTO test_drop_db.test_repl (n) SELECT number FROM system.numbers LIMIT 10;
+    DETACH TABLE test_drop_db.test_repl SYNC;
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/tables/{shard}/ are equal to
+    """
+    /clickhouse/tables/shard1/test_repl
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin table delete --detached test_drop_db test_repl
+    """
+    Then we get response contains
+    """
+    """
+    When we execute command on clickhouse01
+    """
+    ls /var/lib/clickhouse/data/test_drop_db/
+    """
+    Then we get response
+    """
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/tables/{shard}/ are equal to
+    """
+    """
+
+  Scenario: Drop replicated table from some hosts
+    Given we have executed queries on clickhouse02
+    """
+    CREATE DATABASE IF NOT EXISTS test_drop_db;
+    CREATE TABLE test_drop_db.test_repl_expected ON CLUSTER '{cluster}'
+    (n Int32)
+    ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/test_repl_expected', '{replica}')
+    ORDER BY n;
+    INSERT INTO test_drop_db.test_repl_expected (n) SELECT number FROM system.numbers LIMIT 10;
+    """
+
+    Given we have executed queries on clickhouse01
+    """
+    CREATE TABLE test_drop_db.test_repl ON CLUSTER '{cluster}'
+    (n Int32)
+    ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/test_repl', '{replica}')
+    ORDER BY n;
+
+    INSERT INTO test_drop_db.test_repl (n) SELECT number FROM system.numbers LIMIT 10;
+    """
+
+    Then the list of children on clickhouse01 for zk node /clickhouse/tables/{shard}/ are equal to
+    """
+    /clickhouse/tables/shard1/test_repl
+    /clickhouse/tables/shard1/test_repl_expected
+    """
+    Then the list of children on clickhouse02 for zk node /clickhouse/tables/{shard}/ are equal to
+    """
+    /clickhouse/tables/shard1/test_repl
+    /clickhouse/tables/shard1/test_repl_expected
+    """
+
+    When we execute queries on clickhouse01
+    """
+    DETACH TABLE test_drop_db.test_repl PERMANENTLY SYNC;
+    """
+    When we execute queries on clickhouse02
+    """
+    DETACH TABLE test_drop_db.test_repl PERMANENTLY SYNC;
+    """
+
+    When we execute command on clickhouse01
+    """
+    chadmin table delete --detached test_drop_db test_repl
+    """
+    Then we get response contains
+    """
+    """
+    When we execute command on clickhouse01
+    """
+    ls /var/lib/clickhouse/data/test_drop_db/
+    """
+    Then we get response
+    """
+    test_repl_expected
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/tables/{shard}/ are equal to
+    """
+    /clickhouse/tables/shard1/test_repl
+    /clickhouse/tables/shard1/test_repl_expected
+    """
+
+    When we execute command on clickhouse02
+    """
+    chadmin table delete --detached test_drop_db test_repl
+    """
+    Then we get response contains
+    """
+    """
+    When we execute command on clickhouse02
+    """
+    ls /var/lib/clickhouse/data/test_drop_db/
+    """
+    Then we get response
+    """
+    test_repl_expected
+    """
+    Then the list of children on clickhouse02 for zk node /clickhouse/tables/{shard}/ are equal to
+    """
+    /clickhouse/tables/shard1/test_repl_expected
+    """
