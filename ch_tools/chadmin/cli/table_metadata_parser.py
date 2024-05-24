@@ -3,7 +3,6 @@ import uuid
 from enum import Enum
 
 UUID_PATTERN = "UUID"
-OFFSET_UUID_PATTERN = 1
 ENGINE_PATTERN = "ENGINE"
 
 
@@ -17,7 +16,7 @@ class MergeTreeFamilyEngines(Enum):
     REPLICATED_MERGE_TREE = "ReplicatedMergeTree"
 
     @staticmethod
-    def from_str(engine_str: str):
+    def from_str(engine_str: str) -> "MergeTreeFamilyEngines":
         for engine in MergeTreeFamilyEngines:
             if engine.value == engine_str:
                 return engine
