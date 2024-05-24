@@ -112,7 +112,7 @@ def _parse_engine(line: str) -> MergeTreeFamilyEngines:
     return MergeTreeFamilyEngines.from_str(match.group(1))
 
 
-def _parse_replica_params(line) -> Tuple[str, str]:
+def _parse_replica_params(line: str) -> Tuple[str, str]:
     pattern = r"ENGINE = Replicated\w*MergeTree\('([^']*)', '([^']*)'(?:, [^)]*)?\)"
     match = re.match(pattern, line)
 
