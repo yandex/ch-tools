@@ -2,10 +2,7 @@ import os
 
 from click import ClickException, Context
 
-from ch_tools.chadmin.cli.table_metadata_parser import (
-    MergeTreeFamilyEngines,
-    TableMetadataParser,
-)
+from ch_tools.chadmin.cli.table_metadata import parse_table_metadata
 from ch_tools.chadmin.internal.clickhouse_disks import (
     CLICKHOUSE_DATA_PATH,
     CLICKHOUSE_METADATA_PATH,
@@ -401,7 +398,12 @@ def delete_detached_table(ctx, database_name, table_name):
             f"No metadata file for table '{escaped_database_name}'.'{escaped_table_name}' by path {local_metadata_table_path}."
         )
 
-    table_metadata = TableMetadataParser(local_metadata_table_path)
+    table_metadata = parse_table_metadata(local_metadata_table_path)
+
+    if table_metadata.table_engine.is_table_engine_replicated():
+        raise RuntimeError(
+            "Drop detached table with replicated engine doesn't supported yet."
+        )
 
     for disk_type, disk_name in _get_disks_data(ctx).items():
         _remove_table_data_from_disk(
@@ -409,10 +411,6 @@ def delete_detached_table(ctx, database_name, table_name):
             disk_name=disk_name,
             disk_type=disk_type,
         )
-
-    if table_metadata.table_engine == MergeTreeFamilyEngines.REPLICATED_MERGE_TREE:
-        # todo logic for clean zk in future.
-        pass
 
     link_to_local_data = (
         CLICKHOUSE_DATA_PATH + "/" + escaped_database_name + "/" + escaped_table_name

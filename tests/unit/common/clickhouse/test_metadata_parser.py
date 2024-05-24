@@ -1,8 +1,8 @@
 import pytest
 
-from ch_tools.chadmin.cli.table_metadata_parser import (
+from ch_tools.chadmin.cli.table_metadata import (
     MergeTreeFamilyEngines,
-    TableMetadataParser,
+    parse_table_metadata,
 )
 
 PATH_TO_TESTS = "tests/unit/common/clickhouse/"
@@ -86,7 +86,7 @@ PATH_TO_TESTS = "tests/unit/common/clickhouse/"
     ],
 )
 def test_metadata_parser(file, expected):
-    metadata = TableMetadataParser(table_metadata_path=PATH_TO_TESTS + file)
+    metadata = parse_table_metadata(table_metadata_path=PATH_TO_TESTS + file)
     assert metadata.table_uuid == expected["table_uuid"]
     assert metadata.table_engine == expected["table_engine"]
 
@@ -123,4 +123,35 @@ def test_metadata_parser(file, expected):
 )
 def test_broken_metadata(file, exception_msg):
     with pytest.raises(RuntimeError, match=exception_msg):
-        _ = TableMetadataParser(table_metadata_path=PATH_TO_TESTS + file)
+        _ = parse_table_metadata(table_metadata_path=PATH_TO_TESTS + file)
+
+
+@pytest.mark.parametrize(
+    "start,finish,is_replicated",
+    [
+        pytest.param(
+            None,
+            MergeTreeFamilyEngines.REPLICATED_MERGE_TREE,
+            False,
+            id="Non replicated",
+        ),
+        pytest.param(
+            MergeTreeFamilyEngines.REPLICATED_MERGE_TREE,
+            None,
+            True,
+            id="Replicated",
+        ),
+    ],
+)
+def test_is_engine_replicated(start, finish, is_replicated):
+    engines_list = list(MergeTreeFamilyEngines)
+    start_idx = 0 if start is None else engines_list.index(start)
+    finish_idx = len(engines_list) if start is None else engines_list.index(start)
+
+    for idx in range(start_idx, finish_idx):
+        assert is_replicated == engines_list[idx].is_table_engine_replicated()
+
+
+def test_last_merge_tree_family_engine():
+    engines_list = list(MergeTreeFamilyEngines)
+    assert MergeTreeFamilyEngines.REPLICATED_GRAPHITE_MERGE_TREE == engines_list[-1]
