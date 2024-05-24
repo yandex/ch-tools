@@ -45,7 +45,6 @@ class TableMetadataParser:
                 if line.startswith("ATTACH TABLE") and UUID_PATTERN in line:
                     assert self._table_uuid is None
                     self._table_uuid = TableMetadataParser._parse_uuid(line)
-                    continue
                 if line.startswith("ENGINE ="):
                     assert self._table_engine is None
                     self._table_engine = TableMetadataParser._parse_engine(line)
@@ -56,8 +55,6 @@ class TableMetadataParser:
                     ):
                         # todo parse logic for zk in future.
                         pass
-
-                    break
 
         if self._table_uuid is None:
             raise RuntimeError(f"Empty UUID from metadata: '{table_metadata_path}'")
