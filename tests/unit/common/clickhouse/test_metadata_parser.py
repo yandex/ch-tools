@@ -2,7 +2,6 @@ import pytest
 
 from ch_tools.chadmin.cli.table_metadata import (
     MergeTreeFamilyEngines,
-    _parse_replica_params,
     parse_table_metadata,
 )
 

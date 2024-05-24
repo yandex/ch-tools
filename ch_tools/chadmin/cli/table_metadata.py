@@ -1,4 +1,3 @@
-import logging
 import re
 import uuid
 from enum import Enum
@@ -118,7 +117,7 @@ def _parse_replica_params(line) -> Tuple[str, str]:
     match = re.match(pattern, line)
 
     if not match:
-        raise RuntimeError(f"Failed parse replicated params from metadata.")
+        raise RuntimeError("Failed parse replicated params from metadata.")
 
     path = match.group(1)
     name = match.group(2)
