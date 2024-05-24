@@ -2,7 +2,10 @@ import os
 
 from click import ClickException, Context
 
-from ch_tools.chadmin.cli.table_metadata import TableMetadata
+from ch_tools.chadmin.cli.table_metadata_parser import (
+    MergeTreeFamilyEngines,
+    TableMetadataParser,
+)
 from ch_tools.chadmin.internal.clickhouse_disks import (
     CLICKHOUSE_DATA_PATH,
     CLICKHOUSE_METADATA_PATH,
@@ -302,13 +305,6 @@ def check_table_dettached(ctx, database_name, table_name):
         )
 
 
-def check_table_engine_supported(engine: str) -> None:
-    if "MergeTree" not in engine:
-        raise RuntimeError(
-            f"Doesn't support removing detached table with engine {engine}"
-        )
-
-
 def _get_disks_data(ctx: Context) -> dict:
     # Disk type 'cache' of disk object_storage_cache is not supported by clickhouse-disks
     query = """
@@ -405,8 +401,7 @@ def delete_detached_table(ctx, database_name, table_name):
             f"No metadata file for table '{escaped_database_name}'.'{escaped_table_name}' by path {local_metadata_table_path}."
         )
 
-    table_metadata = TableMetadata(local_metadata_table_path)
-    check_table_engine_supported(engine=table_metadata.table_engine)
+    table_metadata = TableMetadataParser(local_metadata_table_path)
 
     for disk_type, disk_name in _get_disks_data(ctx).items():
         _remove_table_data_from_disk(
@@ -414,6 +409,10 @@ def delete_detached_table(ctx, database_name, table_name):
             disk_name=disk_name,
             disk_type=disk_type,
         )
+
+    if table_metadata.table_engine == MergeTreeFamilyEngines.REPLICATED_MERGE_TREE:
+        # todo logic for clean zk in future.
+        pass
 
     link_to_local_data = (
         CLICKHOUSE_DATA_PATH + "/" + escaped_database_name + "/" + escaped_table_name
