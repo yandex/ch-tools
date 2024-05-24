@@ -2,6 +2,7 @@ import pytest
 
 from ch_tools.chadmin.cli.table_metadata import (
     MergeTreeFamilyEngines,
+    _parse_replica_params,
     parse_table_metadata,
 )
 
@@ -92,6 +93,41 @@ def test_metadata_parser(file, expected):
 
 
 @pytest.mark.parametrize(
+    "file,expected",
+    [
+        pytest.param(
+            "metadata/table_replicated_merge_tree.sql",
+            {
+                "replica_path": "/clickhouse/tables/{shard}/test_table_repl",
+                "replica_name": "{replica}",
+            },
+            id="ReplicatedMergeTree",
+        ),
+        pytest.param(
+            "metadata/table_replicated_merge_tree_ver.sql",
+            {
+                "replica_path": "/clickhouse/tables/{shard}/test_table_repl1",
+                "replica_name": "{replica}",
+            },
+            id="ReplicatedMergeTree with ver",
+        ),
+        pytest.param(
+            "metadata/table_replicated_replacing_merge_tree.sql",
+            {
+                "replica_path": "/clickhouse/tables/tableName/{shard}/",
+                "replica_name": "{replica}",
+            },
+            id="ReplicatedReplacingMergeTree",
+        ),
+    ],
+)
+def test_replicated_params_parser(file, expected):
+    metadata = parse_table_metadata(table_metadata_path=PATH_TO_TESTS + file)
+    assert metadata.replica_path == expected["replica_path"]
+    assert metadata.replica_name == expected["replica_name"]
+
+
+@pytest.mark.parametrize(
     "file,exception_msg",
     [
         pytest.param(
@@ -146,7 +182,7 @@ def test_broken_metadata(file, exception_msg):
 def test_is_engine_replicated(start, finish, is_replicated):
     engines_list = list(MergeTreeFamilyEngines)
     start_idx = 0 if start is None else engines_list.index(start)
-    finish_idx = len(engines_list) if start is None else engines_list.index(start)
+    finish_idx = len(engines_list) if finish is None else engines_list.index(finish)
 
     for idx in range(start_idx, finish_idx):
         assert is_replicated == engines_list[idx].is_table_engine_replicated()

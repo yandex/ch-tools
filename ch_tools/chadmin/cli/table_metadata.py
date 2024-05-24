@@ -1,6 +1,8 @@
+import logging
 import re
 import uuid
 from enum import Enum
+from typing import Tuple
 
 UUID_PATTERN = "UUID"
 ENGINE_PATTERN = "ENGINE"
@@ -36,19 +38,25 @@ class MergeTreeFamilyEngines(Enum):
         replicated_start_idx = engines_list.index(
             MergeTreeFamilyEngines.REPLICATED_MERGE_TREE
         )
-        return self.value in engines_list[replicated_start_idx:]
+        return self.value in [
+            engine.value for engine in engines_list[replicated_start_idx:]
+        ]
 
 
 class TableMetadata:
-    def __init__(self, table_uuid, table_engine):
+    def __init__(self, table_uuid, table_engine, replica_path=None, replica_name=None):
         self.table_uuid = table_uuid
         self.table_engine = table_engine
+        self.replica_path = replica_path
+        self.replica_name = replica_name
 
 
 def parse_table_metadata(table_metadata_path: str) -> TableMetadata:
     assert table_metadata_path.endswith(".sql")
     table_uuid = None
     table_engine = None
+    replica_path = None
+    replica_name = None
 
     with open(table_metadata_path, "r", encoding="utf-8") as metadata_file:
         for line in metadata_file:
@@ -59,9 +67,11 @@ def parse_table_metadata(table_metadata_path: str) -> TableMetadata:
                 assert table_engine is None
                 table_engine = _parse_engine(line)
 
+                print(
+                    f"test #1 {table_engine} is {table_engine.is_table_engine_replicated()}"
+                )
                 if table_engine.is_table_engine_replicated():
-                    # todo parse logic for zk in future.
-                    pass
+                    replica_path, replica_name = _parse_replica_params(line)
 
     if table_uuid is None:
         raise RuntimeError(f"Empty UUID from metadata: '{table_metadata_path}'")
@@ -69,7 +79,7 @@ def parse_table_metadata(table_metadata_path: str) -> TableMetadata:
     if table_engine is None:
         raise RuntimeError(f"Empty table engine from metadata: '{table_metadata_path}'")
 
-    return TableMetadata(table_uuid, table_engine)
+    return TableMetadata(table_uuid, table_engine, replica_path, replica_name)
 
 
 def _is_valid_uuid(uuid_str: str) -> bool:
@@ -101,3 +111,15 @@ def _parse_engine(line: str) -> MergeTreeFamilyEngines:
         raise RuntimeError(f"Failed parse {ENGINE_PATTERN} from metadata.")
 
     return MergeTreeFamilyEngines.from_str(match.group(1))
+
+
+def _parse_replica_params(line) -> Tuple[str, str]:
+    pattern = r"ENGINE = Replicated\w*MergeTree\('([^']*)', '([^']*)'(?:, [^)]*)?\)"
+    match = re.match(pattern, line)
+
+    if not match:
+        raise RuntimeError(f"Failed parse replicated params from metadata.")
+
+    path = match.group(1)
+    name = match.group(2)
+    return path, name
