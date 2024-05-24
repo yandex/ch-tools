@@ -75,20 +75,14 @@ PATH_TO_TESTS = "tests/unit/common/clickhouse/"
             },
             id="VersionedCollapsingMergeTree",
         ),
-        pytest.param(
-            "metadata/table_replicated_merge_tree.sql",
-            {
-                "table_uuid": "f438d816-605d-4fe0-a9cb-4edba3ce72dd",
-                "table_engine": MergeTreeFamilyEngines.REPLICATED_MERGE_TREE,
-            },
-            id="ReplicatedMergeTree",
-        ),
     ],
 )
-def test_metadata_parser(file, expected):
+def test_parse_table_metadata_non_repl(file, expected):
     metadata = parse_table_metadata(table_metadata_path=PATH_TO_TESTS + file)
     assert metadata.table_uuid == expected["table_uuid"]
     assert metadata.table_engine == expected["table_engine"]
+    assert metadata.replica_name is None
+    assert metadata.replica_path is None
 
 
 @pytest.mark.parametrize(
@@ -97,6 +91,8 @@ def test_metadata_parser(file, expected):
         pytest.param(
             "metadata/table_replicated_merge_tree.sql",
             {
+                "table_uuid": "f438d816-605d-4fe0-a9cb-4edba3ce72dd",
+                "table_engine": MergeTreeFamilyEngines.REPLICATED_MERGE_TREE,
                 "replica_path": "/clickhouse/tables/{shard}/test_table_repl",
                 "replica_name": "{replica}",
             },
@@ -105,6 +101,8 @@ def test_metadata_parser(file, expected):
         pytest.param(
             "metadata/table_replicated_merge_tree_ver.sql",
             {
+                "table_uuid": "f438d816-605d-4fe0-a9cb-4edba3ce72dd",
+                "table_engine": MergeTreeFamilyEngines.REPLICATED_MERGE_TREE,
                 "replica_path": "/clickhouse/tables/{shard}/test_table_repl1",
                 "replica_name": "{replica}",
             },
@@ -113,15 +111,59 @@ def test_metadata_parser(file, expected):
         pytest.param(
             "metadata/table_replicated_replacing_merge_tree.sql",
             {
+                "table_uuid": "4ce817e2-8043-4655-869e-eeab3edeae6a",
+                "table_engine": MergeTreeFamilyEngines.REPLICATED_REPLACING_MERGE_TREE,
                 "replica_path": "/clickhouse/tables/tableName/{shard}/",
                 "replica_name": "{replica}",
             },
             id="ReplicatedReplacingMergeTree",
         ),
+        pytest.param(
+            "metadata/table_replicated_summing_merge_tree.sql",
+            {
+                "table_uuid": "72b4c520-9cc2-4549-ba6c-bd952bb049d8",
+                "table_engine": MergeTreeFamilyEngines.REPLICATED_SUMMING_MERGE_TREE,
+                "replica_path": "/clickhouse/tables/tableName/{shard}/1",
+                "replica_name": "{replica}",
+            },
+            id="ReplicatedSummingMergeTree",
+        ),
+        pytest.param(
+            "metadata/table_replicated_aggregating_merge_tree.sql",
+            {
+                "table_uuid": "8ac44a5e-091e-4dc4-9eb0-0ba577b3afd7",
+                "table_engine": MergeTreeFamilyEngines.REPLICATED_AGGREGATING_MERGE_TREE,
+                "replica_path": "/clickhouse/tables/{shard}/example_replicated_aggregating_mergetree",
+                "replica_name": "{replica}",
+            },
+            id="ReplicatedAggregatingMergeTree",
+        ),
+        pytest.param(
+            "metadata/table_replicated_collapsing_merge_tree.sql",
+            {
+                "table_uuid": "9317cb30-1efd-44bd-ab88-d0e3a025965a",
+                "table_engine": MergeTreeFamilyEngines.REPLICATED_COLLAPSING_MERGE_TREE,
+                "replica_path": "/clickhouse/tables/{shard}/example_replicated_collapsing_mergetree",
+                "replica_name": "{replica}",
+            },
+            id="ReplicatedCollapsingMergeTree",
+        ),
+        pytest.param(
+            "metadata/table_replicated_versioned_collapsing_merge_tree.sql",
+            {
+                "table_uuid": "10ccbec1-6b78-48fe-a51a-fb7c9f7fbe4a",
+                "table_engine": MergeTreeFamilyEngines.REPLICATED_VERSIONED_MERGE_TREE,
+                "replica_path": "/clickhouse/tables/{shard}/example_replicated_versioned_collapsing_mergetree",
+                "replica_name": "{replica}",
+            },
+            id="ReplicatedVersionedCollapsingMergeTree",
+        ),
     ],
 )
-def test_replicated_params_parser(file, expected):
+def test_parse_table_metadata_repl(file, expected):
     metadata = parse_table_metadata(table_metadata_path=PATH_TO_TESTS + file)
+    assert metadata.table_uuid == expected["table_uuid"]
+    assert metadata.table_engine == expected["table_engine"]
     assert metadata.replica_path == expected["replica_path"]
     assert metadata.replica_name == expected["replica_name"]
 
