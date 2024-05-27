@@ -331,7 +331,6 @@ def _get_disks_data(ctx: Context) -> dict:
 
 
 def _get_fqdn(ctx: Context) -> str:
-    # Get name (fqdn) for current host.
     query = """
         SELECT hostName() AS fqdn
     """
