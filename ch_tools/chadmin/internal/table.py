@@ -12,7 +12,7 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
     remove_from_ch_disk,
 )
 from ch_tools.chadmin.internal.utils import execute_query, remove_from_disk
-from ch_tools.chadmin.internal.zookeeper import delete_zk_node, list_zk_nodes
+from ch_tools.chadmin.internal.zookeeper import clean_zk_metadata_for_hosts
 from ch_tools.common import logging
 
 DISK_LOCAL_KEY = "local"
@@ -330,6 +330,23 @@ def _get_disks_data(ctx: Context) -> dict:
     return result
 
 
+def _get_fqdn(ctx: Context) -> str:
+    # Get name (fqdn) for current host.
+    query = """
+        SELECT hostName() AS fqdn
+    """
+    response = execute_query(
+        ctx,
+        query,
+        format_="JSON",
+    )["data"]
+
+    assert 1 == len(response)
+    result = response[0]["fqdn"]
+
+    return result
+
+
 def _is_should_use_ch_disk_remover(table_data_path: str, disk_type: str) -> bool:
     if disk_type == DISK_LOCAL_KEY:
         return os.path.exists(CLICKHOUSE_PATH + table_data_path)
@@ -409,14 +426,18 @@ def delete_detached_table(ctx, database_name, table_name):
         )
 
     if table_metadata.table_engine.is_table_engine_replicated():
-        current_node = table_metadata.replica_path + "/replicas/"
-        current_replica = current_node + table_metadata.replica_name
+        fqdn = _get_fqdn(ctx)
+        logging.info(
+            "Remove node: fqdn={}, replica_path={}", fqdn, table_metadata.replica_path
+        )
 
-        logging.info("Remove replica: {}", current_replica)
-        delete_zk_node(ctx, current_replica)
-        if not list_zk_nodes(ctx, current_node):
-            logging.info("No replicas, remove node: {}", current_node)
-            delete_zk_node(ctx, table_metadata.replica_path)
+        clean_zk_metadata_for_hosts(
+            ctx,
+            nodes=[fqdn],
+            zk_cleanup_root_path=table_metadata.replica_path,
+            cleanup_database=False,
+            cleanup_ddl_queue=False,
+        )
 
     link_to_local_data = (
         CLICKHOUSE_DATA_PATH + "/" + escaped_database_name + "/" + escaped_table_name

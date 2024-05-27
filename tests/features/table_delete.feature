@@ -5,6 +5,7 @@ Feature: chadmin delete detached table commands
     And a working s3
     And a working zookeeper
     And a working clickhouse on clickhouse01
+    And a working clickhouse on clickhouse02
     Given we have executed queries on clickhouse01
     """
     CREATE DATABASE IF NOT EXISTS test_drop_db;
@@ -293,10 +294,11 @@ Feature: chadmin delete detached table commands
     """
     """
 
+  @require_version_23.3
   Scenario: Drop replicated table from some hosts
     Given we have executed queries on clickhouse02
     """
-    CREATE DATABASE IF NOT EXISTS test_drop_db;
+    CREATE DATABASE IF NOT EXISTS test_drop_db ON CLUSTER '{cluster}';
     CREATE TABLE test_drop_db.test_repl_expected ON CLUSTER '{cluster}'
     (n Int32)
     ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/test_repl_expected', '{replica}')

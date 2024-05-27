@@ -124,7 +124,7 @@ def _find_paths(zk, root_path, included_paths_regexp, excluded_paths_regexp=None
     Return paths of nodes that match the include regular expression and do not match the excluded one.
     """
     paths = set()
-    queue = deque(root_path)
+    queue = deque([root_path])
     included_regexp = re.compile("|".join(included_paths_regexp))
     excluded_regexp = (
         re.compile("|".join(excluded_paths_regexp)) if excluded_paths_regexp else None
@@ -358,6 +358,7 @@ def clean_zk_metadata_for_hosts(
         Do cleanup for tables which contains nodes.
         """
         (table_paths, hosts_paths) = _find_tables(zk, zk_root_path, nodes)
+        logging.info("table_cleanup: {}", (table_paths, hosts_paths))
         _set_replicas_is_lost(zk, table_paths, nodes)
         _remove_replicas_queues(zk, table_paths, nodes)
         _delete_recursive(zk, hosts_paths)
@@ -475,6 +476,7 @@ def clean_zk_metadata_for_hosts(
         logging.info("DDL queue cleanup finished")
 
     zk_root_path = _format_path(ctx, zk_cleanup_root_path)
+    logging.info("zk_root_path: {}", zk_root_path)
 
     with zk_client(ctx) as zk:
         if cleanup_tables:
