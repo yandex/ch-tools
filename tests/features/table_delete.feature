@@ -261,6 +261,7 @@ Feature: chadmin delete detached table commands
     """
     Then S3 contains 0 objects
 
+  @require_version_23.3
   Scenario: Drop replicated table from single host
     Given we have executed queries on clickhouse01
     """
