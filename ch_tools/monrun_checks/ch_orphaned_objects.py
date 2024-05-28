@@ -12,7 +12,7 @@ DRY_RUN = True
 ON_CLUSTER = True
 CLUSTER_NAME = "{cluster}"
 DISK_NAME = "object_storage"
-OBJECT_NAME_PREFIX = None
+OBJECT_NAME_PREFIX = ""
 
 
 @click.command("orphaned-objects")
@@ -20,7 +20,9 @@ OBJECT_NAME_PREFIX = None
     "--keep-paths",
     "keep_paths",
     is_flag=True,
-    help=("Do not delete the collected paths from the local table, when the command completes."),
+    help=(
+        "Do not delete the collected paths from the local table, when the command completes."
+    ),
 )
 @click.option(
     "--use-saved-list",
@@ -77,7 +79,7 @@ def orphaned_objects_command(
         CLUSTER_NAME,
         DRY_RUN,
         keep_paths,
-        use_saved_list
+        use_saved_list,
     )
 
     msg = f"Total size: {total_size}"

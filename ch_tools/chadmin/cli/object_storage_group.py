@@ -83,7 +83,9 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     "--keep-paths",
     "keep_paths",
     is_flag=True,
-    help=("Do not delete the collected paths from the local table, when the command completes."),
+    help=(
+        "Do not delete the collected paths from the local table, when the command completes."
+    ),
 )
 @option(
     "--use-saved-list",
@@ -115,9 +117,10 @@ def clean_command(
         cluster_name,
         dry_run,
         keep_paths,
-        use_saved_list
+        use_saved_list,
     )
     _print_response(ctx, dry_run, deleted, total_size)
+
 
 def _print_response(ctx: Context, dry_run: bool, deleted: int, total_size: int) -> None:
     """

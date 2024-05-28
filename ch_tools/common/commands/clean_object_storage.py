@@ -10,7 +10,9 @@ from ch_tools.chadmin.internal.object_storage import (
     ObjListItem,
     cleanup_s3_object_storage,
 )
-from ch_tools.chadmin.internal.object_storage.s3_iterator import s3_object_storage_iterator
+from ch_tools.chadmin.internal.object_storage.s3_iterator import (
+    s3_object_storage_iterator,
+)
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
@@ -36,7 +38,7 @@ def clean(
     dry_run: bool,
     keep_paths: bool,
     use_saved_list: bool,
-) -> None:
+) -> Tuple[int, int]:
     """
     Clean orphaned S3 objects.
     """
@@ -97,9 +99,7 @@ def _clean_object_storage(
         logging.info(
             f"Collecting objects... (Disk: '{disk_conf.name}', Endpoint '{disk_conf.endpoint_url}', Bucket: '{disk_conf.bucket_name}', Prefix: '{disk_conf.prefix}')",
         )
-        _traverse_object_storage(
-            ctx, listing_table, from_time, to_time, prefix
-        )
+        _traverse_object_storage(ctx, listing_table, from_time, to_time, prefix)
 
     remote_data_paths_table = "system.remote_data_paths"
     if on_cluster:
@@ -110,7 +110,7 @@ def _clean_object_storage(
     settings = ""
     if match_ch_version(ctx, min_version="24.3"):
         settings = "SETTINGS traverse_shadow_remote_data_paths=1"
-        
+
     antijoin_query = f"""
         SELECT obj_path, obj_size FROM {listing_table} AS object_storage
           LEFT ANTI JOIN {remote_data_paths_table} AS object_table
