@@ -18,4 +18,6 @@ class ClickhouseUsersConfig:
 
     @staticmethod
     def load():
-        return ClickhouseUsersConfig(load_config(CLICKHOUSE_USERS_CONFIG_PATH))
+        return ClickhouseUsersConfig(
+            load_config(CLICKHOUSE_USERS_CONFIG_PATH, "users.d")
+        )
