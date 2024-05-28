@@ -15,8 +15,8 @@ from .utils import delayed
 
 
 class DiagnosticsData:
-    def __init__(self, host: str, normalize_queries: bool):
-        self.host = host
+    def __init__(self, hostname: str, normalize_queries: bool):
+        self.hostname = hostname
         self.normalize_queries = normalize_queries
         self._sections: List[Dict[str, Any]] = [{"section": None, "data": {}}]
 
@@ -171,7 +171,7 @@ class DiagnosticsData:
 
         buffer = io.StringIO()
 
-        _write_title(buffer, f"Diagnostics data for host {self.host}")
+        _write_title(buffer, f"Diagnostics data for host {self.hostname}")
         for section in self._sections:
             section_name = section["section"]
             if section_name:
