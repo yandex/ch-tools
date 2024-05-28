@@ -1,11 +1,5 @@
 <?xml version="1.0"?>
 <clickhouse>
-    <profiles>
-        <default>
-            <distributed_ddl_task_timeout>20</distributed_ddl_task_timeout>
-        </default>
-    </profiles>
-
     <users>
         <default>
             <password></password>
@@ -13,7 +7,7 @@
                 <ip>::/0</ip>
             </networks>
             <profile>default</profile>
-            <quota>default</quota>
+            <access_management>1</access_management>
         </default>
         <_monitor>
             <password></password>
@@ -21,7 +15,6 @@
                 <ip>::/0</ip>
             </networks>
             <profile>default</profile>
-            <quota>default</quota>
         </_monitor>
         <_admin>
             <password></password>
@@ -29,11 +22,12 @@
                 <ip>::/0</ip>
             </networks>
             <profile>default</profile>
-            <quota>default</quota>
+            <access_management>1</access_management>
         </_admin>
     </users>
-
-    <quotas>
-        <default/>
-    </quotas>
+    <profiles>
+        <default>
+            <distributed_ddl_task_timeout>20</distributed_ddl_task_timeout>
+        </default>
+    </profiles>
 </clickhouse>
