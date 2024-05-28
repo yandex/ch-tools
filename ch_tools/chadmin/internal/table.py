@@ -330,22 +330,6 @@ def _get_disks_data(ctx: Context) -> dict:
     return result
 
 
-def _get_fqdn(ctx: Context) -> str:
-    query = """
-        SELECT hostName() AS fqdn
-    """
-    response = execute_query(
-        ctx,
-        query,
-        format_="JSON",
-    )["data"]
-
-    assert 1 == len(response)
-    result = response[0]["fqdn"]
-
-    return result
-
-
 def _is_should_use_ch_disk_remover(table_data_path: str, disk_type: str) -> bool:
     if disk_type == DISK_LOCAL_KEY:
         return os.path.exists(CLICKHOUSE_PATH + table_data_path)
@@ -425,14 +409,15 @@ def delete_detached_table(ctx, database_name, table_name):
         )
 
     if table_metadata.table_engine.is_table_engine_replicated():
-        fqdn = _get_fqdn(ctx)
         logging.info(
-            "Remove node: fqdn={}, replica_path={}", fqdn, table_metadata.replica_path
+            "Remove node: replica_name={}, replica_path={}",
+            table_metadata.replica_name,
+            table_metadata.replica_path,
         )
 
         clean_zk_metadata_for_hosts(
             ctx,
-            nodes=[fqdn],
+            nodes=[table_metadata.replica_name],
             zk_cleanup_root_path=table_metadata.replica_path,
             cleanup_database=False,
             cleanup_ddl_queue=False,

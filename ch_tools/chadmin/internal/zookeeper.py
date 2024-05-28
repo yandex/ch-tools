@@ -246,7 +246,16 @@ def escape_for_zookeeper(s: str) -> str:
     return "".join(result)
 
 
+def replace_macros_in_nodes(func):
+    def wrapper(ctx, nodes, *args, **kwargs):
+        replace_macros_nodes = [_format_path(ctx, node) for node in nodes]
+        return func(ctx, replace_macros_nodes, *args, **kwargs)
+
+    return wrapper
+
+
 # pylint: disable=too-many-statements
+@replace_macros_in_nodes
 def clean_zk_metadata_for_hosts(
     ctx,
     nodes,
@@ -358,7 +367,6 @@ def clean_zk_metadata_for_hosts(
         Do cleanup for tables which contains nodes.
         """
         (table_paths, hosts_paths) = _find_tables(zk, zk_root_path, nodes)
-        logging.info("table_cleanup: {}", (table_paths, hosts_paths))
         _set_replicas_is_lost(zk, table_paths, nodes)
         _remove_replicas_queues(zk, table_paths, nodes)
         _delete_recursive(zk, hosts_paths)
@@ -476,7 +484,6 @@ def clean_zk_metadata_for_hosts(
         logging.info("DDL queue cleanup finished")
 
     zk_root_path = _format_path(ctx, zk_cleanup_root_path)
-    logging.info("zk_root_path: {}", zk_root_path)
 
     with zk_client(ctx) as zk:
         if cleanup_tables:
