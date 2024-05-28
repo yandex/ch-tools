@@ -42,7 +42,7 @@ def clean(
     """
     Clean orphaned S3 objects.
     """
-    if from_time is not None and to_time <= from_time:
+    if from_time is not None and to_time < from_time:
         raise click.BadParameter(
             "'to_time' parameter must be greater than 'from_time'",
             param_hint="--from-time",
