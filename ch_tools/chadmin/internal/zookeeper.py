@@ -124,7 +124,7 @@ def _find_paths(zk, root_path, included_paths_regexp, excluded_paths_regexp=None
     Return paths of nodes that match the include regular expression and do not match the excluded one.
     """
     paths = set()
-    queue = deque(root_path)
+    queue = deque([root_path])
     included_regexp = re.compile("|".join(included_paths_regexp))
     excluded_regexp = (
         re.compile("|".join(excluded_paths_regexp)) if excluded_paths_regexp else None
@@ -246,7 +246,16 @@ def escape_for_zookeeper(s: str) -> str:
     return "".join(result)
 
 
+def replace_macros_in_nodes(func):
+    def wrapper(ctx, nodes, *args, **kwargs):
+        replace_macros_nodes = [_format_path(ctx, node) for node in nodes]
+        return func(ctx, replace_macros_nodes, *args, **kwargs)
+
+    return wrapper
+
+
 # pylint: disable=too-many-statements
+@replace_macros_in_nodes
 def clean_zk_metadata_for_hosts(
     ctx,
     nodes,
