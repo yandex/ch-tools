@@ -73,8 +73,8 @@ class MonrunChecks(cloup.Group):
 
             status = Status()
             try:
-                result = ctx.invoke(cmd_callback, *args, **kwargs)
                 logging.disable_stdout_logger()
+                result = ctx.invoke(cmd_callback, *args, **kwargs)
                 if result:
                     status.append(result.message)
                     status.set_code(result.code)
