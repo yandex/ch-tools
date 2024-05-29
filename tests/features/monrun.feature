@@ -388,3 +388,43 @@ Feature: ch-monitoring tool
     """
     2;KazooTimeoutError('Connection time-out')
     """
+  
+  Scenario: Check CH orphaned objects size
+    When we execute command on clickhouse01
+    """
+    ch-monitoring orphaned-objects
+    """
+    Then we get response
+    """
+    0;Total size: 0
+    """
+    When we put object in S3
+    """
+      bucket: cloud-storage-test
+      path: /data/orpaned_object.tsv
+      data: '1234567890'
+    """
+    When we execute command on clickhouse01
+    """
+    ch-monitoring orphaned-objects --to-time 0h
+    """
+    Then we get response contains
+    """
+    0;Total size: 10
+    """
+    When we execute command on clickhouse01
+    """
+    ch-monitoring orphaned-objects --to-time 0h -w 9 -c 19
+    """
+    Then we get response contains
+    """
+    1;Total size: 10
+    """
+    When we execute command on clickhouse01
+    """
+    ch-monitoring orphaned-objects --to-time 0h -w 4 -c 9
+    """
+    Then we get response contains
+    """
+    2;Total size: 10
+    """

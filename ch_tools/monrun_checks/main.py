@@ -26,6 +26,7 @@ from ch_tools.monrun_checks.ch_dist_tables import dist_tables_command
 from ch_tools.monrun_checks.ch_geobase import geobase_command
 from ch_tools.monrun_checks.ch_keeper import keeper_command
 from ch_tools.monrun_checks.ch_log_errors import log_errors_command
+from ch_tools.monrun_checks.ch_orphaned_objects import orphaned_objects_command
 from ch_tools.monrun_checks.ch_ping import ping_command
 from ch_tools.monrun_checks.ch_replication_lag import replication_lag_command
 from ch_tools.monrun_checks.ch_resetup_state import resetup_state_command
@@ -72,8 +73,8 @@ class MonrunChecks(cloup.Group):
 
             status = Status()
             try:
-                result = ctx.invoke(cmd_callback, *args, **kwargs)
                 logging.disable_stdout_logger()
+                result = ctx.invoke(cmd_callback, *args, **kwargs)
                 if result:
                     status.append(result.message)
                     status.set_code(result.code)
@@ -141,6 +142,7 @@ CLI_COMMANDS = [
     tls_command,
     keeper_command,
     dns_command,
+    orphaned_objects_command,
 ]
 
 cli.add_command(status_command(CLI_COMMANDS))
