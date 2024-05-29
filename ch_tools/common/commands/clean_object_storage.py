@@ -44,7 +44,7 @@ def clean(
     """
     if from_time is not None and to_time < from_time:
         raise click.BadParameter(
-            "'to_time' parameter must be greater than 'from_time'",
+            "'from_time' parameter must be greater than 'to_time'",
             param_hint="--from-time",
         )
 
