@@ -69,6 +69,10 @@ Feature: chadmin commands.
     """
     chadmin dictionary list
     """
+    And we execute command on clickhouse01
+    """
+    chadmin diagnostics
+    """
     Then it completes successfully
 
   @require_version_24.2

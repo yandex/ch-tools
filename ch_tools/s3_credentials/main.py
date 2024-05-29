@@ -90,7 +90,7 @@ def _update_config(args):
 
     doc = minidom.Document()
     storage = _add_node(
-        doc, _add_node(doc, _add_node(doc, doc, "yandex"), "s3"), "cloud_storage"
+        doc, _add_node(doc, _add_node(doc, doc, "clickhouse"), "s3"), "cloud_storage"
     )
     _add_node(doc, storage, "endpoint").appendChild(doc.createTextNode(args.endpoint))
     _add_node(doc, storage, "header").appendChild(

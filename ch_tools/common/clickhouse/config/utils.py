@@ -7,7 +7,7 @@ import xmltodict
 from ch_tools.common.utils import first_value
 
 
-def load_config(config_path):
+def load_config(config_path, configd_dir="config.d"):
     """
     Load ClickHouse config file.
     """
@@ -15,7 +15,7 @@ def load_config(config_path):
     config = _load_config(config_path)
 
     # Load config files from config.d/ directory.
-    configd_path = os.path.join(os.path.dirname(config_path), "config.d")
+    configd_path = os.path.join(os.path.dirname(config_path), configd_dir)
     if os.path.exists(configd_path):
         for file in os.listdir(configd_path):
             file_path = os.path.join(configd_path, file)

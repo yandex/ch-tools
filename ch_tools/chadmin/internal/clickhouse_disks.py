@@ -21,7 +21,7 @@ def make_ch_disks_config(disk: str) -> str:
     with open(disk_config_path, "w", encoding="utf-8") as f:
         xmltodict.unparse(
             {
-                "yandex": {
+                "clickhouse": {
                     "storage_configuration": {"disks": {disk: disk_config}},
                 }
             },

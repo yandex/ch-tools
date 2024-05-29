@@ -1,8 +1,9 @@
+import socket
 from datetime import datetime
 
 from click import Context
 
-from ch_tools.chadmin.internal.diagnostics import formatter, query
+from ch_tools.chadmin.internal.diagnostics import query
 from ch_tools.common.cli.formatting import format_duration
 from ch_tools.common.cli.progress_bar import progress
 from ch_tools.common.clickhouse.client import OutputFormat
@@ -11,7 +12,6 @@ from ch_tools.common.clickhouse.config import (
     ClickhouseKeeperConfig,
     ClickhouseUsersConfig,
 )
-from ch_tools.common.dbaas import DbaasConfig
 
 from ..utils import clickhouse_client
 from .data import DiagnosticsData, add_command, add_query, execute_query
@@ -20,7 +20,7 @@ from .data import DiagnosticsData, add_command, add_query, execute_query
 def diagnose(ctx: Context, output_format: str, normalize_queries: bool) -> None:
     timestamp = datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")
     client = clickhouse_client(ctx)
-    dbaas_config = DbaasConfig.load()
+    hostname = socket.getfqdn()
     ch_config = ClickhouseConfig.load(try_preprocessed=True)
     keeper_config = ClickhouseKeeperConfig.load()
     ch_users_config = ClickhouseUsersConfig.load()
@@ -32,26 +32,11 @@ def diagnose(ctx: Context, output_format: str, normalize_queries: bool) -> None:
         )["data"]
     ]
 
-    diagnostics = DiagnosticsData(
-        host=dbaas_config.fqdn, normalize_queries=normalize_queries
-    )
+    diagnostics = DiagnosticsData(hostname, normalize_queries)
 
     tasks = [
-        diagnostics.add_string("Cluster ID", dbaas_config.cluster_id),
-        diagnostics.add_string("Cluster name", dbaas_config.cluster_name),
-        diagnostics.add_string("Version", version),
-        diagnostics.add_string("Host", dbaas_config.fqdn),
-        diagnostics.add_string("Replicas", ",".join(dbaas_config.replicas)),
-        diagnostics.add_string("Shard count", dbaas_config.shard_count),
-        diagnostics.add_string("Host count", dbaas_config.host_count),
-        diagnostics.add_string("Virtualization", dbaas_config.vtype),
-        diagnostics.add_string(
-            "Resource preset", formatter.format_resource_preset(dbaas_config)
-        ),
-        diagnostics.add_string(
-            "Storage", formatter.format_storage(dbaas_config, ch_config)
-        ),
         diagnostics.add_string("Timestamp", timestamp),
+        diagnostics.add_string("Version", version),
         diagnostics.add_string("Uptime", format_duration(client.get_uptime())),
         diagnostics.add_xml_document("ClickHouse configuration", ch_config.dump_xml()),
     ]
