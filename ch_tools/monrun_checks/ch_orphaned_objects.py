@@ -31,10 +31,20 @@ OBJECT_NAME_PREFIX = ""
     help=("Use saved object list without traversing object storage again."),
 )
 @click.option(
-    "-c", "--critical", "crit", type=int, default=10 * 1024**3, help="Critical threshold."
+    "-c",
+    "--critical",
+    "crit",
+    type=int,
+    default=10 * 1024**3,
+    help="Critical threshold.",
 )
 @click.option(
-    "-w", "--warning", "warn", type=int, default=100 * 1024**2, help="Warning threshold."
+    "-w",
+    "--warning",
+    "warn",
+    type=int,
+    default=100 * 1024**2,
+    help="Warning threshold.",
 )
 @click.option(
     "--from-time",
