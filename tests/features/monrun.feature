@@ -402,7 +402,7 @@ Feature: ch-monitoring tool
     """
       bucket: cloud-storage-test
       path: /data/orpaned_object.tsv
-      data: '1'
+      data: '1234567890'
     """
     When we execute command on clickhouse01
     """
@@ -410,5 +410,21 @@ Feature: ch-monitoring tool
     """
     Then we get response contains
     """
-    0;Total size: 1
+    0;Total size: 10
+    """
+    When we execute command on clickhouse01
+    """
+    ch-monitoring orphaned-objects --to-time 0h -w 9 -c 19
+    """
+    Then we get response contains
+    """
+    1;Total size: 10
+    """
+    When we execute command on clickhouse01
+    """
+    ch-monitoring orphaned-objects --to-time 0h -w 4 -c 9
+    """
+    Then we get response contains
+    """
+    2;Total size: 10
     """
