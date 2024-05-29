@@ -1,6 +1,8 @@
 from collections import OrderedDict
 
-from cloup import argument, group, option, option_group, pass_context
+from click import ClickException
+from cloup import argument, constraint, group, option, option_group, pass_context
+from cloup.constraints import AnySet, If, RequireAtLeast, accept_none, require_all
 
 from ch_tools.chadmin.internal.table_replica import (
     get_table_replica,
@@ -104,6 +106,9 @@ def list_command(ctx, **kwargs):
 
 
 @replica_group.command("restart")
+@argument("database_name", metavar="DATABASE", required=False)
+@argument("table_name", metavar="TABLE", required=False)
+@constraint(If("database_name", then=require_all), ["table_name"])
 @option_group(
     "Replica selection options",
     option(
@@ -138,6 +143,11 @@ def list_command(ctx, **kwargs):
         "exclude_table_pattern",
         help="Filter out replicas to restore by the specified table name pattern."
         " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    constraint=If(
+        AnySet("database_name", "table_name"),
+        then=accept_none,
+        else_=RequireAtLeast(1),
     ),
 )
 @option(
@@ -155,12 +165,26 @@ def list_command(ctx, **kwargs):
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 @pass_context
-def restart_replica_command(ctx, on_cluster, dry_run, **kwargs):
+def restart_replica_command(
+    ctx,
+    _all,
+    database_name,
+    table_name,
+    on_cluster,
+    dry_run,
+    **kwargs,
+):
     """
     Restart one or several table replicas.
     """
     cluster = get_cluster_name(ctx) if on_cluster else None
-    for replica in list_table_replicas(ctx, **kwargs):
+
+    if database_name and table_name:
+        replicas = [get_table_replica(ctx, database_name, table_name)]
+    else:
+        replicas = list_table_replicas(ctx, **kwargs)
+
+    for replica in replicas:
         restart_table_replica(
             ctx,
             replica["database"],
@@ -171,6 +195,9 @@ def restart_replica_command(ctx, on_cluster, dry_run, **kwargs):
 
 
 @replica_group.command("restore")
+@argument("database_name", metavar="DATABASE", required=False)
+@argument("table_name", metavar="TABLE", required=False)
+@constraint(If("database_name", then=require_all), ["table_name"])
 @option_group(
     "Replica selection options",
     option(
@@ -206,6 +233,11 @@ def restart_replica_command(ctx, on_cluster, dry_run, **kwargs):
         help="Filter out replicas to restore by the specified table name pattern."
         " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
+    constraint=If(
+        AnySet("database_name", "table_name"),
+        then=accept_none,
+        else_=RequireAtLeast(1),
+    ),
 )
 @option(
     "--cluster",
@@ -222,13 +254,31 @@ def restart_replica_command(ctx, on_cluster, dry_run, **kwargs):
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 @pass_context
-def restore_command(ctx, _all, on_cluster, dry_run, **kwargs):
+def restore_command(
+    ctx,
+    _all,
+    database_name,
+    table_name,
+    on_cluster,
+    dry_run,
+    **kwargs,
+):
     """
     Restore one or several table replicas.
     """
     cluster = get_cluster_name(ctx) if on_cluster else None
-    ro_replicas = list_table_replicas(ctx, is_readonly=True, **kwargs)
-    for replica in ro_replicas:
+
+    if database_name and table_name:
+        replica = get_table_replica(ctx, database_name, table_name)
+        if not replica["is_readonly"]:
+            raise ClickException(
+                f"Replicated table `{database_name}`.`{table_name}` must be in read-only in order to perform restore."
+            )
+        replicas = [replica]
+    else:
+        replicas = list_table_replicas(ctx, is_readonly=True, **kwargs)
+
+    for replica in replicas:
         try:
             restore_table_replica(
                 ctx,
