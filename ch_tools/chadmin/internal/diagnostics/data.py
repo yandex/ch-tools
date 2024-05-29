@@ -218,7 +218,13 @@ def execute_query(
         query = client.render_query(query)
 
     try:
-        return client.query(query, format_=format_)
+        return client.query(
+            query,
+            settings={
+                "allow_introspection_functions": 1,
+            },
+            format_=format_,
+        )
     except RequestException as e:
         return repr(e) if e.response is None else e.response.text
 
