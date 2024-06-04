@@ -13,6 +13,8 @@ CLICKHOUSE_METADATA_PATH = CLICKHOUSE_PATH + "/metadata"
 S3_PATH = CLICKHOUSE_PATH + "/disks/object_storage"
 S3_METADATA_STORE_PATH = S3_PATH + "/store"
 
+OBJECT_STORAGE_DISK_TYPES = ["s3", "object_storage", "ObjectStorage"]
+
 
 def make_ch_disks_config(disk: str) -> str:
     disk_config = ClickhouseConfig.load().storage_configuration.get_disk_config(disk)
