@@ -1,4 +1,5 @@
 import os
+from typing import Dict
 
 from click import ClickException, Context
 
@@ -7,6 +8,7 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
     CLICKHOUSE_DATA_PATH,
     CLICKHOUSE_METADATA_PATH,
     CLICKHOUSE_PATH,
+    OBJECT_STORAGE_DISK_TYPES,
     S3_PATH,
     make_ch_disks_config,
     remove_from_ch_disk,
@@ -303,7 +305,13 @@ def check_table_dettached(ctx, database_name, table_name):
         )
 
 
-def _get_disks_data(ctx: Context) -> dict:
+def _assign_disk_type(result: Dict[str, str], key: str, disk_name: str) -> None:
+    if key in result:
+        raise RuntimeError(f"It's a bug. {key} was set early.")
+    result[key] = disk_name
+
+
+def _get_disks_data(ctx: Context) -> Dict[str, str]:
     # Disk type 'cache' of disk object_storage_cache is not supported by clickhouse-disks
     query = """
         SELECT name, type FROM system.disks
@@ -317,16 +325,20 @@ def _get_disks_data(ctx: Context) -> dict:
 
     logging.info("Found disks: {}", response)
 
-    result = {}
+    result: Dict[str, str] = {}
 
     for data_disk in response:
-        if data_disk.get("type") == "s3":
-            result[DISK_OBJECT_STORAGE_KEY] = data_disk["name"]
+        if data_disk.get("type") in OBJECT_STORAGE_DISK_TYPES:
+            _assign_disk_type(result, DISK_OBJECT_STORAGE_KEY, data_disk["name"])
         else:
-            result[DISK_LOCAL_KEY] = data_disk["name"]
+            _assign_disk_type(result, DISK_LOCAL_KEY, data_disk["name"])
 
     logging.info("Table disks: {}", result)
 
+    # Although currently we ensure that no keys in result are overridden,
+    # I prefer to add an assert for future possible refactoring. If we skip even one disk,
+    # we may never remove the data on it in the future.
+    assert len(response) == len(result)
     return result
 
 
