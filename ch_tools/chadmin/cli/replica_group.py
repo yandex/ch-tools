@@ -288,8 +288,8 @@ def restore_command(
                 dry_run=dry_run,
             )
         except ClickhouseError as e:
-            msg = e.response.text
-            if "Replica has metadata in ZooKeeper" in msg or "NO_ZOOKEEPER" in msg:
+            msg = e.response.text.strip()
+            if "NO_ZOOKEEPER" in msg or "Session expired" in msg:
                 logging.warning(
                     'Failed to restore replica with error "{}", attempting to recover by restarting replica and retrying restore',
                     msg,
