@@ -12,6 +12,8 @@ from ch_tools.common.commands.clean_object_storage import DEFAULT_GUARD_INTERVAL
 # Use big enough timeout for stream HTTP query
 STREAM_TIMEOUT = 10 * 60
 
+ORPHANED_OBJECTS_LOG = "/var/log/s3_orphaned_objects.log"
+
 
 @group("object-storage")
 @option(
@@ -93,6 +95,12 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     is_flag=True,
     help=("Use saved object list without traversing object storage again."),
 )
+@option(
+    "--total-size-to-file",
+    "total_size_to_file",
+    is_flag=True,
+    help=("Write total size of orphaned objects to log file."),
+)
 @pass_context
 def clean_command(
     ctx: Context,
@@ -104,6 +112,7 @@ def clean_command(
     dry_run: bool,
     keep_paths: bool,
     use_saved_list: bool,
+    total_size_to_file: bool,
 ) -> None:
     """
     Clean orphaned S3 objects.
@@ -119,6 +128,11 @@ def clean_command(
         keep_paths,
         use_saved_list,
     )
+    
+    if total_size_to_file:
+        with open(ORPHANED_OBJECTS_LOG, "w+") as file:
+            file.write(str(total_size))
+
     _print_response(ctx, dry_run, deleted, total_size)
 
 
