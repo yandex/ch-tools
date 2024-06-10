@@ -406,7 +406,11 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects --to-time 0h
+    chadmin object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --total-size-to-file
+    """
+    When we execute command on clickhouse01
+    """
+    ch-monitoring orphaned-objects
     """
     Then we get response contains
     """
@@ -414,7 +418,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects --to-time 0h -w 9 -c 19
+    ch-monitoring orphaned-objects -w 9 -c 19
     """
     Then we get response contains
     """
@@ -422,7 +426,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects --to-time 0h -w 4 -c 9
+    ch-monitoring orphaned-objects -w 4 -c 9
     """
     Then we get response contains
     """
