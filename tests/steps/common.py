@@ -6,6 +6,7 @@ import time
 
 import requests
 import yaml
+import os
 from behave import given, then, when
 from hamcrest import assert_that, contains_string, equal_to, is_not, matches_regexp
 from modules import docker
@@ -86,6 +87,18 @@ def step_get_response_matches(context):
 @then("we get response not contains {entry:w}")
 def step_get_response_not_contains(context, entry):
     assert_that(context.response, is_not(contains_string(entry)))  # type: ignore
+
+
+@then("we get file {file_path}")
+def step_get_file(context,  file_path):
+    container = docker.get_container(context, "clickhouse01")
+    context.command = context.text.strip()
+    result = container.exec_run(["bash", "-c", f"cat {file_path}"], user="root")
+    context.response = result.output.decode().strip()
+    context.exit_code = result.exit_code
+    if context.exit_code != 0:
+        assert_that("", equal_to(context.text))
+    assert_that(context.response, equal_to(context.text))
 
 
 @when("we sleep for {seconds:d} seconds")
