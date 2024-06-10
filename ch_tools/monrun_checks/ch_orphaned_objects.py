@@ -23,12 +23,12 @@ from ch_tools.common.result import CRIT, OK, WARNING, Result
 )
 @click.pass_context
 def orphaned_objects_command(
-    ctx: click.Context,
+    _: click.Context,
     crit: int,
     warn: int,
 ) -> Result:
     try:
-        with open(ORPHANED_OBJECTS_LOG, "r") as file:
+        with open(ORPHANED_OBJECTS_LOG, mode="r", encoding="utf-8") as file:
             total_size = int(file.read())
     except FileNotFoundError:
         total_size = 0

@@ -128,9 +128,9 @@ def clean_command(
         keep_paths,
         use_saved_list,
     )
-    
+
     if total_size_to_file:
-        with open(ORPHANED_OBJECTS_LOG, "w+") as file:
+        with open(ORPHANED_OBJECTS_LOG, mode="w+", encoding="utf-8") as file:
             file.write(str(total_size))
 
     _print_response(ctx, dry_run, deleted, total_size)

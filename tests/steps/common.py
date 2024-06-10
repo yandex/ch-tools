@@ -6,7 +6,6 @@ import time
 
 import requests
 import yaml
-import os
 from behave import given, then, when
 from hamcrest import assert_that, contains_string, equal_to, is_not, matches_regexp
 from modules import docker
@@ -90,7 +89,7 @@ def step_get_response_not_contains(context, entry):
 
 
 @then("we get file {file_path}")
-def step_get_file(context,  file_path):
+def step_get_file(context, file_path):
     container = docker.get_container(context, "clickhouse01")
     context.command = context.text.strip()
     result = container.exec_run(["bash", "-c", f"cat {file_path}"], user="root")
