@@ -14,6 +14,12 @@ from modules.clickhouse import (
 from modules.docker import get_container
 from tenacity import retry, stop_after_attempt, wait_fixed
 
+from ch_tools.chadmin.internal.clickhouse_disks import (
+    CLICKHOUSE_PATH,
+    OBJECT_STORAGE_DISK_TYPES,
+    S3_PATH,
+)
+
 
 @given("a working clickhouse on {node:w}")
 @retry(wait=wait_fixed(0.5), stop=stop_after_attempt(40))
@@ -86,3 +92,53 @@ def step_put_config(context, path, node):
         ["bash", "-c", "supervisorctl restart clickhouse-server"], user="root"
     )
     assert_that(result.exit_code, equal_to(0))
+
+
+@then("save uuid table {table} in context on {node:w}")
+def step_save_table_uuid(context, table, node):
+    query = f"SELECT uuid FROM system.tables WHERE name='{table}'"
+    ret_code, response = get_response(context, node, query)
+    assert 200 == ret_code
+
+    if not hasattr(context, "table_uuid"):
+        context.uuid_to_table = {}
+    context.uuid_to_table[table] = response
+
+
+def _get_table_dir_from_disk(context, table, disk, node):
+    if disk in OBJECT_STORAGE_DISK_TYPES:
+        path = S3_PATH
+    else:
+        path = CLICKHOUSE_PATH
+
+    path = path + "/store/"
+
+    table_uuid = context.uuid_to_table.get(table, None)
+
+    assert_that(table_uuid is not None, f"not found saved uuid for table {table}")
+    assert_that(len(table_uuid) > 0, f"found empty uuid for table {table}")
+
+    container = get_container(context, node)
+
+    table_path = path + table_uuid[:3]
+    return container.exec_run(
+        ["bash", "-c", f"ls {table_path}"], user="root"
+    ).output.decode()
+
+
+@then("check {disk} disk contains table {table} data in {node:w}")
+def step_check_disk_contains_table_data(context, disk, table, node):
+    """
+    Check that disk contains table data (using table uuid that saved in step_save_table_uuid)
+    """
+    output = _get_table_dir_from_disk(context, table, disk, node)
+    assert_that(0 != len(output), f"table {table} not exists on disk {disk}")
+
+
+@then("check table {table} not exists on {disk} disk in {node:w}")
+def step_check_table_not_exists_on_disk(context, table, disk, node):
+    """
+    Check that table not exists on disk (using table uuid that saved in step_save_table_uuid)
+    """
+    output = _get_table_dir_from_disk(context, table, disk, node)
+    assert_that(0 == len(output), f"table {table} exists on disk {disk}")
