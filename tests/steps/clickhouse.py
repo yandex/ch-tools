@@ -100,12 +100,12 @@ def step_save_table_uuid(context, table, node):
     ret_code, response = get_response(context, node, query)
     assert 200 == ret_code
 
-    if not hasattr(context, "table_uuid"):
+    if not hasattr(context, "uuid_to_table"):
         context.uuid_to_table = {}
     context.uuid_to_table[table] = response
 
 
-def _get_table_dir_from_disk(context, table, disk, node):
+def _get_uuid_dirs_with_same_prefix_name(context, table_uuid, disk, node):
     if disk in OBJECT_STORAGE_DISK_TYPES:
         path = S3_PATH
     else:
@@ -113,17 +113,21 @@ def _get_table_dir_from_disk(context, table, disk, node):
 
     path = path + "/store/"
 
-    table_uuid = context.uuid_to_table.get(table, None)
-
-    assert_that(table_uuid is not None, f"not found saved uuid for table {table}")
-    assert_that(len(table_uuid) > 0, f"found empty uuid for table {table}")
-
     container = get_container(context, node)
 
     table_path = path + table_uuid[:3]
-    return container.exec_run(
-        ["bash", "-c", f"ls {table_path}"], user="root"
-    ).output.decode()
+    return (
+        container.exec_run(["bash", "-c", f"ls {table_path}"], user="root")
+        .output.decode()
+        .split()
+    )
+
+
+def _get_table_uuid(context, table):
+    table_uuid = context.uuid_to_table.get(table, None)
+    assert_that(table_uuid is not None, f"not found saved uuid for table {table}")
+    assert_that(len(table_uuid) > 0, f"found empty uuid for table {table}")
+    return table_uuid
 
 
 @then("check {disk} disk contains table {table} data in {node:w}")
@@ -131,8 +135,15 @@ def step_check_disk_contains_table_data(context, disk, table, node):
     """
     Check that disk contains table data (using table uuid that saved in step_save_table_uuid)
     """
-    output = _get_table_dir_from_disk(context, table, disk, node)
-    assert_that(0 != len(output), f"table {table} not exists on disk {disk}")
+    table_uuid = _get_table_uuid(context, table)
+    tables_uuid_same_prefix = _get_uuid_dirs_with_same_prefix_name(
+        context, table_uuid, disk, node
+    )
+
+    assert_that(
+        table_uuid in tables_uuid_same_prefix,
+        f"table {table} not exists on disk {disk}: tables_uuid_same_prefix={tables_uuid_same_prefix}",
+    )
 
 
 @then("check table {table} not exists on {disk} disk in {node:w}")
@@ -140,5 +151,12 @@ def step_check_table_not_exists_on_disk(context, table, disk, node):
     """
     Check that table not exists on disk (using table uuid that saved in step_save_table_uuid)
     """
-    output = _get_table_dir_from_disk(context, table, disk, node)
-    assert_that(0 == len(output), f"table {table} exists on disk {disk}")
+    table_uuid = _get_table_uuid(context, table)
+    tables_uuid_same_prefix = _get_uuid_dirs_with_same_prefix_name(
+        context, table, disk, node
+    )
+
+    assert_that(
+        table_uuid not in tables_uuid_same_prefix,
+        f"table {table} exists on disk {disk}: tables_uuid_same_prefix={tables_uuid_same_prefix}",
+    )

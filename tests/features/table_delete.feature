@@ -26,8 +26,13 @@ Feature: chadmin delete detached table commands
 
     INSERT INTO test_drop_db.test_table_expected (n) SELECT number FROM system.numbers LIMIT 10;
     """
+
     Then save uuid table test_table_local in context on clickhouse01
+    Then save uuid table test_table_expected in context on clickhouse01
+
     Then check local disk contains table test_table_local data in clickhouse01
+    Then check local disk contains table test_table_expected data in clickhouse01
+
     When we execute command on clickhouse01
     """
     ls /var/lib/clickhouse/data/test_drop_db/
@@ -44,7 +49,10 @@ Feature: chadmin delete detached table commands
     Then we get response contains
     """
     """
+
     Then check table test_table_local not exists on local disk in clickhouse01
+    Then check local disk contains table test_table_expected data in clickhouse01
+
     When we execute command on clickhouse01
     """
     ls /var/lib/clickhouse/data/test_drop_db/
@@ -75,6 +83,15 @@ Feature: chadmin delete detached table commands
 
     INSERT INTO test_drop_db.test_table_expected (n) SELECT number FROM system.numbers LIMIT 10;
     """
+
+    Then save uuid table test_table_local1 in context on clickhouse01
+    Then save uuid table test_table_local2 in context on clickhouse01
+    Then save uuid table test_table_expected in context on clickhouse01
+
+    Then check local disk contains table test_table_local1 data in clickhouse01
+    Then check local disk contains table test_table_local2 data in clickhouse01
+    Then check local disk contains table test_table_expected data in clickhouse01
+
     When we execute command on clickhouse01
     """
     ls /var/lib/clickhouse/data/test_drop_db/
@@ -92,6 +109,11 @@ Feature: chadmin delete detached table commands
     Then we get response contains
     """
     """
+
+    Then check table test_table_local1 not exists on local disk in clickhouse01
+    Then check table test_table_local2 not exists on local disk in clickhouse01
+    Then check local disk contains table test_table_expected data in clickhouse01
+
     When we execute command on clickhouse01
     """
     ls /var/lib/clickhouse/data/test_drop_db/
@@ -120,6 +142,12 @@ Feature: chadmin delete detached table commands
     """
     Then S3 contains greater than 0 objects
 
+    Then save uuid table test_table_object_storage1 in context on clickhouse01
+    Then save uuid table test_table_object_storage2 in context on clickhouse01
+
+    Then check s3 disk contains table test_table_object_storage1 data in clickhouse01
+    Then check s3 disk contains table test_table_object_storage2 data in clickhouse01
+
     When we execute command on clickhouse01
     """
     ls /var/lib/clickhouse/data/test_drop_db/
@@ -136,6 +164,10 @@ Feature: chadmin delete detached table commands
     Then we get response contains
     """
     """
+
+    Then check table test_table_object_storage1 not exists on s3 disk in clickhouse01
+    Then check table test_table_object_storage2 not exists on s3 disk in clickhouse01
+
     When we execute command on clickhouse01
     """
     ls -l /var/lib/clickhouse/data/test_drop_db/
@@ -185,6 +217,62 @@ Feature: chadmin delete detached table commands
     Then we get response
     """
     total 0
+    """
+
+  @require_version_23.3
+  Scenario: Drop only one detached table from two detached tables
+    Given we have executed queries on clickhouse01
+    """
+    CREATE TABLE IF NOT EXISTS test_drop_db.test_table_local_deleted (n Int32)
+    ENGINE = MergeTree
+    ORDER BY n;
+
+    INSERT INTO test_drop_db.test_table_local_deleted (n) SELECT number FROM system.numbers LIMIT 10;
+
+    CREATE TABLE IF NOT EXISTS test_drop_db.test_table_local_expected (n Int32)
+    ENGINE = MergeTree
+    ORDER BY n;
+
+    INSERT INTO test_drop_db.test_table_local_expected (n) SELECT number FROM system.numbers LIMIT 10;
+    """
+
+    Then save uuid table test_table_local_deleted in context on clickhouse01
+    Then save uuid table test_table_local_expected in context on clickhouse01
+    Then check local disk contains table test_table_local_deleted data in clickhouse01
+    Then check local disk contains table test_table_local_expected data in clickhouse01
+
+    When we execute command on clickhouse01
+    """
+    ls /var/lib/clickhouse/data/test_drop_db/
+    """
+    Then we get response
+    """
+    test_table_local_deleted
+    test_table_local_expected
+    """
+    When we execute queries on clickhouse01
+    """
+    DETACH TABLE test_drop_db.test_table_local_deleted SYNC;
+    DETACH TABLE test_drop_db.test_table_local_expected SYNC;
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin table delete --detached test_drop_db test_table_local_deleted
+    """
+    Then we get response contains
+    """
+    """
+
+    Then check table test_table_local_deleted not exists on local disk in clickhouse01
+    Then check local disk contains table test_table_local_expected data in clickhouse01
+
+    When we execute command on clickhouse01
+    """
+    ls /var/lib/clickhouse/data/test_drop_db/
+    """
+    Then we get response
+    """
+    test_table_local_expected
     """
 
   @require_version_23.3
@@ -337,8 +425,11 @@ Feature: chadmin delete detached table commands
     """
 
     Then save uuid table test_repl in context on clickhouse01
+    Then save uuid table test_repl_expected in context on clickhouse01
     Then check local disk contains table test_repl data in clickhouse01
     Then check local disk contains table test_repl data in clickhouse02
+    Then check local disk contains table test_repl_expected data in clickhouse01
+    Then check local disk contains table test_repl_expected data in clickhouse02
 
     Then the list of children on clickhouse01 for zk node /clickhouse/tables/{shard}/ are equal to
     """
@@ -367,6 +458,10 @@ Feature: chadmin delete detached table commands
     Then we get response contains
     """
     """
+
+    Then check table test_repl not exists on local disk in clickhouse01
+    Then check local disk contains table test_repl_expected data in clickhouse01
+
     When we execute command on clickhouse01
     """
     ls /var/lib/clickhouse/data/test_drop_db/
@@ -388,7 +483,8 @@ Feature: chadmin delete detached table commands
     Then we get response contains
     """
     """
-    Then check table test_repl not exists on local disk in clickhouse01
+    Then check table test_repl not exists on local disk in clickhouse02
+    Then check local disk contains table test_repl_expected data in clickhouse02
 
     When we execute command on clickhouse02
     """
