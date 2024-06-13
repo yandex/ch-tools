@@ -5,6 +5,7 @@ Steps for interacting with ClickHouse DBMS.
 from behave import given, then, when
 from hamcrest import assert_that, equal_to
 from modules.clickhouse import (
+    check_table_exists_in_uuid_dir,
     execute_query,
     get_all_user_data,
     get_all_user_schemas,
@@ -13,12 +14,6 @@ from modules.clickhouse import (
 )
 from modules.docker import get_container
 from tenacity import retry, stop_after_attempt, wait_fixed
-
-from ch_tools.chadmin.internal.clickhouse_disks import (
-    CLICKHOUSE_PATH,
-    OBJECT_STORAGE_DISK_TYPES,
-    S3_PATH,
-)
 
 
 @given("a working clickhouse on {node:w}")
@@ -105,44 +100,16 @@ def step_save_table_uuid(context, table, node):
     context.uuid_to_table[table] = response
 
 
-def _get_uuid_dirs_with_same_prefix_name(context, table_uuid, disk, node):
-    if disk in OBJECT_STORAGE_DISK_TYPES:
-        path = S3_PATH
-    else:
-        path = CLICKHOUSE_PATH
-
-    path = path + "/store/"
-
-    container = get_container(context, node)
-
-    table_path = path + table_uuid[:3]
-    return (
-        container.exec_run(["bash", "-c", f"ls {table_path}"], user="root")
-        .output.decode()
-        .split()
-    )
-
-
-def _get_table_uuid(context, table):
-    table_uuid = context.uuid_to_table.get(table, None)
-    assert_that(table_uuid is not None, f"not found saved uuid for table {table}")
-    assert_that(len(table_uuid) > 0, f"found empty uuid for table {table}")
-    return table_uuid
-
-
 @then("check {disk} disk contains table {table} data in {node:w}")
 def step_check_disk_contains_table_data(context, disk, table, node):
     """
     Check that disk contains table data (using table uuid that saved in step_save_table_uuid)
     """
-    table_uuid = _get_table_uuid(context, table)
-    tables_uuid_same_prefix = _get_uuid_dirs_with_same_prefix_name(
-        context, table_uuid, disk, node
-    )
+    table_exists = check_table_exists_in_uuid_dir(context, table, disk, node)
 
     assert_that(
-        table_uuid in tables_uuid_same_prefix,
-        f"table {table} not exists on disk {disk}: tables_uuid_same_prefix={tables_uuid_same_prefix}",
+        table_exists,
+        f"table {table} not exists on disk {disk}",
     )
 
 
@@ -151,12 +118,9 @@ def step_check_table_not_exists_on_disk(context, table, disk, node):
     """
     Check that table not exists on disk (using table uuid that saved in step_save_table_uuid)
     """
-    table_uuid = _get_table_uuid(context, table)
-    tables_uuid_same_prefix = _get_uuid_dirs_with_same_prefix_name(
-        context, table, disk, node
-    )
+    table_exists = check_table_exists_in_uuid_dir(context, table, disk, node)
 
     assert_that(
-        table_uuid not in tables_uuid_same_prefix,
-        f"table {table} exists on disk {disk}: tables_uuid_same_prefix={tables_uuid_same_prefix}",
+        not table_exists,
+        f"table {table} exists on disk {disk}",
     )
