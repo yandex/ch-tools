@@ -4,8 +4,14 @@ ClickHouse client.
 
 from typing import Any, Optional, Sequence, Tuple
 
+from hamcrest import assert_that
 from requests import HTTPError
 
+from ch_tools.chadmin.internal.clickhouse_disks import (
+    CLICKHOUSE_PATH,
+    OBJECT_STORAGE_DISK_TYPES,
+    S3_PATH,
+)
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import (
     ClickhouseClient,
@@ -144,3 +150,25 @@ def execute_query(
         raise
 
     return response
+
+
+def _get_table_uuid(context, table):
+    table_uuid = context.uuid_to_table.get(table, None)
+    assert_that(table_uuid is not None, f"not found saved uuid for table {table}")
+    assert_that(len(table_uuid) > 0, f"found empty uuid for table {table}")
+    return table_uuid
+
+
+def check_table_exists_in_uuid_dir(context, table, disk, node):
+    table_uuid = _get_table_uuid(context, table)
+
+    if disk in OBJECT_STORAGE_DISK_TYPES:
+        path = S3_PATH
+    else:
+        path = CLICKHOUSE_PATH
+
+    container = docker.get_container(context, node)
+
+    table_path = path + "/store/" + table_uuid[:3] + "/" + table_uuid
+    result = container.exec_run(["bash", "-c", f"ls {table_path}"], user="root")
+    return True if 0 == result.exit_code else False

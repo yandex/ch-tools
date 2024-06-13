@@ -5,6 +5,7 @@ Steps for interacting with ClickHouse DBMS.
 from behave import given, then, when
 from hamcrest import assert_that, equal_to
 from modules.clickhouse import (
+    check_table_exists_in_uuid_dir,
     execute_query,
     get_all_user_data,
     get_all_user_schemas,
@@ -86,3 +87,40 @@ def step_put_config(context, path, node):
         ["bash", "-c", "supervisorctl restart clickhouse-server"], user="root"
     )
     assert_that(result.exit_code, equal_to(0))
+
+
+@then("save uuid table {table} in context on {node:w}")
+def step_save_table_uuid(context, table, node):
+    query = f"SELECT uuid FROM system.tables WHERE name='{table}'"
+    ret_code, response = get_response(context, node, query)
+    assert 200 == ret_code
+
+    if not hasattr(context, "uuid_to_table"):
+        context.uuid_to_table = {}
+    context.uuid_to_table[table] = response
+
+
+@then("check {disk} disk contains table {table} data in {node:w}")
+def step_check_disk_contains_table_data(context, disk, table, node):
+    """
+    Check that disk contains table data (using table uuid that saved in step_save_table_uuid)
+    """
+    table_exists = check_table_exists_in_uuid_dir(context, table, disk, node)
+
+    assert_that(
+        table_exists,
+        f"table {table} not exists on disk {disk}",
+    )
+
+
+@then("check table {table} not exists on {disk} disk in {node:w}")
+def step_check_table_not_exists_on_disk(context, table, disk, node):
+    """
+    Check that table not exists on disk (using table uuid that saved in step_save_table_uuid)
+    """
+    table_exists = check_table_exists_in_uuid_dir(context, table, disk, node)
+
+    assert_that(
+        not table_exists,
+        f"table {table} exists on disk {disk}",
+    )
