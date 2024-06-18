@@ -1,7 +1,6 @@
 import os
 import shutil
 import subprocess
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional
 
 from click import group, option, pass_context
@@ -16,6 +15,7 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
 from ch_tools.chadmin.internal.utils import remove_from_disk
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
+from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
 
 
 @group("data-store")
@@ -210,40 +210,27 @@ def cleanup_data_dir(
     if remove:
         disk_config_path = make_ch_disks_config(disk)
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Can't use map function here. The map method returns a generator
-            # and it is not possible to resume a generator after an exception occurs.
-            # https://peps.python.org/pep-0255/#specification-generators-and-exception-propagation
-            if remove_only_metadata:
-                futures_to_part = {
-                    executor.submit(
-                        remove_orphaned_sql_object_metadata,
-                        data,
-                    ): data
-                    for data in lost_data
-                }
-            else:
-                futures_to_part = {
-                    executor.submit(
-                        remove_orphaned_sql_object_full,
-                        data,
-                        disk,
-                        path_to_disk,
-                        disk_config_path,
-                    ): data
-                    for data in lost_data
-                }
-            for future in as_completed(futures_to_part):
-                try:
-                    future.result()
-                except Exception as e:
-                    if keep_going:
-                        logging.warning(
-                            "Ignoring the exception due to keep-going flag : {!r}", e
-                        )
-                    else:
-                        raise
-
+        tasks: List[WorkerTask] = []
+        if remove_only_metadata:
+            for data in lost_data:
+                task = WorkerTask(
+                    data["path"], remove_orphaned_sql_object_metadata, {"data": data}
+                )
+                tasks.append(task)
+        else:
+            for data in lost_data:
+                task = WorkerTask(
+                    data["path"],
+                    remove_orphaned_sql_object_full,
+                    {
+                        "data": data,
+                        "disk": disk,
+                        "path_to_disk": path_to_disk,
+                        "disks_config_path": disk_config_path,
+                    },
+                )
+                tasks.append(task)
+        execute_tasks_in_parallel(tasks, max_workers=max_workers, keep_going=keep_going)
     print_response(ctx, lost_data, default_format="table")
 
 
