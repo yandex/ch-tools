@@ -155,3 +155,25 @@ Feature: chadmin commands.
     """
     chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4
     """
+
+  Scenario Outline: Check replica restore (<replicas_count> replicas, <workers> workers) 
+    Given populated clickhouse with <replicas_count> replicated tables on clickhouse01 with db database and table_ prefix
+    When we delete zookeepers nodes /db on clickhouse01
+    And we execute command on clickhouse01
+    """
+    supervisorctl restart clickhouse-server
+    """
+    Then a clickhouse will be worked on clickhouse01
+    And <replicas_count> readonly replicas on clickhouse01
+
+    When we execute command on clickhouse01
+    """
+    chadmin replica restore --all -w <workers>
+    """
+    Then 0 readonly replicas on clickhouse01
+  Examples:
+      | replicas_count | workers|
+      | 5              | 1      |
+      | 12             | 4      |
+      | 30             | 12     |
+     

@@ -17,6 +17,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 
 
 @given("a working clickhouse on {node:w}")
+@then("a clickhouse will be worked on {node:w}")
 @retry(wait=wait_fixed(0.5), stop=stop_after_attempt(40))
 def step_wait_for_clickhouse_alive(context, node):
     """
@@ -124,3 +125,40 @@ def step_check_table_not_exists_on_disk(context, table, disk, node):
         not table_exists,
         f"table {table} exists on disk {disk}",
     )
+
+
+@given(
+    "populated clickhouse with {count:d} replicated tables on {node:w} with {database_name} database and {table_prefix} prefix"
+)
+def step_populate_with_replicated_tables(
+    context, count, node, database_name, table_prefix
+):
+    """
+    Creates <count> number of replicated tables: database_name.table_prefix
+    """
+
+    execute_query(
+        context,
+        node,
+        ("DROP DATABASE IF EXISTS %s ON CLUSTER '{cluster}'" % database_name),
+    )
+
+    execute_query(
+        context, node, ("CREATE DATABASE %s ON CLUSTER '{cluster}'" % database_name)
+    )
+
+    for ind in range(0, count):
+        table_name = f"{database_name}.{table_prefix}{ind}"
+        query = (
+            "CREATE TABLE %s ON CLUSTER '{cluster}' (n Int32) ENGINE = ReplicatedMergeTree('/%s/%s','{replica}') PARTITION BY n ORDER BY n;"
+            % (table_name, database_name, table_name)
+        )
+        execute_query(context, node, query)
+
+
+@then("{count:d} readonly replicas on {node:w}")
+def step_check_number_ro_replicas(context, count, node):
+    query = "SELECT count() FROM system.replicas WHERE is_readonly=1"
+
+    ret_code, response = get_response(context, node, query)
+    assert_that(response, equal_to(str(count)))
