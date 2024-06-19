@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 from typing import Optional
 
@@ -11,6 +12,9 @@ from ch_tools.common.commands.clean_object_storage import DEFAULT_GUARD_INTERVAL
 
 # Use big enough timeout for stream HTTP query
 STREAM_TIMEOUT = 10 * 60
+
+STORE_STATE_PATH = "/tmp/object_storage_cleanup_state.json"
+ORPHANED_OBJECTS_SIZE_FIELD = "orphaned_objects_size"
 
 
 @group("object-storage")
@@ -93,6 +97,12 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     is_flag=True,
     help=("Use saved object list without traversing object storage again."),
 )
+@option(
+    "--store-state",
+    "store_state",
+    is_flag=True,
+    help=("Write total size of orphaned objects to log file."),
+)
 @pass_context
 def clean_command(
     ctx: Context,
@@ -104,6 +114,7 @@ def clean_command(
     dry_run: bool,
     keep_paths: bool,
     use_saved_list: bool,
+    store_state: bool,
 ) -> None:
     """
     Clean orphaned S3 objects.
@@ -119,6 +130,11 @@ def clean_command(
         keep_paths,
         use_saved_list,
     )
+
+    if store_state:
+        with open(STORE_STATE_PATH, "w", encoding="utf-8") as file:
+            json.dump({ORPHANED_OBJECTS_SIZE_FIELD: total_size}, file, indent=4)
+
     _print_response(ctx, dry_run, deleted, total_size)
 
 
