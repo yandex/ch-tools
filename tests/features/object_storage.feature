@@ -170,10 +170,10 @@ Feature: chadmin object-storage commands
       TotalSize: 3
     """
   
-  Scenario: Clean with flag total-size-to-file works
+  Scenario: Clean with flag store-state works
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --total-size-to-file
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state
     """
     Then we get file /var/log/s3_orphaned_objects.log
     """
@@ -187,7 +187,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --total-size-to-file
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state
     """
     Then we get file /var/log/s3_orphaned_objects.log
     """

@@ -96,8 +96,8 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     help=("Use saved object list without traversing object storage again."),
 )
 @option(
-    "--total-size-to-file",
-    "total_size_to_file",
+    "--store-state",
+    "store_state",
     is_flag=True,
     help=("Write total size of orphaned objects to log file."),
 )
@@ -112,7 +112,7 @@ def clean_command(
     dry_run: bool,
     keep_paths: bool,
     use_saved_list: bool,
-    total_size_to_file: bool,
+    store_state: bool,
 ) -> None:
     """
     Clean orphaned S3 objects.
@@ -129,7 +129,7 @@ def clean_command(
         use_saved_list,
     )
 
-    if total_size_to_file:
+    if store_state:
         with open(ORPHANED_OBJECTS_LOG, mode="w+", encoding="utf-8") as file:
             file.write(str(total_size))
 

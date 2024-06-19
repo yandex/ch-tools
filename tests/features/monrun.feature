@@ -406,7 +406,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --total-size-to-file
+    chadmin object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state
     """
     When we execute command on clickhouse01
     """
