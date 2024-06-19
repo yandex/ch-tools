@@ -389,7 +389,7 @@ Feature: ch-monitoring tool
     2;KazooTimeoutError('Connection time-out')
     """
   
-  Scenario: Check CH orphaned objects size
+  Scenario: Check CH store state
     When we execute command on clickhouse01
     """
     ch-monitoring orphaned-objects

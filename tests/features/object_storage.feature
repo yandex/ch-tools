@@ -177,7 +177,9 @@ Feature: chadmin object-storage commands
     """
     Then we get file /tmp/object_storage_cleanup_state.json
     """
-    0
+    {
+        "orphaned_objects_size": 0
+    }
     """
     When we put object in S3
     """
@@ -191,5 +193,7 @@ Feature: chadmin object-storage commands
     """
     Then we get file /tmp/object_storage_cleanup_state.json
     """
-    10
+    {
+        "orphaned_objects_size": 10
+    }
     """

@@ -1,7 +1,11 @@
 import json
+
 import click
 
-from ch_tools.chadmin.cli.object_storage_group import ORPHANED_OBJECTS_SIZE_FIELD, STORE_STATE_PATH
+from ch_tools.chadmin.cli.object_storage_group import (
+    ORPHANED_OBJECTS_SIZE_FIELD,
+    STORE_STATE_PATH,
+)
 from ch_tools.common.result import CRIT, OK, WARNING, Result
 
 

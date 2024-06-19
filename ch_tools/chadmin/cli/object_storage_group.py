@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 from typing import Optional
 
@@ -13,6 +14,7 @@ from ch_tools.common.commands.clean_object_storage import DEFAULT_GUARD_INTERVAL
 STREAM_TIMEOUT = 10 * 60
 
 STORE_STATE_PATH = "/tmp/object_storage_cleanup_state.json"
+ORPHANED_OBJECTS_SIZE_FIELD = "orphaned_objects_size"
 
 
 @group("object-storage")
@@ -130,8 +132,8 @@ def clean_command(
     )
 
     if store_state:
-        with open(STORE_STATE_PATH, mode="w+", encoding="utf-8") as file:
-            file.write(str(total_size))
+        with open(STORE_STATE_PATH, "w", encoding="utf-8") as file:
+            json.dump({ORPHANED_OBJECTS_SIZE_FIELD: total_size}, file, indent=4)
 
     _print_response(ctx, dry_run, deleted, total_size)
 
