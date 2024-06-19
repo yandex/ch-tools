@@ -264,6 +264,7 @@ def restart_replica_command(
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 @option("-w", "--workers", default=4, help="Number of workers.")
+@option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @pass_context
 def restore_command(
     ctx,
@@ -273,6 +274,7 @@ def restore_command(
     on_cluster,
     dry_run,
     workers,
+    keep_going,
     **kwargs,
 ):
     """
@@ -305,7 +307,7 @@ def restore_command(
                 },
             )
         )
-    execute_tasks_in_parallel(tasks, max_workers=workers)
+    execute_tasks_in_parallel(tasks, max_workers=workers, keep_going=keep_going)
 
 
 def restore_replica(
