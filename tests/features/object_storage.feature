@@ -175,7 +175,7 @@ Feature: chadmin object-storage commands
     """
     chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state
     """
-    Then we get file /var/log/s3_orphaned_objects.log
+    Then we get file /tmp/object_storage_cleanup_state.json
     """
     0
     """
@@ -189,7 +189,7 @@ Feature: chadmin object-storage commands
     """
     chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state
     """
-    Then we get file /var/log/s3_orphaned_objects.log
+    Then we get file /tmp/object_storage_cleanup_state.json
     """
     10
     """

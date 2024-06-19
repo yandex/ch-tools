@@ -1,6 +1,6 @@
 import click
 
-from ch_tools.chadmin.cli.object_storage_group import ORPHANED_OBJECTS_LOG
+from ch_tools.chadmin.cli.object_storage_group import STORE_STATE_PATH
 from ch_tools.common.result import CRIT, OK, WARNING, Result
 
 
@@ -28,7 +28,7 @@ def orphaned_objects_command(
     warn: int,
 ) -> Result:
     try:
-        with open(ORPHANED_OBJECTS_LOG, mode="r", encoding="utf-8") as file:
+        with open(STORE_STATE_PATH, mode="r", encoding="utf-8") as file:
             total_size = int(file.read())
     except FileNotFoundError:
         total_size = 0

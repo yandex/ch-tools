@@ -12,7 +12,7 @@ from ch_tools.common.commands.clean_object_storage import DEFAULT_GUARD_INTERVAL
 # Use big enough timeout for stream HTTP query
 STREAM_TIMEOUT = 10 * 60
 
-ORPHANED_OBJECTS_LOG = "/var/log/s3_orphaned_objects.log"
+STORE_STATE_PATH = "/tmp/object_storage_cleanup_state.json"
 
 
 @group("object-storage")
@@ -130,7 +130,7 @@ def clean_command(
     )
 
     if store_state:
-        with open(ORPHANED_OBJECTS_LOG, mode="w+", encoding="utf-8") as file:
+        with open(STORE_STATE_PATH, mode="w+", encoding="utf-8") as file:
             file.write(str(total_size))
 
     _print_response(ctx, dry_run, deleted, total_size)
