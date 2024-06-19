@@ -290,9 +290,9 @@ def restore_command(
     else:
         replicas = list_table_replicas(ctx, is_readonly=True, **kwargs)
 
-    rotines: List[WorkerTask] = []
+    tasks: List[WorkerTask] = []
     for replica in replicas:
-        rotines.append(
+        tasks.append(
             WorkerTask(
                 f"restore_replica_{replica['database']}.{replica['table']}",
                 restore_replica,
@@ -305,7 +305,7 @@ def restore_command(
                 },
             )
         )
-    execute_tasks_in_parallel(rotines, max_workers=workers)
+    execute_tasks_in_parallel(tasks, max_workers=workers)
 
 
 def restore_replica(
