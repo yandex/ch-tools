@@ -63,7 +63,7 @@ def clean_orphaned_tables_command(
             path_result = process_path(path, prefix, column, remove)
         except subprocess.CalledProcessError as e:
             if "No such file or directory" in e.stdout.decode("utf-8"):
-                print("Pass directory {} because it is removed: {}", path, e.stdout)
+                print("Spip directory {} because it is removed: {}", path, e.stdout)
                 continue
             raise
 
