@@ -59,7 +59,14 @@ def clean_orphaned_tables_command(
     results = []
     for prefix in os.listdir(store_path):
         path = store_path + "/" + prefix
-        path_result = process_path(path, prefix, column, remove)
+        try:
+            path_result = process_path(path, prefix, column, remove)
+        except subprocess.CalledProcessError as e:
+            if "No such file or directory" in e.stdout.decode("utf-8"):
+                print("Pass directory {} because it is removed: {}", path, e.stdout)
+                continue
+            raise
+
         if show_only_orphaned_metadata and path_result["status"] != "not_used":
             continue
         results.append(path_result)
@@ -144,7 +151,11 @@ def additional_check_successed(column: str, path: str) -> bool:
 
 
 def du(path: str) -> str:
-    return subprocess.check_output(["du", "-sh", path]).split()[0].decode("utf-8")
+    return (
+        subprocess.check_output(["du", "-sh", path], stderr=subprocess.STDOUT)
+        .split()[0]
+        .decode("utf-8")
+    )
 
 
 def remove_data(path: str) -> None:
