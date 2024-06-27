@@ -2,8 +2,6 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 # YC specific value for sanity checking
-# TODO: pass bucket, prefix, endpoint as arguments to cli for versatility
-BUCKET_NAME_PREFIX = "cloud-storage-"
 
 
 @dataclass
@@ -27,7 +25,9 @@ class ClickhouseStorageConfiguration:
     def has_disk(self, name: str) -> bool:
         return name in self._config.get("disks", {})
 
-    def s3_disk_configuaration(self, name: str) -> S3DiskConfiguration:
+    def s3_disk_configuration(
+        self, name: str, bucket_name_prefix: str
+    ) -> S3DiskConfiguration:
         if not self.has_disk(name):
             raise RuntimeError(f"Config section for disk '{name}' is not found")
 
@@ -40,7 +40,9 @@ class ClickhouseStorageConfiguration:
         secret_access_key = disk["secret_access_key"]
         endpoint: str = disk["endpoint"]
 
-        _host, bucket_name, prefix, endpoint_url = _parse_endpoint(endpoint)
+        _host, bucket_name, prefix, endpoint_url = _parse_endpoint(
+            endpoint, bucket_name_prefix
+        )
 
         return S3DiskConfiguration(
             name=name,
@@ -55,7 +57,7 @@ class ClickhouseStorageConfiguration:
         return (self._config.get("disks", {})).get(disk, {})
 
 
-def _parse_endpoint(endpoint: str) -> tuple:
+def _parse_endpoint(endpoint: str, bucket_name_prefix: str) -> tuple:
     """
     Parse both virtual and path style S3 endpoints url.
     """
@@ -64,7 +66,7 @@ def _parse_endpoint(endpoint: str) -> tuple:
         raise ValueError(f"Incorrect endpoint format {endpoint}")
 
     path = url.path[1:] if url.path.startswith("/") else url.path
-    if url.hostname.startswith(BUCKET_NAME_PREFIX):
+    if url.hostname.startswith(bucket_name_prefix):
         # virtual addressing style
         bucket_name, host = url.hostname.split(".", maxsplit=1)
         prefix = path
@@ -72,9 +74,9 @@ def _parse_endpoint(endpoint: str) -> tuple:
         # path addressing style
         host = url.hostname
         bucket_name, prefix = path.split("/", maxsplit=1)
-        if not bucket_name.startswith(BUCKET_NAME_PREFIX):
+        if not bucket_name.startswith(bucket_name_prefix):
             raise ValueError(
-                f"Unexpected bucket name `{bucket_name}`. Parser expects `{BUCKET_NAME_PREFIX}` prefix"
+                f"Unexpected bucket name `{bucket_name}`. Parser expects `{bucket_name_prefix}` prefix"
             )
 
     endpoint_url = "{}://{}{}".format(
