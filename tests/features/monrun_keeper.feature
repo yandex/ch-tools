@@ -6,6 +6,12 @@ Feature: keeper-monitoring tool
     And a working zookeeper
     And a working clickhouse on clickhouse01
 
+  Scenario: Check status command not throwing
+    When we execute command on zookeeper01
+    """
+    keeper-monitoring status
+    """
+
   Scenario: Check Zookeeper alive with keeper monitoring
     When we execute command on zookeeper01
     """
