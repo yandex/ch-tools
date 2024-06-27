@@ -39,6 +39,7 @@ DEFAULT_CONFIG = {
         "restore_replica_timeout": 10 * 60,
     },
     "object_storage": {
+        "bucket_name_prefix": "cloud-storage-",
         "clean": {
             "listing_table_prefix": "listing_objects_from_",
             "listing_table_database": "default",
@@ -103,6 +104,9 @@ DEFAULT_CONFIG = {
             "queue_size_crit": 20,
             "inserts_in_queue_warn": 10,
             "inserts_in_queue_crit": 20,
+        },
+        "geobase": {
+            "enabled": True,
         },
         "dns": {
             "ipv4": True,

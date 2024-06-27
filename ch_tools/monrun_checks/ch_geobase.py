@@ -14,6 +14,8 @@ def geobase_command(ctx):
     Check that embedded geobase is configured.
     """
 
+    if not ctx.default_map["geobase"]["enabled"]:
+        return Result(OK, "OK, geobase is disabled")
     try:
         response = clickhouse_client(ctx).query_json_data(
             query="SELECT regionToName(CAST(1 AS UInt32))"
