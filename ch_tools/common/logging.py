@@ -85,6 +85,7 @@ def configure(
     """
     Configure logger.
     """
+    logger_config.clear()
     logger_config["module"] = module
     loguru_handlers = []
 
