@@ -41,7 +41,7 @@ CLICKHOUSE_VERSION="1.2.3.4" make test-integration
 
 # For building deb packages
 make prepare-build-deb
-make build-deb-package  
+make build-deb-package
 ```
 
 Please note: base images for tests are pulled from [chtools Dockerhub](https://hub.docker.com/u/chtools).
