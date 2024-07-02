@@ -304,7 +304,7 @@ def delete_ddl_task_command(ctx, tasks):
     help="Remove metadata from Zookeeper for specified hosts.",
 )
 @option(
-    "--clean-ddl-queue/--not-clean-ddl-queue",
+    "--clean-ddl-queue/--no-clean-ddl-queue",
     is_flag=True,
     default=True,
     help="Perform ddl query cleanup.",
