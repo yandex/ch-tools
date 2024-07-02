@@ -118,7 +118,7 @@ def _set_node_value(zk, path, value):
             logging.warning("Can not set for node: {}  value : {}", path, value)
 
 
-def _find_paths(zk, root_path, included_paths_regexp, excluded_paths: List[str] = None):
+def _find_paths(zk, root_path, included_paths_regexp, excluded_paths=None):
     """
     Traverse zookeeper tree from root_path with bfs approach.
 
@@ -343,7 +343,7 @@ def clean_zk_metadata_for_hosts(
                     continue
 
                 if zk.exists(queue_path):
-                    to_remove.append(zk, queue_path)
+                    to_remove.append(queue_path)
         return to_remove
 
     def _remove_if_no_hosts_in_replicas(zk, paths):
