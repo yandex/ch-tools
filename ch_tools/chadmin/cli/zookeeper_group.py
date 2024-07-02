@@ -303,14 +303,24 @@ def delete_ddl_task_command(ctx, tasks):
     name="cleanup-removed-hosts-metadata",
     help="Remove metadata from Zookeeper for specified hosts.",
 )
+@option(
+    "--clean-ddl-queue/--not-clean-ddl-queue",
+    is_flag=True,
+    default=True,
+    help="Perform ddl query cleanup.",
+    type=bool,
+)
 @argument("fqdn", type=ListParamType())
 @pass_context
-def clickhouse_hosts_command(ctx, fqdn):
+def clickhouse_hosts_command(ctx, fqdn, clean_ddl_queue):
     # We can't get the ddl queue path from clickhouse config,
     # because in some cases we are changing this path while performing cluster resetup.
     config = load_config()
     clean_zk_metadata_for_hosts(
-        ctx, fqdn, zk_ddl_query_path=config["clickhouse"]["distributed_ddl_path"]
+        ctx,
+        fqdn,
+        cleanup_ddl_queue=clean_ddl_queue,
+        zk_ddl_query_path=config["clickhouse"]["distributed_ddl_path"],
     )
 
 
