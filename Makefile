@@ -25,13 +25,13 @@ PYTHON_MINOR := $(shell $(PYTHON) -c 'import sys; print(sys.version_info[1])')
 
 # The latest version supporting Python 3.6
 POETRY_VERSION ?= 1.1.15
+POETRY_HOME ?= /opt/poetry
+POETRY := $(POETRY_HOME)/bin/poetry
 # The minimum officially supported version for Python 3.12 is 1.7.0 (https://python-poetry.org/history/#170---2023-11-03)
 ifeq ($(shell test $(PYTHON_MAJOR) -ge 3 && test $(PYTHON_MINOR) -ge 12; echo $$?),0)
 	POETRY_VERSION="1.8.3"
+	$(POETRY) update --lock
 endif
-
-POETRY_HOME ?= /opt/poetry
-POETRY := $(POETRY_HOME)/bin/poetry
 
 PREFIX ?= /opt/yandex/$(PROJECT_NAME)
 export BUILD_PYTHON_OUTPUT_DIR ?= dist
