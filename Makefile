@@ -114,7 +114,6 @@ update-deps:
 
 $(INSTALL_DEPS_STAMP): $(VENV_DIR) pyproject.toml poetry.lock
 	$(ensure_poetry)
-	@echo "UPDATE_POETRY_LOCK: $(UPDATE_POETRY_LOCK)"
 	@if [[ -n "${UPDATE_POETRY_LOCK}" ]]; then \
 		$(POETRY) update --lock; \
 	fi
