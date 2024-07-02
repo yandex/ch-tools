@@ -5,6 +5,7 @@ import time
 from collections import deque
 from contextlib import contextmanager
 from math import sqrt
+from typing import List
 
 from click import BadParameter
 from kazoo.client import KazooClient
@@ -117,7 +118,7 @@ def _set_node_value(zk, path, value):
             logging.warning("Can not set for node: {}  value : {}", path, value)
 
 
-def _find_paths(zk, root_path, included_paths_regexp, excluded_paths_regexp=None):
+def _find_paths(zk, root_path, included_paths_regexp, excluded_paths: List[str] = None):
     """
     Traverse zookeeper tree from root_path with bfs approach.
 
@@ -126,15 +127,11 @@ def _find_paths(zk, root_path, included_paths_regexp, excluded_paths_regexp=None
     paths = set()
     queue = deque([root_path])
     included_regexp = re.compile("|".join(included_paths_regexp))
-    excluded_regexp = (
-        re.compile("|".join(excluded_paths_regexp)) if excluded_paths_regexp else None
-    )
-
+    excluded_regexp = re.compile("|".join(excluded_paths)) if excluded_paths else None
     while len(queue):
         path = queue.popleft()
         if excluded_regexp and re.match(excluded_regexp, path):
             continue
-
         for child_node in _get_children(zk, path):
             subpath = os.path.join(path, child_node)
 
@@ -161,7 +158,7 @@ def _delete_nodes_transaction(zk, to_delete_in_trasaction):
         return
 
     logging.info(
-        "Delete transaction have failed. Fallthrough to single delete operations for zk_nodes : ",
+        "Delete transaction have failed. Fallthrough to single delete operations for zk_nodes : {}",
         to_delete_in_trasaction,
     )
     for node in to_delete_in_trasaction:
@@ -212,7 +209,8 @@ def _delete_recursive(zk, paths):
 
     if len(paths) == 0:
         return
-    logging.info("Node to recursive delete {}", paths)
+
+    logging.debug("Node to recursive delete {}", paths)
     paths = _remove_subpaths(paths)
     nodes_to_delete = []
     queue = deque(paths)
@@ -223,6 +221,7 @@ def _delete_recursive(zk, paths):
         for child_node in _get_children(zk, path):
             queue.append(os.path.join(path, child_node))
 
+    logging.info("Got {} nodes to remove.", len(nodes_to_delete))
     # When number of nodes to delete is large preferable to use greater transaction size.
     operations_in_transaction = max(100, int(sqrt(len(nodes_to_delete))))
 
@@ -273,44 +272,41 @@ def clean_zk_metadata_for_hosts(
         """
         Find nodes mentions in zk for table management.
         """
-        hosts_metions = _find_paths(zk, root_path, [".*/" + node for node in nodes])
         excluded_paths = [
             ".*clickhouse/task_queue",
             ".*clickhouse/zero_copy",
+            ".*/blocks/.*",
+            ".*/block_numbers/.*",
         ]
-        included_paths = [".*/replicas/" + node for node in nodes]
 
-        included_regexp = re.compile("|".join(included_paths))
-        excluded_regexp = re.compile("|".join(excluded_paths))
-        table_paths = list(
-            filter(
-                lambda path: not re.match(excluded_regexp, path)
-                and re.match(included_regexp, path),
-                hosts_metions,
-            )
+        hosts_mentions = _find_paths(
+            zk, root_path, [".*/replicas/" + node for node in nodes], excluded_paths
         )
 
         # Paths will be like */shard1/replicas/hostname. But we need */shard1.
         # Go up for 2 directories.
-        table_paths = [os.sep.join(path.split(os.sep)[:-2]) for path in table_paths]
+        table_paths = [os.sep.join(path.split(os.sep)[:-2]) for path in hosts_mentions]
         # One path might be in list several times. Make list unique.
-        return (list(set(table_paths)), hosts_metions)
+        return (list(set(table_paths)), hosts_mentions)
 
     def _find_databases(zk, root_path, nodes):
         """
         Databases contains replicas in zk in cases when engine is Replicated with
         pattern: <shard>|<replica>
         """
+        excluded_paths = [
+            ".*clickhouse/task_queue",
+            ".*clickhouse/zero_copy",
+            ".*/blocks/.*",
+            ".*/block_numbers/.*",
+        ]
         hosts_mentions = _find_paths(
-            zk, root_path, [".*/.*[|]" + node for node in nodes]
+            zk,
+            root_path,
+            [".*/replicas/.*[|]" + node for node in nodes],
+            excluded_paths,
         )
 
-        included_paths = [".*/replicas/.*[|]" + node for node in nodes]
-        included_regexp = re.compile("|".join(included_paths))
-
-        databases_paths = list(
-            filter(lambda path: re.match(included_regexp, path), hosts_mentions)
-        )
         databases_paths = [
             os.sep.join(path.split(os.sep)[:-2]) for path in hosts_mentions
         ]
@@ -331,10 +327,11 @@ def clean_zk_metadata_for_hosts(
                 logging.info("Set is_lost_flag {}", is_lost_flag_path)
                 _set_node_value(zk, is_lost_flag_path, "1")
 
-    def _remove_replicas_queues(zk, paths, replica_names):
+    def _get_replicas_queues_to_remove(zk, paths, replica_names):
         """
         Remove <path>/replicas/<replica_name>/queue
         """
+        to_remove: List[str] = []
         for path in paths:
             replica_name = os.path.join(path, "replicas")
             if not zk.exists(replica_name):
@@ -346,7 +343,8 @@ def clean_zk_metadata_for_hosts(
                     continue
 
                 if zk.exists(queue_path):
-                    _delete_recursive(zk, queue_path)
+                    to_remove.append(zk, queue_path)
+        return to_remove
 
     def _remove_if_no_hosts_in_replicas(zk, paths):
         """
@@ -366,17 +364,19 @@ def clean_zk_metadata_for_hosts(
         """
         Do cleanup for tables which contains nodes.
         """
+        logging.info("Start tables cleanup for nodes: {}", ",".join(nodes))
         (table_paths, hosts_paths) = _find_tables(zk, zk_root_path, nodes)
         _set_replicas_is_lost(zk, table_paths, nodes)
-        _remove_replicas_queues(zk, table_paths, nodes)
-        _delete_recursive(zk, hosts_paths)
+
+        to_remove = _get_replicas_queues_to_remove(zk, table_paths, nodes) + hosts_paths
+        _delete_recursive(zk, to_remove)
         _remove_if_no_hosts_in_replicas(zk, table_paths)
 
     def databases_cleanups(zk, zk_root_path):
         """
         Do cleanup for databases which contains nodes.
         """
-
+        logging.info("Start databases cleanup for nodes: {}", ",".join(nodes))
         (databases_paths, hosts_paths) = _find_databases(zk, zk_root_path, nodes)
         _delete_recursive(zk, hosts_paths)
         _remove_if_no_hosts_in_replicas(zk, databases_paths)
@@ -447,6 +447,8 @@ def clean_zk_metadata_for_hosts(
 
         """
         ddl_tasks_to_remove = []
+
+        logging.info("Start ddl query cleanup for nodes: {}", ",".join(nodes))
 
         for ddl_task in _get_children(zk, _format_path(ctx, zk_ddl_query_path)):
             ddl_task_full = os.path.join(zk_ddl_query_path, ddl_task)
