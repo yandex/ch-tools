@@ -23,14 +23,19 @@ export PYTHON ?= python3
 PYTHON_MAJOR := $(shell $(PYTHON) -c 'import sys; print(sys.version_info[0])')
 PYTHON_MINOR := $(shell $(PYTHON) -c 'import sys; print(sys.version_info[1])')
 
+POETRY_DEFAULT_VERSION = 1.1.15
 # The latest version supporting Python 3.6
-POETRY_VERSION ?= 1.1.15
+POETRY_VERSION ?= $(POETRY_DEFAULT_VERSION)
 POETRY_HOME ?= /opt/poetry
 POETRY := $(POETRY_HOME)/bin/poetry
 # The minimum officially supported version for Python 3.12 is 1.7.0 (https://python-poetry.org/history/#170---2023-11-03)
 ifeq ($(shell test $(PYTHON_MAJOR) -ge 3 && test $(PYTHON_MINOR) -ge 12; echo $$?),0)
 	POETRY_VERSION="1.8.3"
-	$(POETRY) update --lock
+endif
+
+UPDATE_POETRY_LOCK =
+ifneq ($(POETRY_VERSION), $(POETRY_DEFAULT_VERSION))
+	UPDATE_POETRY_LOCK="y"
 endif
 
 PREFIX ?= /opt/yandex/$(PROJECT_NAME)
@@ -109,6 +114,10 @@ update-deps:
 
 $(INSTALL_DEPS_STAMP): $(VENV_DIR) pyproject.toml poetry.lock
 	$(ensure_poetry)
+	@echo "UPDATE_POETRY_LOCK: $(UPDATE_POETRY_LOCK)"
+	@if [[ -n "${UPDATE_POETRY_LOCK}" ]]; then \
+		$(POETRY) update --lock; \
+	fi
 	$(POETRY) install --no-root
 	touch $(INSTALL_DEPS_STAMP)
 
