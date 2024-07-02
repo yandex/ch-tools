@@ -20,8 +20,16 @@ export PROJECT_NAME_UNDERSCORE ?= $(subst -,_,$(PROJECT_NAME))
 
 export PYTHON ?= python3
 
+PYTHON_MAJOR := $(shell $(PYTHON) -c 'import sys; print(sys.version_info[0])')
+PYTHON_MINOR := $(shell $(PYTHON) -c 'import sys; print(sys.version_info[1])')
+
 # The latest version supporting Python 3.6
 POETRY_VERSION ?= 1.1.15
+# The minimum officially supported version for Python 3.12 is 1.7.0 (https://python-poetry.org/history/#170---2023-11-03)
+ifeq ($(shell test $(PYTHON_MAJOR) -ge 3 && test $(PYTHON_MINOR) -ge 12; echo $$?),0)
+	POETRY_VERSION="1.8.3"
+endif
+
 POETRY_HOME ?= /opt/poetry
 POETRY := $(POETRY_HOME)/bin/poetry
 
@@ -66,14 +74,14 @@ export DEB_BUILD_DISTRIBUTION ?=
 
 define ensure_poetry
 	if [ ! -e $(POETRY) ]; then
-	  echo "Poetry could not be found. Please install it manually 'make install-poetry'"; 
+	  echo "Poetry could not be found. Please install it manually 'make install-poetry'";
 	  exit 1;
 	fi
 endef
 
 
 # Should be default target, because "make" is just run
-# by debhelper(dh_auto_build stage) for building the program during 
+# by debhelper(dh_auto_build stage) for building the program during
 # creation of a DEB package
 .PHONY: build
 build: build-python-packages ;
@@ -112,7 +120,7 @@ install-poetry:
 	curl -sSL https://install.python-poetry.org | POETRY_HOME=$(POETRY_HOME) $(PYTHON) - --version $(POETRY_VERSION)
 
 	# TODO: remove after getting rid of support Python 3.6
-	# Fix "cannot import name 'appengine' from 'urllib3.contrib'..." error 
+	# Fix "cannot import name 'appengine' from 'urllib3.contrib'..." error
 	# while 'poetry publish' for version poetry 1.1.15 due to incompatibility with urllib3 >= 2.0.0
 	# https://urllib3.readthedocs.io/en/stable/v2-migration-guide.html#importerror-cannot-import-name-gaecontrib-from-requests-toolbelt-compat
 	$(POETRY_HOME)/venv/bin/python -m pip install "urllib3<2.0.0"
@@ -182,7 +190,7 @@ test-unit: install-deps
 
 
 .PHONY: test-integration
-test-integration: install-deps build-python-packages	
+test-integration: install-deps build-python-packages
 	cd $(TESTS_DIR)
 	export PYTHONPATH=$(CURDIR):$$PATH
 	$(POETRY) run behave --show-timings --stop --junit $(BEHAVE_ARGS)
@@ -238,7 +246,7 @@ install-symlinks:
 
 	mkdir -p $(SYMLINK_BIN_DIR)
 	$(foreach bin, chadmin ch-monitoring keeper-monitoring ch-s3-credentials, \
-		ln -sf $(PREFIX)/bin/$(bin) $(SYMLINK_BIN_DIR);) 
+		ln -sf $(PREFIX)/bin/$(bin) $(SYMLINK_BIN_DIR);)
 
 
 .PHONY: uninstall-symlinks
@@ -337,15 +345,15 @@ clean: clean_debuild
 	rm -rf $(INSTALL_DEPS_STAMP)
 	rm -rf .mypy_cache .ruff_cache tests/{.session_conf.sav,__pycache__,staging,reports}
 
- 
+
 .PHONY: help
 help:
 	echo "Base targets:"
 	echo "  install-poetry             Install Poetry"
 	echo "  uninstall-poetry           Uninstall Poetry"
 	echo "  install-deps               Install Python dependencies to local environment $(VENV_DIR)"
-	echo "  update-deps                Update dependencies in poetry.lock to their latest versions"	
-	echo "  publish                    Publish python package to PYPI"	
+	echo "  update-deps                Update dependencies in poetry.lock to their latest versions"
+	echo "  publish                    Publish python package to PYPI"
 	echo "  lint                       Run linters. Alias for \"isort black codespell ruff pylint mypy\"."
 	echo "  test-unit                  Run unit tests."
 	echo "  test-integration           Run integration tests."
