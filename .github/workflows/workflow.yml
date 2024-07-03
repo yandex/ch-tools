@@ -46,6 +46,7 @@ jobs:
         target:
           - { python: "3.6", ubuntu: "20.04" }
           - { python: "3.10", ubuntu: "latest" }
+          - { python: "3.12", ubuntu: "24.04" }
         clickhouse:
           - "22.8.21.38"
           - "23.3.22.3"
