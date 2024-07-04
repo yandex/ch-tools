@@ -17,14 +17,20 @@ def status_command(commands):
         """
         Perform all checks.
         """
-        checks_status = []
+        config = ctx.obj["config"]["ch-monitoring"]
         ctx.obj["status_mode"] = True
-        ctx.default_map = ctx.obj["config"]["ch-monitoring"]
+        ctx.default_map = config
+
+        checks_status = []
         for cmd in commands:
-            status = ctx.invoke(cmd)
-            checks_status.append(
-                (cmd.name, f"{COLOR_MAP[status.code]}{status.message}{DEFAULT_COLOR}")
-            )
+            if not config.get(cmd.name, {}).get("@disabled"):
+                status = ctx.invoke(cmd)
+                checks_status.append(
+                    (
+                        cmd.name,
+                        f"{COLOR_MAP[status.code]}{status.message}{DEFAULT_COLOR}",
+                    )
+                )
 
         print(tabulate.tabulate(checks_status))
 

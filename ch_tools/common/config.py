@@ -75,6 +75,7 @@ DEFAULT_CONFIG = {
     },
     "ch-monitoring": {
         "log-errors": {
+            "@disabled": False,
             "crit": 60,
             "warn": 6,
             "watch_seconds": 600,
@@ -82,10 +83,12 @@ DEFAULT_CONFIG = {
             "logfile": "/var/log/clickhouse-server/clickhouse-server.err.log",
         },
         "core-dumps": {
+            "@disabled": False,
             "core_directory": "/var/cores/",
             "crit_seconds": 60 * 10,
         },
         "replication-lag": {
+            "@disabled": False,
             "xcrit": 3600,
             "crit": 600,
             "warn": 300,
@@ -93,6 +96,7 @@ DEFAULT_CONFIG = {
             "mwarn": 50.0,
         },
         "system-queues": {
+            "@disabled": False,
             "merges_in_queue_warn": 10,
             "merges_in_queue_crit": 20,
             "future_parts_warn": 10,
@@ -105,6 +109,7 @@ DEFAULT_CONFIG = {
             "inserts_in_queue_crit": 20,
         },
         "dns": {
+            "@disabled": False,
             "ipv4": True,
             "ipv6": False,
             "cluster": False,
