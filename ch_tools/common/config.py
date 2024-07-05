@@ -39,11 +39,12 @@ DEFAULT_CONFIG = {
         "restore_replica_timeout": 10 * 60,
     },
     "object_storage": {
+        "bucket_name_prefix": "cloud-storage-",
         "clean": {
             "listing_table_prefix": "listing_objects_from_",
             "listing_table_database": "default",
             "storage_policy": "default",
-        }
+        },
     },
     "zookeeper": {
         "randomize_hosts": True,
@@ -107,6 +108,9 @@ DEFAULT_CONFIG = {
             "queue_size_crit": 20,
             "inserts_in_queue_warn": 10,
             "inserts_in_queue_crit": 20,
+        },
+        "geobase": {
+            "@disabled": False,
         },
         "dns": {
             "@disabled": False,
