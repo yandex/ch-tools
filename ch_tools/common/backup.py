@@ -6,6 +6,8 @@ from typing import List
 
 import yaml
 
+from ch_tools.common.clickhouse.client.retry import retry
+
 CHS3_BACKUPS_DIRECTORY = "/var/lib/clickhouse/disks/object_storage/shadow/"
 
 
@@ -33,6 +35,7 @@ class BackupConfig:
             return BackupConfig(yaml.safe_load(file))
 
 
+@retry(json.decoder.JSONDecodeError)
 def get_backups() -> List[dict]:
     """
     Get ClickHouse backups.
