@@ -104,6 +104,7 @@ typing-extensions = "~4.1.1"
 xmltodict = "*"
 loguru = "*"
 cffi = { version = "1.16.0", python = ">=3.12" }
+setuptools = { version = "*", python = ">=3.12" }
 
 [tool.poetry.dev-dependencies]
 # TODO: use groups in a modern version of poetry
@@ -117,7 +118,6 @@ pyfakefs = [
     { version = "*", python = "<3.12" },
     { version = "5.5.0", python = ">=3.12" }
 ]
-setuptools = { version = "*", python = ">=3.12" }
 
 # lint
 black = { version = "^22.0", python = ">=3.10" }
