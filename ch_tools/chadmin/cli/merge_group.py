@@ -2,6 +2,7 @@ from collections import OrderedDict
 
 from click import group, option, pass_context
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.process import list_merges
 from ch_tools.common.cli.formatting import (
     format_bytes,
@@ -21,7 +22,7 @@ FIELD_FORMATTERS = {
 }
 
 
-@group("merge")
+@group("merge", cls=Chadmin)
 def merge_group():
     """Commands to manage merges (retrieve information from system.merges)."""
     pass

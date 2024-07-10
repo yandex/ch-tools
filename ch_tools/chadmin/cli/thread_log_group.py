@@ -1,10 +1,11 @@
 from click import argument, group, option, pass_context
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 
 
-@group("thread-log")
+@group("thread-log", cls=Chadmin)
 def thread_log_group():
     """
     Commands for retrieving information from system.query_thread_log.

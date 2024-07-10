@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from click import group, option, pass_context
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.clickhouse_disks import (
     CLICKHOUSE_METADATA_PATH,
     CLICKHOUSE_PATH,
@@ -18,7 +19,7 @@ from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
 
 
-@group("data-store")
+@group("data-store", cls=Chadmin)
 def data_store_group():
     """
     Commands for manipulating data stored by ClickHouse.

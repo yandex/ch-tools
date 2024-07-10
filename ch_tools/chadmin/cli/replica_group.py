@@ -13,6 +13,7 @@ from cloup import (
 )
 from cloup.constraints import AnySet, If, RequireAtLeast, accept_none, require_all
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.table_replica import (
     get_table_replica,
     list_table_replicas,
@@ -26,7 +27,7 @@ from ch_tools.common.clickhouse.config import get_cluster_name
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
 
 
-@group("replica")
+@group("replica", cls=Chadmin)
 def replica_group():
     """Commands to manage table replicas."""
     pass

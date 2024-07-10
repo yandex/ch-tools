@@ -2,6 +2,7 @@ from collections import OrderedDict
 
 from click import group, option, pass_context
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.process import list_replicated_fetches
 from ch_tools.common.cli.formatting import (
     format_bytes,
@@ -18,7 +19,7 @@ FIELD_FORMATTERS = {
 }
 
 
-@group("replicated-fetch")
+@group("replicated-fetch", cls=Chadmin)
 def replicated_fetch_group():
     """Commands to manage fetches (retrieve information from system.replicated_fetches)."""
     pass

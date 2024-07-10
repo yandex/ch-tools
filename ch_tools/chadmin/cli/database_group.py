@@ -1,12 +1,13 @@
 from cloup import argument, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_cluster_name
 
 
-@group("database")
+@group("database", cls=Chadmin)
 def database_group():
     """Commands to manage databases."""
     pass

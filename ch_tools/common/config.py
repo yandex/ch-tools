@@ -14,7 +14,7 @@ CONFIG_FILE = "/etc/clickhouse-tools/config.yaml"
 S3_LOG_CONFIG = {
     "sink": f"{CHADMIN_LOG_FILE}",
     "level": "WARNING",
-    "format": "chadmin",
+    "format": "default",
 }
 
 DEFAULT_CONFIG = {
@@ -124,15 +124,14 @@ DEFAULT_CONFIG = {
     "keeper-monitoring": {},
     "loguru": {
         "formatters": {
-            "chadmin": "{time:YYYY-MM-DD HH:mm:ss,SSS} {process.name:11} {process.id:5} [{level:8}] {extra[logger_name]}: {message}",
-            "monrun": "{time:YYYY-MM-DD HH:mm:ss,SSS} {process.name:11} {process.id:5} [{level:8}] {extra[logger_name]}: {extra[cmd_name]}: {message}",
+            "default": "{time:YYYY-MM-DD HH:mm:ss,SSS} {process.name:11} {process.id:5} [{level:8}] {extra[logger_name]}: {extra[cmd_name]}: {message}",
         },
         "handlers": {
             "chadmin": {
                 "chadmin": {
                     "sink": CHADMIN_LOG_FILE,
                     "level": "DEBUG",
-                    "format": "chadmin",
+                    "format": "default",
                 },
                 "boto3": S3_LOG_CONFIG,
                 "botocore": S3_LOG_CONFIG,
@@ -145,19 +144,19 @@ DEFAULT_CONFIG = {
                 "ch-monitoring": {
                     "sink": CH_MONITORING_LOG_FILE,
                     "level": "DEBUG",
-                    "format": "monrun",
+                    "format": "default",
                 },
                 "urllib3.connectionpool": {
                     "sink": CH_MONITORING_LOG_FILE,
                     "level": "CRITICAL",
-                    "format": "monrun",
+                    "format": "default",
                 },
             },
             "keeper-monitoring": {
                 "keeper-monitoring": {
                     "sink": KEEPER_MONITORING_LOG_FILE,
                     "level": "DEBUG",
-                    "format": "monrun",
+                    "format": "default",
                 },
             },
         },

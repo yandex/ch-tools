@@ -5,6 +5,7 @@ import time
 from click import FloatRange, group, option, pass_context
 from requests.exceptions import ReadTimeout
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.clickhouse_disks import S3_METADATA_STORE_PATH
 from ch_tools.chadmin.internal.table_replica import list_table_replicas
 from ch_tools.chadmin.internal.utils import execute_query
@@ -19,7 +20,7 @@ LOCAL_PART_LOAD_SPEED = 10  # in data parts per second
 S3_PART_LOAD_SPEED = 0.5  # in data parts per second
 
 
-@group("wait")
+@group("wait", cls=Chadmin)
 def wait_group():
     """Commands to wait until Clickhouse is in a certain state."""
     pass

@@ -4,6 +4,7 @@ import sys
 from click import argument, group, option, pass_context
 from kazoo.security import make_digest_acl
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.table_replica import get_table_replica
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
@@ -22,7 +23,7 @@ from ch_tools.common.cli.parameters import ListParamType, StringParamType
 from ch_tools.common.config import load_config
 
 
-@group("zookeeper")
+@group("zookeeper", cls=Chadmin)
 @option("--port", help="ZooKeeper port.", type=int, default=2181)
 @option("--host", help="ZooKeeper host.", type=str)
 @option("--secure", help="Use secure connection.", default=False, is_flag=True)

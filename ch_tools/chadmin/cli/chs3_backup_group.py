@@ -2,6 +2,7 @@ import os
 
 from click import ClickException, argument, group, option, pass_context
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.backup import unfreeze_backup
 from ch_tools.common import logging
 from ch_tools.common.backup import (
@@ -12,7 +13,7 @@ from ch_tools.common.backup import (
 from ch_tools.common.utils import clear_empty_directories_recursively
 
 
-@group("chs3-backup")
+@group("chs3-backup", cls=Chadmin)
 def chs3_backup_group():
     """Commands to manage ClickHouse over S3 backups (backups for data stored in S3)."""
     pass

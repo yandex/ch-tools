@@ -4,10 +4,11 @@ import shutil
 
 from click import group, option
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.common import logging
 
 
-@group("disks")
+@group("disks", cls=Chadmin)
 def disks_group():
     """Commands to manage disks."""
     pass

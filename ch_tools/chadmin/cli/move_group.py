@@ -2,6 +2,7 @@ from collections import OrderedDict
 
 from cloup import group, option, pass_context
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.process import list_moves
 from ch_tools.common.cli.formatting import format_bytes, format_float, print_response
 from ch_tools.common.clickhouse.config import get_cluster_name
@@ -12,7 +13,7 @@ FIELD_FORMATTERS = {
 }
 
 
-@group("move")
+@group("move", cls=Chadmin)
 def move_group():
     """Commands to manage moves (retrieve information from system.moves)."""
     pass

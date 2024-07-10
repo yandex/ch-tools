@@ -52,7 +52,16 @@ class KeeperChecks(cloup.Group):
                 ctx.obj["config"]["loguru"], "keeper-monitoring", {"cmd_name": cmd.name}
             )
 
-            logging.debug("Start executing")
+            logging.debug(
+                "Executing command '{}', params: {}, args: {}, version: {}",
+                cmd.name,
+                {
+                    **ctx.parent.params,
+                    **ctx.params,
+                },
+                ctx.args,
+                __version__,
+            )
 
             status = Status()
             try:

@@ -1,6 +1,7 @@
 from cloup import Choice, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.partition import (
     attach_partition,
     detach_partition,
@@ -13,7 +14,7 @@ from ch_tools.common import logging
 from ch_tools.common.cli.parameters import BytesParamType
 
 
-@group("partition")
+@group("partition", cls=Chadmin)
 def partition_group():
     """
     Commands to manage partitions.
