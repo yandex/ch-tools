@@ -93,10 +93,10 @@ def delete_zk_node(ctx, path):
     delete_zk_nodes(ctx, [path])
 
 
-def delete_zk_nodes(ctx, paths):
+def delete_zk_nodes(ctx, paths, dry_run=False):
     paths_formated = [_format_path(ctx, path) for path in paths]
     with zk_client(ctx) as zk:
-        _delete_recursive(zk, paths_formated)
+        _delete_recursive(zk, paths_formated, dry_run)
 
 
 def _format_path(ctx, path):
@@ -198,7 +198,7 @@ def _remove_subpaths(paths):
     return ["/".join(path) for path in normalized_paths]
 
 
-def _delete_recursive(zk, paths):
+def _delete_recursive(zk, paths, dry_run=False):
     """
     Kazoo already has the ability to recursively delete nodes, but the implementation is quite naive
     and has poor performance with a large number of nodes being deleted.
@@ -222,6 +222,8 @@ def _delete_recursive(zk, paths):
             queue.append(os.path.join(path, child_node))
 
     logging.info("Got {} nodes to remove.", len(nodes_to_delete))
+    if dry_run:
+        return
     # When number of nodes to delete is large preferable to use greater transaction size.
     operations_in_transaction = max(100, int(sqrt(len(nodes_to_delete))))
 
@@ -263,6 +265,7 @@ def clean_zk_metadata_for_hosts(
     cleanup_database=True,
     cleanup_ddl_queue=True,
     zk_ddl_query_path=None,
+    dry_run=False,
 ):
     """
     Perform cleanup in zookeeper after deleting hosts in the cluster or whole cluster deleting.
@@ -325,7 +328,8 @@ def clean_zk_metadata_for_hosts(
             for node in nodes:
                 is_lost_flag_path = os.path.join(replica_path, node, "is_lost")
                 logging.info("Set is_lost_flag {}", is_lost_flag_path)
-                _set_node_value(zk, is_lost_flag_path, "1")
+                if not dry_run:
+                    _set_node_value(zk, is_lost_flag_path, "1")
 
     def _get_replicas_queues_to_remove(zk, paths, replica_names):
         """
@@ -358,7 +362,7 @@ def clean_zk_metadata_for_hosts(
                 or len(_get_children(zk, child_full_path)) == 0
             ):
                 to_delete.append(path)
-        _delete_recursive(zk, to_delete)
+        _delete_recursive(zk, to_delete, dry_run)
 
     def tables_cleanup(zk, zk_root_path):
         """
@@ -369,7 +373,7 @@ def clean_zk_metadata_for_hosts(
         _set_replicas_is_lost(zk, table_paths, nodes)
 
         to_remove = _get_replicas_queues_to_remove(zk, table_paths, nodes) + hosts_paths
-        _delete_recursive(zk, to_remove)
+        _delete_recursive(zk, to_remove, dry_run)
         _remove_if_no_hosts_in_replicas(zk, table_paths)
 
     def databases_cleanups(zk, zk_root_path):
@@ -378,7 +382,7 @@ def clean_zk_metadata_for_hosts(
         """
         logging.info("Start databases cleanup for nodes: {}", ",".join(nodes))
         (databases_paths, hosts_paths) = _find_databases(zk, zk_root_path, nodes)
-        _delete_recursive(zk, hosts_paths)
+        _delete_recursive(zk, hosts_paths, dry_run)
         _remove_if_no_hosts_in_replicas(zk, databases_paths)
 
     def _get_hosts_from_ddl(zk, ddl_task_path):
@@ -472,7 +476,8 @@ def clean_zk_metadata_for_hosts(
                     logging.info("Finished path already exists: {}", finished_path)
                     continue
                 logging.info("Add {} to finished for ddl_task: {}", host, ddl_task)
-                zk.create(finished_path, b"0\n")
+                if not dry_run:
+                    zk.create(finished_path, b"0\n")
 
             if have_mention:
                 ddl_tasks_to_remove.append([ddl_task_full, len(ddl_hosts_dict)])
@@ -480,8 +485,9 @@ def clean_zk_metadata_for_hosts(
         logging.info("Finish mark ddl query")
         chunk_size = 100
         for ddl_task_chunk in chunked(ddl_tasks_to_remove, chunk_size):
-            _wait_ddl_tasks_finished(zk, ddl_task_chunk)
-            delete_zk_nodes(ctx, [ddl_data[0] for ddl_data in ddl_task_chunk])
+            if not dry_run:
+                _wait_ddl_tasks_finished(zk, ddl_task_chunk)
+            delete_zk_nodes(ctx, [ddl_data[0] for ddl_data in ddl_task_chunk], dry_run)
 
         logging.info("DDL queue cleanup finished")
 

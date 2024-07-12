@@ -304,6 +304,13 @@ def delete_ddl_task_command(ctx, tasks):
     help="Remove metadata from Zookeeper for specified hosts.",
 )
 @option(
+    "-n",
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Enable dry run mode and do not perform any modifying actions.",
+)
+@option(
     "--clean-ddl-queue/--no-clean-ddl-queue",
     is_flag=True,
     default=True,
@@ -312,7 +319,7 @@ def delete_ddl_task_command(ctx, tasks):
 )
 @argument("fqdn", type=ListParamType())
 @pass_context
-def clickhouse_hosts_command(ctx, fqdn, clean_ddl_queue):
+def clickhouse_hosts_command(ctx, fqdn, clean_ddl_queue, dry_run):
     # We can't get the ddl queue path from clickhouse config,
     # because in some cases we are changing this path while performing cluster resetup.
     config = load_config()
@@ -321,6 +328,7 @@ def clickhouse_hosts_command(ctx, fqdn, clean_ddl_queue):
         fqdn,
         cleanup_ddl_queue=clean_ddl_queue,
         zk_ddl_query_path=config["clickhouse"]["distributed_ddl_path"],
+        dry_run=dry_run,
     )
 
 
@@ -328,14 +336,22 @@ def clickhouse_hosts_command(ctx, fqdn, clean_ddl_queue):
     name="remove-hosts-from-table",
     help="Remove hosts from table metadata in the Zookeeper.",
 )
+@option(
+    "-n",
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Enable dry run mode and do not perform any modifying actions.",
+)
 @argument("zookeeper-table-path")
 @argument("fqdn", type=ListParamType())
 @pass_context
-def remove_hosts_from_table(ctx, zookeeper_table_path, fqdn):
+def remove_hosts_from_table(ctx, zookeeper_table_path, fqdn, dry_run):
     clean_zk_metadata_for_hosts(
         ctx,
         fqdn,
         zk_ddl_query_path=zookeeper_table_path,
         cleanup_database=False,
         cleanup_ddl_queue=False,
+        dry_run=dry_run,
     )
