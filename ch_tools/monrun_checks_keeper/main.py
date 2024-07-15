@@ -1,8 +1,13 @@
+import warnings
 from functools import wraps
 from typing import Optional
 
 import click
 import cloup
+
+warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
+
+# pylint: disable=wrong-import-position
 
 from ch_tools import __version__
 from ch_tools.common import logging
@@ -20,6 +25,7 @@ from ch_tools.monrun_checks_keeper.keeper_commands import (
     max_latency_command,
     min_latency_command,
     queue_command,
+    tls_command,
 )
 from ch_tools.monrun_checks_keeper.status import status_command
 
@@ -129,6 +135,7 @@ COMMANDS = [
     descriptors_command,
     get_version_command,
     check_snapshots,
+    tls_command,
 ]
 
 cli.add_command(status_command(COMMANDS))
