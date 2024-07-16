@@ -120,8 +120,17 @@ DEFAULT_CONFIG = {
             "private": False,
             "imdsv2": False,
         },
+        "tls": {
+            "crit": 10,
+            "warn": 30,
+        },
     },
-    "keeper-monitoring": {},
+    "keeper-monitoring": {
+        "tls": {
+            "crit": 10,
+            "warn": 30,
+        },
+    },
     "loguru": {
         "formatters": {
             "chadmin": "{time:YYYY-MM-DD HH:mm:ss,SSS} {process.name:11} {process.id:5} [{level:8}] {extra[logger_name]}: {message}",

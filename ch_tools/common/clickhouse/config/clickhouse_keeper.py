@@ -39,6 +39,14 @@ class ClickhouseKeeperConfig:
         return int(self._keeper_server.get("tcp_port", 0)), False
 
     @property
+    def tls_cert_path(self):
+        return (
+            self._clickhouse.get("openSSL", {})
+            .get("server", {})
+            .get("certificateFile", None)
+        )
+
+    @property
     def snapshots_dir(self):
         return self._keeper_server.get("snapshot_storage_path")
 

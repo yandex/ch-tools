@@ -3,13 +3,14 @@ import re
 import socket
 import ssl
 import time
-from typing import Dict
+from typing import Dict, Optional
 
-from click import command, pass_context
+from click import command, option, pass_context
 from kazoo.client import KazooClient
 
 from ch_tools.common.clickhouse.config import ClickhouseKeeperConfig
 from ch_tools.common.result import CRIT, OK, WARNING, Result
+from ch_tools.common.tls import check_cert_on_ports
 
 ZOOKEEPER_CFG_FILE = "/etc/zookeeper/conf/zoo.cfg"
 DEFAULT_ZOOKEEPER_DATA_DIR = "/var/lib/zookeeper"
@@ -128,6 +129,44 @@ def check_last_null_pointer_exc():
     return Result(OK)
 
 
+@command("tls")
+@option("-c", "--critical", "crit", type=int, help="Critical threshold.")
+@option("-w", "--warning", "warn", type=int, help="Warning threshold.")
+@option(
+    "-p",
+    "--ports",
+    "ports",
+    type=str,
+    default=None,
+    help="Comma separated list of ports. By default read from ClickHouse config",
+)
+@option("--chain", "chain", is_flag=True, help="Verify certificate chain.")
+def tls_command(
+    crit: int,
+    warn: int,
+    ports: Optional[str],
+    chain: bool,
+) -> Result:
+    """
+    Check TLS certificate for expiration and that actual cert from fs used.
+    """
+    # pylint: disable=too-many-return-statements
+
+    if ports:
+        port_list = ports.split(",")
+    else:
+        port, is_secure = get_keeper_port_pair()
+        if not is_secure:
+            return Result(OK, "Keeper doesn't have security port.")
+        port_list = [port]
+
+    path = get_keeper_cert_path()
+    if not path:
+        return Result(WARNING, "Keeper has security port without configured TLS cert.")
+
+    return check_cert_on_ports(port_list, crit, warn, chain, path)
+
+
 def get_zookeeper_log_files_for_last_day():
     """Collect Zookeeper logs for last 24 hours"""
     current_timestamp = time.time()
@@ -193,6 +232,16 @@ def get_keeper_port_pair():
         return ClickhouseKeeperConfig.load().port_pair
     except FileNotFoundError:
         return 2181, False
+
+
+def get_keeper_cert_path():
+    """
+    :returns path to Keeper TLS cert if exists.
+    """
+    try:
+        return ClickhouseKeeperConfig.load().tls_cert_path
+    except FileNotFoundError:
+        return None
 
 
 def keeper_command(cmd, timeout, verify_ssl_certs):
