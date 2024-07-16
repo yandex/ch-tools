@@ -34,11 +34,12 @@ class Chadmin:
         )
         return self.exec_cmd(cmd)
 
-    def zk_cleanup(self, fqdn, zk_root=None, no_ch_config=False):
-        cmd = "zookeeper {use_config} {root} cleanup-removed-hosts-metadata {hosts}".format(
+    def zk_cleanup(self, fqdn, zk_root=None, no_ch_config=False, dry_run=False):
+        cmd = "zookeeper {use_config} {root} cleanup-removed-hosts-metadata {hosts} {dry}".format(
             use_config="--no-ch-config" if no_ch_config else "",
             root=f"--chroot {zk_root}" if zk_root else "",
             hosts=fqdn,
+            dry="" if not dry_run else "--dry-run",
         )
         return self.exec_cmd(cmd)
 

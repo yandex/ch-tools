@@ -24,6 +24,26 @@ Feature: chadmin zookeeper commands.
     And we do hosts cleanup on clickhouse01 with fqdn clickhouse01.ch_tools_test,clickhouse02.ch_tools_test and zk root /tables
     Then the list of children on clickhouse01 for zk node /tables/ are empty
 
+  Scenario: Cleanup all hosts dry run
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS test ON CLUSTER 'cluster'; 
+    CREATE DATABASE test ON CLUSTER 'cluster';
+
+    CREATE TABLE test.table_01 ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n;
+
+    CREATE TABLE test.table_02 ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_02', '{replica}') PARTITION BY n ORDER BY n;
+    """
+
+    And we do hosts dry cleanup on clickhouse01 with fqdn clickhouse01.ch_tools_test,clickhouse02.ch_tools_test and zk root /tables
+    Then the list of children on clickhouse01 for zk node /tables/ are equal to
+    """
+    /tables/table_01
+    /tables/table_02
+    """
+
   Scenario: Cleanup single host 
     When we execute chadmin create zk nodes on clickhouse01
     """
