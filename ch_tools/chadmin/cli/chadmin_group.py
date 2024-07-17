@@ -47,9 +47,11 @@ class Chadmin(cloup.Group):
                 __version__,
             )
 
-            result = cmd_callback(*a, **kw)
-
-            logging.debug("Command '{}' finished", cmd.name)
+            try:
+                result = cmd_callback(*a, **kw)
+                logging.debug("Command '{}' completed", cmd.name)
+            except Exception:
+                logging.exception("Command '{}' failed with error:", cmd.name)
 
             return result
 
