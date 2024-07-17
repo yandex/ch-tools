@@ -136,10 +136,12 @@ groups: List[Any] = [
     zookeeper_group,
 ]
 
-for section_title, entries in {"Commands": commands, "Groups": groups}.items():
-    section = cloup.Section(section_title)
-    for entry in entries:
-        cli.add_command(entry, section=section)
+section = cloup.Section("Commands")
+for command in commands:
+    cli.add_command(command, section=section)
+section = cloup.Section("Groups")
+for group in groups:
+    cli.add_group(group, section=section)
 
 
 def main():

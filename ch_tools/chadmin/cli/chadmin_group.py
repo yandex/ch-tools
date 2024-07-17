@@ -60,3 +60,17 @@ class Chadmin(cloup.Group):
             section=section,
             fallback_to_default_section=fallback_to_default_section,
         )
+
+    def add_group(
+        self,
+        cmd: click.Group,
+        name: Optional[str] = None,
+        section: Optional[cloup.Section] = None,
+        fallback_to_default_section: bool = True,
+    ) -> None:
+        super().add_command(
+            cmd,
+            name=name,
+            section=section,
+            fallback_to_default_section=fallback_to_default_section,
+        )
