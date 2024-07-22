@@ -12,6 +12,7 @@ from cloup.constraints import (
     require_all,
 )
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.table import (
     attach_table,
     delete_detached_table,
@@ -33,7 +34,7 @@ FIELD_FORMATTERS = {
 }
 
 
-@group("table")
+@group("table", cls=Chadmin)
 def table_group():
     """Commands to manage tables."""
     pass

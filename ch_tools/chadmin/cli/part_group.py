@@ -3,6 +3,7 @@ from collections import OrderedDict
 from cloup import Choice, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.part import (
     attach_part,
     detach_part,
@@ -22,7 +23,7 @@ FIELD_FORMATTERS = {
 }
 
 
-@group("part")
+@group("part", cls=Chadmin)
 def part_group():
     """
     Commands to manage data parts.

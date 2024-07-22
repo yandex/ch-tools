@@ -2,6 +2,7 @@ from collections import OrderedDict
 
 from click import Choice, group, option, pass_context
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.part import list_part_log
 from ch_tools.common.cli.formatting import format_bytes, print_response
 from ch_tools.common.clickhouse.config import get_cluster_name
@@ -13,7 +14,7 @@ FIELD_FORMATTERS = {
 }
 
 
-@group("part-log")
+@group("part-log", cls=Chadmin)
 def part_log_group():
     """
     Commands for retrieving information from system.part_log.

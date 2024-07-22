@@ -1,6 +1,7 @@
 from cloup import Choice, argument, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.process import get_process, kill_process, list_processes
 from ch_tools.chadmin.internal.utils import format_query
 from ch_tools.common.cli.formatting import print_response
@@ -11,7 +12,7 @@ FIELD_FORMATTERS = {
 }
 
 
-@group("process")
+@group("process", cls=Chadmin)
 def process_group():
     """
     Commands to manage processes.

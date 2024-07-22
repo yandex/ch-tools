@@ -1,11 +1,12 @@
 from click import group, option, pass_context
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.dictionary import list_dictionaries, reload_dictionary
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
 
 
-@group("dictionary")
+@group("dictionary", cls=Chadmin)
 def dictionary_group():
     """Commands to manage external dictionaries."""
     pass

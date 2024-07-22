@@ -2,12 +2,13 @@ import datetime
 
 from click import Choice, argument, group, option, pass_context
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_cluster_name
 
 
-@group("query-log")
+@group("query-log", cls=Chadmin)
 def query_log_group():
     """
     Commands for retrieving information from system.query_log.

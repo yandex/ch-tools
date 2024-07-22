@@ -4,8 +4,8 @@ from typing import Any, List
 
 import cloup
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.cli.move_group import move_group
-from ch_tools.common import logging
 from ch_tools.common.config import load_config
 
 warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
@@ -54,6 +54,7 @@ from ch_tools.common.cli.parameters import TimeSpanParamType
 
 @cloup.group(
     "chadmin",
+    cls=Chadmin,
     help="ClickHouse administration tool.",
     context_settings=CONTEXT_SETTINGS,
 )
@@ -81,8 +82,6 @@ from ch_tools.common.cli.parameters import TimeSpanParamType
 def cli(ctx, format_, settings, timeout, port, debug):
     """ClickHouse administration tool."""
     config = load_config()
-
-    logging.configure(config["loguru"], "chadmin")
 
     if port:
         config["clickhouse"]["port"] = port
@@ -137,10 +136,12 @@ groups: List[Any] = [
     zookeeper_group,
 ]
 
-for section_title, entries in {"Commands": commands, "Groups": groups}.items():
-    section = cloup.Section(section_title)
-    for entry in entries:
-        cli.add_command(entry, section=section)
+section = cloup.Section("Commands")
+for command in commands:
+    cli.add_command(command, section=section)
+section = cloup.Section("Groups")
+for group in groups:
+    cli.add_group(group, section=section)
 
 
 def main():

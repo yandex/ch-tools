@@ -5,6 +5,7 @@ from typing import Optional
 from click import Context, group, option, pass_context
 from humanfriendly import format_size
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config import get_clickhouse_config
@@ -17,7 +18,7 @@ STORE_STATE_PATH = "/tmp/object_storage_cleanup_state.json"
 ORPHANED_OBJECTS_SIZE_FIELD = "orphaned_objects_size"
 
 
-@group("object-storage")
+@group("object-storage", cls=Chadmin)
 @option(
     "-d",
     "--disk",

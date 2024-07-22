@@ -1,11 +1,12 @@
 from click import group, option, pass_context
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_cluster_name
 
 
-@group("crash-log")
+@group("crash-log", cls=Chadmin)
 def crash_log_group():
     """
     Commands for retrieving information from system.crash_log.

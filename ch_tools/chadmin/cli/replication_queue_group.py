@@ -2,6 +2,7 @@ from collections import defaultdict
 
 from click import group, option, pass_context
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import delete_zk_node
 from ch_tools.common import logging
@@ -9,7 +10,7 @@ from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config import get_cluster_name
 
 
-@group("replication-queue")
+@group("replication-queue", cls=Chadmin)
 def replication_queue_group():
     """
     Commands to manage replication queue.
