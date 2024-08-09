@@ -389,14 +389,14 @@ Feature: ch-monitoring tool
     2;KazooTimeoutError('Connection time-out')
     """
   
-  Scenario: Check clickhouse orphaned objects with store-state-zk-path option
+  Scenario: Check clickhouse orphaned objects with state-zk-path option
     When we execute command on clickhouse01
     """
     chadmin object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state-zk-path /tmp/shard_1
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects --store-state-zk-path /tmp/shard_1
+    ch-monitoring orphaned-objects --state-zk-path /tmp/shard_1
     """
     Then we get response
     """
@@ -414,7 +414,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects --store-state-zk-path /tmp/shard_1
+    ch-monitoring orphaned-objects --state-zk-path /tmp/shard_1
     """
     Then we get response contains
     """
@@ -422,7 +422,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects -w 9 -c 19 --store-state-zk-path /tmp/shard_1
+    ch-monitoring orphaned-objects -w 9 -c 19 --state-zk-path /tmp/shard_1
     """
     Then we get response contains
     """
@@ -430,21 +430,21 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects -w 4 -c 9 --store-state-zk-path /tmp/shard_1
+    ch-monitoring orphaned-objects -w 4 -c 9 --state-zk-path /tmp/shard_1
     """
     Then we get response contains
     """
     2;Total size: 10
     """
 
-  Scenario: Check clickhouse orphaned objects with store-state-local option
+  Scenario: Check clickhouse orphaned objects with state-local option
     When we execute command on clickhouse01
     """
     chadmin object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state-local
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects --store-state-local
+    ch-monitoring orphaned-objects --state-local
     """
     Then we get response
     """
@@ -462,7 +462,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects --store-state-local
+    ch-monitoring orphaned-objects --state-local
     """
     Then we get response contains
     """
@@ -470,7 +470,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects -w 9 -c 19 --store-state-local
+    ch-monitoring orphaned-objects -w 9 -c 19 --state-local
     """
     Then we get response contains
     """
@@ -478,21 +478,21 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects -w 4 -c 9 --store-state-local
+    ch-monitoring orphaned-objects -w 4 -c 9 --state-local
     """
     Then we get response contains
     """
     2;Total size: 10
     """
 
-  Scenario: Check clickhouse orphaned objects --store-state-local and --store-state-zk-path are mutually exclusive
+  Scenario: Check clickhouse orphaned objects --state-local and --state-zk-path are mutually exclusive
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects -w 9 -c 19 --store-state-local --store-state-zk-path /tmp/shard_1
+    ch-monitoring orphaned-objects -w 9 -c 19 --state-local --state-zk-path /tmp/shard_1
     """
     Then we get response contains
     """
-    1;Unknown error: Options --store-state-local and --store-state-zk-path are mutually exclusive.
+    1;Unknown error: Options --state-local and --state-zk-path are mutually exclusive.
     """
     When we execute command on clickhouse01
     """
@@ -500,5 +500,5 @@ Feature: ch-monitoring tool
     """
     Then we get response contains
     """
-    1;Unknown error: One of these options must be provided: --store_state_local, --store_state_zk_path
+    1;Unknown error: One of these options must be provided: --state-local, --state-zk-path
     """

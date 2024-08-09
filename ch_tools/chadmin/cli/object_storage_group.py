@@ -20,7 +20,7 @@ from ch_tools.common.commands.clean_object_storage import DEFAULT_GUARD_INTERVAL
 STREAM_TIMEOUT = 10 * 60
 
 ORPHANED_OBJECTS_SIZE_FIELD = "orphaned_objects_size"
-STORE_STATE_LOCAL_PATH = "/tmp/object_storage_cleanup_state.json"
+STATE_LOCAL_PATH = "/tmp/object_storage_cleanup_state.json"
 
 
 @group("object-storage", cls=Chadmin)
@@ -163,7 +163,7 @@ def _store_state_zk_save(ctx: Context, path: str, total_size: int) -> None:
 
 
 def _store_state_local_save(_: Context, total_size: int) -> None:
-    with open(STORE_STATE_LOCAL_PATH, "w", encoding="utf-8") as file:
+    with open(STATE_LOCAL_PATH, "w", encoding="utf-8") as file:
         json.dump({ORPHANED_OBJECTS_SIZE_FIELD: total_size}, file, indent=4)
 
 
