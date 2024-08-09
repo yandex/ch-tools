@@ -6,6 +6,11 @@ from click import Context, group, option, pass_context
 from humanfriendly import format_size
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
+from ch_tools.chadmin.internal.zookeeper import (
+    check_zk_node,
+    create_zk_nodes,
+    update_zk_nodes,
+)
 from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config import get_clickhouse_config
@@ -14,8 +19,8 @@ from ch_tools.common.commands.clean_object_storage import DEFAULT_GUARD_INTERVAL
 # Use big enough timeout for stream HTTP query
 STREAM_TIMEOUT = 10 * 60
 
-STORE_STATE_PATH = "/tmp/object_storage_cleanup_state.json"
 ORPHANED_OBJECTS_SIZE_FIELD = "orphaned_objects_size"
+STORE_STATE_LOCAL_PATH = "/tmp/object_storage_cleanup_state.json"
 
 
 @group("object-storage", cls=Chadmin)
@@ -101,10 +106,16 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     help=("Use saved object list without traversing object storage again."),
 )
 @option(
-    "--store-state",
-    "store_state",
+    "--store-state-local",
+    "store_state_local",
     is_flag=True,
     help=("Write total size of orphaned objects to log file."),
+)
+@option(
+    "--store-state-zk-path",
+    "store_state_zk_path",
+    default="",
+    help=("Zookeeper node path for storage total size of orphaned objects."),
 )
 @pass_context
 def clean_command(
@@ -117,7 +128,8 @@ def clean_command(
     dry_run: bool,
     keep_paths: bool,
     use_saved_list: bool,
-    store_state: bool,
+    store_state_local: bool,
+    store_state_zk_path: str,
 ) -> None:
     """
     Clean orphaned S3 objects.
@@ -134,11 +146,25 @@ def clean_command(
         use_saved_list,
     )
 
-    if store_state:
-        with open(STORE_STATE_PATH, "w", encoding="utf-8") as file:
-            json.dump({ORPHANED_OBJECTS_SIZE_FIELD: total_size}, file, indent=4)
+    if store_state_zk_path:
+        _store_state_zk_save(ctx, store_state_zk_path, total_size)
+
+    if store_state_local:
+        _store_state_local_save(ctx, total_size)
 
     _print_response(ctx, dry_run, deleted, total_size)
+
+
+def _store_state_zk_save(ctx: Context, path: str, total_size: int) -> None:
+    if not check_zk_node(ctx, path):
+        create_zk_nodes(ctx, [path], make_parents=True)
+    state_data = json.dumps({ORPHANED_OBJECTS_SIZE_FIELD: total_size}, indent=4)
+    update_zk_nodes(ctx, [path], state_data.encode("utf-8"))
+
+
+def _store_state_local_save(_: Context, total_size: int) -> None:
+    with open(STORE_STATE_LOCAL_PATH, "w", encoding="utf-8") as file:
+        json.dump({ORPHANED_OBJECTS_SIZE_FIELD: total_size}, file, indent=4)
 
 
 def _print_response(ctx: Context, dry_run: bool, deleted: int, total_size: int) -> None:

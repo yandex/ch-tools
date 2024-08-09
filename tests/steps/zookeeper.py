@@ -4,7 +4,7 @@ Steps for interacting with ZooKeeper or Clickhouse Keeper.
 
 import os
 
-from behave import given
+from behave import given, then
 from kazoo.client import KazooClient
 from modules.docker import get_container, get_exposed_port
 from tenacity import retry, stop_after_attempt, wait_fixed
@@ -62,6 +62,19 @@ def clean_zk_tables_metadata_for_host(context, node):
         recursive_remove_node_data(client, "/", node)
     finally:
         client.stop()
+
+
+@then('we get zookeeper node with "{path}" path')
+def step_get_zk_node(context, path):
+    client = _zk_client(context)
+
+    try:
+        client.start()
+        result = client.get(path)[0].decode().strip()
+    finally:
+        client.stop()
+
+    print(result)
 
 
 def _zk_client(context, instance_name="zookeeper01", port=2181, use_ssl=False):
