@@ -389,10 +389,14 @@ Feature: ch-monitoring tool
     2;KazooTimeoutError('Connection time-out')
     """
   
-  Scenario: Check CH store state
+  Scenario: Check clickhouse orphaned objects with state-zk-path option
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects
+    chadmin object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state-zk-path /tmp/shard_1
+    """
+    When we execute command on clickhouse01
+    """
+    ch-monitoring orphaned-objects --state-zk-path /tmp/shard_1
     """
     Then we get response
     """
@@ -406,11 +410,11 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state
+    chadmin object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state-zk-path /tmp/shard_1
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects
+    ch-monitoring orphaned-objects --state-zk-path /tmp/shard_1
     """
     Then we get response contains
     """
@@ -418,7 +422,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects -w 9 -c 19
+    ch-monitoring orphaned-objects -w 9 -c 19 --state-zk-path /tmp/shard_1
     """
     Then we get response contains
     """
@@ -426,9 +430,75 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects -w 4 -c 9
+    ch-monitoring orphaned-objects -w 4 -c 9 --state-zk-path /tmp/shard_1
     """
     Then we get response contains
     """
     2;Total size: 10
+    """
+
+  Scenario: Check clickhouse orphaned objects with state-local option
+    When we execute command on clickhouse01
+    """
+    chadmin object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state-local
+    """
+    When we execute command on clickhouse01
+    """
+    ch-monitoring orphaned-objects --state-local
+    """
+    Then we get response
+    """
+    0;Total size: 0
+    """
+    When we put object in S3
+    """
+      bucket: cloud-storage-test
+      path: /data/orpaned_object.tsv
+      data: '1234567890'
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state-local
+    """
+    When we execute command on clickhouse01
+    """
+    ch-monitoring orphaned-objects --state-local
+    """
+    Then we get response contains
+    """
+    0;Total size: 10
+    """
+    When we execute command on clickhouse01
+    """
+    ch-monitoring orphaned-objects -w 9 -c 19 --state-local
+    """
+    Then we get response contains
+    """
+    1;Total size: 10
+    """
+    When we execute command on clickhouse01
+    """
+    ch-monitoring orphaned-objects -w 4 -c 9 --state-local
+    """
+    Then we get response contains
+    """
+    2;Total size: 10
+    """
+
+  Scenario: Check clickhouse orphaned objects --state-local and --state-zk-path are mutually exclusive
+    When we execute command on clickhouse01
+    """
+    ch-monitoring orphaned-objects -w 9 -c 19 --state-local --state-zk-path /tmp/shard_1
+    """
+    Then we get response contains
+    """
+    1;Unknown error: Options --state-local and --state-zk-path are mutually exclusive.
+    """
+    When we execute command on clickhouse01
+    """
+    ch-monitoring orphaned-objects -w 9 -c 19
+    """
+    Then we get response contains
+    """
+    1;Unknown error: One of these options must be provided: --state-local, --state-zk-path
     """

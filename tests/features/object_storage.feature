@@ -170,10 +170,38 @@ Feature: chadmin object-storage commands
       TotalSize: 3
     """
   
-  Scenario: Clean with flag store-state works
+  Scenario: Clean with store-state-zk-path works
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state-zk-path /tmp/shard_1
+    """
+    Then we get zookeeper node with "/tmp/shard_1" path
+    """
+    {
+        "orphaned_objects_size": 0
+    }
+    """
+    When we put object in S3
+    """
+      bucket: cloud-storage-test
+      path: /data/orpaned_object.tsv
+      data: '1234567890'
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state-zk-path /tmp/shard_1
+    """
+    Then we get zookeeper node with "/tmp/shard_1" path
+    """
+    {
+        "orphaned_objects_size": 10
+    }
+    """
+
+  Scenario: Clean with store-state-local works
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state-local
     """
     Then we get file /tmp/object_storage_cleanup_state.json
     """
@@ -189,7 +217,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state-local
     """
     Then we get file /tmp/object_storage_cleanup_state.json
     """
