@@ -13,6 +13,7 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
     make_ch_disks_config,
     remove_from_ch_disk,
 )
+from ch_tools.chadmin.internal.system import get_version
 from ch_tools.chadmin.internal.utils import execute_query, remove_from_disk
 from ch_tools.chadmin.internal.zookeeper import clean_zk_metadata_for_hosts
 from ch_tools.common import logging
@@ -352,7 +353,7 @@ def _is_should_use_ch_disk_remover(table_data_path: str, disk_type: str) -> bool
 
 
 def _remove_table_data_from_disk(
-    table_uuid: str, disk_name: str, disk_type: str
+    table_uuid: str, disk_name: str, disk_type: str, ch_version: str
 ) -> None:
     logging.info(
         "_remove_table_data_from_disk: UUID={}, disk={}",
@@ -380,6 +381,7 @@ def _remove_table_data_from_disk(
         disk=disk_name,
         path=table_data_path,
         disk_config_path=disk_config_path,
+        ch_version=ch_version,
     )
     if code:
         raise RuntimeError(
@@ -418,6 +420,7 @@ def delete_detached_table(ctx, database_name, table_name):
             table_uuid=table_metadata.table_uuid,
             disk_name=disk_name,
             disk_type=disk_type,
+            ch_version=get_version(ctx)
         )
 
     if table_metadata.table_engine.is_table_engine_replicated():

@@ -5,6 +5,7 @@ import xmltodict
 
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import ClickhouseConfig
+from ch_tools.chadmin.internal.system import match_str_ch_version
 
 CLICKHOUSE_PATH = "/var/lib/clickhouse"
 CLICKHOUSE_STORE_PATH = CLICKHOUSE_PATH + "/store"
@@ -34,9 +35,14 @@ def make_ch_disks_config(disk: str) -> str:
 
 
 def remove_from_ch_disk(
-    disk: str, path: str, disk_config_path: Optional[str] = None
+    disk: str, path: str, ch_version: str = None, disk_config_path: Optional[str] = None
 ) -> Tuple[int, bytes]:
-    cmd = f"clickhouse-disks { '-C ' + disk_config_path if disk_config_path else ''} --disk {disk} remove {path}"
+    cmd = f"clickhouse-disks {'-C ' + disk_config_path if disk_config_path else ''} --disk {disk}"
+    if ch_version is None or not match_str_ch_version(ch_version, "24.7"):
+        cmd += f" remove {path}"
+    else:
+        cmd += f" --query \"remove {path} --recursive\""
+
     logging.info("Run : {}", cmd)
 
     proc = subprocess.run(
@@ -46,4 +52,6 @@ def remove_from_ch_disk(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
+
+    logging.info("clickhouse-disks remove command has finished: retcode {}, stderr: {}", proc.returncode, proc.stderr.decode())
     return (proc.returncode, proc.stderr)

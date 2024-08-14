@@ -15,4 +15,11 @@ def match_ch_version(ctx: Context, min_version: str) -> bool:
     """
     Returns True if ClickHouse version >= min_version.
     """
-    return parse_version(get_version(ctx)) >= parse_version(min_version)
+    return match_str_ch_version(get_version(ctx), min_version)
+
+
+def match_str_ch_version(version: str, min_version: str) -> bool:
+    """
+    Returns True if ClickHouse version >= min_version.
+    """
+    return parse_version(version) >= parse_version(min_version)
