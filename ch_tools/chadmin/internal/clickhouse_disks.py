@@ -41,7 +41,7 @@ def remove_from_ch_disk(
     if ch_version is None or not match_str_ch_version(ch_version, "24.7"):
         cmd += f" remove {path}"
     else:
-        cmd += f" --query \"remove {path} --recursive\""
+        cmd += f' --query "remove {path} --recursive"'
 
     logging.info("Run : {}", cmd)
 
@@ -53,5 +53,9 @@ def remove_from_ch_disk(
         stderr=subprocess.PIPE,
     )
 
-    logging.info("clickhouse-disks remove command has finished: retcode {}, stderr: {}", proc.returncode, proc.stderr.decode())
+    logging.info(
+        "clickhouse-disks remove command has finished: retcode {}, stderr: {}",
+        proc.returncode,
+        proc.stderr.decode(),
+    )
     return (proc.returncode, proc.stderr)

@@ -420,7 +420,7 @@ def delete_detached_table(ctx, database_name, table_name):
             table_uuid=table_metadata.table_uuid,
             disk_name=disk_name,
             disk_type=disk_type,
-            ch_version=get_version(ctx)
+            ch_version=get_version(ctx),
         )
 
     if table_metadata.table_engine.is_table_engine_replicated():
