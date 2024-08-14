@@ -35,13 +35,13 @@ def make_ch_disks_config(disk: str) -> str:
 
 
 def remove_from_ch_disk(
-    disk: str, path: str, ch_version: str = None, disk_config_path: Optional[str] = None
+    disk: str, path: str, ch_version: str = "", disk_config_path: Optional[str] = None
 ) -> Tuple[int, bytes]:
     cmd = f"clickhouse-disks {'-C ' + disk_config_path if disk_config_path else ''} --disk {disk}"
-    if ch_version is None or not match_str_ch_version(ch_version, "24.7"):
-        cmd += f" remove {path}"
-    else:
+    if match_str_ch_version(ch_version, "24.7"):
         cmd += f' --query "remove {path} --recursive"'
+    else:
+        cmd += f" remove {path}"
 
     logging.info("Run : {}", cmd)
 
