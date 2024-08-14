@@ -3,9 +3,9 @@ from typing import Optional, Tuple
 
 import xmltodict
 
+from ch_tools.chadmin.internal.system import match_str_ch_version
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import ClickhouseConfig
-from ch_tools.chadmin.internal.system import match_str_ch_version
 
 CLICKHOUSE_PATH = "/var/lib/clickhouse"
 CLICKHOUSE_STORE_PATH = CLICKHOUSE_PATH + "/store"
