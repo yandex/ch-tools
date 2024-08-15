@@ -6,7 +6,7 @@ import json
 import os.path
 from datetime import datetime, timedelta, timezone
 from os.path import exists
-from typing import Dict, List, Tuple
+from typing import Dict, List, Sequence
 
 from click import Context
 from cloup import command, option, pass_context
@@ -132,8 +132,8 @@ def _check_valid_backups_exist(backups: List[Dict]) -> Result:
     return Result(CRIT, "No valid backups found")
 
 
-def _count_failed_backups(backups: List[Dict]) -> Tuple[int, int]:
-    counter, userfault_counter = 0, 0
+def _count_failed_backups(backups: List[Dict]) -> int:
+    counter = 0
     for i, backup in enumerate(backups):
         state = backup["state"]
 
@@ -141,18 +141,16 @@ def _count_failed_backups(backups: List[Dict]) -> Tuple[int, int]:
             break
 
         if (state == "failed") or (state == "creating" and i > 0):
-            if "exception" in backup and _is_userfault_exception(backup["exception"]):
-                userfault_counter += 1
             counter += 1
 
-    return counter, userfault_counter
+    return counter
 
 
 def _check_last_backup_not_failed(backups: List[Dict], crit_threshold: int) -> Result:
     """
     Check that the last backup is not failed. Its status must be 'created' or 'creating'.
     """
-    counter, _ = _count_failed_backups(backups)
+    counter = _count_failed_backups(backups)
 
     if counter == 0:
         return Result(OK)
@@ -292,7 +290,7 @@ def _merge_results(*results: Result) -> Result:
     return merged_result
 
 
-def _is_backup_failed_by_userfault_error(backups: List[Dict]) -> bool:
+def _is_backup_failed_by_userfault_error(backups: Sequence[Dict]) -> bool:
     failed_backup = None
     for i, backup in enumerate(backups):
         state = backup["state"]
@@ -305,17 +303,5 @@ def _is_backup_failed_by_userfault_error(backups: List[Dict]) -> bool:
     if not failed_backup:
         return False
 
-    exception = failed_backup.get("exception", "")
-    return any(value in exception for value in USERFAULT_ERRORS)
-
-
-def _is_userfault_exception(exception):
-    """
-    Check if exception was caused by user.
-    Current list:
-      * Disk quota exceeded
-    """
-    if not exception:
-        return False
-
-    return any(value in exception for value in USERFAULT_ERRORS)
+    exception_msg = failed_backup.get("exception") or ""
+    return any(value in exception_msg for value in USERFAULT_ERRORS)

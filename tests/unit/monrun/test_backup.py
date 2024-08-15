@@ -1,45 +1,47 @@
 from typing import Dict, Sequence
 
-from hamcrest import assert_that, equal_to
 from pytest import mark
 
-from ch_tools.monrun_checks.ch_backup import _count_failed_backups
+from ch_tools.monrun_checks.ch_backup import _is_backup_failed_by_userfault_error
 
 
 @mark.parametrize(
-    ["backups", "userfault_expected"],
+    ["backups", "result"],
     [
-        (({"state": "created"},), 0),
+        (({"state": "created"},), False),
+        (
+            (
+                {"state": "failed"},
+                {"state": "created"},
+            ),
+            False,
+        ),
+        (
+            (
+                {"state": "failed"},
+                {"state": "failed"},
+                {"state": "created"},
+            ),
+            False,
+        ),
         (
             (
                 {"state": "failed", "exception": None},
                 {"state": "created"},
             ),
-            0,
+            False,
         ),
         (
             (
-                {"state": "failed"},
-                {"state": "created"},
-            ),
-            0,
-        ),
-        (
-            (
+                {
+                    "state": "failed",
+                    "exception": "ClickhouseError: Code: 243. DB::Exception: Cannot reserve 1.00 MiB, not enough space. (NOT_ENOUGH_SPACE) (version 23.8.14.6 (official build))",
+                },
                 {"state": "failed"},
                 {"state": "failed"},
                 {"state": "created"},
             ),
-            0,
-        ),
-        (
-            (
-                {"state": "failed", "exception": "Disk quota exceeded"},
-                {"state": "failed"},
-                {"state": "failed"},
-                {"state": "created"},
-            ),
-            1,
+            True,
         ),
         (
             (
@@ -48,16 +50,7 @@ from ch_tools.monrun_checks.ch_backup import _count_failed_backups
                 {"state": "failed"},
                 {"state": "created"},
             ),
-            0,
-        ),
-        (
-            (
-                {"state": "failed", "exception": None},
-                {"state": "failed"},
-                {"state": "failed"},
-                {"state": "created"},
-            ),
-            0,
+            False,
         ),
         (
             (
@@ -66,12 +59,11 @@ from ch_tools.monrun_checks.ch_backup import _count_failed_backups
                 {"state": "failed", "exception": "Disk quota exceeded"},
                 {"state": "created"},
             ),
-            3,
+            True,
         ),
     ],
 )
-def test_last_backup_not_failed(
-    backups: Sequence[Dict], userfault_expected: Sequence[int]
+def test_is_backup_failed_by_userfault_error(
+    backups: Sequence[Dict], result: bool
 ) -> None:
-    _, userfault = _count_failed_backups(list(backups))
-    assert_that(userfault, equal_to(userfault_expected))
+    assert _is_backup_failed_by_userfault_error(backups) == result
