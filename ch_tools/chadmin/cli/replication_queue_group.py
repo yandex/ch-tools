@@ -38,7 +38,9 @@ def replication_queue_group():
     help="Filter replication queue tasks to output by the specified exception.",
 )
 @option(
-    "--executing", is_flag=True, help="Output only executing replication queue tasks."
+    "--executing",
+    is_flag=True,
+    help="Output only executing replication queue tasks.",
 )
 @option(
     "--age",
@@ -69,6 +71,23 @@ def replication_queue_group():
     "--table",
     help="Filter replication queue tasks to output by the specified table."
     " Multiple values can be specified through a comma.",
+)
+@option(
+    "--id",
+    "--partition",
+    "partition_id",
+    help="Filter in replication queue tasks to output by the specified partition."
+    " Multiple values can be specified through a comma.",
+)
+@option(
+    "--min-postpone-count",
+    type=int,
+    help="Filter out replication queue tasks with less than the specified number of postponements.",
+)
+@option(
+    "--max-postpone-count",
+    type=int,
+    help="Filter out replication queue tasks with more than the specified number of postponements.",
 )
 @option("-v", "--verbose", is_flag=True, help="Verbose mode.")
 @option(
@@ -174,6 +193,9 @@ def get_replication_queue_tasks(
     exclude_type=None,
     database=None,
     table=None,
+    partition_id=None,
+    min_postpone_count=None,
+    max_postpone_count=None,
     verbose=None,
     limit=None,
     format_=None,
@@ -196,6 +218,7 @@ def get_replication_queue_tasks(
         source_replica,
         parts_to_merge,
         new_part_name,
+        splitByChar('_', new_part_name, 1)[1] "partition_id",
         create_time,
         last_attempt_time "attempt_time",
         last_exception "exception",
@@ -215,6 +238,9 @@ def get_replication_queue_tasks(
     {% if table %}
       AND table {{ format_str_match(table) }}
     {% endif %}
+    {% if partition_id -%}
+      AND partition_id {{ format_str_match(partition_id) }}
+    {% endif -%}
     {% if failed %}
       AND last_exception != ''
     {% endif %}
@@ -233,6 +259,12 @@ def get_replication_queue_tasks(
     {% if exclude_type %}
       AND type NOT {{ format_str_match(exclude_type) }}
     {% endif %}
+    {% if min_postpone_count -%}
+      AND num_postponed >= {{ min_postpone_count }}
+    {% endif %}
+    {% if max_postpone_count -%}
+      AND num_postponed <= {{ max_postpone_count }}
+    {% endif %}
     ORDER BY database, table, position
     {% if limit %}
     LIMIT {{ limit }}
@@ -244,12 +276,15 @@ def get_replication_queue_tasks(
         cluster=cluster,
         database=database,
         table=table,
+        partition_id=partition_id,
         failed=failed,
         exception=exception,
         executing=executing,
         min_age=min_age.total_seconds() if min_age else None,
         type=type_,
         exclude_type=exclude_type,
+        min_postpone_count=min_postpone_count,
+        max_postpone_count=max_postpone_count,
         verbose=verbose,
         limit=limit,
         format_=format_,
