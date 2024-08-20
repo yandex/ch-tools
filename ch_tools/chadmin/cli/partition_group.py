@@ -461,6 +461,7 @@ def reattach_partitions_command(
                 break
 
     if failed_partitions:
+        print("Partitions that failed to detach or attach:")
         print_response(
             ctx,
             failed_partitions,
