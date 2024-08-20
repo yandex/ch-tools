@@ -74,7 +74,7 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     help=("End of inspecting interval in human-friendly format."),
 )
 @option(
-    "--on-cluster",
+    "--on-cluster/--no-on-cluster",
     "on_cluster",
     is_flag=True,
     help=("List objects on all hosts in a cluster."),
