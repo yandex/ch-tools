@@ -72,6 +72,22 @@ def partition_group():
     help="Output only those partitions that have mutating data parts.",
 )
 @option(
+    "--has-replication-tasks",
+    "has_replication_tasks",
+    is_flag=True,
+    help="Output only those partitions that are processing by replication queue tasks.",
+)
+@option(
+    "--min-replication-task-postpone-count",
+    type=int,
+    help="Filter out replication tasks with less than the specified number of postponements.",
+)
+@option(
+    "--max-replication-task-postpone-count",
+    type=int,
+    help="Filter out replication tasks with more than the specified number of postponements.",
+)
+@option(
     "--detached", is_flag=True, help="Show detached partitions instead of attached."
 )
 @option(
@@ -211,12 +227,28 @@ def attach_partitions_command(
     option(
         "--merging",
         is_flag=True,
-        help="Reattach only those partitions that have merging data parts.",
+        help="Filter in only those partitions that have merging data parts.",
     ),
     option(
         "--mutating",
         is_flag=True,
-        help="Reattach only those partitions that have mutating data parts.",
+        help="Filter in only those partitions that have mutating data parts.",
+    ),
+    option(
+        "--has-replication-tasks",
+        "has_replication_tasks",
+        is_flag=True,
+        help="Filter in only those partitions that are processing by replication queue tasks.",
+    ),
+    option(
+        "--min-replication-task-postpone-count",
+        type=int,
+        help="Filter out replication tasks with less than the specified number of postponements.",
+    ),
+    option(
+        "--max-replication-task-postpone-count",
+        type=int,
+        help="Filter out replication tasks with more than the specified number of postponements.",
     ),
     constraint=RequireAtLeast(1),
 )
@@ -238,6 +270,9 @@ def detach_partitions_command(
     disk_name,
     merging,
     mutating,
+    has_replication_tasks,
+    min_replication_task_postpone_count,
+    max_replication_task_postpone_count,
     keep_going,
     dry_run,
 ):
@@ -250,6 +285,9 @@ def detach_partitions_command(
         disk_name=disk_name,
         merging=merging,
         mutating=mutating,
+        has_replication_tasks=has_replication_tasks,
+        min_replication_task_postpone_count=min_replication_task_postpone_count,
+        max_replication_task_postpone_count=max_replication_task_postpone_count,
         format_="JSON",
     )["data"]
     for p in partitions:
@@ -307,12 +345,28 @@ def detach_partitions_command(
     option(
         "--merging",
         is_flag=True,
-        help="Reattach only those partitions that have merging data parts.",
+        help="Filter in only those partitions that have merging data parts.",
     ),
     option(
         "--mutating",
         is_flag=True,
-        help="Reattach only those partitions that have mutating data parts.",
+        help="Filter in only those partitions that have mutating data parts.",
+    ),
+    option(
+        "--has-replication-tasks",
+        "has_replication_tasks",
+        is_flag=True,
+        help="Filter in only those partitions that are processing by replication queue tasks.",
+    ),
+    option(
+        "--min-replication-task-postpone-count",
+        type=int,
+        help="Filter out replication tasks with less than the specified number of postponements.",
+    ),
+    option(
+        "--max-replication-task-postpone-count",
+        type=int,
+        help="Filter out replication tasks with more than the specified number of postponements.",
     ),
     option(
         "-l",
@@ -341,6 +395,9 @@ def reattach_partitions_command(
     disk_name,
     merging,
     mutating,
+    has_replication_tasks,
+    min_replication_task_postpone_count,
+    max_replication_task_postpone_count,
     limit,
     dry_run,
 ):
@@ -352,9 +409,12 @@ def reattach_partitions_command(
         partition_id=partition_id,
         min_partition_id=min_partition_id,
         max_partition_id=max_partition_id,
+        disk_name=disk_name,
         merging=merging,
         mutating=mutating,
-        disk_name=disk_name,
+        has_replication_tasks=has_replication_tasks,
+        min_replication_task_postpone_count=min_replication_task_postpone_count,
+        max_replication_task_postpone_count=max_replication_task_postpone_count,
         limit=limit,
         format_="JSON",
     )["data"]
@@ -599,6 +659,9 @@ def get_partitions(
     disk_name=None,
     merging=None,
     mutating=None,
+    has_replication_tasks=None,
+    min_replication_task_postpone_count=None,
+    max_replication_task_postpone_count=None,
     detached=None,
     order_by=None,
     limit=None,
@@ -712,6 +775,19 @@ def get_partitions(
                    WHERE is_mutation
                )
             {% endif -%}
+            {% if has_replication_tasks -%}
+               AND (database, table, partition_id) IN (
+                   SELECT (database, table, splitByChar('_', new_part_name, 1)[1])
+                   FROM system.replication_queue
+                   WHERE 1
+            {%     if min_replication_task_postpone_count -%}
+                     AND num_postponed >= {{ min_replication_task_postpone_count }}
+            {%     endif -%}
+            {%     if max_replication_task_postpone_count -%}
+                     AND num_postponed <= {{ max_replication_task_postpone_count }}
+            {%     endif -%}
+               )
+            {% endif -%}
             ORDER BY {{ order_by }}
             {% if limit -%}
             LIMIT {{ limit }}
@@ -735,6 +811,9 @@ def get_partitions(
         disk_name=disk_name,
         merging=merging,
         mutating=mutating,
+        has_replication_tasks=has_replication_tasks,
+        min_replication_task_postpone_count=min_replication_task_postpone_count,
+        max_replication_task_postpone_count=max_replication_task_postpone_count,
         order_by=order_by,
         limit=limit,
         format_=format_,
