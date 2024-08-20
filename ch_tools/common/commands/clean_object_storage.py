@@ -125,11 +125,13 @@ def _clean_object_storage(
     else:
         logging.info("Deleting orphaned objects...")
 
-    deleted = 0
-    total_size = 0
     with TemporaryFile() as keys_file:
         with execute_query(
-            ctx, antijoin_query, stream=True, format_="TabSeparated"
+            ctx,
+            antijoin_query,
+            timeout=ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"],
+            stream=True,
+            format_="TabSeparated",
         ) as resp:
             # Save response to the file by chunks
             for chunk in resp.iter_content(chunk_size=8192):
