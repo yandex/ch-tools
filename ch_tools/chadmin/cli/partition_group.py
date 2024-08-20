@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 from cloup import Choice, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
 
@@ -11,6 +13,7 @@ from ch_tools.chadmin.internal.partition import (
 )
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
+from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.cli.parameters import BytesParamType
 
 
@@ -372,9 +375,16 @@ def detach_partitions_command(
         "-l",
         "--limit",
         type=int,
-        help="Limit the max number of partitions to reaatach in the output.",
+        help="Limit the max number of partitions to reattach in the output.",
     ),
     constraint=RequireAtLeast(1),
+)
+@option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
+@option(
+    "--limit-errors",
+    type=int,
+    help="Limit the max number of failed to detach or attach partitions before exit if keep-going is set.",
+    default=10,
 )
 @option(
     "-n",
@@ -399,9 +409,21 @@ def reattach_partitions_command(
     min_replication_task_postpone_count,
     max_replication_task_postpone_count,
     limit,
+    keep_going,
+    limit_errors,
     dry_run,
 ):
     """Perform sequential attach and detach of one or several partitions."""
+
+    def _table_formatter(partition):
+        return OrderedDict(
+            (
+                ("database", partition["database"]),
+                ("table", partition["table"]),
+                ("partition_id", partition["partition_id"]),
+            )
+        )
+
     partitions = get_partitions(
         ctx,
         database,
@@ -418,12 +440,33 @@ def reattach_partitions_command(
         limit=limit,
         format_="JSON",
     )["data"]
+
+    error_count = 0
+    failed_partitions = []
     for p in partitions:
-        detach_partition(
-            ctx, p["database"], p["table"], p["partition_id"], dry_run=dry_run
-        )
-        attach_partition(
-            ctx, p["database"], p["table"], p["partition_id"], dry_run=dry_run
+        try:
+            detach_partition(
+                ctx, p["database"], p["table"], p["partition_id"], dry_run=dry_run
+            )
+            attach_partition(
+                ctx, p["database"], p["table"], p["partition_id"], dry_run=dry_run
+            )
+        except Exception:
+            error_count += 1
+            failed_partitions.append(p)
+            if not keep_going:
+                raise
+            if error_count == limit_errors:
+                logging.info("Max number of errors reached.")
+                break
+
+    if failed_partitions:
+        print("Partitions that failed to detach or attach:")
+        print_response(
+            ctx,
+            failed_partitions,
+            default_format="table",
+            table_formatter=_table_formatter,
         )
 
 
