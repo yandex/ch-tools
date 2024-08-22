@@ -91,6 +91,12 @@ def partition_group():
     help="Filter out replication tasks with more than the specified number of postponements.",
 )
 @option(
+    "--replication-task-error",
+    "--replication-task-exception",
+    "replication_task_exception",
+    help="Filter out replication tasks by the specified exception.",
+)
+@option(
     "--detached", is_flag=True, help="Show detached partitions instead of attached."
 )
 @option(
@@ -253,6 +259,12 @@ def attach_partitions_command(
         type=int,
         help="Filter out replication tasks with more than the specified number of postponements.",
     ),
+    option(
+        "--replication-task-error",
+        "--replication-task-exception",
+        "replication_task_exception",
+        help="Filter out replication tasks by the specified exception.",
+    ),
     constraint=RequireAtLeast(1),
 )
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
@@ -276,6 +288,7 @@ def detach_partitions_command(
     has_replication_tasks,
     min_replication_task_postpone_count,
     max_replication_task_postpone_count,
+    replication_task_exception,
     keep_going,
     dry_run,
 ):
@@ -291,6 +304,7 @@ def detach_partitions_command(
         has_replication_tasks=has_replication_tasks,
         min_replication_task_postpone_count=min_replication_task_postpone_count,
         max_replication_task_postpone_count=max_replication_task_postpone_count,
+        replication_task_exception=replication_task_exception,
         format_="JSON",
     )["data"]
     for p in partitions:
@@ -372,6 +386,12 @@ def detach_partitions_command(
         help="Filter out replication tasks with more than the specified number of postponements.",
     ),
     option(
+        "--replication-task-error",
+        "--replication-task-exception",
+        "replication_task_exception",
+        help="Filter out replication tasks by the specified exception.",
+    ),
+    option(
         "-l",
         "--limit",
         type=int,
@@ -408,6 +428,7 @@ def reattach_partitions_command(
     has_replication_tasks,
     min_replication_task_postpone_count,
     max_replication_task_postpone_count,
+    replication_task_exception,
     limit,
     keep_going,
     limit_errors,
@@ -437,6 +458,7 @@ def reattach_partitions_command(
         has_replication_tasks=has_replication_tasks,
         min_replication_task_postpone_count=min_replication_task_postpone_count,
         max_replication_task_postpone_count=max_replication_task_postpone_count,
+        replication_task_exception=replication_task_exception,
         limit=limit,
         format_="JSON",
     )["data"]
@@ -705,11 +727,13 @@ def get_partitions(
     has_replication_tasks=None,
     min_replication_task_postpone_count=None,
     max_replication_task_postpone_count=None,
+    replication_task_exception=None,
     detached=None,
     order_by=None,
     limit=None,
     format_=None,
 ):
+    # pylint: disable=too-many-locals
     order_by = {
         "size": "sum(bytes_on_disk) DESC",
         "parts": "parts DESC",
@@ -829,6 +853,9 @@ def get_partitions(
             {%     if max_replication_task_postpone_count -%}
                      AND num_postponed <= {{ max_replication_task_postpone_count }}
             {%     endif -%}
+            {%     if replication_task_exception -%}
+                     AND last_exception {{ format_str_match(replication_task_exception) }}
+            {%     endif -%}
                )
             {% endif -%}
             ORDER BY {{ order_by }}
@@ -857,6 +884,7 @@ def get_partitions(
         has_replication_tasks=has_replication_tasks,
         min_replication_task_postpone_count=min_replication_task_postpone_count,
         max_replication_task_postpone_count=max_replication_task_postpone_count,
+        replication_task_exception=replication_task_exception,
         order_by=order_by,
         limit=limit,
         format_=format_,
