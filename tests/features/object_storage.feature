@@ -18,47 +18,23 @@ Feature: chadmin object-storage commands
     """
     Then S3 contains greater than 0 objects
 
-  Scenario: Dry-run clean on one replica with guard period
+  Scenario Outline: Dry-run clean with guard period
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --dry-run
-    """
-    Then we get response contains
-    """
-    - WouldDelete: 0
-      TotalSize: 0
-    """
-    When we execute command on clickhouse01
-    """
-    chadmin --format yaml object-storage clean --to-time 0h --dry-run
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run --clean-scope=<scope>
     """
     Then we get response matches
     """
-    - WouldDelete: [1-9][0-9]*
-      TotalSize: [1-9][0-9]*
-    """
+    - WouldDelete: <WouldDelete>
+      TotalSize: <TotalSize>
+    """  
+  Examples:
+    | scope   | WouldDelete | TotalSize   |
+    | host    | [1-9][0-9]* | [1-9][0-9]* |
+    | shard   | 0           | 0           |
+    | cluster | 0           | 0           |
 
-  Scenario: Dry-run clean on cluster with guard period
-    When we execute command on clickhouse01
-    """
-    chadmin --format yaml object-storage clean --dry-run --on-cluster
-    """
-    Then we get response contains
-    """
-    - WouldDelete: 0
-      TotalSize: 0
-    """
-    When we execute command on clickhouse01
-    """
-    chadmin --format yaml object-storage clean --to-time 0h --dry-run --on-cluster
-    """
-    Then we get response contains
-    """
-    - WouldDelete: 0
-      TotalSize: 0
-    """
-
-  Scenario: Clean orphaned objects
+  Scenario Outline: Clean orphaned objects
     When we put object in S3
     """
       bucket: cloud-storage-test
@@ -67,27 +43,31 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --clean-scope=<scope>
     """
     Then we get response contains
     """
-    - WouldDelete: 1
-      TotalSize: 1
+    - WouldDelete: <WouldDelete>
+      TotalSize: <TotalSize>
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --to-time 0h --on-cluster
+    chadmin --format yaml object-storage clean --to-time 0h --clean-scope=<scope>
     """
     Then we get response contains
     """
-    - Deleted: 1
-      TotalSize: 1
+    - Deleted: <Deleted>
+      TotalSize: <TotalSize>
     """
     And path does not exist in S3
     """
       bucket: cloud-storage-test
       path: /data/orpaned_object.tsv
     """
+  Examples:
+    | scope   | WouldDelete | TotalSize   | Deleted |
+    | shard   | 1           | 1           | 1       |
+    | cluster | 1           | 1           | 1       |
   
   Scenario: Clean many orphaned objects
     When we put 100 objects in S3
@@ -98,7 +78,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h
     """
     Then we get response contains
     """
@@ -107,7 +87,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --to-time 0h --on-cluster
+    chadmin --format yaml object-storage clean --to-time 0h
     """
     Then we get response contains
     """
@@ -116,7 +96,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --to-time 0h --dry-run --on-cluster
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run
     """
     Then we get response contains
     """
@@ -139,7 +119,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --prefix "data_1"
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --prefix "data_1"
     """
     Then we get response contains
     """
@@ -148,7 +128,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --to-time 0h --on-cluster --prefix "data_1"
+    chadmin --format yaml object-storage clean --to-time 0h --prefix "data_1"
     """
     Then we get response contains
     """
@@ -162,7 +142,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --prefix "data_2"
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --prefix "data_2"
     """
     Then we get response contains
     """
@@ -173,7 +153,7 @@ Feature: chadmin object-storage commands
   Scenario: Clean with store-state-zk-path works
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state-zk-path /tmp/shard_1
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths --store-state-zk-path /tmp/shard_1
     """
     Then we get zookeeper node with "/tmp/shard_1" path
     """
@@ -189,7 +169,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state-zk-path /tmp/shard_1
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths --store-state-zk-path /tmp/shard_1
     """
     Then we get zookeeper node with "/tmp/shard_1" path
     """
@@ -201,7 +181,7 @@ Feature: chadmin object-storage commands
   Scenario: Clean with store-state-local works
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state-local
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths --store-state-local
     """
     Then we get file /tmp/object_storage_cleanup_state.json
     """
@@ -217,7 +197,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state-local
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths --store-state-local
     """
     Then we get file /tmp/object_storage_cleanup_state.json
     """

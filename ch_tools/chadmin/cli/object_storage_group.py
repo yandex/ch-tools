@@ -2,7 +2,7 @@ import json
 from datetime import timedelta
 from typing import Optional
 
-from click import Context, group, option, pass_context
+from click import Choice, Context, group, option, pass_context
 from humanfriendly import format_size
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -14,7 +14,11 @@ from ch_tools.chadmin.internal.zookeeper import (
 from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config import get_clickhouse_config
-from ch_tools.common.commands.clean_object_storage import DEFAULT_GUARD_INTERVAL, clean
+from ch_tools.common.commands.clean_object_storage import (
+    DEFAULT_GUARD_INTERVAL,
+    CleanScope,
+    clean,
+)
 
 # Use big enough timeout for stream HTTP query
 STREAM_TIMEOUT = 10 * 60
@@ -75,9 +79,16 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
 )
 @option(
     "--on-cluster/--no-on-cluster",
-    "on_cluster",
+    "_on_cluster",
     is_flag=True,
-    help=("List objects on all hosts in a cluster."),
+    help=("List objects on all hosts in a cluster. Deprecated, see --clean-scope"),
+)
+@option(
+    "--clean-scope",
+    "clean_scope",
+    default="shard",
+    type=Choice(["host", "shard", "cluster"]),
+    help="Cleaning scope.",
 )
 @option(
     "--cluster",
@@ -123,7 +134,8 @@ def clean_command(
     object_name_prefix: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
-    on_cluster: bool,
+    _on_cluster: bool,
+    clean_scope: str,
     cluster_name: str,
     dry_run: bool,
     keep_paths: bool,
@@ -139,7 +151,7 @@ def clean_command(
         object_name_prefix,
         from_time,
         to_time,
-        on_cluster,
+        CleanScope(clean_scope),
         cluster_name,
         dry_run,
         keep_paths,

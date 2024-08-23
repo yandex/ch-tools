@@ -4,6 +4,7 @@ from datetime import timedelta
 from typing import Any, Dict, Optional
 
 import requests
+from click import Context
 from jinja2 import Environment
 from typing_extensions import Self
 
@@ -272,7 +273,7 @@ class ClickhouseClient:
         return self.query(query=None, port=port)
 
 
-def clickhouse_client(ctx):
+def clickhouse_client(ctx: Context) -> ClickhouseClient:
     """
     Return ClickHouse client from the context if it exists.
     Init ClickHouse client and store to the context if it doesn't exist.
