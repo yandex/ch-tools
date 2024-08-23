@@ -47,6 +47,8 @@ from ch_tools.chadmin.cli.table_group import table_group
 from ch_tools.chadmin.cli.thread_log_group import thread_log_group
 from ch_tools.chadmin.cli.wait_group import wait_group
 from ch_tools.chadmin.cli.zookeeper_group import zookeeper_group
+from ch_tools.chadmin.cli.data_store_group import data_store_group
+
 from ch_tools.common.cli.context_settings import CONTEXT_SETTINGS
 from ch_tools.common.cli.locale_resolver import LocaleResolver
 from ch_tools.common.cli.parameters import TimeSpanParamType
@@ -101,6 +103,7 @@ def cli(ctx, format_, settings, timeout, port, debug):
 commands: List[Any] = [
     config_command,
     diagnostics_command,
+    data_store_group,
     list_async_metrics_command,
     list_events_command,
     list_functions_command,
