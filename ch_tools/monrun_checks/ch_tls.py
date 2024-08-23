@@ -51,4 +51,4 @@ def get_ports(ctx: click.Context, ports: Optional[str]) -> List[str]:
         result.append(client.get_port(ClickhousePort.HTTPS))
     if client.check_port(ClickhousePort.TCP_SECURE):
         result.append(client.get_port(ClickhousePort.TCP_SECURE))
-    return result
+    return [str(port) for port in result]

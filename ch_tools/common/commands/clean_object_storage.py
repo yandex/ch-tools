@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from enum import Enum
 from tempfile import TemporaryFile
 from typing import List, Optional, Tuple
 
@@ -16,7 +17,10 @@ from ch_tools.chadmin.internal.object_storage.s3_iterator import (
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
+from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
+from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
 # Batch size for inserts in a listing table
 # Set not very big value due to default ClickHouse 'http_max_field_value_size' settings value 128Kb
@@ -28,12 +32,22 @@ INSERT_BATCH_SIZE = 500
 DEFAULT_GUARD_INTERVAL = "24h"
 
 
+class CleanScope(str, Enum):
+    """
+    Define a local metadata search scope to clean.
+    """
+
+    HOST = "host"
+    SHARD = "shard"
+    CLUSTER = "cluster"
+
+
 def clean(
     ctx: Context,
     object_name_prefix: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
-    on_cluster: bool,
+    clean_scope: CleanScope,
     cluster_name: str,
     dry_run: bool,
     keep_paths: bool,
@@ -63,7 +77,7 @@ def clean(
             object_name_prefix,
             from_time,
             to_time,
-            on_cluster,
+            clean_scope,
             cluster_name,
             dry_run,
             listing_table,
@@ -83,7 +97,7 @@ def _clean_object_storage(
     object_name_prefix: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
-    on_cluster: bool,
+    clean_scope: CleanScope,
     cluster_name: str,
     dry_run: bool,
     listing_table: str,
@@ -101,10 +115,27 @@ def _clean_object_storage(
         )
         _traverse_object_storage(ctx, listing_table, from_time, to_time, prefix)
 
+    ch_client = clickhouse_client(ctx)
     remote_data_paths_table = "system.remote_data_paths"
-    if on_cluster:
+
+    if clean_scope == CleanScope.CLUSTER:
         remote_data_paths_table = (
             f"clusterAllReplicas('{cluster_name}', {remote_data_paths_table})"
+        )
+    elif clean_scope == CleanScope.SHARD:
+        #  It is believed that all hosts in shard have the same port set, so check current for tcp port
+        if ch_client.check_port(ClickhousePort.TCP_SECURE):
+            remote_clause = "remoteSecure"
+        elif ch_client.check_port(ClickhousePort.TCP):
+            remote_clause = "remote"
+        else:
+            raise RuntimeError(
+                "For using remote() table function tcp port must be defined"
+            )
+
+        replicas = ",".join(ClickhouseInfo.get_replicas(ctx))
+        remote_data_paths_table = (
+            f"{remote_clause}('{replicas}', {remote_data_paths_table})"
         )
 
     settings = ""
@@ -125,9 +156,10 @@ def _clean_object_storage(
     else:
         logging.info("Deleting orphaned objects...")
 
+    deleted = 0
+    total_size = 0
     with TemporaryFile() as keys_file:
-        with execute_query(
-            ctx,
+        with ch_client.query(
             antijoin_query,
             timeout=ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"],
             stream=True,
