@@ -392,7 +392,7 @@ Feature: ch-monitoring tool
   Scenario: Check clickhouse orphaned objects with state-zk-path option
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state-zk-path /tmp/shard_1
+    chadmin object-storage clean --dry-run --to-time 0h --keep-paths --store-state-zk-path /tmp/shard_1
     """
     When we execute command on clickhouse01
     """
@@ -410,7 +410,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state-zk-path /tmp/shard_1
+    chadmin object-storage clean --dry-run --to-time 0h --keep-paths --store-state-zk-path /tmp/shard_1
     """
     When we execute command on clickhouse01
     """
@@ -440,7 +440,7 @@ Feature: ch-monitoring tool
   Scenario: Check clickhouse orphaned objects with state-local option
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state-local
+    chadmin object-storage clean --dry-run --to-time 0h --keep-paths --store-state-local
     """
     When we execute command on clickhouse01
     """
@@ -458,7 +458,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --dry-run --to-time 0h --on-cluster --keep-paths --store-state-local
+    chadmin object-storage clean --dry-run --to-time 0h --keep-paths --store-state-local
     """
     When we execute command on clickhouse01
     """

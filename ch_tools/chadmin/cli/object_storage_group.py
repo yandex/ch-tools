@@ -78,12 +78,6 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     help=("End of inspecting interval in human-friendly format."),
 )
 @option(
-    "--on-cluster/--no-on-cluster",
-    "_on_cluster",
-    is_flag=True,
-    help=("List objects on all hosts in a cluster. Deprecated, see --clean-scope"),
-)
-@option(
     "--clean-scope",
     "clean_scope",
     default="shard",
@@ -134,7 +128,6 @@ def clean_command(
     object_name_prefix: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
-    _on_cluster: bool,
     clean_scope: str,
     cluster_name: str,
     dry_run: bool,
