@@ -419,13 +419,16 @@ def get_partition_list(ctx, parts):
 
     return result
 
-def query_with_retry(ctx, query, timeout, retries = 5):
+def query_with_retry(ctx, query, timeout, retries = 10):
     susccess = False
     for _ in range(retries):
-        res = execute_query(ctx, query, timeout=timeout)
-        if res == '':
-            susccess = True
-            break
+        try:
+            res = execute_query(ctx, query, timeout=timeout)
+            if res == '':
+                susccess = True
+                break
+        except Exception:
+            continue
     logging.info("Query  {} finised with {}", query,susccess)
     return susccess
 
