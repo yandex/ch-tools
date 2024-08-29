@@ -1,27 +1,27 @@
 import os
+import re
 import shutil
 import subprocess
-import re
+from typing import List, Optional, Tuple
+
 import boto3
-from typing import List, Optional
-from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
-from ch_tools.chadmin.internal.utils import execute_query
-from ch_tools.common.clickhouse.config import get_clickhouse_config
-from ch_tools.chadmin.internal.clickhouse_disks import S3_METADATA_STORE_PATH
-from click import group, option, pass_context
-from ch_tools.common.clickhouse.client import OutputFormat
+from click import Context, group, option, pass_context
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.clickhouse_disks import (
     CLICKHOUSE_METADATA_PATH,
     CLICKHOUSE_PATH,
     CLICKHOUSE_STORE_PATH,
+    S3_METADATA_STORE_PATH,
     make_ch_disks_config,
     remove_from_ch_disk,
 )
-from ch_tools.chadmin.internal.utils import remove_from_disk
+from ch_tools.chadmin.internal.utils import execute_query, remove_from_disk
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
+from ch_tools.common.clickhouse.client import OutputFormat
+from ch_tools.common.clickhouse.config import get_clickhouse_config
+from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
 
 
@@ -320,68 +320,85 @@ def collect_orphaned_sql_objects_recursive(
             )
 
 
-@data_store_group.command("cleanup-lost-objects")
+@data_store_group.command("detect-broken-partitions")
 @option(
     "--root-path",
     "root_path",
     default=S3_METADATA_STORE_PATH,
     help="Set the store subdirectory path.",
 )
+@option(
+    "--reattach",
+    is_flag=True,
+    default=False,
+    help="Flag to reattach broken partitions.",
+)
 @pass_context
-def cleanup_lost_keys_in_s3(ctx, root_path):
-    parts_with_lost_keys = find_part_with_lost_keys(ctx, root_path)
-    partition_list = get_partition_list(ctx, parts_with_lost_keys)
-        
-    print_response(ctx, partition_list.items(), default_format="table")
-    for table, part_list in partition_list.items():
-        for partition in part_list:
-            reattach_partition(ctx, table, partition)
-    
+def detect_broken_partitions(ctx, root_path, reattach):
+    parts_paths_with_lost_keys = find_paths_to_part_with_lost_keys(ctx, root_path)
+    partition_list = get_partition_list(ctx, parts_paths_with_lost_keys)
+
+    print_response(ctx, partition_list, default_format="table")
+    if reattach:
+        for partition_info in partition_list:
+            reattach_partition(
+                ctx, partition_info["table"], partition_info["partition"]
+            )
 
 
-def find_part_with_lost_keys(ctx, root_path: str):
+def find_paths_to_part_with_lost_keys(ctx: Context, root_path: str) -> List[str]:
     result = []
 
     ch_config = get_clickhouse_config(ctx)
 
-    disk_conf:S3DiskConfiguration = ch_config.storage_configuration.s3_disk_configuration('object_storage', ctx.obj["config"]["object_storage"]["bucket_name_prefix"])
+    disk_conf: S3DiskConfiguration = (
+        ch_config.storage_configuration.s3_disk_configuration(
+            "object_storage", ctx.obj["config"]["object_storage"]["bucket_name_prefix"]
+        )
+    )
     s3_client = boto3.client(
         "s3",
         endpoint_url=disk_conf.endpoint_url,
         aws_access_key_id=disk_conf.access_key_id,
-        aws_secret_access_key=disk_conf.secret_access_key
+        aws_secret_access_key=disk_conf.secret_access_key,
     )
-    
-    for path, subdirs, files in os.walk(root_path):
+
+    for path, _, files in os.walk(root_path):
         keys = []
+        logging.debug(f"Checking files from: {path}")
         for file in files:
-            logging.info(f"Checking {path}/{file}")
-            keys.extend(get_keys_from_file(os.path.join(path,file)))
-        
+            keys.extend(get_keys_from_file(os.path.join(path, file)))
+
         for key in keys:
-            full_key = os.path.join(disk_conf.prefix,key)
-            if not check_key_in_object_storage(s3_client, disk_conf.bucket_name, full_key):
-                logging.info('Not found key {}', full_key)
-                result.append(extract_part_name(path))
-                logging.info('Add part to check {}', result[-1])
+            full_key = os.path.join(disk_conf.prefix, key)
+            if not check_key_in_object_storage(
+                s3_client, disk_conf.bucket_name, full_key
+            ):
+                logging.debug("Not found key {}", full_key)
+                result.append(path)
+                logging.debug(
+                    "Add part to check with path", result[-1][0], result[-1][1]
+                )
                 break
-    logging.debug("Parts to check: {}", result)
+
+    logging.debug("Found parts with missing s3 keys. Local paths of parts: {}", result)
     return result
+
 
 def get_keys_from_file(path):
     keys = []
     key_entry_regexp = re.compile("[0-9]+	[a-z]+/[a-z]+$")
     try:
-        with open(path) as file:
+        with open(path, encoding="utf-8") as file:
             lines = file.readlines()
 
-            if(len(lines) != 5):
+            if len(lines) != 5:
                 return
             for line in lines:
                 if key_entry_regexp.match(line):
                     keys.append(line.split()[1])
     except Exception as e:
-        logging.warning('Can not read file {!r}\n', e)
+        logging.warning("Can not read file {!r}\n", e)
     return keys
 
 
@@ -390,60 +407,74 @@ def check_key_in_object_storage(s3_client, bucket, key):
         Bucket=bucket,
         Prefix=key,
     )
-    if 'Contents' not in s3_resp:
+    if "Contents" not in s3_resp:
         return False
-    if len(s3_resp['Contents']) != 1:
+    if len(s3_resp["Contents"]) != 1:
         return False
-    res = s3_resp['Contents'][0]['Key'] == key
+    res = s3_resp["Contents"][0]["Key"] == key
     return res
-    
-def extract_part_name(path):
-    return path.split('/')[-1]
 
-def get_partition_list(ctx, parts):
-    result = dict()
-    for part in parts:
-        query_string = f"SELECT database, table, partition FROM system.parts WHERE part_name='{part}'"
+
+def get_partition_list(ctx, parts_paths):
+    partitions = set()
+    for path in parts_paths:
+        query_string = (
+            f"SELECT database, table, partition FROM system.parts WHERE path='{path}/'"
+        )
         res = execute_query(ctx, query_string, format_=OutputFormat.JSONCompact)
-        if 'data' not in res:
-            logging.warning("Not found data for part {}", part)
+        if "data" not in res:
+            logging.warning("Not found data for part with path {}", path)
             continue
 
-        if len(res['data']) != 1 or len(res['data'][0]) != 3:
+        if len(res["data"]) != 1 or len(res["data"][0]) != 3:
             continue
-        database, table, partition = res['data'][0]
-        table = f"`{database}`.`{table}`"
-        if table not in result:
-            result[table] = set()
-        result[table].add(partition)
+        table = f"`{res['data'][0][0]}`.`{res['data'][0][1]}`"
+        partition = res["data"][0][2]
+        partitions.add((table, partition))
 
+    # It's not really necessary, just to make output stable for tests.
+    partitions_list: List[Tuple[str, str]] = list(partitions)
+    partitions_list.sort()
+
+    result = [
+        {"table": partition[0], "partition": partition[1]}
+        for partition in partitions_list
+    ]
     return result
 
-def query_with_retry(ctx, query, timeout, retries = 10):
-    susccess = False
-    for _ in range(retries):
+
+def query_with_retry(ctx, query, timeout, retries=10):
+    logging.debug("Execute query: {}", query)
+    for retry in range(retries):
         try:
             res = execute_query(ctx, query, timeout=timeout)
-            if res == '':
-                susccess = True
+            if res == "":
                 break
-        except Exception:
+        except Exception as e:
+            if retry + 1 == retries:
+                logging.warning("Query {} failed  with:  {!r}\n", query, e)
+                return False
             continue
-    logging.info("Query  {} finised with {}", query,susccess)
-    return susccess
+
+    logging.info("Query {} finished successfully", query)
+    return True
+
 
 def reattach_partition(ctx, table, partition):
-    
+
+    logging.debug(f"Going to reattach partition {partition} for table {table}")
     detach_query = f"ALTER TABLE {table} DETACH PARTITION '{partition}'"
     attach_query = f"ALTER TABLE {table} ATTACH PARTITION '{partition}'"
-    logging.info(detach_query)
-    logging.info(attach_query)
-    
-    res = query_with_retry(ctx, detach_query, timeout=4000)
-    if res == False:
-        return False
-   
-    res = query_with_retry(ctx, attach_query, timeout=4000)
-    if res == False:
-        return False
+
+    timeout = 5000
+    retry_count = 10
+
+    res = query_with_retry(ctx, detach_query, timeout=timeout, retries=retry_count)
+    if not res:
+        return res
+
+    # To avoid keeping detached partitions, perform the attach query with double attempts.
+    res = query_with_retry(ctx, attach_query, timeout=timeout, retries=2 * retry_count)
+    if not res:
+        return res
     return True
