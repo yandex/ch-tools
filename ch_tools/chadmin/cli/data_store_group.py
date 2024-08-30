@@ -387,7 +387,7 @@ def find_paths_to_part_with_lost_keys(ctx: Context, root_path: str) -> List[str]
 
 def get_keys_from_file(path):
     keys = []
-    key_entry_regexp = re.compile("[0-9]+	[a-z]+/[a-z]+$")
+    key_entry_regexp = re.compile("[0-9]+	[a-z/]+$")
     try:
         with open(path, encoding="utf-8") as file:
             lines = file.readlines()
