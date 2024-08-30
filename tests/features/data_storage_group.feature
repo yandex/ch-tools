@@ -143,12 +143,12 @@ Feature: chadmin data-store commands
     SELECT * FROM test_db.table2;
     """
 
-    @require_version_23.4
+    @require_version_24.4
     Examples:
     | additional_table_settings                               |
     | , disable_detach_partition_for_zero_copy_replication = 0|
 
-    @require_version_less_than_23.4
+    @require_version_less_than_24.4
     Examples:
     | additional_table_settings                               |
     |                                                         |
