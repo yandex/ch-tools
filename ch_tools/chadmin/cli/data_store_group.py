@@ -354,6 +354,10 @@ def detect_broken_partitions(ctx, root_path, reattach):
 
 
 def find_paths_to_part_with_lost_keys(ctx: Context, root_path: str) -> List[str]:
+    """
+    Find paths of parts with keys that doesn't have objects in s3.
+    """
+
     result = []
 
     ch_config = get_clickhouse_config(ctx)
