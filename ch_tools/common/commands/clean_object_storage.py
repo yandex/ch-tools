@@ -159,9 +159,11 @@ def _clean_object_storage(
     deleted = 0
     total_size = 0
     with TemporaryFile() as keys_file:
+        timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
         with ch_client.query(
             antijoin_query,
-            timeout=ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"],
+            timeout=timeout,
+            settings={"receive_timeout": timeout},
             stream=True,
             format_="TabSeparated",
         ) as resp:
