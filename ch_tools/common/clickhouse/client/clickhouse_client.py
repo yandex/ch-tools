@@ -195,6 +195,7 @@ class ClickhouseClient:
             timeout = self._timeout
 
         per_query_settings = settings or {}
+        per_query_settings.setdefault("receive_timeout", timeout)
 
         if port is None:
             for i_port in PORTS_PRIORITY:
