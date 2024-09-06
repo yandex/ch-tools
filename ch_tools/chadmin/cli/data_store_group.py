@@ -1,22 +1,35 @@
 import os
 import shutil
 import subprocess
-from typing import List, Optional
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
-from click import group, option, pass_context
+import boto3
+from click import Context, group, option, pass_context
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.clickhouse_disks import (
     CLICKHOUSE_METADATA_PATH,
     CLICKHOUSE_PATH,
     CLICKHOUSE_STORE_PATH,
+    S3_METADATA_STORE_PATH,
     make_ch_disks_config,
     remove_from_ch_disk,
 )
-from ch_tools.chadmin.internal.utils import remove_from_disk
+from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
+    S3ObjectLocalInfo,
+    S3ObjectLocalMetaData,
+)
+from ch_tools.chadmin.internal.utils import execute_query, remove_from_disk
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
+from ch_tools.common.clickhouse.client import OutputFormat
+from ch_tools.common.clickhouse.config import get_clickhouse_config
+from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
+
+ATTACH_DETTACH_TIMEOUT = 5000
+ATTACH_DETACH_QUERY_RETRY = 10
 
 
 @group("data-store", cls=Chadmin)
@@ -312,3 +325,171 @@ def collect_orphaned_sql_objects_recursive(
                 max_depth,
                 max_sql_objects,
             )
+
+
+@data_store_group.command("detect-broken-partitions")
+@option(
+    "--root-path",
+    "root_path",
+    default=S3_METADATA_STORE_PATH,
+    help="Set the store subdirectory path.",
+)
+@option(
+    "--reattach",
+    is_flag=True,
+    default=False,
+    help="Flag to reattach broken partitions.",
+)
+@pass_context
+def detect_broken_partitions(ctx, root_path, reattach):
+    parts_paths_with_lost_keys = find_paths_to_part_with_lost_keys(ctx, root_path)
+    partition_list = get_partitions_by_path(ctx, parts_paths_with_lost_keys)
+
+    print_response(ctx, partition_list, default_format="table")
+    if reattach:
+        for partition_info in partition_list:
+            reattach_partition(
+                ctx, partition_info["table"], partition_info["partition"]
+            )
+
+
+def find_paths_to_part_with_lost_keys(ctx: Context, root_path: str) -> List[str]:
+    """
+    Find paths of parts with keys that doesn't have objects in s3.
+    """
+
+    result = []
+
+    ch_config = get_clickhouse_config(ctx)
+
+    disk_conf: S3DiskConfiguration = (
+        ch_config.storage_configuration.s3_disk_configuration(
+            "object_storage", ctx.obj["config"]["object_storage"]["bucket_name_prefix"]
+        )
+    )
+    s3_client = boto3.client(
+        "s3",
+        endpoint_url=disk_conf.endpoint_url,
+        aws_access_key_id=disk_conf.access_key_id,
+        aws_secret_access_key=disk_conf.secret_access_key,
+    )
+
+    for path, _, files in os.walk(root_path):
+        objects: List[S3ObjectLocalInfo] = []
+        logging.debug(f"Checking files from: {path}")
+        for file in files:
+            file_full_path = Path(os.path.join(path, file))
+            objects.extend(S3ObjectLocalMetaData.from_file(file_full_path).objects)
+
+        for s3_object in objects:
+            full_key = os.path.join(disk_conf.prefix, s3_object.key)
+            if not check_key_in_object_storage(
+                s3_client, disk_conf.bucket_name, full_key
+            ):
+                logging.debug("Not found key {}", full_key)
+                result.append(path)
+                logging.debug(
+                    "Add part to check with path", result[-1][0], result[-1][1]
+                )
+                break
+
+    logging.debug("Found parts with missing s3 keys. Local paths of parts: {}", result)
+    return result
+
+
+def check_key_in_object_storage(s3_client: boto3.client, bucket: str, key: str) -> bool:
+    """
+    Check that object exists in s3 bucket with the specified key.
+    """
+    s3_resp = s3_client.list_objects_v2(
+        Bucket=bucket,
+        Prefix=key,
+    )
+    if "Contents" not in s3_resp:
+        return False
+    if len(s3_resp["Contents"]) != 1:
+        return False
+    res = s3_resp["Contents"][0]["Key"] == key
+    return res
+
+
+def get_partitions_by_path(
+    ctx: Context, parts_paths: List[str]
+) -> List[Dict[str, str]]:
+    """
+    For each path of part match corresponding table and partition.
+    """
+    partitions = set()
+    for path in parts_paths:
+        query_string = (
+            f"SELECT database, table, partition FROM system.parts WHERE path='{path}/'"
+        )
+        res = execute_query(ctx, query_string, format_=OutputFormat.JSONCompact)
+        if "data" not in res:
+            logging.warning("Not found data for part with path {}", path)
+            continue
+
+        if len(res["data"]) != 1 or len(res["data"][0]) != 3:
+            continue
+        table = f"`{res['data'][0][0]}`.`{res['data'][0][1]}`"
+        partition = res["data"][0][2]
+        partitions.add((table, partition))
+
+    # It's not really necessary, just to make output stable for tests.
+    partitions_list: List[Tuple[str, str]] = list(partitions)
+    partitions_list.sort()
+
+    result = [
+        {"table": partition[0], "partition": partition[1]}
+        for partition in partitions_list
+    ]
+    return result
+
+
+def query_with_retry(ctx: Context, query: str, timeout: int, retries: int) -> bool:
+    """
+    Execute clickhouse query with given number of retries.
+    """
+    logging.debug("Execute query: {}", query)
+    for retry in range(retries):
+        try:
+            res = execute_query(ctx, query, timeout=timeout)
+            if res == "":
+                break
+        except Exception as e:
+            if retry + 1 == retries:
+                logging.warning("Query {} failed  with:  {!r}\n", query, e)
+                return False
+            continue
+
+    logging.info("Query {} finished successfully", query)
+    return True
+
+
+def reattach_partition(ctx: Context, table: str, partition: str) -> bool:
+    """
+    Run Detach , Attach for given partition.
+    """
+    logging.debug(f"Going to reattach partition {partition} for table {table}")
+    detach_query = f"ALTER TABLE {table} DETACH PARTITION '{partition}'"
+    attach_query = f"ALTER TABLE {table} ATTACH PARTITION '{partition}'"
+
+    res = query_with_retry(
+        ctx,
+        detach_query,
+        timeout=ATTACH_DETTACH_TIMEOUT,
+        retries=ATTACH_DETACH_QUERY_RETRY,
+    )
+    if not res:
+        return res
+
+    # To avoid keeping detached partitions, perform the attach query with double attempts.
+    res = query_with_retry(
+        ctx,
+        attach_query,
+        timeout=ATTACH_DETTACH_TIMEOUT,
+        retries=2 * ATTACH_DETACH_QUERY_RETRY,
+    )
+    if not res:
+        return res
+    return True

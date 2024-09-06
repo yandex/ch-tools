@@ -101,6 +101,7 @@ def cli(ctx, format_, settings, timeout, port, debug):
 commands: List[Any] = [
     config_command,
     diagnostics_command,
+    data_store_group,
     list_async_metrics_command,
     list_events_command,
     list_functions_command,
