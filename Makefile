@@ -311,7 +311,8 @@ prepare-changelog: prepare-version
 prepare-version: $(VERSION_FILE)
 	VERSION=$$(cat $(VERSION_FILE))
 	# Replace version in $(SRC_DIR)/__init__.py
-	sed -i "s/__version__ = \"[0-9\.]\+\"/__version__ = \"$${VERSION}\"/g" $(SRC_DIR)/__init__.py
+	# For macOS add -i ""
+	sed "s/__version__ = \"[0-9\.]\+\"/__version__ = \"$${VERSION}\"/g" $(SRC_DIR)/__init__.py
 	# Replace version in pyproject.toml
 	$(POETRY) version $${VERSION}
 
