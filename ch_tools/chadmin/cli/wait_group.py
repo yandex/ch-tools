@@ -2,8 +2,8 @@ import os
 import sys
 import time
 
+import requests
 from click import FloatRange, group, option, pass_context
-from requests.exceptions import ReadTimeout
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.clickhouse_disks import S3_METADATA_STORE_PATH
@@ -98,13 +98,13 @@ def wait_replication_sync_command(
     start_time = time.time()
     deadline = start_time + total_timeout.total_seconds()
 
-    # Sync tables in cycle
-    for replica in list_table_replicas(ctx):
-        full_name = f"`{replica['database']}`.`{replica['table']}`"
-        time_left = deadline - time.time()
-        timeout = min(replica_timeout.total_seconds(), time_left)
+    try:
+        # Sync tables in cycle
+        for replica in list_table_replicas(ctx):
+            full_name = f"`{replica['database']}`.`{replica['table']}`"
+            time_left = deadline - time.time()
+            timeout = min(replica_timeout.total_seconds(), time_left)
 
-        try:
             execute_query(
                 ctx,
                 f"SYSTEM SYNC REPLICA {full_name}",
@@ -112,14 +112,17 @@ def wait_replication_sync_command(
                 timeout=timeout,
                 settings={"receive_timeout": timeout},
             )
-        except ReadTimeout:
-            logging.error("Timeout while running SYNC REPLICA on {}.", full_name)
+    except requests.exceptions.ReadTimeout:
+        logging.error("Read timeout while running query.")
+        sys.exit(1)
+    except requests.exceptions.ConnectionError:
+        logging.error("Connection error while running query.")
+        sys.exit(1)
+    except ClickhouseError as e:
+        if "TIMEOUT_EXCEEDED" in str(e):
+            logging.error("Timeout while running query.")
             sys.exit(1)
-        except ClickhouseError as e:
-            if "TIMEOUT_EXCEEDED" in str(e):
-                logging.error("Timeout while running SYNC REPLICA on {}.", full_name)
-                sys.exit(1)
-            raise
+        raise
 
     # Replication lag
     while time.time() < deadline:
