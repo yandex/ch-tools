@@ -145,11 +145,27 @@ Feature: chadmin commands.
     """
     Then it fails with response contains
     """
-    Timeout while running SYNC REPLICA on
+    Read timeout while running query.
     """
     When we execute query on clickhouse01
     """
     SYSTEM START FETCHES
+    """
+    When we execute command on clickhouse01
+    """
+    supervisorctl stop clickhouse-server
+    """
+    When we try to execute command on clickhouse01
+    """
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4
+    """
+    Then it fails with response contains
+    """
+    Connection error while running query.
+    """
+    When we execute command on clickhouse01
+    """
+    supervisorctl start clickhouse-server
     """
     When we execute command on clickhouse01
     """
