@@ -49,6 +49,8 @@ DEFAULT_CONFIG = {
     },
     "zookeeper": {
         "randomize_hosts": True,
+        "username": None,
+        "password": None,
     },
     "chadmin": {
         "wait": {

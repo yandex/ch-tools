@@ -7,8 +7,10 @@ from typing import Dict, Optional
 
 from click import command, option, pass_context
 from kazoo.client import KazooClient
+from kazoo.security import make_digest_acl
 
 from ch_tools.common.clickhouse.config import ClickhouseKeeperConfig
+from ch_tools.common.config import load_config
 from ch_tools.common.result import CRIT, OK, WARNING, Result
 from ch_tools.common.tls import check_cert_on_ports
 
@@ -26,15 +28,30 @@ context = ssl.create_default_context()
 def alive_command(ctx):
     """Check (Zoo)Keeper service is alive"""
     try:
+        config = load_config()
         keeper_port, use_ssl = get_keeper_port_pair()
-        client = KazooClient(
-            f"127.0.0.1:{keeper_port}",
-            connection_retry=ctx.obj.get("retries"),
-            command_retry=ctx.obj.get("retries"),
-            timeout=ctx.obj.get("timeout"),
-            use_ssl=use_ssl,
-            verify_certs=not ctx.obj.get("no_verify_ssl_certs"),
-        )
+        username = config['zookeeper']['username']
+        password = config['zookeeper']['password']
+        args = {
+            'hosts': f"127.0.0.1:{keeper_port}",
+            'connection_retry': ctx.obj.get("retries"),
+            'command_retry': ctx.obj.get("retries"),
+            'timeout': ctx.obj.get("timeout"),
+            'use_ssl': use_ssl,
+            'verify_certs': not ctx.obj.get("no_verify_ssl_certs"),
+        }
+        if username is not None and password is not None:
+            auth_data = [
+                (
+                    'digest',
+                    f'{username}:{password}',
+                )
+            ]
+            acls = [make_digest_acl(username, password, all=True)]
+            args['auth_data'] = auth_data
+            args['default_acl'] = acls
+
+        client = KazooClient(**args)
         client.start()
         client.get("/")
         client.create(path="/{0}_alive".format(socket.getfqdn()), ephemeral=True)
