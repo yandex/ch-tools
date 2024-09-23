@@ -14,6 +14,7 @@ from logging import (  # noqa # pylint:disable=unused-import
     WARN,
     WARNING,
 )
+import traceback
 from typing import Any, Dict, Optional
 
 from loguru import logger
@@ -96,6 +97,7 @@ def configure(
             "format": format_,
             "enqueue": True,
             "diagnose": False,
+            "backtrace": False,
         }
         if "level" in value:
             handler["level"] = value["level"]
@@ -230,4 +232,10 @@ def enable_stdout_logger():
             level="INFO",
             format="{message}",
             filter=make_filter(logger_config["module"]),
+            backtrace=False,
+            diagnose=False,
         )
+
+
+def print_last_exception(e):
+    traceback.print_exception(BaseException, e, e.__traceback__, chain=False)
