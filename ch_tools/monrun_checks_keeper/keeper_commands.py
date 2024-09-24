@@ -10,7 +10,6 @@ from kazoo.client import KazooClient
 from kazoo.security import make_digest_acl
 
 from ch_tools.common.clickhouse.config import ClickhouseKeeperConfig
-from ch_tools.common.config import load_config
 from ch_tools.common.result import CRIT, OK, WARNING, Result
 from ch_tools.common.tls import check_cert_on_ports
 
@@ -28,10 +27,9 @@ context = ssl.create_default_context()
 def alive_command(ctx):
     """Check (Zoo)Keeper service is alive"""
     try:
-        config = load_config()
         keeper_port, use_ssl = get_keeper_port_pair()
-        username = config["zookeeper"]["username"]
-        password = config["zookeeper"]["password"]
+        username = ctx.obj["config"]["zookeeper"]["username"]
+        password = ctx.obj["config"]["zookeeper"]["password"]
         args = {
             "hosts": f"127.0.0.1:{keeper_port}",
             "connection_retry": ctx.obj.get("retries"),
