@@ -109,7 +109,7 @@ def wait_replication_sync_command(
                 ctx,
                 f"SYSTEM SYNC REPLICA {full_name}",
                 format_=None,
-                timeout=timeout,
+                timeout=time_left,
                 settings={"receive_timeout": timeout},
             )
     except requests.exceptions.ReadTimeout:
