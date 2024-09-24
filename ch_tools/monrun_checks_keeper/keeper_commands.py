@@ -30,26 +30,26 @@ def alive_command(ctx):
     try:
         config = load_config()
         keeper_port, use_ssl = get_keeper_port_pair()
-        username = config['zookeeper']['username']
-        password = config['zookeeper']['password']
+        username = config["zookeeper"]["username"]
+        password = config["zookeeper"]["password"]
         args = {
-            'hosts': f"127.0.0.1:{keeper_port}",
-            'connection_retry': ctx.obj.get("retries"),
-            'command_retry': ctx.obj.get("retries"),
-            'timeout': ctx.obj.get("timeout"),
-            'use_ssl': use_ssl,
-            'verify_certs': not ctx.obj.get("no_verify_ssl_certs"),
+            "hosts": f"127.0.0.1:{keeper_port}",
+            "connection_retry": ctx.obj.get("retries"),
+            "command_retry": ctx.obj.get("retries"),
+            "timeout": ctx.obj.get("timeout"),
+            "use_ssl": use_ssl,
+            "verify_certs": not ctx.obj.get("no_verify_ssl_certs"),
         }
         if username is not None and password is not None:
             auth_data = [
                 (
-                    'digest',
-                    f'{username}:{password}',
+                    "digest",
+                    f"{username}:{password}",
                 )
             ]
             acls = [make_digest_acl(username, password, all=True)]
-            args['auth_data'] = auth_data
-            args['default_acl'] = acls
+            args["auth_data"] = auth_data
+            args["default_acl"] = acls
 
         client = KazooClient(**args)
         client.start()
