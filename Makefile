@@ -117,6 +117,10 @@ $(INSTALL_DEPS_STAMP): $(VENV_DIR) pyproject.toml poetry.lock
 	@if [[ -n "${UPDATE_POETRY_LOCK}" ]]; then \
 		$(POETRY) update --lock; \
 	fi
+	# Fix "TypeError: canonicalize_version() got an unexpected keyword argument 'strip_trailing_zero'"
+	# Related issue https://github.com/pypa/setuptools/issues/4483
+	# TODO: Try to remove this workaround after upgrading Poetry and Python version
+	$(VENV_DIR)/bin/pip install "setuptools<71"
 	$(POETRY) install --no-root
 	touch $(INSTALL_DEPS_STAMP)
 
