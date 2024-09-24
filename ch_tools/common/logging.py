@@ -5,6 +5,7 @@ Logging module.
 import inspect
 import logging
 import sys
+import traceback
 from logging import (  # noqa # pylint:disable=unused-import
     CRITICAL,
     DEBUG,
@@ -14,7 +15,6 @@ from logging import (  # noqa # pylint:disable=unused-import
     WARN,
     WARNING,
 )
-import traceback
 from typing import Any, Dict, Optional
 
 from loguru import logger
