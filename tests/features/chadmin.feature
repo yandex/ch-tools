@@ -145,7 +145,7 @@ Feature: chadmin commands.
     """
     Then it fails with response contains
     """
-    Timeout while running query.
+    Read timeout while running query.
     """
     When we execute query on clickhouse01
     """
