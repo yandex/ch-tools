@@ -143,11 +143,20 @@ def error(msg, *args, **kwargs):
     _log("ERROR", msg, *args, **kwargs)
 
 
-def exception(msg, *args, exc_info=True, **kwargs):
+def exception(msg, *args, exc_info=True, short_stdout=False, **kwargs):
     """
     Log a message with severity 'ERROR' with exception information.
     """
-    _log("ERROR", msg, *args, exc_info=exc_info, **kwargs)
+    if not short_stdout:
+        _log("ERROR", msg, *args, exc_info=exc_info, **kwargs)
+    else:
+        print_last_exception()
+        if logger_config.get("stdout_logger_id", None) is not None:
+            disable_stdout_logger()
+            _log("ERROR", msg, *args, exc_info=exc_info, **kwargs)
+            enable_stdout_logger()
+        else:
+            _log("ERROR", msg, *args, exc_info=exc_info, **kwargs)
 
 
 def warning(msg, *args, **kwargs):
@@ -237,5 +246,6 @@ def enable_stdout_logger():
         )
 
 
-def print_last_exception(e):
-    traceback.print_exception(BaseException, e, e.__traceback__, chain=False)
+def print_last_exception():
+    exc_type, value, traceback_ = sys.exc_info()
+    traceback.print_exception(exc_type, value, traceback_, chain=False)
