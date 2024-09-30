@@ -1,7 +1,8 @@
+import json
 from collections import OrderedDict
 
 from cloup import Choice, group, option, option_group, pass_context
-from cloup.constraints import RequireAtLeast
+from cloup.constraints import If, IsSet, RequireAtLeast, RequireExactly
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.partition import (
@@ -152,7 +153,17 @@ def list_partitions_command(ctx, **kwargs):
         "disk_name",
         help="Filter in partitions to attach by the specified disk.",
     ),
-    constraint=RequireAtLeast(1),
+    option(
+        "--use-partition-list-from-json",
+        default=None,
+        type=str,
+        help="Use list of partitions from the file. Example 'SELECT database, table, partition_id ... FORMAT JSON' > file && chadmin partition attach --use-partition-list-from-json <file>.",
+    ),
+    constraint=If(
+        IsSet("use_partition_list_from_json"),
+        then=RequireExactly(1),
+        else_=RequireAtLeast(1),
+    ),
 )
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @option(
@@ -265,7 +276,17 @@ def attach_partitions_command(
         "replication_task_exception",
         help="Filter out replication tasks by the specified exception.",
     ),
-    constraint=RequireAtLeast(1),
+    option(
+        "--use-partition-list-from-json",
+        default=None,
+        type=str,
+        help="Use list of partitions from the file. Example 'SELECT database, table, partition_id ... FORMAT JSON' > file && chadmin partition detach --use-partition-list-from-json <file>.",
+    ),
+    constraint=If(
+        IsSet("use_partition_list_from_json"),
+        then=RequireExactly(1),
+        else_=RequireAtLeast(1),
+    ),
 )
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @option(
@@ -291,6 +312,7 @@ def detach_partitions_command(
     replication_task_exception,
     keep_going,
     dry_run,
+    use_partition_list_from_json,
 ):
     """Detach one or several partitions."""
     partitions = get_partitions(
@@ -306,6 +328,7 @@ def detach_partitions_command(
         max_replication_task_postpone_count=max_replication_task_postpone_count,
         replication_task_exception=replication_task_exception,
         format_="JSON",
+        use_partition_list_from_json=use_partition_list_from_json,
     )["data"]
     for p in partitions:
         try:
@@ -397,7 +420,17 @@ def detach_partitions_command(
         type=int,
         help="Limit the max number of partitions to reattach in the output.",
     ),
-    constraint=RequireAtLeast(1),
+    option(
+        "--use-partition-list-from-json",
+        default=None,
+        type=str,
+        help="Use list of partitions from the file. Example 'SELECT database, table, partition_id ... FORMAT JSON' > file && chadmin partition rettach --use-partition-list-from-json <file>.",
+    ),
+    constraint=If(
+        IsSet("use_partition_list_from_json"),
+        then=RequireExactly(1),
+        else_=RequireAtLeast(1),
+    ),
 )
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @option(
@@ -433,6 +466,7 @@ def reattach_partitions_command(
     keep_going,
     limit_errors,
     dry_run,
+    use_partition_list_from_json,
 ):
     """Perform sequential attach and detach of one or several partitions."""
 
@@ -461,6 +495,7 @@ def reattach_partitions_command(
         replication_task_exception=replication_task_exception,
         limit=limit,
         format_="JSON",
+        use_partition_list_from_json=use_partition_list_from_json,
     )["data"]
 
     error_count = 0
@@ -706,6 +741,25 @@ def materialize_ttl_command(
         )
 
 
+def read_and_validate_partitions_from_json(json_path):
+
+    base_exception_str = "Incorrect json file, there are no {corrupted_section}. Use the JSON format for ch query to get correct format."
+    with open(json_path, "r", encoding="utf-8") as json_file:
+        json_obj = json.load(json_file)
+        if "data" not in json_obj:
+            raise ValueError(base_exception_str.format("data section"))
+
+        partitions_list = json_obj["data"]
+        for p in partitions_list:
+            if "database" not in p:
+                raise ValueError(base_exception_str.format("database"))
+            if "table" not in p:
+                raise ValueError(base_exception_str.format("table"))
+            if "partition_id" not in p:
+                raise ValueError(base_exception_str.format("partition_id"))
+    return json_obj
+
+
 def get_partitions(
     ctx,
     database,
@@ -732,8 +786,12 @@ def get_partitions(
     order_by=None,
     limit=None,
     format_=None,
+    use_partition_list_from_json=None,
 ):
     # pylint: disable=too-many-locals
+    if use_partition_list_from_json:
+        return read_and_validate_partitions_from_json(use_partition_list_from_json)
+
     order_by = {
         "size": "sum(bytes_on_disk) DESC",
         "parts": "parts DESC",
