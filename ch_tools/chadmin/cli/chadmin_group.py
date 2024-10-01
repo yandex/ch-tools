@@ -51,7 +51,9 @@ class Chadmin(cloup.Group):
                 cmd_callback(*a, **kw)
                 logging.debug("Command '{}' completed", cmd.name)
             except Exception:
-                logging.exception("Command '{}' failed with error:", cmd.name)
+                logging.exception(
+                    "Command '{}' failed with error:", cmd.name, short_stdout=True
+                )
 
         cmd.callback = wrapper
         super().add_command(

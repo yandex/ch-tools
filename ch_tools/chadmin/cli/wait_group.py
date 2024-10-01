@@ -103,14 +103,13 @@ def wait_replication_sync_command(
         for replica in list_table_replicas(ctx):
             full_name = f"`{replica['database']}`.`{replica['table']}`"
             time_left = deadline - time.time()
-            timeout = min(replica_timeout.total_seconds(), time_left)
 
             execute_query(
                 ctx,
                 f"SYSTEM SYNC REPLICA {full_name}",
                 format_=None,
-                timeout=timeout,
-                settings={"receive_timeout": timeout},
+                timeout=replica_timeout.total_seconds(),
+                settings={"receive_timeout": time_left},
             )
     except requests.exceptions.ReadTimeout:
         logging.error("Read timeout while running query.")
