@@ -149,14 +149,15 @@ def exception(msg, *args, exc_info=True, short_stdout=False, **kwargs):
     """
     if not short_stdout:
         _log("ERROR", msg, *args, exc_info=exc_info, **kwargs)
+        return
+
+    print_last_exception()
+    if logger_config.get("stdout_logger_id", None):
+        disable_stdout_logger()
+        _log("ERROR", msg, *args, exc_info=exc_info, **kwargs)
+        enable_stdout_logger()
     else:
-        print_last_exception()
-        if logger_config.get("stdout_logger_id", None) is not None:
-            disable_stdout_logger()
-            _log("ERROR", msg, *args, exc_info=exc_info, **kwargs)
-            enable_stdout_logger()
-        else:
-            _log("ERROR", msg, *args, exc_info=exc_info, **kwargs)
+        _log("ERROR", msg, *args, exc_info=exc_info, **kwargs)
 
 
 def warning(msg, *args, **kwargs):
