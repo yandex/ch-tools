@@ -14,6 +14,7 @@ from kazoo.exceptions import NoNodeError, NotEmptyError
 from kazoo.interfaces import IAsyncResult
 
 from ch_tools.chadmin.internal.database_replica import system_database_drop_replica
+from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.table_replica import system_table_drop_replica
 from ch_tools.chadmin.internal.utils import chunked, replace_macros
 from ch_tools.common import logging
@@ -551,21 +552,26 @@ def clean_zk_metadata_for_hosts(
                     )
 
         if cleanup_database:
-            for zk_database_path, list_of_nodes in database_to_drop.items():  # type: ignore
-                for node in list_of_nodes:
-                    replica = f"{node[0]}|{node[1]}"
-                    tasks.append(
-                        WorkerTask(
-                            f"system_database_drop_replica_{replica}",
-                            system_database_drop_replica,
-                            {
-                                "ctx": ctx,
-                                "database_zk_path": zk_database_path,
-                                "replica": replica,
-                                "dry_run": dry_run,
-                            },
+            if match_ch_version(ctx, min_version="23.1"):
+                for zk_database_path, list_of_nodes in database_to_drop.items():  # type: ignore
+                    for node in list_of_nodes:
+                        replica = f"{node[0]}|{node[1]}"
+                        tasks.append(
+                            WorkerTask(
+                                f"system_database_drop_replica_{replica}",
+                                system_database_drop_replica,
+                                {
+                                    "ctx": ctx,
+                                    "database_zk_path": zk_database_path,
+                                    "replica": replica,
+                                    "dry_run": dry_run,
+                                },
+                            )
                         )
-                    )
+            else:
+                logging.warning(
+                    "Ch version is too old, will skip replicated database cleanup."
+                )
 
         execute_tasks_in_parallel(tasks, max_workers=max_workers)
 

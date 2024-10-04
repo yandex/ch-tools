@@ -76,6 +76,7 @@ Feature: chadmin zookeeper commands.
     /tables/table_02/replicas/clickhouse02.ch_tools_test
     """
 
+  @require_version_23.1
   Scenario: Remove single host from Replicated database.
     When we execute queries on clickhouse01
     """
@@ -88,6 +89,7 @@ Feature: chadmin zookeeper commands.
     /clickhouse/databases/test/replicas/shard1|clickhouse02.ch_tools_test
     """
 
+  @require_version_23.1
   Scenario: Remove all host from Replicated database.
     When we execute queries on clickhouse01
     """
