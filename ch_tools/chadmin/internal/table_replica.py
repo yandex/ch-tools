@@ -144,3 +144,12 @@ def restore_table_replica(
     if cluster:
         query += f" ON CLUSTER '{cluster}'"
     execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
+
+
+def system_table_drop_replica(ctx, table_zk_path, replica, dry_run=False):
+    """
+    Perform "SYSTEM DROP REPLICA" query.
+    """
+    timeout = ctx.obj["config"]["clickhouse"]["drop_replica_timeout"]
+    query = f"SYSTEM DROP REPLICA '{replica}' FROM ZKPATH '{table_zk_path}'"
+    execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
