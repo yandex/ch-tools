@@ -2,7 +2,7 @@ import ast
 import os
 import re
 import time
-from collections import deque
+from collections import defaultdict, deque
 from contextlib import contextmanager
 from dataclasses import dataclass
 from math import sqrt
@@ -269,6 +269,12 @@ class ZookeeperNode:
     children: List[str]
 
 
+@dataclass
+class GetChildrenTask:
+    path: str
+    get_children_request: IAsyncResult
+
+
 class ZookeeperTreeInspector:
     """
     Class for traversal zookeeper tree.
@@ -286,7 +292,7 @@ class ZookeeperTreeInspector:
         self._max_active_tasks = max_parrallel_tasks
 
         self._queue_pending: Deque[str] = deque()
-        self._queue_active: Deque[Tuple[str, IAsyncResult]] = deque(
+        self._queue_active: Deque[GetChildrenTask] = deque(
             maxlen=self._max_active_tasks
         )
         self._queue_finished: Deque[ZookeeperNode] = deque()
@@ -303,29 +309,34 @@ class ZookeeperTreeInspector:
         for _ in range(0, number_tasks_to_move_to_active):
             path = self._queue_pending.popleft()
             async_task = self._zk_client.get_children_async(path)
-            self._queue_active.append((path, async_task))
+            self._queue_active.append(GetChildrenTask(path, async_task))
 
     def _update_active_queue(self, block_until_finised_tasks: bool = False) -> None:
         """
         Moves executed tasks from active to finished queues.
         """
 
-        if block_until_finised_tasks:
-            self._queue_active[0][1].wait()
+        if block_until_finised_tasks and len(self._queue_active):
+            self._queue_active[0].get_children_request.wait()
 
-        while len(self._queue_active) and self._queue_active[0][1].ready():
+        while (
+            len(self._queue_active)
+            and self._queue_active[0].get_children_request.ready()
+        ):
             async_task = self._queue_active.popleft()
-            if async_task[1].successful():
+            if async_task.get_children_request.successful():
                 self._queue_finished.append(
-                    ZookeeperNode(async_task[0], async_task[1].get())
+                    ZookeeperNode(
+                        async_task.path, async_task.get_children_request.get()
+                    )
                 )
             else:
-                if isinstance(async_task[1].exception, NoNodeError):
+                if isinstance(async_task.get_children_request.exception, NoNodeError):
                     logging.warning(
-                        "Ignoring node {}, because someone delete it", async_task[0]
+                        "Ignoring node {}, because someone delete it", async_task.path
                     )
                     continue
-                raise async_task[1].exception
+                raise async_task.get_children_request.exception
 
     def _update_queues(self, block_until_finished_tasks: bool = False) -> None:
         """
@@ -461,12 +472,12 @@ def clean_zk_metadata_for_hosts(
 
         nodes_set = set(nodes)
 
-        databases_to_cleanup: Dict[str, List[Tuple[str, str]]] = {}
-        tables_to_cleanup: Dict[str, List[str]] = {}
+        databases_to_cleanup: Dict[str, List[Tuple[str, str]]] = defaultdict(list)
+        tables_to_cleanup: Dict[str, List[str]] = defaultdict(list)
 
         for replicated_object in replicated_objects:
-            # Actually rn in the ch (10.24) there are no secure way to determine that node is the root of replicated table.
-            # So we are accuming that if object not database then it is table.
+            # Actually there is no a reliable way to determine that node is the root of replicated table in the CH (24.10)
+            # So we are assuming that if object is not a database then it is a table.
             #
             # Replicated table
             # https://github.com/ClickHouse/ClickHouse/blob/eb984db51ea0309dd607eaf98280315b42347f65/src/Interpreters/InterpreterSystemQuery.cpp#L1029
@@ -474,7 +485,7 @@ def clean_zk_metadata_for_hosts(
             # Replicated Database
             # https://github.com/ClickHouse/ClickHouse/blob/eb984db51ea0309dd607eaf98280315b42347f65/src/Databases/DatabaseReplicated.cpp#L1529
             try:
-                is_database = bool(
+                is_database = (
                     zk.get(replicated_object.path)[0] == REPLICATED_DATABASE_MARKER
                 )
             except NoNodeError:
@@ -497,15 +508,11 @@ def clean_zk_metadata_for_hosts(
                 if is_database:
                     shard, replica_parsed = replica.split("|")
                     if replica_parsed in nodes_set:
-                        if replicated_object.path not in databases_to_cleanup:
-                            databases_to_cleanup[replicated_object.path] = []
                         databases_to_cleanup[replicated_object.path].append(
                             (shard, replica_parsed)
                         )
                 elif is_table:
                     if replica in nodes_set:
-                        if replicated_object.path not in tables_to_cleanup:
-                            tables_to_cleanup[replicated_object.path] = []
                         tables_to_cleanup[replicated_object.path].append(replica)
                 else:
                     raise RuntimeError("Unreacheble state")
