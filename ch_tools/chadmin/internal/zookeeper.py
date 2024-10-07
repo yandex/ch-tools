@@ -311,13 +311,10 @@ class ZookeeperTreeInspector:
             async_task = self._zk_client.get_children_async(path)
             self._queue_active.append(GetChildrenTask(path, async_task))
 
-    def _update_active_queue(self, block_until_finised_tasks: bool = False) -> None:
+    def _update_active_queue(self) -> None:
         """
         Moves executed tasks from active to finished queues.
         """
-
-        if block_until_finised_tasks and len(self._queue_active):
-            self._queue_active[0].get_children_request.wait()
 
         while (
             len(self._queue_active)
@@ -338,12 +335,12 @@ class ZookeeperTreeInspector:
                     continue
                 raise async_task.get_children_request.exception
 
-    def _update_queues(self, block_until_finished_tasks: bool = False) -> None:
+    def _update_queues(self) -> None:
         """
         Perform queues updates.
         """
 
-        self._update_active_queue(block_until_finished_tasks)
+        self._update_active_queue()
         self._update_pending_queue()
 
     def _exists_tasks_to_do(self) -> bool:
@@ -357,21 +354,30 @@ class ZookeeperTreeInspector:
             + len(self._queue_active)
         ) > 0
 
-    def _get_impl(self, with_block: bool = False) -> Optional[ZookeeperNode]:
+    def _wait_for_task_finished(self) -> None:
         """
-        Implementation of get functions. There are two mode:
-        with_block - wait until one of the tasks finished.
-        without_block - get one finished task if there are no finished, calls itself with block.
+        Wait until one of the tasks will be finished if it's possible.
         """
-        self._update_queues(with_block)
+
+        while self._exists_tasks_to_do() and len(self._queue_finished) == 0:
+            self._update_pending_queue()
+            self._queue_active[0].get_children_request.wait()
+            self._update_active_queue()
+
+    def _get_impl(self) -> Optional[ZookeeperNode]:
+        """
+        Implementation of get functions.
+        """
+        self._update_queues()
 
         if len(self._queue_finished):
             return self._queue_finished.popleft()
 
+        self._wait_for_task_finished()
+
         if not self._exists_tasks_to_do():
             return None
-
-        return self._get_impl(with_block=True)
+        return self._queue_finished.popleft()
 
     def add(self, pathes_to_inspect: List[str]) -> None:
         """
@@ -384,7 +390,7 @@ class ZookeeperTreeInspector:
         """
         Get one finished task, if exists.
         """
-        return self._get_impl(with_block=False)
+        return self._get_impl()
 
     def tree_iterator(self) -> Generator[ZookeeperNode, None, None]:
         """
