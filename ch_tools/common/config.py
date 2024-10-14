@@ -37,7 +37,6 @@ DEFAULT_CONFIG = {
         "unfreeze_timeout": 10 * 60,
         "restart_replica_timeout": 10 * 60,
         "restore_replica_timeout": 10 * 60,
-        "drop_replica_timeout": 10 * 60,
     },
     "object_storage": {
         "bucket_name_prefix": "cloud-storage-",
@@ -65,11 +64,6 @@ DEFAULT_CONFIG = {
                 "warn": 300,
                 "mcrit": 90.0,
                 "mwarn": 50.0,
-            },
-        },
-        "zookeeper": {
-            "clean_zk_metadata_for_hosts": {
-                "workers": 10,
             },
         },
     },
