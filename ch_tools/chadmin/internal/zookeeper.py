@@ -15,7 +15,11 @@ from kazoo.interfaces import IAsyncResult
 
 from ch_tools.chadmin.internal.database_replica import system_database_drop_replica
 from ch_tools.chadmin.internal.system import match_ch_version
-from ch_tools.chadmin.internal.table_replica import system_table_drop_replica
+from ch_tools.chadmin.internal.table_replica import (
+    list_table_replicas,
+    system_table_drop_replica,
+    system_table_drop_replica_by_zk_path,
+)
 from ch_tools.chadmin.internal.utils import chunked, replace_macros
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
@@ -531,6 +535,22 @@ def clean_zk_metadata_for_hosts(
         )
         return (databases_to_cleanup, tables_to_cleanup)
 
+    def _drop_table_replica_task(ctx, table_zk_path, replica, dry_run):
+        """
+        Workaround for the problem from:
+        https://github.com/ClickHouse/ClickHouse/pull/70642
+
+        If this pr to ch will be merged, then we can always use `from zkpath` syntax.
+        """
+        list_replicas = list_table_replicas(ctx=ctx, zookeeper_path=table_zk_path)
+
+        if len(list_replicas):
+            database = list_replicas[0]["database"]
+            table = list_replicas[0]["table"]
+            system_table_drop_replica(ctx, replica, database, table)
+        else:
+            system_table_drop_replica_by_zk_path(ctx, replica, table_zk_path, dry_run)
+
     def cleanup_tables_and_databases(zk: KazooClient) -> None:
         """
         Collects all objects that have nodes to be deleted and runs drop repliaca for them.
@@ -553,8 +573,8 @@ def clean_zk_metadata_for_hosts(
                 for node in list_of_nodes:
                     tasks.append(
                         WorkerTask(
-                            f"system_table_drop_replica_{node}",
-                            system_table_drop_replica,
+                            f"drop_replica_task_{node}",
+                            _drop_table_replica_task,
                             {
                                 "ctx": ctx,
                                 "table_zk_path": zk_table_path,

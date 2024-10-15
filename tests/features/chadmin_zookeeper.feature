@@ -76,6 +76,32 @@ Feature: chadmin zookeeper commands.
     /tables/table_02/replicas/clickhouse02.ch_tools_test
     """
 
+  Scenario: Cleanup single host on non empty node.
+    When we execute queries on clickhouse02
+    """
+    DROP DATABASE IF EXISTS test ON CLUSTER 'cluster'; 
+    CREATE DATABASE test ON CLUSTER 'cluster';
+
+    CREATE TABLE test.table_01 ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n;
+
+    CREATE TABLE test.table_02 ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_02', '{replica}') PARTITION BY n ORDER BY n;
+
+    DETACH TABLE test.table_01;
+    DETACH TABLE test.table_02;
+    """
+
+    And we do hosts cleanup on clickhouse01 with fqdn clickhouse02.ch_tools_test and zk root /
+    Then the list of children on clickhouse02 for zk node /tables/table_01/replicas are equal to
+    """
+    /tables/table_01/replicas/clickhouse01.ch_tools_test
+    """
+    And the list of children on clickhouse02 for zk node /tables/table_02/replicas are equal to
+    """
+    /tables/table_02/replicas/clickhouse01.ch_tools_test
+    """
+
   @require_version_23.1
   Scenario: Remove single host from Replicated database.
     When we execute queries on clickhouse01
