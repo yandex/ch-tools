@@ -70,6 +70,10 @@ DEFAULT_CONFIG = {
         "zookeeper": {
             "clean_zk_metadata_for_hosts": {
                 "workers": 10,
+                # In the wrost case 10 min * 25 about 4 h.
+                "retry_min_wait_sec": 60,
+                "retry_max_wait_sec": 60 * 10,
+                "max_retries": 25,
             },
         },
     },

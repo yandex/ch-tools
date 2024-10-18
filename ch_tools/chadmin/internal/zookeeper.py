@@ -12,6 +12,13 @@ from click import BadParameter
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError, NotEmptyError
 from kazoo.interfaces import IAsyncResult
+from tenacity import (
+    retry,
+    retry_if_exception_message,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_random_exponential,
+)
 
 from ch_tools.chadmin.internal.database_replica import system_database_drop_replica
 from ch_tools.chadmin.internal.system import match_ch_version
@@ -22,6 +29,7 @@ from ch_tools.chadmin.internal.table_replica import (
 )
 from ch_tools.chadmin.internal.utils import chunked, replace_macros
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.client import ClickhouseError
 from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
 
@@ -535,7 +543,7 @@ def clean_zk_metadata_for_hosts(
         )
         return (databases_to_cleanup, tables_to_cleanup)
 
-    def _drop_table_replica_task(ctx, table_zk_path, replica, dry_run):
+    def _drop_table_replica_task(ctx, table_zk_path, replica, dry_run, retry_decorator):
         """
         Workaround for the problem from:
         https://github.com/ClickHouse/ClickHouse/pull/70642
@@ -547,17 +555,45 @@ def clean_zk_metadata_for_hosts(
         if len(list_replicas):
             database = list_replicas[0]["database"]
             table = list_replicas[0]["table"]
-            system_table_drop_replica(ctx, replica, database, table)
+            retry_decorator(system_table_drop_replica)(ctx, replica, database, table)
         else:
-            system_table_drop_replica_by_zk_path(ctx, replica, table_zk_path, dry_run)
+            retry_decorator(system_table_drop_replica_by_zk_path)(
+                ctx, replica, table_zk_path, dry_run
+            )
+
+    def _drop_database_replica_task(
+        ctx, database_zk_path, replica, dry_run, retry_decorator
+    ):
+        """
+        Task for the system drop database replica query with retry.
+        """
+        retry_decorator(system_database_drop_replica)(
+            ctx, database_zk_path, replica, dry_run
+        )
 
     def cleanup_tables_and_databases(zk: KazooClient) -> None:
         """
         Collects all objects that have nodes to be deleted and runs drop repliaca for them.
         """
-        max_workers = ctx.obj["config"]["chadmin"]["zookeeper"][
+        clean_zk_metadata_config = ctx.obj["config"]["chadmin"]["zookeeper"][
             "clean_zk_metadata_for_hosts"
-        ]["workers"]
+        ]
+        max_workers = clean_zk_metadata_config["workers"]
+        min_wait_time_sec = clean_zk_metadata_config["retry_min_wait_sec"]
+        max_wait_time_sec = clean_zk_metadata_config["retry_max_wait_sec"]
+        max_retries = clean_zk_metadata_config["max_retries"]
+
+        retry_decorator = retry(
+            retry=(
+                retry_if_exception_type(ClickhouseError)
+                & (
+                    retry_if_exception_message(match=".*because it's active.*")
+                    | retry_if_exception_message(match=".*is active.*")
+                )
+            ),
+            wait=wait_random_exponential(min=min_wait_time_sec, max=max_wait_time_sec),
+            stop=stop_after_attempt(max_retries),
+        )
 
         database_to_drop, tables_to_drop = _collect_objects_for_cleanup(
             zk,
@@ -580,6 +616,7 @@ def clean_zk_metadata_for_hosts(
                                 "table_zk_path": zk_table_path,
                                 "replica": node,
                                 "dry_run": dry_run,
+                                "retry_decorator": retry_decorator,
                             },
                         )
                     )
@@ -592,12 +629,13 @@ def clean_zk_metadata_for_hosts(
                         tasks.append(
                             WorkerTask(
                                 f"system_database_drop_replica_{replica}",
-                                system_database_drop_replica,
+                                _drop_database_replica_task,
                                 {
                                     "ctx": ctx,
                                     "database_zk_path": zk_database_path,
                                     "replica": replica,
                                     "dry_run": dry_run,
+                                    "retry_decorator": retry_decorator,
                                 },
                             )
                         )
