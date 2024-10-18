@@ -31,6 +31,7 @@ def list_table_replicas(
     table_name=None,
     table_pattern=None,
     exclude_table_pattern=None,
+    zookeeper_path=None,
     is_readonly=None,
     verbose=False,
     limit=None,
@@ -87,6 +88,9 @@ def list_table_replicas(
         {% if exclude_table_pattern -%}
             AND table NOT {{ format_str_match(exclude_table_pattern) }}
         {% endif -%}
+        {% if zookeeper_path -%}
+            AND zookeeper_path = '{{ zookeeper_path }}'
+        {% endif -%}
         {% if is_readonly -%}
            AND is_readonly
         {% endif -%}
@@ -103,6 +107,7 @@ def list_table_replicas(
         table_name=table_name,
         table_pattern=table_pattern,
         exclude_table_pattern=exclude_table_pattern,
+        zookeeper_path=zookeeper_path,
         is_readonly=is_readonly,
         verbose=verbose,
         limit=limit,
@@ -143,4 +148,23 @@ def restore_table_replica(
     query = f"SYSTEM RESTORE REPLICA `{database_name}`.`{table_name}`"
     if cluster:
         query += f" ON CLUSTER '{cluster}'"
+    execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
+
+
+def system_table_drop_replica_by_zk_path(ctx, replica, table_zk_path, dry_run=False):
+    """
+    Perform "SYSTEM DROP REPLICA <replica> ZKPATH <table_zk_paht>" query.
+    """
+    timeout = ctx.obj["config"]["clickhouse"]["drop_replica_timeout"]
+    query = f"SYSTEM DROP REPLICA '{replica}' FROM ZKPATH '{table_zk_path}'"
+
+    execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
+
+
+def system_table_drop_replica(ctx, replica, database, table, dry_run=False):
+    """
+    Perform "SYSTEM DROP REPLICA <replica> FROM TABLE <database.table>" query.
+    """
+    timeout = ctx.obj["config"]["clickhouse"]["drop_replica_timeout"]
+    query = f"SYSTEM DROP REPLICA '{replica}' FROM TABLE `{database}`.`{table}`"
     execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
