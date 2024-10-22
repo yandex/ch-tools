@@ -2,18 +2,38 @@ import ast
 import os
 import re
 import time
-from collections import deque
+from collections import defaultdict, deque
 from contextlib import contextmanager
+from dataclasses import dataclass
 from math import sqrt
-from typing import List
+from typing import Deque, Dict, Generator, List, Optional, Tuple
 
 from click import BadParameter
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError, NotEmptyError
+from kazoo.interfaces import IAsyncResult
+from tenacity import (
+    retry,
+    retry_if_exception_message,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_random_exponential,
+)
 
+from ch_tools.chadmin.internal.database_replica import system_database_drop_replica
+from ch_tools.chadmin.internal.system import match_ch_version
+from ch_tools.chadmin.internal.table_replica import (
+    list_table_replicas,
+    system_table_drop_replica,
+    system_table_drop_replica_by_zk_path,
+)
 from ch_tools.chadmin.internal.utils import chunked, replace_macros
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.client import ClickhouseError
 from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
+from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
+
+REPLICATED_DATABASE_MARKER = bytes("DatabaseReplicated", "utf-8")
 
 
 def get_zk_node(ctx, path, binary=False):
@@ -255,6 +275,146 @@ def replace_macros_in_nodes(func):
     return wrapper
 
 
+@dataclass
+class ZookeeperNode:
+    path: str
+    children: List[str]
+
+
+@dataclass
+class GetChildrenTask:
+    path: str
+    get_children_request: IAsyncResult
+
+
+class ZookeeperTreeInspector:
+    """
+    Class for traversal zookeeper tree.
+    It is based on 3 queues (pending, active, finished). We are performing several (max_parrallel_tasks) async request,
+    so active queue has limited size.
+    Note: It doesn't inserts nodes, user should do it manually.
+
+    There are two main methods:
+        add() -> add list nodes to get children.
+        get() -> get the one node with list of children.
+    """
+
+    def __init__(self, zk: KazooClient, max_parrallel_tasks: int = 5):
+        self._zk_client = zk
+        self._max_active_tasks = max_parrallel_tasks
+
+        self._queue_pending: Deque[str] = deque()
+        self._queue_active: Deque[GetChildrenTask] = deque(
+            maxlen=self._max_active_tasks
+        )
+        self._queue_finished: Deque[ZookeeperNode] = deque()
+
+    def _update_pending_queue(self) -> None:
+        """
+        Moves tasks to active and creates async get_children requests.
+        """
+
+        number_tasks_to_move_to_active = min(
+            len(self._queue_pending), self._max_active_tasks - len(self._queue_active)
+        )
+
+        for _ in range(0, number_tasks_to_move_to_active):
+            path = self._queue_pending.popleft()
+            async_task = self._zk_client.get_children_async(path)
+            self._queue_active.append(GetChildrenTask(path, async_task))
+
+    def _update_active_queue(self) -> None:
+        """
+        Moves executed tasks from active to finished queues.
+        """
+
+        while (
+            len(self._queue_active)
+            and self._queue_active[0].get_children_request.ready()
+        ):
+            async_task = self._queue_active.popleft()
+            if async_task.get_children_request.successful():
+                self._queue_finished.append(
+                    ZookeeperNode(
+                        async_task.path, async_task.get_children_request.get()
+                    )
+                )
+            else:
+                if isinstance(async_task.get_children_request.exception, NoNodeError):
+                    logging.warning(
+                        "Ignoring node {}, because someone delete it", async_task.path
+                    )
+                    continue
+                raise async_task.get_children_request.exception
+
+    def _update_queues(self) -> None:
+        """
+        Perform queues updates.
+        """
+
+        self._update_active_queue()
+        self._update_pending_queue()
+
+    def _exists_tasks_to_do(self) -> bool:
+        """
+        Check that exists tasks in queues.
+        """
+
+        return (
+            len(self._queue_finished)
+            + len(self._queue_pending)
+            + len(self._queue_active)
+        ) > 0
+
+    def _wait_for_task_finished(self) -> None:
+        """
+        Wait until one of the tasks will be finished if it's possible.
+        """
+
+        while self._exists_tasks_to_do() and len(self._queue_finished) == 0:
+            self._update_pending_queue()
+            self._queue_active[0].get_children_request.wait()
+            self._update_active_queue()
+
+    def _get_impl(self) -> Optional[ZookeeperNode]:
+        """
+        Implementation of get functions.
+        """
+        self._update_queues()
+
+        if len(self._queue_finished):
+            return self._queue_finished.popleft()
+
+        self._wait_for_task_finished()
+
+        if not self._exists_tasks_to_do():
+            return None
+        return self._queue_finished.popleft()
+
+    def add(self, pathes_to_inspect: List[str]) -> None:
+        """
+        Add list of paths in pending queue.
+        """
+        self._queue_pending.extend(pathes_to_inspect)
+        self._update_queues()
+
+    def get(self) -> Optional[ZookeeperNode]:
+        """
+        Get one finished task, if exists.
+        """
+        return self._get_impl()
+
+    def tree_iterator(self) -> Generator[ZookeeperNode, None, None]:
+        """
+        Iterator for tree.
+        """
+        while True:
+            next_zk_node = self.get()
+            if not next_zk_node:
+                return
+            yield next_zk_node
+
+
 # pylint: disable=too-many-statements
 @replace_macros_in_nodes
 def clean_zk_metadata_for_hosts(
@@ -271,10 +431,49 @@ def clean_zk_metadata_for_hosts(
     Perform cleanup in zookeeper after deleting hosts in the cluster or whole cluster deleting.
     """
 
-    def _find_tables(zk, root_path, nodes):
+    def _traverse_zk_tree_and_find_objects(
+        zk: KazooClient,
+        zk_root_path: str,
+        excluded_paths: List[str],
+        max_workers: int = 4,
+    ) -> List[ZookeeperNode]:
         """
-        Find nodes mentions in zk for table management.
+        Traverse zk tree and find replicated objects.
         """
+
+        inspector = ZookeeperTreeInspector(zk, max_parrallel_tasks=max_workers)
+        inspector.add([zk_root_path])
+
+        objects_paths: List[ZookeeperNode] = []
+
+        excluded_regexp = re.compile("|".join(excluded_paths))
+
+        for zk_node in inspector.tree_iterator():
+            if "replicas" in zk_node.children:
+                objects_paths.append(zk_node)
+                continue
+
+            children_to_traverse: List[str] = []
+            for children in zk_node.children:
+                children_full_path = os.path.join(zk_node.path, children)
+                if not re.match(excluded_regexp, children_full_path):
+                    children_to_traverse.append(children_full_path)
+            inspector.add(children_to_traverse)
+
+        logging.info("Found {} replicated objects", len(objects_paths))
+        return objects_paths
+
+    def _collect_objects_for_cleanup(
+        zk: KazooClient,
+        zk_root_path: str,
+        collect_tables: bool,
+        collect_database: bool,
+        max_workers: int = 4,
+    ) -> Tuple[Dict[str, List[Tuple[str, str]]], Dict[str, List[str]]]:
+        """
+        Gets list of all replicated objects in zk, determine tables and databases for cleanup.
+        """
+
         excluded_paths = [
             ".*clickhouse/task_queue",
             ".*clickhouse/zero_copy",
@@ -282,108 +481,170 @@ def clean_zk_metadata_for_hosts(
             ".*/block_numbers/.*",
         ]
 
-        hosts_mentions = _find_paths(
-            zk, root_path, [".*/replicas/" + node for node in nodes], excluded_paths
-        )
-
-        # Paths will be like */shard1/replicas/hostname. But we need */shard1.
-        # Go up for 2 directories.
-        table_paths = [os.sep.join(path.split(os.sep)[:-2]) for path in hosts_mentions]
-        # One path might be in list several times. Make list unique.
-        return (list(set(table_paths)), hosts_mentions)
-
-    def _find_databases(zk, root_path, nodes):
-        """
-        Databases contains replicas in zk in cases when engine is Replicated with
-        pattern: <shard>|<replica>
-        """
-        excluded_paths = [
-            ".*clickhouse/task_queue",
-            ".*clickhouse/zero_copy",
-            ".*/blocks/.*",
-            ".*/block_numbers/.*",
-        ]
-        hosts_mentions = _find_paths(
+        replicated_objects: List[ZookeeperNode] = _traverse_zk_tree_and_find_objects(
             zk,
-            root_path,
-            [".*/replicas/.*[|]" + node for node in nodes],
-            excluded_paths,
+            zk_root_path,
+            excluded_paths=excluded_paths,
+            max_workers=max_workers,
         )
 
-        databases_paths = [
-            os.sep.join(path.split(os.sep)[:-2]) for path in hosts_mentions
+        nodes_set = set(nodes)
+
+        databases_to_cleanup: Dict[str, List[Tuple[str, str]]] = defaultdict(list)
+        tables_to_cleanup: Dict[str, List[str]] = defaultdict(list)
+
+        for replicated_object in replicated_objects:
+            # Actually there is no a reliable way to determine that node is the root of replicated table in the CH (24.10)
+            # So we are assuming that if object is not a database then it is a table.
+            #
+            # Replicated table
+            # https://github.com/ClickHouse/ClickHouse/blob/eb984db51ea0309dd607eaf98280315b42347f65/src/Interpreters/InterpreterSystemQuery.cpp#L1029
+            #
+            # Replicated Database
+            # https://github.com/ClickHouse/ClickHouse/blob/eb984db51ea0309dd607eaf98280315b42347f65/src/Databases/DatabaseReplicated.cpp#L1529
+            try:
+                is_database = (
+                    zk.get(replicated_object.path)[0] == REPLICATED_DATABASE_MARKER
+                )
+            except NoNodeError:
+                logging.warning(
+                    "Someone delete node {}, ignore it", replicated_object.path
+                )
+                continue
+
+            is_table = not is_database
+            if is_database and not collect_database:
+                continue
+            if is_table and not collect_tables:
+                continue
+
+            replicas_list = _get_children(
+                zk, os.path.join(replicated_object.path, "replicas")
+            )
+
+            for replica in replicas_list:
+                if is_database:
+                    shard, replica_parsed = replica.split("|")
+                    if replica_parsed in nodes_set:
+                        databases_to_cleanup[replicated_object.path].append(
+                            (shard, replica_parsed)
+                        )
+                elif is_table:
+                    if replica in nodes_set:
+                        tables_to_cleanup[replicated_object.path].append(replica)
+                else:
+                    raise RuntimeError("Unreacheble state")
+
+        logging.info(
+            "From {} objects, there are {} replicatad tables and {} replicated databases.",
+            len(replicated_objects),
+            len(tables_to_cleanup),
+            len(databases_to_cleanup),
+        )
+        return (databases_to_cleanup, tables_to_cleanup)
+
+    def _drop_table_replica_task(ctx, table_zk_path, replica, dry_run, retry_decorator):
+        """
+        Workaround for the problem from:
+        https://github.com/ClickHouse/ClickHouse/pull/70642
+
+        If this pr to ch will be merged, then we can always use `from zkpath` syntax.
+        """
+        list_replicas = list_table_replicas(ctx=ctx, zookeeper_path=table_zk_path)
+
+        if len(list_replicas):
+            database = list_replicas[0]["database"]
+            table = list_replicas[0]["table"]
+            retry_decorator(system_table_drop_replica)(ctx, replica, database, table)
+        else:
+            retry_decorator(system_table_drop_replica_by_zk_path)(
+                ctx, replica, table_zk_path, dry_run
+            )
+
+    def _drop_database_replica_task(
+        ctx, database_zk_path, replica, dry_run, retry_decorator
+    ):
+        """
+        Task for the system drop database replica query with retry.
+        """
+        retry_decorator(system_database_drop_replica)(
+            ctx, database_zk_path, replica, dry_run
+        )
+
+    def cleanup_tables_and_databases(zk: KazooClient) -> None:
+        """
+        Collects all objects that have nodes to be deleted and runs drop repliaca for them.
+        """
+        clean_zk_metadata_config = ctx.obj["config"]["chadmin"]["zookeeper"][
+            "clean_zk_metadata_for_hosts"
         ]
+        max_workers = clean_zk_metadata_config["workers"]
+        min_wait_time_sec = clean_zk_metadata_config["retry_min_wait_sec"]
+        max_wait_time_sec = clean_zk_metadata_config["retry_max_wait_sec"]
+        max_retries = clean_zk_metadata_config["max_retries"]
 
-        return (list(set(databases_paths)), hosts_mentions)
+        retry_decorator = retry(
+            retry=(
+                retry_if_exception_type(ClickhouseError)
+                & (
+                    retry_if_exception_message(match=".*because it's active.*")
+                    | retry_if_exception_message(match=".*is active.*")
+                )
+            ),
+            wait=wait_random_exponential(min=min_wait_time_sec, max=max_wait_time_sec),
+            stop=stop_after_attempt(max_retries),
+        )
 
-    def _set_replicas_is_lost(zk, table_paths, nodes):
-        """
-        Set flag <path>/replicas/<replica_name>/is_lost to 1
-        """
-        for path in table_paths:
-            replica_path = os.path.join(path, "replicas")
-            if not zk.exists(replica_path):
-                continue
+        database_to_drop, tables_to_drop = _collect_objects_for_cleanup(
+            zk,
+            zk_root_path,
+            collect_database=cleanup_database,
+            collect_tables=cleanup_tables,
+            max_workers=max_workers,
+        )
 
-            for node in nodes:
-                is_lost_flag_path = os.path.join(replica_path, node, "is_lost")
-                logging.info("Set is_lost_flag {}", is_lost_flag_path)
-                if not dry_run:
-                    _set_node_value(zk, is_lost_flag_path, "1")
+        tasks: List[WorkerTask] = []
+        if cleanup_tables:
+            for zk_table_path, list_of_nodes in tables_to_drop.items():
+                for node in list_of_nodes:
+                    tasks.append(
+                        WorkerTask(
+                            f"drop_replica_task_{node}",
+                            _drop_table_replica_task,
+                            {
+                                "ctx": ctx,
+                                "table_zk_path": zk_table_path,
+                                "replica": node,
+                                "dry_run": dry_run,
+                                "retry_decorator": retry_decorator,
+                            },
+                        )
+                    )
 
-    def _get_replicas_queues_to_remove(zk, paths, replica_names):
-        """
-        Remove <path>/replicas/<replica_name>/queue
-        """
-        to_remove: List[str] = []
-        for path in paths:
-            replica_name = os.path.join(path, "replicas")
-            if not zk.exists(replica_name):
-                continue
+        if cleanup_database:
+            if match_ch_version(ctx, min_version="23.1"):
+                for zk_database_path, list_of_nodes in database_to_drop.items():  # type: ignore
+                    for node in list_of_nodes:
+                        replica = f"{node[0]}|{node[1]}"
+                        tasks.append(
+                            WorkerTask(
+                                f"system_database_drop_replica_{replica}",
+                                _drop_database_replica_task,
+                                {
+                                    "ctx": ctx,
+                                    "database_zk_path": zk_database_path,
+                                    "replica": replica,
+                                    "dry_run": dry_run,
+                                    "retry_decorator": retry_decorator,
+                                },
+                            )
+                        )
+            else:
+                logging.warning(
+                    "Ch version is too old, will skip replicated database cleanup."
+                )
 
-            for replica_name in replica_names:
-                queue_path = os.path.join(replica_name, replica_name, "queue")
-                if not zk.exists(queue_path):
-                    continue
-
-                if zk.exists(queue_path):
-                    to_remove.append(queue_path)
-        return to_remove
-
-    def _remove_if_no_hosts_in_replicas(zk, paths):
-        """
-        Remove node if subnode is empty
-        """
-        to_delete = []
-        for path in paths:
-            child_full_path = os.path.join(path, "replicas")
-            if (
-                not zk.exists(child_full_path)
-                or len(_get_children(zk, child_full_path)) == 0
-            ):
-                to_delete.append(path)
-        _delete_recursive(zk, to_delete, dry_run)
-
-    def tables_cleanup(zk, zk_root_path):
-        """
-        Do cleanup for tables which contains nodes.
-        """
-        logging.info("Start tables cleanup for nodes: {}", ",".join(nodes))
-        (table_paths, hosts_paths) = _find_tables(zk, zk_root_path, nodes)
-        _set_replicas_is_lost(zk, table_paths, nodes)
-
-        to_remove = _get_replicas_queues_to_remove(zk, table_paths, nodes) + hosts_paths
-        _delete_recursive(zk, to_remove, dry_run)
-        _remove_if_no_hosts_in_replicas(zk, table_paths)
-
-    def databases_cleanups(zk, zk_root_path):
-        """
-        Do cleanup for databases which contains nodes.
-        """
-        logging.info("Start databases cleanup for nodes: {}", ",".join(nodes))
-        (databases_paths, hosts_paths) = _find_databases(zk, zk_root_path, nodes)
-        _delete_recursive(zk, hosts_paths, dry_run)
-        _remove_if_no_hosts_in_replicas(zk, databases_paths)
+        execute_tasks_in_parallel(tasks, max_workers=max_workers)
 
     def _get_hosts_from_ddl(zk, ddl_task_path):
         """
@@ -494,11 +755,8 @@ def clean_zk_metadata_for_hosts(
     zk_root_path = _format_path(ctx, zk_cleanup_root_path)
 
     with zk_client(ctx) as zk:
-        if cleanup_tables:
-            tables_cleanup(zk, zk_root_path)
 
-        if cleanup_database:
-            databases_cleanups(zk, zk_root_path)
+        cleanup_tables_and_databases(zk)
 
         if cleanup_ddl_queue:
             if not zk_ddl_query_path:
