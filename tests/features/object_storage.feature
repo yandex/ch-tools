@@ -158,7 +158,8 @@ Feature: chadmin object-storage commands
     Then we get zookeeper node with "/tmp/shard_1" path
     """
     {
-        "orphaned_objects_size": 0
+        "orphaned_objects_size": 0,
+        "error_msg": ""
     }
     """
     When we put object in S3
@@ -174,7 +175,8 @@ Feature: chadmin object-storage commands
     Then we get zookeeper node with "/tmp/shard_1" path
     """
     {
-        "orphaned_objects_size": 10
+        "orphaned_objects_size": 10,
+        "error_msg": ""
     }
     """
 
@@ -186,7 +188,8 @@ Feature: chadmin object-storage commands
     Then we get file /tmp/object_storage_cleanup_state.json
     """
     {
-        "orphaned_objects_size": 0
+        "orphaned_objects_size": 0,
+        "error_msg": ""
     }
     """
     When we put object in S3
@@ -202,6 +205,7 @@ Feature: chadmin object-storage commands
     Then we get file /tmp/object_storage_cleanup_state.json
     """
     {
-        "orphaned_objects_size": 10
+        "orphaned_objects_size": 10,
+        "error_msg": ""
     }
     """
