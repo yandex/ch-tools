@@ -357,9 +357,18 @@ def detect_broken_partitions(ctx, root_path, reattach, detach):
 
     if reattach or detach:
         for partition_info in partition_list:
-            handle_partition(
-                ctx, partition_info["table"], partition_info["partition"], detach
-            )
+            if reattach:
+                handle_partition(
+                    ctx, partition_info["table"], partition_info["partition"]
+                )
+            if detach:
+                handle_partition(
+                    ctx,
+                    partition_info["table"],
+                    partition_info["partition"],
+                    attach=False,
+                    detach=True,
+                )
 
 
 def find_paths_to_part_with_lost_keys(ctx: Context, root_path: str) -> List[str]:
@@ -476,34 +485,36 @@ def query_with_retry(ctx: Context, query: str, timeout: int, retries: int) -> bo
 
 
 def handle_partition(
-    ctx: Context, table: str, partition: str, detach_only: bool
+    ctx: Context, table: str, partition: str, detach: bool = True, attach: bool = False
 ) -> bool:
     """
-    Run Detach , Attach for given partition.
+    Handle the partition.
+    Run DETACH, ATTACH if needed.
     """
-    logging.debug(f"Going to reattach partition {partition} for table {table}")
-    detach_query = f"ALTER TABLE {table} DETACH PARTITION '{partition}'"
-    attach_query = f"ALTER TABLE {table} ATTACH PARTITION '{partition}'"
+    if not detach and not attach:
+        return False
 
-    res = query_with_retry(
-        ctx,
-        detach_query,
-        timeout=ATTACH_DETTACH_TIMEOUT,
-        retries=ATTACH_DETACH_QUERY_RETRY,
-    )
-    if not res:
-        return res
-
-    if detach_only:
-        return True
-
-    # To avoid keeping detached partitions, perform the attach query with double attempts.
-    res = query_with_retry(
-        ctx,
-        attach_query,
-        timeout=ATTACH_DETTACH_TIMEOUT,
-        retries=2 * ATTACH_DETACH_QUERY_RETRY,
-    )
-    if not res:
-        return res
+    if detach:
+        logging.debug(f"Going to attach partition {partition} for table {table}")
+        detach_query = f"ALTER TABLE {table} DETACH PARTITION '{partition}'"
+        res = query_with_retry(
+            ctx,
+            detach_query,
+            timeout=ATTACH_DETTACH_TIMEOUT,
+            retries=ATTACH_DETACH_QUERY_RETRY,
+        )
+        if not res:
+            return res
+    if attach:
+        logging.debug(f"Going to detach partition {partition} for table {table}")
+        attach_query = f"ALTER TABLE {table} ATTACH PARTITION '{partition}'"
+        # To avoid keeping detached partitions, perform the attach query with double attempts.
+        res = query_with_retry(
+            ctx,
+            attach_query,
+            timeout=ATTACH_DETTACH_TIMEOUT,
+            retries=2 * ATTACH_DETACH_QUERY_RETRY,
+        )
+        if not res:
+            return res
     return True
