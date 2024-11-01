@@ -177,28 +177,15 @@ def _store_state_zk_save(
         create_zk_nodes(ctx, [path], make_parents=True)
 
     state_data = json.dumps(
-        {
-            ORPHANED_OBJECTS_SIZE_FIELD: total_size,
-            ORPHANED_OBJECTS_ERROR_MSG_FIELD: error_msg,
-        },
-        indent=4,
+        create_orphaned_objects_state(total_size, error_msg), indent=4
     )
 
     update_zk_nodes(ctx, [path], state_data.encode("utf-8"))
 
 
-def _store_state_local_save(
-    _: Context, total_size: int, error_msg: Optional[str]
-) -> None:
+def _store_state_local_save(_: Context, total_size: int, error_msg: str) -> None:
     with open(STATE_LOCAL_PATH, "w", encoding="utf-8") as file:
-        json.dump(
-            {
-                ORPHANED_OBJECTS_SIZE_FIELD: total_size,
-                ORPHANED_OBJECTS_ERROR_MSG_FIELD: error_msg,
-            },
-            file,
-            indent=4,
-        )
+        json.dump(create_orphaned_objects_state(total_size, error_msg), file, indent=4)
 
 
 def _print_response(ctx: Context, dry_run: bool, deleted: int, total_size: int) -> None:
@@ -224,3 +211,10 @@ def _print_response(ctx: Context, dry_run: bool, deleted: int, total_size: int) 
     print_response(
         ctx, clean_stats, default_format="table", table_formatter=_table_formatter
     )
+
+
+def create_orphaned_objects_state(total_size: int, error_msg: str) -> dict:
+    return {
+        ORPHANED_OBJECTS_SIZE_FIELD: total_size,
+        ORPHANED_OBJECTS_ERROR_MSG_FIELD: error_msg,
+    }

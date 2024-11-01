@@ -502,3 +502,14 @@ Feature: ch-monitoring tool
     """
     1;Unknown error: One of these options must be provided: --state-local, --state-zk-path
     """
+  
+  Scenario: Check clickhouse orphaned objects with not empty error_msg
+    When we create file /tmp/object_storage_cleanup_state.json with data "{ \"orphaned_objects_size\": 0,  \"error_msg\": \"ERROR\" }"
+    And we execute command on clickhouse01
+    """
+    ch-monitoring orphaned-objects --state-local
+    """
+    Then we get response
+    """
+    2;ERROR
+    """

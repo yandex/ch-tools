@@ -88,15 +88,21 @@ def step_get_response_not_contains(context, entry):
     assert_that(context.response, is_not(contains_string(entry)))  # type: ignore
 
 
+@when('we create file {file_path} with data "{data}"')
+def step_create_file(context, file_path, data):
+    container = docker.get_container(context, "clickhouse01")
+    result = container.exec_run(
+        ["bash", "-c", f'echo "{data}" > {file_path}'], user="root"
+    )
+    assert result.exit_code == 0
+
+
 @then("we get file {file_path}")
 def step_get_file(context, file_path):
     container = docker.get_container(context, "clickhouse01")
-    context.command = context.text.strip()
     result = container.exec_run(["bash", "-c", f"cat {file_path}"], user="root")
     context.response = result.output.decode().strip()
-    context.exit_code = result.exit_code
-    if context.exit_code != 0:
-        assert_that("", equal_to(context.text))
+    assert result.exit_code == 0
     assert_that(context.response, equal_to(context.text))
 
 
