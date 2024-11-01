@@ -152,3 +152,72 @@ Feature: chadmin data-store commands
     Examples:
     | additional_table_settings                               |
     |                                                         |
+
+
+  Scenario Outline: Detach partitions with broken parts from zero copy
+    When we execute queries on clickhouse01
+    """
+    SYSTEM STOP MERGES;
+
+    DROP DATABASE IF EXISTS test_db;
+    CREATE DATABASE test_db;
+    CREATE TABLE test_db.table1 (a int, b int) ENGINE=ReplicatedMergeTree('/clickhouse/{database}/{table}', '{replica}') ORDER BY a PARTITION BY a 
+    SETTINGS storage_policy='object_storage', allow_remote_fs_zero_copy_replication=1 <additional_table_settings>;
+    INSERT INTO test_db.table1 SELECT 1, 1;
+    INSERT INTO test_db.table1 SELECT 1, 2;
+    INSERT INTO test_db.table1 SELECT 2, 1;
+    INSERT INTO test_db.table1 SELECT 3, 1;
+
+    CREATE TABLE test_db.table2 (a int, b int) ENGINE=ReplicatedMergeTree('/clickhouse/{database}/{table}', '{replica}') ORDER BY a PARTITION BY a 
+    SETTINGS storage_policy='object_storage', allow_remote_fs_zero_copy_replication=1 <additional_table_settings>;
+
+    INSERT INTO test_db.table2 SELECT 1, 1;
+    INSERT INTO test_db.table2 SELECT 2, 1;
+    INSERT INTO test_db.table2 SELECT 3, 1;
+    """
+    # Imitate "bad" behavior of zero copy, when s3 objects are removed earlier than needed.
+    And we remove key from s3 for partitions database test_db on clickhouse01
+    """
+    test_db:
+      table1: ['1', '2']
+      table2: ['1', '2', '3']
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detect-broken-partitions
+    """
+    Then we get response contains
+    """
+    - table: '`test_db`.`table1`'
+      partition: '1'
+    - table: '`test_db`.`table1`'
+      partition: '2'
+    - table: '`test_db`.`table2`'
+      partition: '1'
+    - table: '`test_db`.`table2`'
+      partition: '2'
+    - table: '`test_db`.`table2`'
+      partition: '3'
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detect-broken-partitions --detach
+    """
+    When we execute queries on clickhouse01
+    """
+    SELECT * FROM test_db.table1;
+    SELECT * FROM test_db.table2;
+    """
+    Then we get response contains
+    """
+    """
+
+    @require_version_24.4
+    Examples:
+    | additional_table_settings                               |
+    | , disable_detach_partition_for_zero_copy_replication = 0|
+
+    @require_version_less_than_24.4
+    Examples:
+    | additional_table_settings                               |
+    |                                                         |

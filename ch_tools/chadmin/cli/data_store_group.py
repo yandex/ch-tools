@@ -6,6 +6,11 @@ from typing import Dict, List, Optional, Tuple
 
 import boto3
 from click import Context, group, option, pass_context
+from cloup.constraints import (
+    If,
+    accept_none,
+    constraint,
+)
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.clickhouse_disks import (
@@ -340,16 +345,25 @@ def collect_orphaned_sql_objects_recursive(
     default=False,
     help="Flag to reattach broken partitions.",
 )
+@option(
+    "--detach",
+    is_flag=True,
+    default=False,
+    help="Flag to detach broken partitions.",
+)
+@constraint(If("reattach", then=accept_none), ["detach"])
+@constraint(If("detach", then=accept_none), ["reattach"])
 @pass_context
-def detect_broken_partitions(ctx, root_path, reattach):
+def detect_broken_partitions(ctx, root_path, reattach, detach):
     parts_paths_with_lost_keys = find_paths_to_part_with_lost_keys(ctx, root_path)
     partition_list = get_partitions_by_path(ctx, parts_paths_with_lost_keys)
 
     print_response(ctx, partition_list, default_format="table")
-    if reattach:
+
+    if reattach or detach:
         for partition_info in partition_list:
             reattach_partition(
-                ctx, partition_info["table"], partition_info["partition"]
+                ctx, partition_info["table"], partition_info["partition"], detach
             )
 
 
@@ -466,7 +480,7 @@ def query_with_retry(ctx: Context, query: str, timeout: int, retries: int) -> bo
     return True
 
 
-def reattach_partition(ctx: Context, table: str, partition: str) -> bool:
+def reattach_partition(ctx: Context, table: str, partition: str, detach_only: bool) -> bool:
     """
     Run Detach , Attach for given partition.
     """
@@ -482,6 +496,9 @@ def reattach_partition(ctx: Context, table: str, partition: str) -> bool:
     )
     if not res:
         return res
+
+    if detach_only:
+        return True
 
     # To avoid keeping detached partitions, perform the attach query with double attempts.
     res = query_with_retry(
