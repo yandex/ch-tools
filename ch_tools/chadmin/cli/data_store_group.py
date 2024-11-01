@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple
 
 import boto3
 from click import Context, group, option, pass_context
-from cloup.constraints import If, accept_none, constraint
+from cloup.constraints import AcceptAtMost, constraint
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.clickhouse_disks import (
@@ -347,8 +347,7 @@ def collect_orphaned_sql_objects_recursive(
     default=False,
     help="Flag to detach broken partitions.",
 )
-@constraint(If("reattach", then=accept_none), ["detach"])
-@constraint(If("detach", then=accept_none), ["reattach"])
+@constraint(AcceptAtMost(1), ['detach', 'reattach'])
 @pass_context
 def detect_broken_partitions(ctx, root_path, reattach, detach):
     parts_paths_with_lost_keys = find_paths_to_part_with_lost_keys(ctx, root_path)
@@ -358,7 +357,7 @@ def detect_broken_partitions(ctx, root_path, reattach, detach):
 
     if reattach or detach:
         for partition_info in partition_list:
-            reattach_partition(
+            handle_partition(
                 ctx, partition_info["table"], partition_info["partition"], detach
             )
 
@@ -476,7 +475,7 @@ def query_with_retry(ctx: Context, query: str, timeout: int, retries: int) -> bo
     return True
 
 
-def reattach_partition(
+def handle_partition(
     ctx: Context, table: str, partition: str, detach_only: bool
 ) -> bool:
     """
