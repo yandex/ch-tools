@@ -347,7 +347,7 @@ def collect_orphaned_sql_objects_recursive(
     default=False,
     help="Flag to detach broken partitions.",
 )
-@constraint(AcceptAtMost(1), ['detach', 'reattach'])
+@constraint(AcceptAtMost(1), ["detach", "reattach"])
 @pass_context
 def detect_broken_partitions(ctx, root_path, reattach, detach):
     parts_paths_with_lost_keys = find_paths_to_part_with_lost_keys(ctx, root_path)
