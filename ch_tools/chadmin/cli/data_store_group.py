@@ -476,7 +476,9 @@ def query_with_retry(ctx: Context, query: str, timeout: int, retries: int) -> bo
     return True
 
 
-def reattach_partition(ctx: Context, table: str, partition: str, detach_only: bool) -> bool:
+def reattach_partition(
+    ctx: Context, table: str, partition: str, detach_only: bool
+) -> bool:
     """
     Run Detach , Attach for given partition.
     """
