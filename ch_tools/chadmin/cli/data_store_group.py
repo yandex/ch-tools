@@ -485,7 +485,7 @@ def query_with_retry(ctx: Context, query: str, timeout: int, retries: int) -> bo
 
 
 def handle_partition(
-    ctx: Context, table: str, partition: str, detach: bool = True, attach: bool = False
+    ctx: Context, table: str, partition: str, detach: bool = True, attach: bool = True
 ) -> bool:
     """
     Handle the partition.
