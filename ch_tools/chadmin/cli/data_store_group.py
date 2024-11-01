@@ -6,11 +6,7 @@ from typing import Dict, List, Optional, Tuple
 
 import boto3
 from click import Context, group, option, pass_context
-from cloup.constraints import (
-    If,
-    accept_none,
-    constraint,
-)
+from cloup.constraints import If, accept_none, constraint
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.clickhouse_disks import (
