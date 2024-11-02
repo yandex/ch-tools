@@ -385,14 +385,19 @@ def detect_broken_partitions(ctx, root_path, reattach, detach):
                 try_restore_data(ctx, partition_list, reattach, detach)
 
                 logging.debug(
-                    "Add part to check with path", parts_paths_with_lost_keys[-1][0], parts_paths_with_lost_keys[-1][1]
+                    "Add part to check with path",
+                    parts_paths_with_lost_keys[-1][0],
+                    parts_paths_with_lost_keys[-1][1],
                 )
                 break
 
     partition_list = get_partitions_by_path(ctx, parts_paths_with_lost_keys)
     print_response(ctx, partition_list, default_format="table")
 
-    logging.debug("Found parts with missing s3 keys. Local paths of parts: {}", parts_paths_with_lost_keys)
+    logging.debug(
+        "Found parts with missing s3 keys. Local paths of parts: {}",
+        parts_paths_with_lost_keys,
+    )
 
 
 def try_restore_data(ctx, partition_list, reattach, detach):
@@ -401,9 +406,7 @@ def try_restore_data(ctx, partition_list, reattach, detach):
 
     for partition_info in partition_list:
         if reattach:
-            handle_partition(
-                ctx, partition_info["table"], partition_info["partition"]
-            )
+            handle_partition(ctx, partition_info["table"], partition_info["partition"])
         if detach:
             handle_partition(
                 ctx,
