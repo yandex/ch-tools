@@ -350,33 +350,7 @@ def collect_orphaned_sql_objects_recursive(
 @constraint(AcceptAtMost(1), ["detach", "reattach"])
 @pass_context
 def detect_broken_partitions(ctx, root_path, reattach, detach):
-    parts_paths_with_lost_keys = find_paths_to_part_with_lost_keys(ctx, root_path)
-    partition_list = get_partitions_by_path(ctx, parts_paths_with_lost_keys)
-
-    print_response(ctx, partition_list, default_format="table")
-
-    if reattach or detach:
-        for partition_info in partition_list:
-            if reattach:
-                handle_partition(
-                    ctx, partition_info["table"], partition_info["partition"]
-                )
-            if detach:
-                handle_partition(
-                    ctx,
-                    partition_info["table"],
-                    partition_info["partition"],
-                    attach=False,
-                    detach=True,
-                )
-
-
-def find_paths_to_part_with_lost_keys(ctx: Context, root_path: str) -> List[str]:
-    """
-    Find paths of parts with keys that doesn't have objects in s3.
-    """
-
-    result = []
+    parts_paths_with_lost_keys = []
 
     ch_config = get_clickhouse_config(ctx)
 
@@ -405,14 +379,39 @@ def find_paths_to_part_with_lost_keys(ctx: Context, root_path: str) -> List[str]
                 s3_client, disk_conf.bucket_name, full_key
             ):
                 logging.debug("Not found key {}", full_key)
-                result.append(path)
+                parts_paths_with_lost_keys.append(path)
+
+                partition_list = get_partitions_by_path(ctx, [path])
+                try_restore_data(ctx, partition_list, reattach, detach)
+
                 logging.debug(
-                    "Add part to check with path", result[-1][0], result[-1][1]
+                    "Add part to check with path", parts_paths_with_lost_keys[-1][0], parts_paths_with_lost_keys[-1][1]
                 )
                 break
 
-    logging.debug("Found parts with missing s3 keys. Local paths of parts: {}", result)
-    return result
+    partition_list = get_partitions_by_path(ctx, parts_paths_with_lost_keys)
+    print_response(ctx, partition_list, default_format="table")
+
+    logging.debug("Found parts with missing s3 keys. Local paths of parts: {}", parts_paths_with_lost_keys)
+
+
+def try_restore_data(ctx, partition_list, reattach, detach):
+    if not (reattach and detach):
+        return
+
+    for partition_info in partition_list:
+        if reattach:
+            handle_partition(
+                ctx, partition_info["table"], partition_info["partition"]
+            )
+        if detach:
+            handle_partition(
+                ctx,
+                partition_info["table"],
+                partition_info["partition"],
+                attach=False,
+                detach=True,
+            )
 
 
 def check_key_in_object_storage(s3_client: boto3.client, bucket: str, key: str) -> bool:
