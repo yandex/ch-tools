@@ -1,13 +1,8 @@
-import json
-from typing import Tuple
-
 import click
 
-from ch_tools.chadmin.cli.object_storage_group import (
-    ORPHANED_OBJECTS_ERROR_MSG_FIELD,
-    ORPHANED_OBJECTS_SIZE_FIELD,
-    STATE_LOCAL_PATH,
-    create_orphaned_objects_state,
+from ch_tools.chadmin.cli.object_storage_group import STATE_LOCAL_PATH
+from ch_tools.chadmin.internal.object_storage.orphaned_objects_state import (
+    OrphanedObjectsState,
 )
 from ch_tools.chadmin.internal.zookeeper import get_zk_node
 from ch_tools.common.result import CRIT, OK, WARNING, Result
@@ -51,14 +46,13 @@ def orphaned_objects_command(
 ) -> Result:
     _check_mutually_exclusive(state_local, state_zk_path)
 
-    state = _get_orphaned_objects_state(ctx, state_local, state_zk_path)
+    try:
+        state = _get_orphaned_objects_state(ctx, state_local, state_zk_path)
+    except Exception as e:
+        return Result(CRIT, str(e))
 
-    valid, msg = _orphaned_objects_state_validate(state)
-    if not valid:
-        return Result(CRIT, msg)
-
-    total_size = state[ORPHANED_OBJECTS_SIZE_FIELD]
-    error_msg = state[ORPHANED_OBJECTS_ERROR_MSG_FIELD]
+    total_size = state.orphaned_objects_size
+    error_msg = state.error_msg
 
     if error_msg != "":
         return Result(CRIT, error_msg)
@@ -84,43 +78,28 @@ def _check_mutually_exclusive(state_local, state_zk_path):
         )
 
 
-def _orphaned_objects_state_validate(state: dict) -> Tuple[bool, str]:
-    total_size = state.get(ORPHANED_OBJECTS_SIZE_FIELD)
-    error_msg = state.get(ORPHANED_OBJECTS_ERROR_MSG_FIELD)
-
-    msg = ""
-    if total_size is None:
-        msg += f'Orphaned objects state not have field "{ORPHANED_OBJECTS_SIZE_FIELD}".'
-    if error_msg is None:
-        msg += f'Orphaned objects state not have field "{ORPHANED_OBJECTS_ERROR_MSG_FIELD}".'
-
-    return msg == "", msg
-
-
 def _get_orphaned_objects_state(
     ctx: click.Context, state_local: bool, state_zk_path: str
-) -> dict:
-    state = dict()
-
+) -> "OrphanedObjectsState":
     if state_local:
         state = _local_get_orphaned_objects_state()
 
     if state_zk_path:
         state = _zk_get_orphaned_objects_state(ctx, state_zk_path)
 
+    if state is None:
+        raise FileNotFoundError()
+
     return state
 
 
-def _local_get_orphaned_objects_state() -> dict:
-    try:
-        with open(STATE_LOCAL_PATH, mode="r", encoding="utf-8") as file:
-            return json.load(file)
-    except Exception as e:
-        return create_orphaned_objects_state(0, str(e))
+def _local_get_orphaned_objects_state() -> "OrphanedObjectsState":
+    with open(STATE_LOCAL_PATH, mode="r", encoding="utf-8") as file:
+        return OrphanedObjectsState.from_json(file.read())
 
 
-def _zk_get_orphaned_objects_state(ctx: click.Context, state_zk_path: str) -> dict:
-    try:
-        return json.loads(get_zk_node(ctx, state_zk_path))
-    except Exception as e:
-        return create_orphaned_objects_state(0, str(e))
+def _zk_get_orphaned_objects_state(
+    ctx: click.Context, state_zk_path: str
+) -> "OrphanedObjectsState":
+    zk_data = get_zk_node(ctx, state_zk_path)
+    return OrphanedObjectsState.from_json(zk_data)
