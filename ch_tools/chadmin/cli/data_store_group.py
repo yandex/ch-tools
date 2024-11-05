@@ -402,7 +402,13 @@ def detect_broken_partitions(ctx, root_path, reattach, detach):
                     table_partition.table,
                     table_partition.partition,
                 )
-                try_repair_partition(ctx, table_partition, detach, reattach)
+                if detach:
+                    try_repair_partition(ctx, table_partition, False)
+                elif reattach:
+                    try_repair_partition(ctx, table_partition)
+                else:
+                    logging.debug("Skip repairing.")
+
             else:
                 logging.debug(
                     "Partition {} for table {} was already repared. Skip.",
@@ -421,16 +427,15 @@ def detect_broken_partitions(ctx, root_path, reattach, detach):
 
 
 def try_repair_partition(
-    ctx: Context, table_partition: TablePartition, detach: bool, attach: bool
+    ctx: Context, table_partition: TablePartition, attach: bool = True
 ) -> None:
     """
-    Try to repair broken partition with DETACH and ATTACH.
+    Try to repair broken partition with DETACH and optional ATTACH.
     """
-    if detach:
-        detach_partition(ctx, table_partition)
+    detach_partition(ctx, table_partition)
 
     if attach:
-        detach_partition(ctx, table_partition)
+        attach_partition(ctx, table_partition)
 
 
 def check_key_in_object_storage(s3_client: boto3.client, bucket: str, key: str) -> bool:
