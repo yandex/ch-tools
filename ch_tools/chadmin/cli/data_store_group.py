@@ -397,7 +397,7 @@ def detect_broken_partitions(ctx, root_path, reattach, detach):
                 repaired_partitions.add(table_partition)
 
                 logging.debug(
-                    "Add part to check with path={}, table={}, partition={}",
+                    "Found the partition with missing blob in the object storage: path={} table={} partition={} ",
                     path,
                     table_partition.table,
                     table_partition.partition,
@@ -406,9 +406,6 @@ def detect_broken_partitions(ctx, root_path, reattach, detach):
                     try_repair_partition(ctx, table_partition, False)
                 elif reattach:
                     try_repair_partition(ctx, table_partition)
-                else:
-                    logging.debug("Skip repairing.")
-
             else:
                 logging.debug(
                     "Partition {} for table {} was already repared. Skip.",
