@@ -208,9 +208,6 @@ Feature: chadmin data-store commands
     SELECT * FROM test_db.table1;
     SELECT * FROM test_db.table2;
     """
-    Then we get response contains
-    """
-    """
 
     @require_version_24.4
     Examples:
