@@ -1,4 +1,3 @@
-import json
 from datetime import timedelta
 from typing import Optional
 
@@ -6,6 +5,9 @@ from click import Choice, Context, group, option, pass_context
 from humanfriendly import format_size
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
+from ch_tools.chadmin.internal.object_storage.orphaned_objects_state import (
+    OrphanedObjectsState,
+)
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
     create_zk_nodes,
@@ -23,7 +25,6 @@ from ch_tools.common.commands.clean_object_storage import (
 # Use big enough timeout for stream HTTP query
 STREAM_TIMEOUT = 10 * 60
 
-ORPHANED_OBJECTS_SIZE_FIELD = "orphaned_objects_size"
 STATE_LOCAL_PATH = "/tmp/object_storage_cleanup_state.json"
 
 
@@ -139,37 +140,46 @@ def clean_command(
     """
     Clean orphaned S3 objects.
     """
-    deleted, total_size = clean(
-        ctx,
-        object_name_prefix,
-        from_time,
-        to_time,
-        CleanScope(clean_scope),
-        cluster_name,
-        dry_run,
-        keep_paths,
-        use_saved_list,
-    )
+    deleted = 0
+    total_size = 0
+    error_msg = ""
+
+    try:
+        deleted, total_size = clean(
+            ctx,
+            object_name_prefix,
+            from_time,
+            to_time,
+            CleanScope(clean_scope),
+            cluster_name,
+            dry_run,
+            keep_paths,
+            use_saved_list,
+        )
+    except Exception as e:
+        error_msg = str(e)
+
+    state = OrphanedObjectsState(total_size, error_msg)
 
     if store_state_zk_path:
-        _store_state_zk_save(ctx, store_state_zk_path, total_size)
+        _store_state_zk_save(ctx, store_state_zk_path, state)
 
     if store_state_local:
-        _store_state_local_save(ctx, total_size)
+        _store_state_local_save(ctx, state)
 
     _print_response(ctx, dry_run, deleted, total_size)
 
 
-def _store_state_zk_save(ctx: Context, path: str, total_size: int) -> None:
+def _store_state_zk_save(ctx: Context, path: str, state: OrphanedObjectsState) -> None:
     if not check_zk_node(ctx, path):
         create_zk_nodes(ctx, [path], make_parents=True)
-    state_data = json.dumps({ORPHANED_OBJECTS_SIZE_FIELD: total_size}, indent=4)
-    update_zk_nodes(ctx, [path], state_data.encode("utf-8"))
+    state_data = state.to_json().encode("utf-8")
+    update_zk_nodes(ctx, [path], state_data)
 
 
-def _store_state_local_save(_: Context, total_size: int) -> None:
+def _store_state_local_save(_: Context, state: OrphanedObjectsState) -> None:
     with open(STATE_LOCAL_PATH, "w", encoding="utf-8") as file:
-        json.dump({ORPHANED_OBJECTS_SIZE_FIELD: total_size}, file, indent=4)
+        file.write(state.to_json())
 
 
 def _print_response(ctx: Context, dry_run: bool, deleted: int, total_size: int) -> None:

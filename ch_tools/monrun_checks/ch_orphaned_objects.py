@@ -1,12 +1,10 @@
-import json
-
 import click
 
-from ch_tools.chadmin.cli.object_storage_group import (
-    ORPHANED_OBJECTS_SIZE_FIELD,
-    STATE_LOCAL_PATH,
+from ch_tools.chadmin.cli.object_storage_group import STATE_LOCAL_PATH
+from ch_tools.chadmin.internal.object_storage.orphaned_objects_state import (
+    OrphanedObjectsState,
 )
-from ch_tools.chadmin.internal.zookeeper import check_zk_node, get_zk_node
+from ch_tools.chadmin.internal.zookeeper import get_zk_node
 from ch_tools.common.result import CRIT, OK, WARNING, Result
 
 
@@ -48,19 +46,24 @@ def orphaned_objects_command(
 ) -> Result:
     _check_mutually_exclusive(state_local, state_zk_path)
 
-    total_size = 0
-    if state_zk_path:
-        total_size = _zk_get_total_size(ctx, state_zk_path)
+    try:
+        state = _get_orphaned_objects_state(ctx, state_local, state_zk_path)
+    except Exception as e:
+        return Result(CRIT, str(e))
 
-    if state_local:
-        total_size = _local_get_total_size()
+    total_size = state.orphaned_objects_size
+    error_msg = state.error_msg
 
-    msg = f"Total size: {total_size}"
+    if error_msg != "":
+        return Result(CRIT, error_msg)
+
+    result_msg = f"Total size: {total_size}"
     if total_size >= crit:
-        return Result(CRIT, msg)
+        return Result(CRIT, result_msg)
     if total_size >= warn:
-        return Result(WARNING, msg)
-    return Result(OK, msg)
+        return Result(WARNING, result_msg)
+
+    return Result(OK, result_msg)
 
 
 def _check_mutually_exclusive(state_local, state_zk_path):
@@ -75,20 +78,28 @@ def _check_mutually_exclusive(state_local, state_zk_path):
         )
 
 
-def _local_get_total_size() -> int:
-    try:
-        with open(STATE_LOCAL_PATH, mode="r", encoding="utf-8") as file:
-            total_size = json.load(file).get(ORPHANED_OBJECTS_SIZE_FIELD)
-    except FileNotFoundError:
-        total_size = 0
+def _get_orphaned_objects_state(
+    ctx: click.Context, state_local: bool, state_zk_path: str
+) -> "OrphanedObjectsState":
+    if state_local:
+        state = _local_get_orphaned_objects_state()
 
-    return total_size
+    if state_zk_path:
+        state = _zk_get_orphaned_objects_state(ctx, state_zk_path)
+
+    if state is None:
+        raise FileNotFoundError()
+
+    return state
 
 
-def _zk_get_total_size(ctx: click.Context, state_zk_path: str) -> int:
-    total_size = 0
-    if check_zk_node(ctx, state_zk_path):
-        total_size = json.loads(get_zk_node(ctx, state_zk_path)).get(
-            ORPHANED_OBJECTS_SIZE_FIELD
-        )
-    return total_size
+def _local_get_orphaned_objects_state() -> "OrphanedObjectsState":
+    with open(STATE_LOCAL_PATH, mode="r", encoding="utf-8") as file:
+        return OrphanedObjectsState.from_json(file.read())
+
+
+def _zk_get_orphaned_objects_state(
+    ctx: click.Context, state_zk_path: str
+) -> "OrphanedObjectsState":
+    zk_data = get_zk_node(ctx, state_zk_path)
+    return OrphanedObjectsState.from_json(zk_data)
