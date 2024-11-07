@@ -374,8 +374,11 @@ def detect_broken_partitions(ctx, root_path, reattach, detach):
         objects: List[S3ObjectLocalInfo] = []
         logging.debug(f"Checking files from: {path}")
         for file in files:
-            file_full_path = Path(os.path.join(path, file))
-            objects.extend(S3ObjectLocalMetaData.from_file(file_full_path).objects)
+            try:
+                file_full_path = Path(os.path.join(path, file))
+                objects.extend(S3ObjectLocalMetaData.from_file(file_full_path).objects)
+            except Exception as e:
+                logging.error("Failed to perform extend objects: {!r}", e)
 
         for s3_object in objects:
             object_storage_key = os.path.join(disk_conf.prefix, s3_object.key)
@@ -513,9 +516,6 @@ def detach_partition(ctx: Context, table_partition: TablePartition) -> bool:
     Run DETACH the partition.
     """
 
-    logging.debug(
-        f"Going to detach partition {table_partition.partition} for table {table_partition.table}"
-    )
     detach_query = f"ALTER TABLE {table_partition.table} DETACH PARTITION '{table_partition.partition}'"
     return query_with_retry(
         ctx,
@@ -529,9 +529,7 @@ def attach_partition(ctx: Context, table_partition: TablePartition) -> bool:
     """
     Run ATTACH the partition.
     """
-    logging.debug(
-        f"Going to attach partition {table_partition.partition} for table {table_partition.table}"
-    )
+
     attach_query = f"ALTER TABLE {table_partition.table} ATTACH PARTITION '{table_partition.partition}'"
     # To avoid keeping detached partitions, perform the attach query with double attempts.
     return query_with_retry(
