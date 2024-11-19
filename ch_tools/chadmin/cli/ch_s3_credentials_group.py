@@ -78,7 +78,9 @@ def update_s3_credentials(ctx, endpoint, random_sleep):
     storage = _add_node(
         doc, _add_node(doc, _add_node(doc, doc, "clickhouse"), "s3"), "cloud_storage"
     )
-    endpoint_header = "access_header" if match_ch_version(ctx, min_version="24.11") else "header"
+    endpoint_header = (
+        "access_header" if match_ch_version(ctx, min_version="24.11") else "header"
+    )
     _add_node(doc, storage, "endpoint").appendChild(doc.createTextNode(endpoint))
     _add_node(doc, storage, endpoint_header).appendChild(
         doc.createTextNode(

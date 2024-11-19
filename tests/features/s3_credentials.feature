@@ -45,7 +45,7 @@ Feature: ch_s3_credentials tool
         </s3>
     </clickhouse>
     """
-    ## Commnted because version `latest` will be greater than any other version.
+    ## Commented because version `latest` will be greater than any other version.
     ##@require_version_24.11
     ##Examples:
     ##|header|
