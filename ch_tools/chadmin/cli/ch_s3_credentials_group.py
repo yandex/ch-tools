@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-Manage default ClickHouse s3 credentials.
-"""
-
-import argparse
 import json
 import os.path
 import random
@@ -13,51 +7,36 @@ from datetime import timedelta
 from xml.dom import minidom
 
 import requests
+from click import group, option, pass_context
 
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
+from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.common.clickhouse.config.path import (
     CLICKHOUSE_RESETUP_CONFIG_PATH,
     CLICKHOUSE_S3_CREDENTIALS_CONFIG_PATH,
 )
 
 
-def _parse_args():
-    parser = argparse.ArgumentParser()
-    actions = parser.add_subparsers()
+@group("ch-s3-credentials", cls=Chadmin)
+@option(
+    "-m",
+    "--metadata-address",
+    "metadata_address",
+    default="169.254.169.254",
+    help="Compute metadata api address.",
+)
+@pass_context
+def ch_s3_credentials_group(ctx, metadata_address):
+    """
+    Manage default ClickHouse s3 credentials.
+    """
+    ctx.obj["s3_cred_metadata_addr"] = metadata_address
 
-    parser.add_argument(
-        "-m",
-        "--metadata-address",
-        type=str,
-        default="169.254.169.254",
-        help="compute metadata api address",
-    )
 
-    update = actions.add_parser(
-        "update", help="update ch default s3 credentials config"
-    )
-    update.set_defaults(func=_update_config)
-    update.add_argument("-e", "--endpoint", type=str, help="S3 endpoint")
-    update.add_argument(
-        "-s",
-        "--random-sleep",
-        action="store_true",
-        default=False,
-        help="whether need a random sleep",
-    )
-
-    check = actions.add_parser(
-        "check", help="check ch default s3 credentials config status"
-    )
-    check.set_defaults(func=_check_config)
-    check.add_argument(
-        "-p",
-        "--present",
-        action="store_true",
-        default=False,
-        help="whether config expected to present",
-    )
-
-    return parser.parse_args()
+def _add_node(document, root, name):
+    node = document.createElement(name)
+    root.appendChild(node)
+    return node
 
 
 def _request_token(endpoint):
@@ -78,37 +57,61 @@ def _get_token(endpoint):
     return data["access_token"]
 
 
-def _add_node(document, root, name):
-    node = document.createElement(name)
-    root.appendChild(node)
-    return node
-
-
-def _update_config(args):
-    if args.random_sleep:
+@ch_s3_credentials_group.command(
+    "update", help="update ch default s3 credentials config"
+)
+@option("-e", "--endpoint", "endpoint", type=str, help="S3 endpoint")
+@option(
+    "-s",
+    "--random-sleep",
+    "random_sleep",
+    default=False,
+    help="whether need a random sleep",
+)
+@pass_context
+def update_s3_credentials(ctx, endpoint, random_sleep):
+    """Update s3 creds."""
+    if random_sleep:
         time.sleep(random.randint(0, 30))
 
     doc = minidom.Document()
     storage = _add_node(
         doc, _add_node(doc, _add_node(doc, doc, "clickhouse"), "s3"), "cloud_storage"
     )
-    _add_node(doc, storage, "endpoint").appendChild(doc.createTextNode(args.endpoint))
-    _add_node(doc, storage, "header").appendChild(
+    endpoint_header = "access_header" if match_ch_version(ctx, min_version="24.11") else "header"
+    _add_node(doc, storage, "endpoint").appendChild(doc.createTextNode(endpoint))
+    _add_node(doc, storage, endpoint_header).appendChild(
         doc.createTextNode(
-            f"X-YaCloud-SubjectToken: {_get_token(args.metadata_address)}"
+            f"X-YaCloud-SubjectToken: {_get_token(ctx.obj['s3_cred_metadata_addr'])}"
         )
     )
     with open("/etc/clickhouse-server/config.d/s3_credentials.xml", "wb") as file:
         file.write(doc.toprettyxml(indent=4 * " ", encoding="utf-8"))
 
 
+def result(code, msg):
+    print(f"{code};{msg}")
+    sys.exit(0)
+
+
 def _delta_to_hours(delta: timedelta) -> str:
     return f"{(delta.total_seconds() / 3600):.2f}"
 
 
-def _check_config(args):
+@ch_s3_credentials_group.command(
+    "check", help="check ch default s3 credentials config status"
+)
+@option(
+    "-p",
+    "--present",
+    default=False,
+    is_flag=True,
+    help="whether config expected to present",
+)
+@pass_context
+def check_s3_credentials(ctx, present):
     # pylint: disable=missing-timeout
-    if not args.present:
+    if not present:
         if os.path.exists(CLICKHOUSE_S3_CREDENTIALS_CONFIG_PATH):
             result(2, "S3 default config present, but shouldn't")
         else:
@@ -137,10 +140,10 @@ def _check_config(args):
     else:
         msg = "S3 default config not present"
 
-    code = _request_token(args.metadata_address).status_code
+    code = _request_token(ctx.obj["s3_cred_metadata_addr"]).status_code
     if code == 404:
         if "default" in requests.get(
-            f"http://{args.metadata_address}/computeMetadata/v1/instance/?recursive=true",
+            f"http://{ctx.obj['s3_cred_metadata_addr']}/computeMetadata/v1/instance/?recursive=true",
             headers={"Metadata-Flavor": "Google"},
         ).json().get("serviceAccounts", {}):
             result(1, "service account deleted")
@@ -148,20 +151,3 @@ def _check_config(args):
             result(2, "service account not linked")
 
     result(2, msg + f", iam code {code}")
-
-
-def result(code, msg):
-    print(f"{code};{msg}")
-    sys.exit(0)
-
-
-def main():
-    """
-    Program entry point.
-    """
-    args = _parse_args()
-    args.func(args)
-
-
-if __name__ == "__main__":
-    main()

@@ -8,10 +8,10 @@ Feature: ch_s3_credentials tool
     And a working clickhouse on clickhouse02
     And a working http server
 
-  Scenario: s3 check work correctly
+    Scenario Outline:: chadmin s3 check work correctly
     When we execute command on clickhouse01
     """
-    ch-s3-credentials check
+    chadmin ch-s3-credentials check
     """
     Then we get response
     """
@@ -19,11 +19,11 @@ Feature: ch_s3_credentials tool
     """
     When we execute command on clickhouse01
     """
-    ch-s3-credentials --metadata-address=http_mock01:8080 update --endpoint=storage.com
+    chadmin ch-s3-credentials --metadata-address=http_mock01:8080 update --endpoint=storage.com
     """
     And we execute command on clickhouse01
     """
-    ch-s3-credentials check --present
+    chadmin ch-s3-credentials check --present
     """
     Then we get response
     """
@@ -40,8 +40,18 @@ Feature: ch_s3_credentials tool
         <s3>
             <cloud_storage>
                 <endpoint>storage.com</endpoint>
-                <header>X-YaCloud-SubjectToken: IAM_TOKEN</header>
+                <<header>>X-YaCloud-SubjectToken: IAM_TOKEN</<header>>
             </cloud_storage>
         </s3>
     </clickhouse>
     """
+    ## Commnted because version `latest` will be greater than any other version.
+    ##@require_version_24.11
+    ##Examples:
+    ##|header|
+    ##|access_header|
+    ##
+    ## @require_version_less_than_24.11
+    Examples:
+    | header      |
+    |header|
