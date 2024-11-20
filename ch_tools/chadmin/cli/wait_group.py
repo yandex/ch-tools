@@ -81,6 +81,12 @@ def wait_group():
     type=FloatRange(0.0, 100.0),
     help="Warning threshold in percent of max_replicated_merges_in_queue.",
 )
+@option(
+    "--lightweight/--full",
+    is_flag=True,
+    default=True,
+    help="Use SYNC REPLICA with LIGHTWEIGHT option and skip replication lag check.",
+)
 @pass_context
 def wait_replication_sync_command(
     ctx,
@@ -93,13 +99,16 @@ def wait_replication_sync_command(
     warn,
     mwarn,
     mcrit,
+    lightweight,
 ):
     """Wait for ClickHouse server to sync replication with other replicas."""
 
     start_time = time.time()
     deadline = start_time + total_timeout.total_seconds()
     # Lightweight sync is added in 23.4
-    lightweight_sync = match_ch_version(23.4)
+    if lightweight and not match_ch_version(23.4):
+        logging.warning("Lightweight sync requires version 23.4, will do full sync instead.")
+        lightweight = False
 
     try:
         # Sync tables in cycle
@@ -108,7 +117,7 @@ def wait_replication_sync_command(
             time_left = deadline - time.time()
 
             query = f"SYSTEM SYNC REPLICA {full_name} LIGHTWEIGHT"
-            if not lightweight_sync:
+            if not lightweight:
                 query = f"SYSTEM SYNC REPLICA {full_name}"
 
             execute_query(
@@ -130,7 +139,7 @@ def wait_replication_sync_command(
             sys.exit(1)
         raise
 
-    if lightweight_sync:
+    if lightweight:
         sys.exit(0)
 
     # Replication lag
