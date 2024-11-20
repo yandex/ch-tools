@@ -161,7 +161,7 @@ Feature: chadmin commands.
     """
     Then it fails with response contains
     """
-    Connection error while running query.
+    Connection error
     """
     When we execute command on clickhouse01
     """

@@ -102,13 +102,19 @@ def wait_replication_sync_command(
     lightweight,
 ):
     """Wait for ClickHouse server to sync replication with other replicas."""
+    # Lightweight sync is added in 23.4
+    try:
+        if lightweight and not match_ch_version(ctx, "23.4"):
+            logging.warning(
+                "Lightweight sync requires version 23.4, will do full sync instead."
+            )
+            lightweight = False
+    except Exception:
+        logging.error("Connection error while getting CH version.")
+        sys.exit(1)
 
     start_time = time.time()
     deadline = start_time + total_timeout.total_seconds()
-    # Lightweight sync is added in 23.4
-    if lightweight and not match_ch_version(23.4):
-        logging.warning("Lightweight sync requires version 23.4, will do full sync instead.")
-        lightweight = False
 
     try:
         # Sync tables in cycle
