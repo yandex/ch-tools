@@ -7,6 +7,7 @@ from click import FloatRange, group, option, pass_context
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.clickhouse_disks import S3_METADATA_STORE_PATH
+from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.table_replica import list_table_replicas
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
@@ -97,6 +98,8 @@ def wait_replication_sync_command(
 
     start_time = time.time()
     deadline = start_time + total_timeout.total_seconds()
+    # Lightweight sync is added in 23.4
+    lightweight_sync = match_ch_version(23.4)
 
     try:
         # Sync tables in cycle
@@ -104,9 +107,13 @@ def wait_replication_sync_command(
             full_name = f"`{replica['database']}`.`{replica['table']}`"
             time_left = deadline - time.time()
 
+            query = f"SYSTEM SYNC REPLICA {full_name} LIGHTWEIGHT"
+            if not lightweight_sync:
+                query = f"SYSTEM SYNC REPLICA {full_name}"
+
             execute_query(
                 ctx,
-                f"SYSTEM SYNC REPLICA {full_name}",
+                query,
                 format_=None,
                 timeout=replica_timeout.total_seconds(),
                 settings={"receive_timeout": time_left},
@@ -122,6 +129,9 @@ def wait_replication_sync_command(
             logging.error("Timeout while running query.")
             sys.exit(1)
         raise
+
+    if lightweight_sync:
+        sys.exit(0)
 
     # Replication lag
     while time.time() < deadline:
