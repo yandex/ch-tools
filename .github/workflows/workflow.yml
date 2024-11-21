@@ -148,8 +148,7 @@ jobs:
         sudo chadmin --help
         sudo ch-monitoring --no-ensure-monitoring-user --help
         sudo keeper-monitoring --help
-        sudo ch-s3-credentials --help
-
+ 
     - name: upload DEB package artifact
       uses: actions/upload-artifact@v4
       with:

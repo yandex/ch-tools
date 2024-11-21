@@ -138,7 +138,6 @@ tomli = { version = "*", python = ">=3.10" }
 chadmin = "ch_tools.chadmin.chadmin_cli:main"
 ch-monitoring = "ch_tools.monrun_checks.main:main"
 keeper-monitoring = "ch_tools.monrun_checks_keeper.main:main"
-ch-s3-credentials = "ch_tools.s3_credentials.main:main"
 
 [tool.isort]
 profile = "black"

@@ -257,7 +257,7 @@ install-symlinks:
 	echo 'Creating symlinks to $(SYMLINK_BIN_DIR)'
 
 	mkdir -p $(SYMLINK_BIN_DIR)
-	$(foreach bin, chadmin ch-monitoring keeper-monitoring ch-s3-credentials, \
+	$(foreach bin, chadmin ch-monitoring keeper-monitoring, \
 		ln -sf $(PREFIX)/bin/$(bin) $(SYMLINK_BIN_DIR);)
 
 
@@ -265,7 +265,7 @@ install-symlinks:
 uninstall-symlinks:
 	echo 'Removing symlinks from $(SYMLINK_BIN_DIR)'
 
-	$(foreach bin, chadmin ch-monitoring keeper-monitoring ch-s3-credentials, \
+	$(foreach bin, chadmin ch-monitoring keeper-monitoring, \
 	    rm -f $(SYMLINK_BIN_DIR)/$(bin);)
 
 

@@ -16,6 +16,7 @@ warnings.filterwarnings(
 # pylint: disable=wrong-import-position
 
 from ch_tools import __version__
+from ch_tools.chadmin.cli.ch_s3_credentials_group import ch_s3_credentials_group
 from ch_tools.chadmin.cli.chs3_backup_group import chs3_backup_group
 from ch_tools.chadmin.cli.config_command import config_command
 from ch_tools.chadmin.cli.crash_log_group import crash_log_group
@@ -125,6 +126,7 @@ groups: List[Any] = [
     object_storage_group,
     part_group,
     part_log_group,
+    ch_s3_credentials_group,
     partition_group,
     process_group,
     query_log_group,
