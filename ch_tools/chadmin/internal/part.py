@@ -204,6 +204,7 @@ def list_detached_parts(
     return execute_query(
         ctx,
         query,
+        timeout=ctx.obj["config"]["clickhouse"]["alter_table_timeout"],
         database=database,
         table=table,
         partition_id=partition_id,
