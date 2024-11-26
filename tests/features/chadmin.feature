@@ -118,7 +118,7 @@ Feature: chadmin commands.
       | --database=db2                                       | table_01\tReplicatedMergeTree\ntable_02\tMergeTree\ntable_03\tReplicatedMergeTree\ntable_04\tReplicatedMergeTree            |
       | --database=db2            --table=table_01           | table_01\tReplicatedMergeTree\ntable_02\tMergeTree\ntable_03\tMergeTree\ntable_04\tMergeTree                                |
 
-  Scenario: Check wait replication sync
+  Scenario Outline: Check wait replication sync
     Given we have executed queries on clickhouse01
     """
     CREATE DATABASE IF NOT EXISTS test ON CLUSTER 'cluster';
@@ -128,7 +128,7 @@ Feature: chadmin commands.
     """
     When we execute command on clickhouse01
     """
-    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4 <options>
     """
     When we execute query on clickhouse01
     """
@@ -141,7 +141,7 @@ Feature: chadmin commands.
     And we sleep for 5 seconds
     When we try to execute command on clickhouse01
     """
-    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4 <options>
     """
     Then it fails with response contains
     """
@@ -157,11 +157,11 @@ Feature: chadmin commands.
     """
     When we try to execute command on clickhouse01
     """
-    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4 <options>
     """
     Then it fails with response contains
     """
-    Connection error while running query.
+    Connection error
     """
     When we execute command on clickhouse01
     """
@@ -169,8 +169,14 @@ Feature: chadmin commands.
     """
     When we execute command on clickhouse01
     """
-    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4 <options>
     """
+    Examples:
+      | options             |
+      |                     |
+      | --lightweight       |
+      | --full              |
+
 
   Scenario Outline: Check replica restore (<replicas_count> replicas, <workers> workers) 
     Given populated clickhouse with <replicas_count> replicated tables on clickhouse01 with db database and table_ prefix
