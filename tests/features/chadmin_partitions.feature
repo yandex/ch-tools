@@ -93,7 +93,7 @@ Feature: chadmin partitions commands.
     """
     0
     """
-    And we execute query on clickhouse01
+    When we execute query on clickhouse01
     """
     SELECT count() FROM system.parts WHERE table='test' and active=1
     """
