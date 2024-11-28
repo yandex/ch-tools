@@ -29,6 +29,7 @@
         <default>
             <distributed_ddl_task_timeout>20</distributed_ddl_task_timeout>
             <allow_experimental_database_replicated>1</allow_experimental_database_replicated>
+            <allow_drop_detached>1</allow_drop_detached>
         </default>
     </profiles>
 </clickhouse>
