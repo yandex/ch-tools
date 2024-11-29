@@ -1,7 +1,7 @@
 from collections import OrderedDict
 
 from cloup import Choice, group, option, option_group, pass_context
-from cloup.constraints import RequireAtLeast
+from cloup.constraints import If, IsSet, RequireAtLeast, RequireExactly
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.part import (
@@ -175,7 +175,17 @@ def list_parts_command(
         type=int,
         help="Limit the max number of data parts to attach.",
     ),
-    constraint=RequireAtLeast(1),
+    option(
+        "--use-part-list-from-json",
+        default=None,
+        type=str,
+        help="Use list of parts from the file. Example 'SELECT database, table, name ... FORMAT JSON' > file && chadmin part attach --use-part-list-from-json <file>.",
+    ),
+    constraint=If(
+        IsSet("use_part_list_from_json"),
+        then=RequireExactly(1),
+        else_=RequireAtLeast(1),
+    ),
 )
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @option(
@@ -248,7 +258,17 @@ def attach_parts_command(ctx, _all, keep_going, dry_run, **kwargs):
         type=int,
         help="Limit the max number of data parts to detach.",
     ),
-    constraint=RequireAtLeast(1),
+    option(
+        "--use-part-list-from-json",
+        default=None,
+        type=str,
+        help="Use list of parts from the file. Example 'SELECT database, table, name ... FORMAT JSON' > file && chadmin part detach --use-part-list-from-json <file>.",
+    ),
+    constraint=If(
+        IsSet("use_part_list_from_json"),
+        then=RequireExactly(1),
+        else_=RequireAtLeast(1),
+    ),
 )
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @option(
@@ -333,7 +353,17 @@ def detach_parts_command(ctx, _all, keep_going, dry_run, **kwargs):
         type=int,
         help="Limit the max number of data parts to delete.",
     ),
-    constraint=RequireAtLeast(1),
+    option(
+        "--use-part-list-from-json",
+        default=None,
+        type=str,
+        help="Use list of parts from the file. Example 'SELECT database, table, name ... FORMAT JSON' > file && chadmin part delete --use-part-list-from-json <file>.",
+    ),
+    constraint=If(
+        IsSet("use_part_list_from_json"),
+        then=RequireExactly(1),
+        else_=RequireAtLeast(1),
+    ),
 )
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @option(
@@ -429,7 +459,17 @@ def delete_parts_command(
         type=int,
         help="Limit the max number of data parts to move.",
     ),
-    constraint=RequireAtLeast(1),
+    option(
+        "--use-part-list-from-json",
+        default=None,
+        type=str,
+        help="Use list of parts from the file. Example 'SELECT database, table, name ... FORMAT JSON' > file && chadmin part delete --use-part-list-from-json <file>.",
+    ),
+    constraint=If(
+        IsSet("use_part_list_from_json"),
+        then=RequireExactly(1),
+        else_=RequireAtLeast(1),
+    ),
 )
 @option("--new-disk", "new_disk_name", required=True)
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")

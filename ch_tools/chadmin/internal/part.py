@@ -1,3 +1,5 @@
+import json
+
 from ch_tools.chadmin.internal.utils import execute_query
 
 
@@ -19,10 +21,14 @@ def list_parts(
     active=None,
     order_by=None,
     limit=None,
+    use_part_list_from_json=None,
 ):
     """
     List data parts.
     """
+    if use_part_list_from_json:
+        return read_and_validate_parts_from_json(use_part_list_from_json)["data"]
+
     order_by = {
         "size": "bytes_on_disk DESC",
         "rows": "rows DESC",
@@ -145,10 +151,14 @@ def list_detached_parts(
     max_level=None,
     reason=None,
     limit=None,
+    use_part_list_from_json=None,
 ):
     """
     List detached data parts.
     """
+    if use_part_list_from_json:
+        return read_and_validate_parts_from_json(use_part_list_from_json)["data"]
+
     query = """
         SELECT
             database,
@@ -396,3 +406,21 @@ def list_part_log(
         limit=limit,
         format_="JSON",
     )["data"]
+
+
+def read_and_validate_parts_from_json(json_path):
+    base_exception_str = "Incorrect json file, there are no {corrupted_section}. Use the JSON format for ch query to get correct format."
+    with open(json_path, "r", encoding="utf-8") as json_file:
+        json_obj = json.load(json_file)
+        if "data" not in json_obj:
+            raise ValueError(base_exception_str.format("data section"))
+
+        part_list = json_obj["data"]
+        for p in part_list:
+            if "database" not in p:
+                raise ValueError(base_exception_str.format("database"))
+            if "table" not in p:
+                raise ValueError(base_exception_str.format("table"))
+            if "name" not in p:
+                raise ValueError(base_exception_str.format("name"))
+    return json_obj
