@@ -11,7 +11,7 @@ Feature: ch_s3_credentials tool
     Scenario Outline:: chadmin s3 check work correctly
     When we execute command on clickhouse01
     """
-    chadmin ch-s3-credentials check
+    ch-monitoring s3-credentials-config
     """
     Then we get response
     """
@@ -19,11 +19,11 @@ Feature: ch_s3_credentials tool
     """
     When we execute command on clickhouse01
     """
-    chadmin ch-s3-credentials --metadata-address=http_mock01:8080 update --endpoint=storage.com
+    chadmin s3-credentials-config --metadata-address=http_mock01:8080 update --endpoint=storage.com
     """
     And we execute command on clickhouse01
     """
-    chadmin ch-s3-credentials check --present
+    ch-monitoring s3-credentials-config --present
     """
     Then we get response
     """
