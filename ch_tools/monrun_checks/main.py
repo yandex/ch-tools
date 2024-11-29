@@ -11,6 +11,7 @@ from cloup import group, option, pass_context, version_option
 
 from ch_tools.common import logging
 from ch_tools.common.config import CH_MONITORING_LOG_FILE, load_config
+from ch_tools.common.utils import get_full_command_name
 
 warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
 
@@ -66,12 +67,13 @@ class MonrunChecks(cloup.Group):
         @pass_context
         def callback_wrapper(ctx, *args, **kwargs):
             logging.configure(
-                ctx.obj["config"]["loguru"], "ch-monitoring", {"cmd_name": cmd.name}
+                ctx.obj["config"]["loguru"],
+                "ch-monitoring",
+                {"cmd_name": get_full_command_name(ctx)},
             )
 
             logging.debug(
-                "Executing command '{}', params: {}, args: {}, version: {}",
-                cmd.name,
+                "Command starts executing, params: {}, args: {}, version: {}",
                 {
                     **ctx.parent.params,
                     **ctx.params,

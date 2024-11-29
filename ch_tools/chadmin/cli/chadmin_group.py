@@ -6,6 +6,7 @@ import cloup
 
 from ch_tools import __version__
 from ch_tools.common import logging
+from ch_tools.common.utils import get_full_command_name
 
 # pylint: disable=too-many-ancestors
 
@@ -33,12 +34,13 @@ class Chadmin(cloup.Group):
         @cloup.pass_context
         def wrapper(ctx, *a, **kw):
             logging.configure(
-                ctx.obj["config"]["loguru"], "chadmin", {"cmd_name": cmd.name}
+                ctx.obj["config"]["loguru"],
+                "chadmin",
+                {"cmd_name": get_full_command_name(ctx)},
             )
 
             logging.debug(
-                "Executing command '{}', params: {}, args: {}, version: {}",
-                cmd.name,
+                "Command starts executing, params: {}, args: {}, version: {}",
                 {
                     **ctx.parent.params,
                     **ctx.params,
@@ -49,11 +51,9 @@ class Chadmin(cloup.Group):
 
             try:
                 cmd_callback(*a, **kw)
-                logging.debug("Command '{}' completed", cmd.name)
+                logging.debug("Command completed")
             except Exception:
-                logging.exception(
-                    "Command '{}' failed with error:", cmd.name, short_stdout=True
-                )
+                logging.exception("Command failed with error:", short_stdout=True)
 
         cmd.callback = wrapper
         super().add_command(

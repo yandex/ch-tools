@@ -5,6 +5,8 @@ from typing import Optional
 import click
 import cloup
 
+from ch_tools.common.utils import get_full_command_name
+
 warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
 
 # pylint: disable=wrong-import-position
@@ -55,12 +57,13 @@ class KeeperChecks(cloup.Group):
         @cloup.pass_context
         def wrapper(ctx, *a, **kw):
             logging.configure(
-                ctx.obj["config"]["loguru"], "keeper-monitoring", {"cmd_name": cmd.name}
+                ctx.obj["config"]["loguru"],
+                "keeper-monitoring",
+                {"cmd_name": get_full_command_name(ctx)},
             )
 
             logging.debug(
-                "Executing command '{}', params: {}, args: {}, version: {}",
-                cmd.name,
+                "Command starts executing, params: {}, args: {}, version: {}",
                 {
                     **ctx.parent.params,
                     **ctx.params,

@@ -146,7 +146,7 @@ DEFAULT_CONFIG = {
     },
     "loguru": {
         "formatters": {
-            "default": "{time:YYYY-MM-DD HH:mm:ss,SSS} {process.name:11} {process.id:5} [{level:8}] {extra[logger_name]}: {extra[cmd_name]}: {message}",
+            "default": "{time:YYYY-MM-DD HH:mm:ss,SSS} {process.name:11} {process.id:5} [{level:8}] {extra[logger_name]} {extra[cmd_name]}: {message}",
         },
         "handlers": {
             "chadmin": {

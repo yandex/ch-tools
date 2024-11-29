@@ -3,6 +3,8 @@ import re
 import subprocess
 from pathlib import Path
 
+from click import Context
+
 
 def version_ge(version1, version2):
     """
@@ -81,3 +83,15 @@ def first_key(mapping):
 
 def first_value(mapping):
     return next(iter(mapping.values()))
+
+
+def get_full_command_name(ctx: Context) -> str:
+    """
+    Return full command name (with names of groups).
+    """
+    if ctx.parent is None:
+        return ""
+
+    cmd_name = ctx.command.name or "unknown"
+    parent_cmd_name = get_full_command_name(ctx.parent)
+    return f"{parent_cmd_name} {cmd_name}" if parent_cmd_name else cmd_name
