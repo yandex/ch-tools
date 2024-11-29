@@ -32,6 +32,9 @@ from ch_tools.monrun_checks.ch_replication_lag import replication_lag_command
 from ch_tools.monrun_checks.ch_resetup_state import resetup_state_command
 from ch_tools.monrun_checks.ch_ro_replica import ro_replica_command
 from ch_tools.monrun_checks.ch_s3_backup_orphaned import orphaned_backups_command
+from ch_tools.monrun_checks.ch_s3_credentials_config import (
+    s3_credentials_configs_command,
+)
 from ch_tools.monrun_checks.ch_system_queues import system_queues_command
 from ch_tools.monrun_checks.ch_tls import tls_command
 from ch_tools.monrun_checks.dns import dns_command
@@ -148,6 +151,7 @@ CLI_COMMANDS = [
     geobase_command,
     backup_command,
     orphaned_backups_command,
+    s3_credentials_configs_command,
     tls_command,
     keeper_command,
     dns_command,
