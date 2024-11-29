@@ -16,7 +16,6 @@ warnings.filterwarnings(
 # pylint: disable=wrong-import-position
 
 from ch_tools import __version__
-from ch_tools.chadmin.cli.ch_s3_credentials_group import ch_s3_credentials_group
 from ch_tools.chadmin.cli.chs3_backup_group import chs3_backup_group
 from ch_tools.chadmin.cli.config_command import config_command
 from ch_tools.chadmin.cli.crash_log_group import crash_log_group
@@ -43,6 +42,7 @@ from ch_tools.chadmin.cli.replica_group import replica_group
 from ch_tools.chadmin.cli.replicated_fetch_group import replicated_fetch_group
 from ch_tools.chadmin.cli.replication_queue_group import replication_queue_group
 from ch_tools.chadmin.cli.restore_replica_command import restore_replica_command
+from ch_tools.chadmin.cli.s3_credentials_config_group import s3_credentials_config_group
 from ch_tools.chadmin.cli.stack_trace_command import stack_trace_command
 from ch_tools.chadmin.cli.table_group import table_group
 from ch_tools.chadmin.cli.thread_log_group import thread_log_group
@@ -126,7 +126,7 @@ groups: List[Any] = [
     object_storage_group,
     part_group,
     part_log_group,
-    ch_s3_credentials_group,
+    s3_credentials_config_group,
     partition_group,
     process_group,
     query_log_group,
