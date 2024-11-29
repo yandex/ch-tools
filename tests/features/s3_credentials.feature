@@ -8,7 +8,7 @@ Feature: ch_s3_credentials tool
     And a working clickhouse on clickhouse02
     And a working http server
 
-    Scenario Outline:: chadmin s3 check work correctly
+    Scenario Outline: chadmin s3 check work correctly
     When we execute command on clickhouse01
     """
     chadmin ch-s3-credentials check
@@ -45,13 +45,12 @@ Feature: ch_s3_credentials tool
         </s3>
     </clickhouse>
     """
-    ## Commented because version `latest` will be greater than any other version.
-    ##@require_version_24.11
-    ##Examples:
-    ##|header|
-    ##|access_header|
-    ##
-    ## @require_version_less_than_24.11
+    @require_version_24.11
+    Examples:
+    |header|
+    |access_header|
+    
+    @require_version_less_than_24.11
     Examples:
     | header      |
     |header|
