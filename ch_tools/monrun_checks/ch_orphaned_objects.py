@@ -82,15 +82,12 @@ def _get_orphaned_objects_state(
     ctx: click.Context, state_local: bool, state_zk_path: str
 ) -> "OrphanedObjectsState":
     if state_local:
-        state = _local_get_orphaned_objects_state()
+        return _local_get_orphaned_objects_state()
 
     if state_zk_path:
-        state = _zk_get_orphaned_objects_state(ctx, state_zk_path)
+        return _zk_get_orphaned_objects_state(ctx, state_zk_path)
 
-    if state is None:
-        raise FileNotFoundError()
-
-    return state
+    raise FileNotFoundError()
 
 
 def _local_get_orphaned_objects_state() -> "OrphanedObjectsState":
