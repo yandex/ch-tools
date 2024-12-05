@@ -1,5 +1,6 @@
-import click
 import re
+
+import click
 
 from ch_tools.chadmin.cli.object_storage_group import STATE_LOCAL_PATH
 from ch_tools.chadmin.internal.object_storage.orphaned_objects_state import (
@@ -54,7 +55,7 @@ def orphaned_objects_command(
 
     total_size = state.orphaned_objects_size
     error_msg = state.error_msg
-    
+
     pattern = r"(Code:\s\d+\.\sDB::Exception:\s).*(\([A-Z_]*\)\s\(version\s.*\s\(official build\)\)).*"
     error_msg = re.sub(pattern, r"...", error_msg)
 
