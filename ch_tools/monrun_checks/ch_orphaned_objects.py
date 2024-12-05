@@ -105,10 +105,10 @@ def _zk_get_orphaned_objects_state(
 
 
 def _error_message_format(error_msg: str) -> str:
-    main_pattern = r"(Code:\s\d+\.\sDB::Exception:\s).*(\([A-Z_]*\)\s\(version\s.*\s\(official build\)\)).*"
+    main_pattern = r"(Code:\s\d+\.\sDB::Exception:\s).*(\s\([A-Z_]*\)\s\(version\s.*\s\(official build\)\)).*"
     spare_pattern = r"(Code:\s\d+\.\sDB::Exception:\s).*"
     if re.match(main_pattern, error_msg):
-        error_msg = re.search(main_pattern, error_msg)
+        error_msg = re.sub(main_pattern, r"\1...\2", error_msg)
     elif re.match(spare_pattern, error_msg):
-        error_msg = re.search(spare_pattern, error_msg)
+        error_msg = re.sub(main_pattern, r"\1...", error_msg)
     return error_msg
