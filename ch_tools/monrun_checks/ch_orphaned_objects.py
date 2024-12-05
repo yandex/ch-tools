@@ -9,6 +9,9 @@ from ch_tools.chadmin.internal.object_storage.orphaned_objects_state import (
 from ch_tools.chadmin.internal.zookeeper import get_zk_node
 from ch_tools.common.result import CRIT, OK, WARNING, Result
 
+MAIN_ERROR_MESSAGE_PATTERN = r"(Code:\s\d+\.\sDB::Exception:\s).*(\s\([A-Z_]*\)\s\(version\s.*\s\(official build\)\)).*"
+SPARE_ERROR_MESSAGE_PATTERN = r"(Code:\s\d+\.\sDB::Exception:\s).*"
+
 
 @click.command("orphaned-objects")
 @click.option(
@@ -105,10 +108,8 @@ def _zk_get_orphaned_objects_state(
 
 
 def _error_message_format(error_msg: str) -> str:
-    main_pattern = r"(Code:\s\d+\.\sDB::Exception:\s).*(\s\([A-Z_]*\)\s\(version\s.*\s\(official build\)\)).*"
-    spare_pattern = r"(Code:\s\d+\.\sDB::Exception:\s).*"
-    if re.match(main_pattern, error_msg):
-        error_msg = re.sub(main_pattern, r"\1...\2", error_msg)
-    elif re.match(spare_pattern, error_msg):
-        error_msg = re.sub(main_pattern, r"\1...", error_msg)
+    if re.match(MAIN_ERROR_MESSAGE_PATTERN, error_msg):
+        error_msg = re.sub(MAIN_ERROR_MESSAGE_PATTERN, r"\1...\2", error_msg)
+    elif re.match(SPARE_ERROR_MESSAGE_PATTERN, error_msg):
+        error_msg = re.sub(SPARE_ERROR_MESSAGE_PATTERN, r"\1...", error_msg)
     return error_msg
