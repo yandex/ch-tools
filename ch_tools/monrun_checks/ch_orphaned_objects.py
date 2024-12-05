@@ -9,7 +9,7 @@ from ch_tools.chadmin.internal.object_storage.orphaned_objects_state import (
 from ch_tools.chadmin.internal.zookeeper import get_zk_node
 from ch_tools.common.result import CRIT, OK, WARNING, Result
 
-ERROR_MESSAGE_PATTERN = r"(Code:\s\d+\.\sDB::Exception:\s).*(\s\([A-Z_]*\)\s\(version\s.*\s\(official build\)\)).*"
+ERROR_MESSAGE_PATTERN = r"(Code:\s\d+\.\sDB::Exception:\s).*(\s\([A-Z_]*\)\s\(version\s.*\s\(official build\)\)\s).*"
 
 
 @click.command("orphaned-objects")
@@ -107,5 +107,5 @@ def _zk_get_orphaned_objects_state(
 
 
 def _error_message_format(error_msg: str) -> str:
-    error_msg = re.sub(ERROR_MESSAGE_PATTERN, r"\1...\2", error_msg)
+    error_msg = re.sub(ERROR_MESSAGE_PATTERN, r"\1...\2...", error_msg)
     return error_msg
