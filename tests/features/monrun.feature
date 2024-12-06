@@ -98,7 +98,7 @@ Feature: ch-monitoring tool
     """
     Then we get response contains
     """
-    1;Unknown error: Code: 156. DB::Exception: Embedded dictionaries were not loaded.
+    1;Unknown error: Code: 156. DB::Exception: ... (DICTIONARIES_WAS_NOT_LOADED)
     """
     When we execute command on clickhouse01
     """
