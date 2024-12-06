@@ -1,5 +1,3 @@
-import re
-
 import click
 
 from ch_tools.chadmin.cli.object_storage_group import STATE_LOCAL_PATH
@@ -8,8 +6,6 @@ from ch_tools.chadmin.internal.object_storage.orphaned_objects_state import (
 )
 from ch_tools.chadmin.internal.zookeeper import get_zk_node
 from ch_tools.common.result import CRIT, OK, WARNING, Result
-
-ERROR_MESSAGE_PATTERN = r"(Code:\s\d+\.\sDB::Exception:\s).*(\s\([A-Z_]*\)\s\(version\s.*\s\(official build\)\)\s).*"
 
 
 @click.command("orphaned-objects")
@@ -56,7 +52,7 @@ def orphaned_objects_command(
         return Result(CRIT, str(e))
 
     total_size = state.orphaned_objects_size
-    error_msg = _error_message_format(state.error_msg)
+    error_msg = state.error_msg
 
     if error_msg != "":
         return Result(CRIT, error_msg)
@@ -104,8 +100,3 @@ def _zk_get_orphaned_objects_state(
 ) -> "OrphanedObjectsState":
     zk_data = get_zk_node(ctx, state_zk_path)
     return OrphanedObjectsState.from_json(zk_data)
-
-
-def _error_message_format(error_msg: str) -> str:
-    error_msg = re.sub(ERROR_MESSAGE_PATTERN, r"\1...\2...", error_msg)
-    return error_msg

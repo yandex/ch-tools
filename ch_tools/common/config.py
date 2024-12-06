@@ -84,6 +84,10 @@ DEFAULT_CONFIG = {
                     "pattern": "\n",
                     "replacement": " ",
                 },
+                {
+                    "pattern": r"(Code:\s\d+\.\sDB::Exception:\s).*(\s\([A-Z_]*\)\s\(version\s.*\s\(official build\)\)\s).*",
+                    "replacement": r"\1...\2...",
+                },
             ],
         },
     },
