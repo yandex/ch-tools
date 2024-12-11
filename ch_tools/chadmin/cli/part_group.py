@@ -1,7 +1,7 @@
 from collections import OrderedDict
 
 from cloup import Choice, group, option, option_group, pass_context
-from cloup.constraints import RequireAtLeast
+from cloup.constraints import If, IsSet, RequireAtLeast, RequireExactly
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.part import (
@@ -12,6 +12,7 @@ from ch_tools.chadmin.internal.part import (
     list_detached_parts,
     list_parts,
     move_part,
+    read_and_validate_parts_from_json,
 )
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.common import logging
@@ -328,12 +329,22 @@ def detach_parts_command(ctx, _all, keep_going, dry_run, **kwargs):
         help="Filter in data parts to delete by the specified detach reason.",
     ),
     option(
+        "--use-part-list-from-json",
+        default=None,
+        type=str,
+        help="Use list of parts from the file. Example 'SELECT database, table, name ... FORMAT JSON' > file && chadmin part delete --use-part-list-from-json <file>.",
+    ),
+    option(
         "-l",
         "--limit",
         type=int,
         help="Limit the max number of data parts to delete.",
     ),
-    constraint=RequireAtLeast(1),
+    constraint=If(
+        IsSet("use_part_list_from_json"),
+        then=RequireExactly(1),
+        else_=RequireAtLeast(1),
+    ),
 )
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @option(
@@ -353,25 +364,29 @@ def delete_parts_command(
     reason,
     keep_going,
     dry_run,
+    use_part_list_from_json=None,
     **kwargs,
 ):
     """Delete one or several data parts."""
-    if detached:
-        parts = list_detached_parts(
-            ctx,
-            reason=reason,
-            **kwargs,
-        )
+    if use_part_list_from_json:
+        parts = read_and_validate_parts_from_json(use_part_list_from_json)["data"]
     else:
-        if reason:
-            ctx.fail("Option --reason cannot be used without --detached.")
+        if detached:
+            parts = list_detached_parts(
+                ctx,
+                reason=reason,
+                **kwargs,
+            )
+        else:
+            if reason:
+                ctx.fail("Option --reason cannot be used without --detached.")
 
-        parts = list_parts(
-            ctx,
-            min_size=min_size,
-            max_size=max_size,
-            **kwargs,
-        )
+            parts = list_parts(
+                ctx,
+                min_size=min_size,
+                max_size=max_size,
+                **kwargs,
+            )
     for part in parts:
         try:
             if detached:
