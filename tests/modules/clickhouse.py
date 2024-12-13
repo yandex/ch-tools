@@ -6,6 +6,7 @@ from typing import Any, Optional, Sequence, Tuple
 
 from hamcrest import assert_that
 from requests import HTTPError
+from requests.exceptions import ChunkedEncodingError
 
 from ch_tools.chadmin.internal.clickhouse_disks import (
     CLICKHOUSE_PATH,
@@ -58,6 +59,10 @@ def get_response(context: ContextT, node: str, query: str) -> Tuple[int, str]:
         return e.response.status_code, e.response.text
     except ClickhouseError as e:
         return e.response.status_code, e.response.text
+    except ChunkedEncodingError as ex:
+        # Related PR: https://github.com/ClickHouse/ClickHouse/pull/68800
+        logging.warning(f"exception from server {ex}")
+        return None, None
 
 
 def get_version(context: ContextT, node: str) -> str:
