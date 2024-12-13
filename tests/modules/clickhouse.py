@@ -62,7 +62,7 @@ def get_response(context: ContextT, node: str, query: str) -> Tuple[int, str]:
     except ChunkedEncodingError as ex:
         # Related PR: https://github.com/ClickHouse/ClickHouse/pull/68800
         logging.warning(f"exception from server {ex}")
-        return None, None
+        return 408, "Workaround for in-progress op"
 
 
 def get_version(context: ContextT, node: str) -> str:
