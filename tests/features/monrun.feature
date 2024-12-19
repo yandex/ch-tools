@@ -522,5 +522,5 @@ Feature: ch-monitoring tool
     """
     Then we get response
     """
-    2;Code: 27. DB::Exception: ... (CANNOT_PARSE_INPUT_ASSERTION_FAILED) (version 24.8.5.115 (official build)) ...
+    2;Code: 27. DB::Exception: ... (CANNOT_PARSE_INPUT_ASSERTION_FAILED) (version 24.8.5.115 (official build))
     """
