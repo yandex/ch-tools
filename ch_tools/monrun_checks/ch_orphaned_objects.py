@@ -5,6 +5,7 @@ from ch_tools.chadmin.internal.object_storage.orphaned_objects_state import (
     OrphanedObjectsState,
 )
 from ch_tools.chadmin.internal.zookeeper import get_zk_node
+from ch_tools.common.clickhouse.config.clickhouse import ClickhouseConfig
 from ch_tools.common.result import CRIT, OK, WARNING, Result
 
 
@@ -45,6 +46,9 @@ def orphaned_objects_command(
     warn: int,
 ) -> Result:
     _check_mutually_exclusive(state_local, state_zk_path)
+
+    if not ClickhouseConfig.load().storage_configuration.has_disk("object_storage"):
+        return Result(OK, "Disabled")
 
     try:
         state = _get_orphaned_objects_state(ctx, state_local, state_zk_path)
