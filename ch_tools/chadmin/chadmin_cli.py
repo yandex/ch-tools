@@ -7,6 +7,7 @@ import cloup
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.cli.move_group import move_group
 from ch_tools.common.config import load_config
+from ch_tools.common.utils import update_by_key_path
 
 warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
 warnings.filterwarnings(
@@ -50,7 +51,7 @@ from ch_tools.chadmin.cli.wait_group import wait_group
 from ch_tools.chadmin.cli.zookeeper_group import zookeeper_group
 from ch_tools.common.cli.context_settings import CONTEXT_SETTINGS
 from ch_tools.common.cli.locale_resolver import LocaleResolver
-from ch_tools.common.cli.parameters import TimeSpanParamType
+from ch_tools.common.cli.parameters import TimeSpanParamType, YamlParamType
 
 
 @cloup.group(
@@ -70,9 +71,9 @@ from ch_tools.common.cli.parameters import TimeSpanParamType
     "--setting",
     "settings",
     multiple=True,
-    type=(str, str),
+    type=(str, YamlParamType()),
     metavar="NAME VALUE",
-    help="Name and value of ClickHouse setting to override. "
+    help="Name and value of tool setting to override. "
     "Can be specified multiple times to override several settings.",
 )
 @cloup.option("--timeout", type=TimeSpanParamType(), help="Timeout for SQL queries.")
@@ -84,12 +85,14 @@ def cli(ctx, format_, settings, timeout, port, debug):
     """ClickHouse administration tool."""
     config = load_config()
 
+    for setting_path, value in settings:
+        update_by_key_path(config, setting_path, value)
+
     if port:
         config["clickhouse"]["port"] = port
+
     if timeout:
         config["clickhouse"]["timeout"] = timeout.total_seconds()
-    if settings:
-        config["clickhouse"]["settings"] = {item[0]: item[1] for item in settings}
 
     ctx.obj = {
         "config": config,

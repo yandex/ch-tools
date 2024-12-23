@@ -53,6 +53,7 @@ DEFAULT_CONFIG = {
         "username": None,
         "password": None,
     },
+    # Configuration of chadmin tool commands and options.
     "chadmin": {
         "wait": {
             "replication-sync": {
@@ -77,6 +78,7 @@ DEFAULT_CONFIG = {
             },
         },
     },
+    # Monitoring settings. It applies to the both ch-monitoring and keeper-monitoring tools.
     "monitoring": {
         "output": {
             "escaping_rules": [
@@ -91,6 +93,7 @@ DEFAULT_CONFIG = {
             ],
         },
     },
+    # Configuration of ch-monitoring tool commands and options.
     "ch-monitoring": {
         "log-errors": {
             "@disabled": False,
@@ -142,12 +145,14 @@ DEFAULT_CONFIG = {
             "warn": 30,
         },
     },
+    # Configuration of keeper-monitoring tool commands and options.
     "keeper-monitoring": {
         "tls": {
             "crit": 10,
             "warn": 30,
         },
     },
+    # Logging configuration.
     "loguru": {
         "formatters": {
             "default": "{time:YYYY-MM-DD HH:mm:ss,SSS} {process.name:11} {process.id:5} [{level:8}] {extra[logger_name]} {extra[cmd_name]}: {message}",
@@ -186,6 +191,10 @@ DEFAULT_CONFIG = {
                 },
             },
         },
+    },
+    # Settings specific for cloud deployments.
+    "cloud": {
+        "metadata_service_endpoint": "http://169.254.169.254",
     },
 }
 

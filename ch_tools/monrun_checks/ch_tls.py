@@ -35,8 +35,6 @@ def tls_command(
     """
     Check TLS certificate for expiration and that actual cert from fs used.
     """
-    # pylint: disable=too-many-return-statements
-
     return check_cert_on_ports(
         get_ports(ctx, ports), crit, warn, chain, CERTIFICATE_PATH
     )
