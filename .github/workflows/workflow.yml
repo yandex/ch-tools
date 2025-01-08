@@ -90,7 +90,7 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
     - name: build and push base images
-      uses: docker/bake-action@v5
+      uses: docker/bake-action@v6
       with:
         files: tests/bake.hcl
         push: true
