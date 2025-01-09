@@ -9,7 +9,9 @@ from typing import Sequence, Union
 
 import click
 import humanfriendly
+import yaml
 from click import ClickException
+from yaml.error import YAMLError
 
 from .formatting import format_var
 from .utils import parse_timespan
@@ -39,6 +41,23 @@ class ListParamType(click.ParamType):
                 result = [self.type(v) for v in result]
 
         return result
+
+
+class YamlParamType(click.ParamType):
+    """
+    Command-line parameter type for YAML values. It supports reading from file and stdin.
+    """
+
+    name = "yaml"
+
+    def convert(self, value, param, ctx):
+        try:
+            value = _preprocess_value(value)
+            return yaml.safe_load(value)
+        except YAMLError as e:
+            raise ClickException(
+                f'Invalid YAML value for the parameter "{param.name}". {str(e)}'
+            )
 
 
 class StringParamType(click.ParamType):

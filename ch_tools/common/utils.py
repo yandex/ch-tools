@@ -95,3 +95,80 @@ def get_full_command_name(ctx: Context) -> str:
     cmd_name = ctx.command.name or "unknown"
     parent_cmd_name = get_full_command_name(ctx.parent)
     return f"{parent_cmd_name} {cmd_name}" if parent_cmd_name else cmd_name
+
+
+def get_by_key_path(object_, key_path, default=None):
+    """
+    Get item by key path from object with arbitrary number of nested lists and dicts.
+    """
+
+    def _get_key(obj, path):
+        key = path.pop(0)
+
+        if isinstance(obj, list):
+            try:
+                key = int(key)
+            except Exception:
+                return default
+
+        if not path:
+            try:
+                return obj[key]
+            except Exception:
+                return default
+        else:
+            try:
+                return _get_key(obj[key], path)
+            except Exception:
+                return default
+
+    return _get_key(object_, key_path.split("."))
+
+
+def update_by_key_path(object_, key_path, value):
+    """
+    Update item by key path in object with arbitrary number of nested lists and dicts.
+    """
+
+    def _update(obj, path, value, current_path_str):
+        key = path.pop(0)
+        current_path_str = (
+            f'{current_path_str}."{key}"' if current_path_str else f'"{key}"'
+        )
+
+        if isinstance(obj, list):
+            try:
+                key = int(key)
+            except Exception:
+                raise RuntimeError(
+                    f'Key path "{key_path}" is invalid as {current_path_str} is a list.'
+                )
+
+        if not path:
+            if isinstance(obj, list):
+                list_size = len(obj)
+                if key < list_size:
+                    obj[key] = value
+                elif key == list_size:
+                    obj.append(value)
+                else:
+                    raise RuntimeError(
+                        f'Key path "{key_path}" is invalid as {current_path_str} is a list with {list_size} elements.'
+                    )
+            else:
+                obj[key] = value
+        else:
+            if isinstance(obj, list):
+                list_size = len(obj)
+                if key < len(obj):
+                    _update(obj[key], path, value, current_path_str)
+                else:
+                    raise RuntimeError(
+                        f'Key path "{key_path}" is invalid as {current_path_str} is a list with {list_size} elements.'
+                    )
+            else:
+                if obj.get(key) is None:
+                    obj[key] = {}
+                _update(obj[key], path, value, current_path_str)
+
+    _update(object_, key_path.split("."), value, "")

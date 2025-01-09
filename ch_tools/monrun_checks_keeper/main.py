@@ -5,7 +5,8 @@ from typing import Optional
 import click
 import cloup
 
-from ch_tools.common.utils import get_full_command_name
+from ch_tools.common.cli.parameters import YamlParamType
+from ch_tools.common.utils import get_full_command_name, update_by_key_path
 
 warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
 
@@ -124,10 +125,23 @@ class KeeperChecks(cloup.Group):
     default=False,
     help="Allow unverified SSL certificates, e.g. self-signed ones",
 )
+@cloup.option(
+    "--setting",
+    "settings",
+    multiple=True,
+    type=(str, YamlParamType()),
+    metavar="NAME VALUE",
+    help="Name and value of tool setting to override. "
+    "Can be specified multiple times to override several settings.",
+)
 @cloup.version_option(__version__)
 @cloup.pass_context
-def cli(ctx, retries, timeout, no_verify_ssl_certs):
+def cli(ctx, settings, retries, timeout, no_verify_ssl_certs):
     config = load_config()
+
+    for setting_path, value in settings:
+        update_by_key_path(config, setting_path, value)
+
     ctx.obj = {
         "config": config,
         "retries": retries,

@@ -17,10 +17,10 @@ from ch_tools.common.result import CRIT, OK, WARNING, Result
 @command("s3-credentials-config")
 @option(
     "-p",
-    "--present",
+    "--present/--missing",
     default=False,
     is_flag=True,
-    help="whether config expected to present",
+    help="Whether S3 credentials config should be present or not.",
 )
 @pass_context
 def s3_credentials_configs_command(ctx, present):
@@ -32,7 +32,7 @@ def s3_credentials_configs_command(ctx, present):
         if not present:
             if not os.path.exists(CLICKHOUSE_S3_CREDENTIALS_CONFIG_PATH):
                 return Result(OK)
-            return Result(CRIT, "S3 default config present, but shouldn't")
+            return Result(CRIT, "S3 credentials config exists, but shouldn't")
 
         if os.path.isfile(CLICKHOUSE_RESETUP_CONFIG_PATH):
             return Result(OK, "Skipped as resetup is in progress")
@@ -55,12 +55,13 @@ def s3_credentials_configs_command(ctx, present):
             else:
                 msg = f"S3 token expired {_delta_to_hours(delta - timedelta(hours=12))} hours ago"
         else:
-            msg = "S3 default config not present"
+            msg = "S3 credentials config is missing"
 
-        code = _request_token(ctx.obj["s3_cred_metadata_addr"]).status_code
+        endpoint = ctx.obj["config"]["cloud"]["metadata_service_endpoint"]
+        code = _request_token(endpoint).status_code
         if code == 404:
             if "default" in requests.get(
-                f"http://{ctx.obj['s3_cred_metadata_addr']}/computeMetadata/v1/instance/?recursive=true",
+                f"{endpoint}/computeMetadata/v1/instance/?recursive=true",
                 headers={"Metadata-Flavor": "Google"},
                 timeout=60,
             ).json().get("serviceAccounts", {}):
@@ -68,18 +69,18 @@ def s3_credentials_configs_command(ctx, present):
 
             return Result(CRIT, "service account not linked")
 
-        return Result(CRIT, f"{msg}, iam code {code}")
+        return Result(CRIT, f"{msg}, IAM code {code}")
 
-    except Exception as e:
+    except Exception:
         logging.exception("Failed to check S3 credentials config")
-        return Result(CRIT, str(e))
+        return Result(CRIT, "Internal error")
 
 
-def _request_token(endpoint):
-    # pylint: disable=missing-timeout
+def _request_token(metadata_service_endpoint):
     return requests.get(
-        f"http://{endpoint}/computeMetadata/v1/instance/service-accounts/default/token",
+        f"{metadata_service_endpoint}/computeMetadata/v1/instance/service-accounts/default/token",
         headers={"Metadata-Flavor": "Google"},
+        timeout=60,
     )
 
 

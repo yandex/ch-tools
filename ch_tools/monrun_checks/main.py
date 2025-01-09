@@ -10,8 +10,9 @@ import cloup
 from cloup import group, option, pass_context, version_option
 
 from ch_tools.common import logging
+from ch_tools.common.cli.parameters import YamlParamType
 from ch_tools.common.config import CH_MONITORING_LOG_FILE, load_config
-from ch_tools.common.utils import get_full_command_name
+from ch_tools.common.utils import get_full_command_name, update_by_key_path
 
 warnings.filterwarnings(action="ignore", message="Python 3.6 is no longer supported")
 
@@ -126,10 +127,22 @@ class MonrunChecks(cloup.Group):
     default=True,
     help="Ensure that monitoring checks are run under monitoring user.",
 )
+@option(
+    "--setting",
+    "settings",
+    multiple=True,
+    type=(str, YamlParamType()),
+    metavar="NAME VALUE",
+    help="Name and value of tool setting to override. "
+    "Can be specified multiple times to override several settings.",
+)
 @version_option(__version__)
 @pass_context
-def cli(ctx, ensure_monitoring_user):
+def cli(ctx, settings, ensure_monitoring_user):
     config = load_config()
+
+    for setting_path, value in settings:
+        update_by_key_path(config, setting_path, value)
 
     if ensure_monitoring_user:
         _ensure_monitoring_user()
