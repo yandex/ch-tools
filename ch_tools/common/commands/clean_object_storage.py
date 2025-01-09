@@ -111,7 +111,7 @@ def _clean_object_storage(
 
     if not use_saved_list:
         logging.info(
-            f"Collecting objects... (Disk: '{disk_conf.name}', Endpoint '{disk_conf.endpoint_url}', Bucket: '{disk_conf.bucket_name}', Prefix: '{disk_conf.prefix}')",
+            f"Collecting objects... (Disk: '{disk_conf.name}', Endpoint '{disk_conf.endpoint_url}', Bucket: '{disk_conf.bucket_name}', Prefix: '{prefix}')",
         )
         _traverse_object_storage(ctx, listing_table, from_time, to_time, prefix)
 
