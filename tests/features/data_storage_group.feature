@@ -137,10 +137,55 @@ Feature: chadmin data-store commands
     """
     chadmin --format yaml data-store detect-broken-partitions --reattach
     """
+        When we execute query on clickhouse01
+    """
+    SELECT * FROM test_db.table1 FORMAT Vertical;
+    """
+    Then we get response
+    """
+    Row 1:
+    ──────
+    a: 3
+    b: 1
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM test_db.table2;
+    """
+    Then we get response contains
+    """
+    """
     When we execute queries on clickhouse01
     """
-    SELECT * FROM test_db.table1;
-    SELECT * FROM test_db.table2;
+    INSERT INTO test_db.table1 SELECT 1, 10;
+    INSERT INTO test_db.table2 SELECT 1, 10;
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM test_db.table1 ORDER BY a FORMAT Vertical;
+    """
+    Then we get response
+    """
+    Row 1:
+    ──────
+    a: 1
+    b: 10
+
+    Row 2:
+    ──────
+    a: 3
+    b: 1
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM test_db.table2 ORDER BY a FORMAT Vertical;
+    """
+    Then we get response contains
+    """
+    Row 1:
+    ──────
+    a: 1
+    b: 10
     """
 
     @require_version_24.4
@@ -203,10 +248,55 @@ Feature: chadmin data-store commands
     """
     chadmin --format yaml data-store detect-broken-partitions --detach
     """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM test_db.table1 FORMAT Vertical;
+    """
+    Then we get response
+    """
+    Row 1:
+    ──────
+    a: 3
+    b: 1
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM test_db.table2;
+    """
+    Then we get response contains
+    """
+    """
     When we execute queries on clickhouse01
     """
-    SELECT * FROM test_db.table1;
-    SELECT * FROM test_db.table2;
+    INSERT INTO test_db.table1 SELECT 1, 10;
+    INSERT INTO test_db.table2 SELECT 1, 10;
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM test_db.table1 ORDER BY a FORMAT Vertical;
+    """
+    Then we get response
+    """
+    Row 1:
+    ──────
+    a: 1
+    b: 10
+
+    Row 2:
+    ──────
+    a: 3
+    b: 1
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM test_db.table2 ORDER BY a FORMAT Vertical;
+    """
+    Then we get response contains
+    """
+    Row 1:
+    ──────
+    a: 1
+    b: 10
     """
 
     @require_version_24.4
