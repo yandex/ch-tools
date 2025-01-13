@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from tempfile import TemporaryFile
@@ -108,7 +109,9 @@ def _clean_object_storage(
     Delete orphaned objects from object storage.
     """
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
-    prefix = object_name_prefix or disk_conf.prefix
+    prefix = object_name_prefix or _get_default_object_name_prefix(
+        clean_scope, disk_conf
+    )
 
     if not use_saved_list:
         logging.info(
@@ -237,3 +240,21 @@ def _insert_listing_batch(
 
 def _drop_table(ctx: Context, table_name: str) -> None:
     execute_query(ctx, f"DROP TABLE IF EXISTS {table_name} SYNC", format_=None)
+
+
+def _get_default_object_name_prefix(
+    clean_scope: CleanScope, disk_conf: S3DiskConfiguration
+) -> str:
+    """
+    Returns default object name prefix for object storage.
+
+    Keep trailing '/'.
+    """
+    if clean_scope == CleanScope.CLUSTER:
+        # NOTE: Ya.Cloud specific code
+        # Remove the last "shard" component of the path.
+        # In general case define `--object-name-prefix` explicitly
+        cluster_path = os.path.split(disk_conf.prefix.rstrip("/"))[0]
+        return cluster_path + ("/" if cluster_path else "")
+
+    return disk_conf.prefix
