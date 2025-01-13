@@ -45,10 +45,10 @@ def orphaned_objects_command(
     crit: int,
     warn: int,
 ) -> Result:
-    _check_mutually_exclusive(state_local, state_zk_path)
-
     if not ClickhouseConfig.load().storage_configuration.has_disk("object_storage"):
         return Result(OK, "Disabled")
+
+    _check_mutually_exclusive(state_local, state_zk_path)
 
     try:
         state = _get_orphaned_objects_state(ctx, state_local, state_zk_path)
