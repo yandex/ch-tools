@@ -92,7 +92,7 @@ kazoo = "*"
 lxml = "*"
 psutil = "*"
 pygments = "*"
-pyopenssl = "*"
+pyopenssl = "<25.0.0"  # Since 25.0.0 has dependency conflict for Python >= 3.7
 python-dateutil = "*"
 pyyaml = "<5.4"
 requests = "<2.30.0"
@@ -100,10 +100,7 @@ tabulate = "*"
 tenacity = "*"
 termcolor = "*"
 tqdm = "*"
-typing-extensions = [
-    { version = "~4.1.1", python = "<=3.7" },
-    { version = ">4.7.1", python = ">3.7" },
-]
+typing-extensions = "~4.1.1"
 xmltodict = "*"
 loguru = "*"
 cffi = { version = "1.16.0", python = ">=3.12" }
