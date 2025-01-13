@@ -114,7 +114,7 @@ def configure(
             handler["filter"] = make_filter(name)
         loguru_handlers.append(handler)
 
-    logger.configure(handlers=loguru_handlers, activation=[("", True)], extra=extra)
+    logger.configure(handlers=loguru_handlers, activation=[("", True)], extra=extra)  # type: ignore[arg-type]
 
     enable_stdout_logger()
 

@@ -68,6 +68,9 @@ def clean(
     listing_table = f"{config['listing_table_database']}.{config['listing_table_prefix']}{disk_conf.name}"
     # Create listing table for storing paths from object storage
     try:
+        if not use_saved_list:
+            _drop_table(ctx, listing_table)
+
         execute_query(
             ctx,
             f"CREATE TABLE IF NOT EXISTS {listing_table} (obj_path String, obj_size UInt64) ENGINE MergeTree ORDER BY obj_path SETTINGS storage_policy = '{config['storage_policy']}'",
@@ -85,9 +88,7 @@ def clean(
         )
     finally:
         if not keep_paths:
-            execute_query(
-                ctx, f"DROP TABLE IF EXISTS {listing_table} SYNC", format_=None
-            )
+            _drop_table(ctx, listing_table)
 
     return deleted, total_size
 
@@ -232,3 +233,7 @@ def _insert_listing_batch(
         f"INSERT INTO {listing_table} (obj_path, obj_size) VALUES {batch_values}",
         format_=None,
     )
+
+
+def _drop_table(ctx: Context, table_name: str) -> None:
+    execute_query(ctx, f"DROP TABLE IF EXISTS {table_name} SYNC", format_=None)

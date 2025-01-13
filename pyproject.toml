@@ -92,7 +92,7 @@ kazoo = "*"
 lxml = "*"
 psutil = "*"
 pygments = "*"
-pyopenssl = "*"
+pyopenssl = "<25.0.0"  # Since 25.0.0 has dependency conflict for Python >= 3.7
 python-dateutil = "*"
 pyyaml = "<5.4"
 requests = "<2.30.0"
@@ -148,6 +148,7 @@ lint.ignore = [
     "A003",  # "Class attribute is shadowing a Python builtin"
     "E402",  # "Module level import not at top of file", duplicate corresponding pylint check
     "E501",  # "Line too long"
+    "A005",  # Module `logging` shadows a Python standard-library module
 ]
 
 [tool.ruff.lint.per-file-ignores]
