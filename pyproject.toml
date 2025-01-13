@@ -148,6 +148,7 @@ lint.ignore = [
     "A003",  # "Class attribute is shadowing a Python builtin"
     "E402",  # "Module level import not at top of file", duplicate corresponding pylint check
     "E501",  # "Line too long"
+    "A005",  # Module `logging` shadows a Python standard-library module
 ]
 
 [tool.ruff.lint.per-file-ignores]
