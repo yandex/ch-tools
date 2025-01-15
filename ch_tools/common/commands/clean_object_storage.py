@@ -123,7 +123,7 @@ def _clean_object_storage(
     prefix = object_name_prefix or _get_default_object_name_prefix(
         clean_scope, disk_conf
     )
-    prefix = os.path.join(prefix, "")
+    prefix = os.path.join(prefix, '')
 
     if not use_saved_list:
         logging.info(
