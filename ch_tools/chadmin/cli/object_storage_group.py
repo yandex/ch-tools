@@ -56,7 +56,7 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     default="",
     help=(
         "Prefix of object name used while listing bucket. By default its value is attempted to parse "
-        "from endpoint in clickhouse S3 disk config"
+        "from endpoint in clickhouse S3 disk config. If there is no trailing slash it will be added automatically."
     ),
 )
 @option(
