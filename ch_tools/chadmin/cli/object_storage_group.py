@@ -158,14 +158,15 @@ def clean_command(
         )
     except Exception as e:
         error_msg = str(e)
+        raise e
+    finally:
+        state = OrphanedObjectsState(total_size, error_msg)
 
-    state = OrphanedObjectsState(total_size, error_msg)
+        if store_state_zk_path:
+            _store_state_zk_save(ctx, store_state_zk_path, state)
 
-    if store_state_zk_path:
-        _store_state_zk_save(ctx, store_state_zk_path, state)
-
-    if store_state_local:
-        _store_state_local_save(ctx, state)
+        if store_state_local:
+            _store_state_local_save(ctx, state)
 
     _print_response(ctx, dry_run, deleted, total_size)
 
