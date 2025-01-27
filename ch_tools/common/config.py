@@ -78,6 +78,17 @@ DEFAULT_CONFIG = {
             },
         },
     },
+    "perfomance_diagnoctics_group": {
+        "clickhouse_settings_per_sample_type": {
+            "CPU": {
+                "query_profiler_cpu_time_period_ns": 10000,
+            },
+            "MemorySample": {
+                "memory_profiler_sample_probability": 1,
+                "max_untracked_memory": 1,
+            },
+        },
+    },
     # Monitoring settings. It applies to the both ch-monitoring and keeper-monitoring tools.
     "monitoring": {
         "output": {

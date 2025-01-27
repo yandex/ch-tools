@@ -37,6 +37,9 @@ from ch_tools.chadmin.cli.object_storage_group import object_storage_group
 from ch_tools.chadmin.cli.part_group import part_group
 from ch_tools.chadmin.cli.part_log_group import part_log_group
 from ch_tools.chadmin.cli.partition_group import partition_group
+from ch_tools.chadmin.cli.perfomance_diagnoctics_group import (
+    perfomance_dianostics_group,
+)
 from ch_tools.chadmin.cli.process_group import process_group
 from ch_tools.chadmin.cli.query_log_group import query_log_group
 from ch_tools.chadmin.cli.replica_group import replica_group
@@ -140,6 +143,7 @@ groups: List[Any] = [
     thread_log_group,
     wait_group,
     zookeeper_group,
+    perfomance_dianostics_group,
 ]
 
 section = cloup.Section("Commands")
