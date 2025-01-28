@@ -7,14 +7,15 @@ Feature: chadmin performance diagnostics.
     And a working clickhouse on clickhouse01
     And a working clickhouse on clickhouse02
 
+  @require_version_23.8
   Scenario: Sanity checks:
     When we execute command on clickhouse01
     """
-    chadmin perfomance-dianostics collect-flamegraph-by-interval --trace-type CPU
+    chadmin flamegraph collect-by-interval --trace-type CPU
     """
     And we execute command on clickhouse01
     """
-    chadmin perfomance-dianostics setup-ch-settings-for-flamegraph --trace-type MemorySample
+    chadmin flamegraph setup --trace-type MemorySample
     """
     And we execute command on clickhouse01
     """
@@ -22,10 +23,10 @@ Feature: chadmin performance diagnostics.
     """
     And we execute command on clickhouse01
     """
-    chadmin perfomance-dianostics collect-flame-graph-by-query-id --query-id 123 --trace-type MemorySample
+    chadmin flamegraph collect-by-query --query-id 123 --trace-type MemorySample
     """
     And we execute command on clickhouse01
     """
-    chadmin perfomance-dianostics remove-ch-settings-for-flamegraph --trace-type MemorySample
+    chadmin flamegraph cleanup --trace-type MemorySample
     """
     Then it completes successfully

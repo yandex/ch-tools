@@ -12,18 +12,18 @@ from ch_tools.common.cli.parameters import StringParamType, TimeSpanParamType
 from ch_tools.common.clickhouse.config.utils import dump_config
 
 
-@group("perfomance-dianostics", cls=Chadmin)
-def perfomance_dianostics_group():
+@group("flamegraph", cls=Chadmin)
+def flamegraph_group():
     """
     Commands for collecting the flamegraph.
 
     There are two options how to collect traces:
-    1. Use `collect-flamegraph-by-interval` to collect the ch-server-wide data.
+    1. Use `collect-by-interval` to collect the ch-server-wide data.
     2. Use 4 steps:
-        * run setup-ch-settings-for-flamegraph to setup all required settings for collecting.
+        * run `setup` to setup all required settings for collecting.
         * run the interesting query in clickhouse and keep it's query_id
-        * run `collect-flame-graph-by-query-id` to collect flamegraph for single query.
-        * run `remove-ch-settings-for-flamegraph` to remove temp settings. It's important!
+        * run `collect-by-query` to collect flamegraph for single query.
+        * run `cleanup` to remove temp settings. It's important!
           Otherwise, traces will continue to be collected at a high sampling rate, which will increase the load.
 
     To render the image with flamegraph, [flamegraph.pl utility](https://github.com/brendangregg/FlameGraph) can be used.
@@ -39,7 +39,7 @@ FLAMEGRAPH_CLICKHOUSE_CONFIG_PATH_TEMPLATE = (
 SYSTEM_RELOAD_CONFIG_QUERY = "SYSTEM RELOAD CONFIG"
 
 
-@perfomance_dianostics_group.command("collect-flamegraph-by-interval")
+@flamegraph_group.command("collect-by-interval")
 @pass_context
 @option(
     "--trace-type",
@@ -52,11 +52,14 @@ SYSTEM_RELOAD_CONFIG_QUERY = "SYSTEM RELOAD CONFIG"
     "collect_inverval",
     type=TimeSpanParamType(),
     default="10s",
-    help="How many time collec traces.",
+    help="How many time collect traces.",
 )
-def collect_flamegraph_by_interval(
+def collect_by_interval(
     ctx: Context, trace_type: str, collect_inverval: timedelta
 ) -> None:
+    """
+    Collect flamegraph by time interval.
+    """
     with ClickhouseTempFlamegraphConfigs(ctx, trace_type):
         if collect_inverval:
             start_event_time = execute_query(ctx, "SELECT now()", format_=None)
@@ -67,7 +70,7 @@ def collect_flamegraph_by_interval(
             )
 
 
-@perfomance_dianostics_group.command("setup-ch-settings-for-flamegraph")
+@flamegraph_group.command("setup")
 @pass_context
 @option(
     "--trace-type",
@@ -76,10 +79,13 @@ def collect_flamegraph_by_interval(
     help="Trace type to build the flamegraph. Required here to setup needed settings for the ch-server.",
 )
 def setup_clickhouse_settings_flamegraph(ctx: Context, trace_type: str) -> None:
+    """
+    Setup clickhouse config for collecting flamegraph.
+    """
     setup_flamegraph_settings(ctx, trace_type)
 
 
-@perfomance_dianostics_group.command("remove-ch-settings-for-flamegraph")
+@flamegraph_group.command("cleanup")
 @pass_context
 @option(
     "--trace-type",
@@ -87,11 +93,14 @@ def setup_clickhouse_settings_flamegraph(ctx: Context, trace_type: str) -> None:
     type=Choice(SUPPORTED_SAMLE_TYPES),
     help="Trace type to build the flamegraph.",
 )
-def remove_clickhouse_settings_flamegraph(ctx: Context, trace_type: str) -> None:
+def cleanup_clickhouse_settings_flamegraph(ctx: Context, trace_type: str) -> None:
+    """
+    Remove clickhouse config for collecting flamegraph.
+    """
     remove_flamegraph_settings(ctx, trace_type)
 
 
-@perfomance_dianostics_group.command("collect-flame-graph-by-query-id")
+@flamegraph_group.command("collect-by-query")
 @pass_context
 @option(
     "--trace-type",
@@ -105,9 +114,10 @@ def remove_clickhouse_settings_flamegraph(ctx: Context, trace_type: str) -> None
     type=StringParamType(),
     help="Query_id to build the flamegraph .",
 )
-def collect_flame_graph_by_query_id(
-    ctx: Context, trace_type: str, query_id: str
-) -> None:
+def collect_by_query(ctx: Context, trace_type: str, query_id: str) -> None:
+    """
+    Collects flamegraph for specific query-id.
+    """
     collect_flamegraph(ctx, trace_type, query_id=query_id)
 
 
