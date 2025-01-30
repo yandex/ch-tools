@@ -78,7 +78,7 @@ DEFAULT_CONFIG = {
             },
         },
     },
-    "perfomance_diagnoctics_group": {
+    "flamegraph": {
         "clickhouse_settings_per_sample_type": {
             "CPU": {
                 "query_profiler_cpu_time_period_ns": 10000,

@@ -25,6 +25,7 @@ from ch_tools.chadmin.cli.database_group import database_group
 from ch_tools.chadmin.cli.diagnostics_command import diagnostics_command
 from ch_tools.chadmin.cli.dictionary_group import dictionary_group
 from ch_tools.chadmin.cli.disk_group import disks_group
+from ch_tools.chadmin.cli.flamegraph_group import flamegraph_group
 from ch_tools.chadmin.cli.list_async_metrics_command import list_async_metrics_command
 from ch_tools.chadmin.cli.list_events_command import list_events_command
 from ch_tools.chadmin.cli.list_functions_command import list_functions_command
@@ -37,7 +38,6 @@ from ch_tools.chadmin.cli.object_storage_group import object_storage_group
 from ch_tools.chadmin.cli.part_group import part_group
 from ch_tools.chadmin.cli.part_log_group import part_log_group
 from ch_tools.chadmin.cli.partition_group import partition_group
-from ch_tools.chadmin.cli.perfomance_diagnoctics_group import flamegraph_group
 from ch_tools.chadmin.cli.process_group import process_group
 from ch_tools.chadmin.cli.query_log_group import query_log_group
 from ch_tools.chadmin.cli.replica_group import replica_group
