@@ -25,6 +25,7 @@ from ch_tools.chadmin.cli.database_group import database_group
 from ch_tools.chadmin.cli.diagnostics_command import diagnostics_command
 from ch_tools.chadmin.cli.dictionary_group import dictionary_group
 from ch_tools.chadmin.cli.disk_group import disks_group
+from ch_tools.chadmin.cli.flamegraph_group import flamegraph_group
 from ch_tools.chadmin.cli.list_async_metrics_command import list_async_metrics_command
 from ch_tools.chadmin.cli.list_events_command import list_events_command
 from ch_tools.chadmin.cli.list_functions_command import list_functions_command
@@ -140,6 +141,7 @@ groups: List[Any] = [
     thread_log_group,
     wait_group,
     zookeeper_group,
+    flamegraph_group,
 ]
 
 section = cloup.Section("Commands")
