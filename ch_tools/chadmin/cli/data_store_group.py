@@ -278,7 +278,9 @@ def remove_orphaned_sql_object_metadata(data):
     data["deleted"] = "Yes"
 
 
-def remove_orphaned_sql_object_full(data, disk, path_to_disk, ch_version, disks_config_path):
+def remove_orphaned_sql_object_full(
+    data, disk, path_to_disk, ch_version, disks_config_path
+):
 
     path = data["path"]
 
@@ -286,7 +288,10 @@ def remove_orphaned_sql_object_full(data, disk, path_to_disk, ch_version, disks_
         raise RuntimeError(f"Path {path} on fs does not math with disk {disk}")
     relative_path_on_disk = path[len(path_to_disk) + 1 :]
     retcode, stderr = remove_from_ch_disk(
-        disk=disk, path=relative_path_on_disk, ch_version=ch_version, disk_config_path=disks_config_path
+        disk=disk,
+        path=relative_path_on_disk,
+        ch_version=ch_version,
+        disk_config_path=disks_config_path,
     )
     if retcode:
         raise RuntimeError(

@@ -7,7 +7,7 @@ from ch_tools.chadmin.internal.utils import clickhouse_client
 
 
 def validate_version(version: str) -> None:
-    pattern = r'^\d{2}\.\d{2}\.\d+\.\d+$'
+    pattern = r"^\d{2}\.\d{2}\.\d+\.\d+$"
 
     assert not re.match(pattern, version), f"version={version} has broken format"
 
