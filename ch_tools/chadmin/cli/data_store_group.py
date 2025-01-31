@@ -21,6 +21,7 @@ from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
     S3ObjectLocalInfo,
     S3ObjectLocalMetaData,
 )
+from ch_tools.chadmin.internal.system import get_version
 from ch_tools.chadmin.internal.utils import execute_query, remove_from_disk
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
@@ -258,6 +259,7 @@ def cleanup_data_dir(
                         "disk": disk,
                         "path_to_disk": path_to_disk,
                         "disks_config_path": disk_config_path,
+                        "ch_version": get_version(ctx),
                     },
                 )
                 tasks.append(task)
@@ -276,7 +278,7 @@ def remove_orphaned_sql_object_metadata(data):
     data["deleted"] = "Yes"
 
 
-def remove_orphaned_sql_object_full(data, disk, path_to_disk, disks_config_path):
+def remove_orphaned_sql_object_full(data, disk, path_to_disk, ch_version, disks_config_path):
 
     path = data["path"]
 
@@ -284,7 +286,7 @@ def remove_orphaned_sql_object_full(data, disk, path_to_disk, disks_config_path)
         raise RuntimeError(f"Path {path} on fs does not math with disk {disk}")
     relative_path_on_disk = path[len(path_to_disk) + 1 :]
     retcode, stderr = remove_from_ch_disk(
-        disk, relative_path_on_disk, disks_config_path
+        disk=disk, path=relative_path_on_disk, ch_version=ch_version, disk_config_path=disks_config_path
     )
     if retcode:
         raise RuntimeError(
