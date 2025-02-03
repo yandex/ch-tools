@@ -173,9 +173,9 @@ def _check_backup_age(
     Check that the last backup is not too old.
     """
     checking_backup: Dict[str, str] = {}
-    for i, backup in enumerate(backups):
+    for backup in backups:
         state = backup["state"]
-        if state == "created" or (state == "creating" and i == 0):
+        if state == "created":
             checking_backup = backup
             break
 
@@ -191,10 +191,7 @@ def _check_backup_age(
     else:
         return Result(OK)
 
-    if checking_backup["state"] == "creating":
-        message = f"Last backup was started {backup_age.days} days ago"
-    else:
-        message = f"Last backup was created {backup_age.days} days ago"
+    message = f"Last backup was created {backup_age.days} days ago"
 
     return Result(status, message)
 
