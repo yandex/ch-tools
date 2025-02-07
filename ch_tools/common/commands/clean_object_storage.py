@@ -163,31 +163,55 @@ def _clean_object_storage(
 
     deleted = 0
     total_size = 0
-    with TemporaryFile() as keys_file:
-        timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
-        with ch_client.query(
-            antijoin_query,
-            timeout=timeout,
-            settings={"receive_timeout": timeout},
-            stream=True,
-            format_="TabSeparated",
-        ) as resp:
-            # Save response to the file by chunks
-            for chunk in resp.iter_content(chunk_size=8192):
-                keys_file.write(chunk)
-
-        keys_file.seek(0)  # rewind file pointer to the beginning
-
-        keys = (
-            ObjListItem.from_tab_separated(line.decode().strip()) for line in keys_file
-        )
-        deleted, total_size = cleanup_s3_object_storage(disk_conf, keys, dry_run)
-
-    logging.info(
-        f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
-    )
+    timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
+    with ch_client.query(
+        antijoin_query,
+        timeout=timeout,
+        settings={"receive_timeout": timeout},
+        stream=True,
+        format_="TabSeparated",
+    ) as resp:
+        last_line = ""
+        for chunk in resp.iter_content(chunk_size=64 * 1024 * 1024):
+            keys, last_line = _split_response_to_keys(chunk, last_line)
+            deleted, total_size = cleanup_s3_object_storage(disk_conf, keys, dry_run)
+            logging.info(
+                f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
+            )
 
     return deleted, total_size
+
+
+def _split_response_to_keys(
+    chunk: bytes, last_line: str
+) -> tuple[List[ObjListItem], str]:
+    """
+    Splits raw bytes to pairs of path and size.
+    Saves last line if it is not full yet and reuses it in the next call.
+    Bytes should look like this: path\tsize\n.....\n
+    """
+    keys = chunk.decode()
+    last_line_is_full = keys.endswith("\n")
+    parsed_keys = []
+    lines = keys.splitlines()
+
+    for i, line in enumerate(lines):
+        if i == len(lines) - 1:
+            last_line = last_line + line
+        elif i == 0:
+            key = ObjListItem.from_tab_separated(last_line + line)
+            parsed_keys.append(key)
+            last_line = ""
+        else:
+            key = ObjListItem.from_tab_separated(line)
+            parsed_keys.append(key)
+
+    if last_line and last_line_is_full:
+        key = ObjListItem.from_tab_separated(last_line)
+        parsed_keys.append(key)
+        last_line = ""
+
+    return parsed_keys, last_line
 
 
 def _traverse_object_storage(
