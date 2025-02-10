@@ -9,6 +9,7 @@ import yaml
 from behave import given, then, when
 from hamcrest import assert_that, contains_string, equal_to, is_not, matches_regexp
 from modules import docker
+from modules.clickhouse import get_version
 from modules.utils import merge
 
 
@@ -121,3 +122,15 @@ def working_http(context):
     host, port = docker.get_exposed_port(container, 8080)
     response = requests.get(f"http://{host}:{port}/")
     assert response.text == "OK", f'expected "OK", got "{response.text}"'
+
+
+@given("installed clickhouse-tools config with version on {node:w}")
+def install_ch_tools_config_with_version(context, node):
+    version = get_version(context, node)
+    container = docker.get_container(context, node)
+    config_data = yaml.dump({"clickhouse": {"version": version["data"][0][0]}})
+
+    container.exec_run(["bash", "-c", "mkdir /etc/clickhouse-tools"])
+    container.exec_run(
+        ["bash", "-c", f"echo '{config_data}' > /etc/clickhouse-tools/config.yaml"]
+    )

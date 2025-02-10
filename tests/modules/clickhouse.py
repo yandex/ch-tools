@@ -65,7 +65,7 @@ def get_response(context: ContextT, node: str, query: str) -> Tuple[int, str]:
         return 500, "Workaround for in-progress op"
 
 
-def get_version(context: ContextT, node: str) -> str:
+def get_version(context: ContextT, node: str) -> dict:
     """
     Get ClickHouse version.
     """

@@ -19,6 +19,7 @@ S3_LOG_CONFIG = {
 
 DEFAULT_CONFIG = {
     "clickhouse": {
+        "version": None,
         "host": socket.getfqdn(),
         "protocol": "https",
         "insecure": False,
