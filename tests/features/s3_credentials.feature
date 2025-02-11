@@ -54,3 +54,26 @@ Feature: ch_s3_credentials tool
     Examples:
     | header_tag_name |
     | header          |
+
+    Scenario: Offline token update.
+    Given installed clickhouse-tools config with version on clickhouse01
+    When we execute command on clickhouse01
+    """
+    ch-monitoring --setting cloud.metadata_service_endpoint http://http_mock01:8080 s3-credentials-config --missing
+    """
+    When we execute command on clickhouse01
+    """
+    supervisorctl stop clickhouse-server
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --setting cloud.metadata_service_endpoint http://http_mock01:8080 s3-credentials-config update --endpoint=storage.com
+    """
+    And we execute command on clickhouse01
+    """
+    ch-monitoring --setting cloud.metadata_service_endpoint http://http_mock01:8080 s3-credentials-config --present
+    """
+    Then we get response
+    """
+    0;OK
+    """

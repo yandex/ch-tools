@@ -16,6 +16,10 @@ def get_version(ctx: Context) -> str:
     """
     Get ClickHouse version.
     """
+
+    ch_version_from_config = ctx.obj["config"]["clickhouse"]["version"]
+    if ch_version_from_config:
+        return ch_version_from_config
     return clickhouse_client(ctx).get_clickhouse_version()
 
 
