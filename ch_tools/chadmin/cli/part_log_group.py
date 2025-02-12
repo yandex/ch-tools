@@ -45,6 +45,16 @@ def part_log_group():
     "--max-time", help="Filter out log records created after the specified timestamp."
 )
 @option(
+    "--event-type",
+    help="Filter in log records to output by the specified event type."
+    " Multiple values can be specified through a comma.",
+)
+@option(
+    "--exclude-event-type",
+    help="Filter out log records to output by the specified event type."
+    " Multiple values can be specified through a comma.",
+)
+@option(
     "--failed/--completed",
     "failed",
     default=None,
