@@ -167,12 +167,13 @@ def _clean_object_storage(
     with ch_client.query(
         antijoin_query,
         timeout=timeout,
-        settings={"receive_timeout": timeout},
+        settings={"receive_timeout": timeout, "max_execution_time": 0},
         stream=True,
         format_="TabSeparated",
     ) as resp:
         last_line = ""
-        for chunk in resp.iter_content(chunk_size=64 * 1024 * 1024):
+        # Setting chunk_size to 10MB, but usually incoming chunks are not larger than 1MB
+        for chunk in resp.iter_content(chunk_size=10 * 1024 * 1024):
             keys, last_line = _split_response_to_keys(chunk, last_line)
             deleted, total_size = cleanup_s3_object_storage(disk_conf, keys, dry_run)
             logging.info(
