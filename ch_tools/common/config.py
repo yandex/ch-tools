@@ -84,6 +84,9 @@ DEFAULT_CONFIG = {
             "CPU": {
                 "query_profiler_cpu_time_period_ns": 10000,
             },
+            "Real": {
+                "query_profiler_real_time_period_ns": 10000,
+            },
             "MemorySample": {
                 "memory_profiler_sample_probability": 1,
                 "max_untracked_memory": 1,

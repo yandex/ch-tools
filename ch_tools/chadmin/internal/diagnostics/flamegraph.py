@@ -8,8 +8,7 @@ from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config.utils import dump_config
 
-## TODO: Handle other types of samples.
-SUPPORTED_SAMLE_TYPES = ["CPU", "MemorySample"]
+SUPPORTED_SAMPLE_TYPES = ["CPU", "Real", "MemorySample"]
 FLAMEGRAPH_CLICKHOUSE_CONFIG_PATH_TEMPLATE = (
     "/etc/clickhouse-server/users.d/{trace_type}_flamegraph_config.xml"
 )
@@ -30,7 +29,7 @@ class ClickhouseTempFlamegraphConfigs:
 
 def setup_flamegraph_settings(ctx: Context, trace_type: str) -> None:
 
-    if trace_type not in SUPPORTED_SAMLE_TYPES:
+    if trace_type not in SUPPORTED_SAMPLE_TYPES:
         raise NotImplementedError(f"Not implemented for type {trace_type}")
 
     config = ctx.obj["config"]["flamegraph"]["clickhouse_settings_per_sample_type"]
@@ -50,7 +49,7 @@ def remove_flamegraph_settings(
     ctx: Context, trace_type_to_remove: Optional[str] = None
 ) -> None:
     to_remove = [
-        trace_type_to_remove if trace_type_to_remove else SUPPORTED_SAMLE_TYPES
+        trace_type_to_remove if trace_type_to_remove else SUPPORTED_SAMPLE_TYPES
     ]
     for trace_type in to_remove:
         try:
