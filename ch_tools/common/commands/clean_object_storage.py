@@ -1,7 +1,6 @@
 import os
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from tempfile import TemporaryFile
 from typing import List, Optional, Tuple
 
 import click
@@ -185,7 +184,7 @@ def _clean_object_storage(
 
 def _split_response_to_keys(
     chunk: bytes, last_line: str
-) -> tuple[List[ObjListItem], str]:
+) -> Tuple[List[ObjListItem], str]:
     """
     Splits raw bytes to pairs of path and size.
     Saves last line if it is not full yet and reuses it in the next call.
