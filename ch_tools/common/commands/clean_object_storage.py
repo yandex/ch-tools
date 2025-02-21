@@ -30,6 +30,7 @@ INSERT_BATCH_SIZE = 500
 # And for metadata for which object is not found in S3.
 # These objects are not counted if their last modified time fall in the interval from the moment of starting analyzing.
 DEFAULT_GUARD_INTERVAL = "24h"
+KEYS_BATCH_SIZE = 100_000
 
 
 class CleanScope(str, Enum):
@@ -170,48 +171,26 @@ def _clean_object_storage(
         stream=True,
         format_="TabSeparated",
     ) as resp:
-        last_line = ""
+        keys = []
         # Setting chunk_size to 10MB, but usually incoming chunks are not larger than 1MB
-        for chunk in resp.iter_content(chunk_size=10 * 1024 * 1024):
-            keys, last_line = _split_response_to_keys(chunk, last_line)
+        for line in resp.iter_lines(chunk_size=10 * 1024 * 1024):
+            keys.append(ObjListItem.from_tab_separated(line.decode()))
+            if len(keys) == KEYS_BATCH_SIZE:
+                deleted, total_size = cleanup_s3_object_storage(
+                    disk_conf, keys, dry_run
+                )
+                logging.info(
+                    f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
+                )
+                keys.clear()
+
+        if keys:
             deleted, total_size = cleanup_s3_object_storage(disk_conf, keys, dry_run)
             logging.info(
                 f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
             )
 
     return deleted, total_size
-
-
-def _split_response_to_keys(
-    chunk: bytes, last_line: str
-) -> Tuple[List[ObjListItem], str]:
-    """
-    Splits raw bytes to pairs of path and size.
-    Saves last line if it is not full yet and reuses it in the next call.
-    Bytes should look like this: path\tsize\n.....\n
-    """
-    keys = chunk.decode()
-    last_line_is_full = keys.endswith("\n")
-    parsed_keys = []
-    lines = keys.splitlines()
-
-    for i, line in enumerate(lines):
-        if i == len(lines) - 1:
-            last_line = last_line + line
-        elif i == 0:
-            key = ObjListItem.from_tab_separated(last_line + line)
-            parsed_keys.append(key)
-            last_line = ""
-        else:
-            key = ObjListItem.from_tab_separated(line)
-            parsed_keys.append(key)
-
-    if last_line and last_line_is_full:
-        key = ObjListItem.from_tab_separated(last_line)
-        parsed_keys.append(key)
-        last_line = ""
-
-    return parsed_keys, last_line
 
 
 def _traverse_object_storage(
