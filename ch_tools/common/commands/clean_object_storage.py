@@ -15,7 +15,7 @@ from ch_tools.chadmin.internal.object_storage.s3_iterator import (
     s3_object_storage_iterator,
 )
 from ch_tools.chadmin.internal.system import match_ch_version
-from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.chadmin.internal.utils import chunked, execute_query
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
@@ -171,20 +171,13 @@ def _clean_object_storage(
         stream=True,
         format_="TabSeparated",
     ) as resp:
-        keys = []
         # Setting chunk_size to 10MB, but usually incoming chunks are not larger than 1MB
-        for line in resp.iter_lines(chunk_size=10 * 1024 * 1024):
-            keys.append(ObjListItem.from_tab_separated(line.decode()))
-            if len(keys) == KEYS_BATCH_SIZE:
-                deleted, total_size = cleanup_s3_object_storage(
-                    disk_conf, keys, dry_run
-                )
-                logging.info(
-                    f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
-                )
-                keys.clear()
-
-        if keys:
+        for lines in chunked(
+            resp.iter_lines(chunk_size=10 * 1024 * 1024), KEYS_BATCH_SIZE
+        ):
+            keys = (
+                ObjListItem.from_tab_separated(line.decode().strip()) for line in lines
+            )
             deleted, total_size = cleanup_s3_object_storage(disk_conf, keys, dry_run)
             logging.info(
                 f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
