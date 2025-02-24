@@ -1,7 +1,6 @@
 import os
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from tempfile import TemporaryFile
 from typing import List, Optional, Tuple
 
 import click
@@ -16,7 +15,7 @@ from ch_tools.chadmin.internal.object_storage.s3_iterator import (
     s3_object_storage_iterator,
 )
 from ch_tools.chadmin.internal.system import match_ch_version
-from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.chadmin.internal.utils import chunked, execute_query
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
@@ -31,6 +30,7 @@ INSERT_BATCH_SIZE = 500
 # And for metadata for which object is not found in S3.
 # These objects are not counted if their last modified time fall in the interval from the moment of starting analyzing.
 DEFAULT_GUARD_INTERVAL = "24h"
+KEYS_BATCH_SIZE = 100_000
 
 
 class CleanScope(str, Enum):
@@ -163,29 +163,25 @@ def _clean_object_storage(
 
     deleted = 0
     total_size = 0
-    with TemporaryFile() as keys_file:
-        timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
-        with ch_client.query(
-            antijoin_query,
-            timeout=timeout,
-            settings={"receive_timeout": timeout},
-            stream=True,
-            format_="TabSeparated",
-        ) as resp:
-            # Save response to the file by chunks
-            for chunk in resp.iter_content(chunk_size=8192):
-                keys_file.write(chunk)
-
-        keys_file.seek(0)  # rewind file pointer to the beginning
-
-        keys = (
-            ObjListItem.from_tab_separated(line.decode().strip()) for line in keys_file
-        )
-        deleted, total_size = cleanup_s3_object_storage(disk_conf, keys, dry_run)
-
-    logging.info(
-        f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
-    )
+    timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
+    with ch_client.query(
+        antijoin_query,
+        timeout=timeout,
+        settings={"receive_timeout": timeout, "max_execution_time": 0},
+        stream=True,
+        format_="TabSeparated",
+    ) as resp:
+        # Setting chunk_size to 10MB, but usually incoming chunks are not larger than 1MB
+        for lines in chunked(
+            resp.iter_lines(chunk_size=10 * 1024 * 1024), KEYS_BATCH_SIZE
+        ):
+            keys = (
+                ObjListItem.from_tab_separated(line.decode().strip()) for line in lines
+            )
+            deleted, total_size = cleanup_s3_object_storage(disk_conf, keys, dry_run)
+            logging.info(
+                f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
+            )
 
     return deleted, total_size
 
