@@ -1,4 +1,4 @@
-from typing import Any, List, Tuple
+from typing import Any, Iterator, List, Tuple
 
 import boto3
 from botocore.client import Config
@@ -12,7 +12,7 @@ BULK_DELETE_CHUNK_SIZE = 1000
 
 
 def cleanup_s3_object_storage(
-    disk: S3DiskConfiguration, keys: List[ObjListItem], dry_run: bool = False
+    disk: S3DiskConfiguration, keys: Iterator[ObjListItem], dry_run: bool = False
 ) -> Tuple[int, int]:
     s3 = boto3.resource(
         "s3",
