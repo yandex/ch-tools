@@ -390,6 +390,7 @@ Feature: ch-monitoring tool
     """
   
   Scenario: Check clickhouse orphaned objects with state-zk-path option
+    Given installed clickhouse-tools config with user on clickhouse01,clickhouse02
     When we execute command on clickhouse01
     """
     chadmin object-storage clean --dry-run --to-time 0h --keep-paths --store-state-zk-path /tmp/shard_1
@@ -438,6 +439,7 @@ Feature: ch-monitoring tool
     """
 
   Scenario: Check clickhouse orphaned objects with state-local option
+    Given installed clickhouse-tools config with user on clickhouse01,clickhouse02
     When we execute command on clickhouse01
     """
     chadmin object-storage clean --dry-run --to-time 0h --keep-paths --store-state-local

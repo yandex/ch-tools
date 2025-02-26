@@ -2,6 +2,7 @@ Feature: chadmin object-storage commands
 
   Background:
     Given default configuration
+    Given installed clickhouse-tools config with user on clickhouse01,clickhouse02
     And a working s3
     And a working zookeeper
     And a working clickhouse on clickhouse01
