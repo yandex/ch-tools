@@ -139,9 +139,7 @@ def _clean_object_storage(
             )
 
         replicas = ",".join(ClickhouseInfo.get_replicas(ctx))
-        remote_data_paths_table = (
-            f"{remote_clause}('{replicas}', {remote_data_paths_table})"
-        )
+        remote_data_paths_table = f"{remote_clause}('{replicas}', {remote_data_paths_table}, '{ch_client.user}', '{ch_client.password}')"
 
     settings = ""
     if match_ch_version(ctx, min_version="24.3"):
