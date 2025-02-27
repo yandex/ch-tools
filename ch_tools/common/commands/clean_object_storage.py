@@ -20,6 +20,7 @@ from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
+from ch_tools.common.utils import query_hide_password
 from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
 # Batch size for inserts in a listing table
@@ -121,6 +122,9 @@ def _clean_object_storage(
         _traverse_object_storage(ctx, listing_table, from_time, to_time, prefix)
 
     ch_client = clickhouse_client(ctx)
+    user_name = ch_client.user or ""
+    user_password = ch_client.password or ""
+
     remote_data_paths_table = "system.remote_data_paths"
 
     if clean_scope == CleanScope.CLUSTER:
@@ -139,7 +143,7 @@ def _clean_object_storage(
             )
 
         replicas = ",".join(ClickhouseInfo.get_replicas(ctx))
-        remote_data_paths_table = f"{remote_clause}('{replicas}', {remote_data_paths_table}, '{ch_client.user}', '{ch_client.password or ''}')"
+        remote_data_paths_table = f"{remote_clause}('{replicas}', {remote_data_paths_table}, '{user_name}', '{user_password}')"
 
     settings = ""
     if match_ch_version(ctx, min_version="24.3"):
@@ -152,7 +156,9 @@ def _clean_object_storage(
             AND object_table.disk_name = '{disk_conf.name}'
         {settings}
     """
-    logging.info("Antijoin query: {}", antijoin_query)
+    logging.info(
+        "Antijoin query: {}", query_hide_password(antijoin_query, user_password)
+    )
 
     if dry_run:
         logging.info("Counting orphaned objects...")
