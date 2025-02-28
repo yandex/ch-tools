@@ -22,8 +22,9 @@ LOAD_MONITOR_FLAG_PATH = "/tmp/load-monitor-userfault.flag"
 RESTORE_CONTEXT_PATH = "/tmp/ch_backup_restore_state.json"
 FAILED_PARTS_THRESHOLD = 10
 USERFAULT_ERRORS = [
-    "Disk quota exceeded",
     "NOT_ENOUGH_SPACE",
+    "Disk quota exceeded",
+    "No space left on device",
 ]
 
 
