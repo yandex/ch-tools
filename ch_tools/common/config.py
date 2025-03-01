@@ -153,13 +153,23 @@ DEFAULT_CONFIG = {
             "imdsv2": False,
         },
         "tls": {
+            "@disabled": False,
             "crit": 10,
             "warn": 30,
+        },
+        "backup": {
+            "@disabled": False,
+            "user_fault_errors": [
+                "NOT_ENOUGH_SPACE",
+                "Disk quota exceeded",
+                "No space left on device",
+            ],
         },
     },
     # Configuration of keeper-monitoring tool commands and options.
     "keeper-monitoring": {
         "tls": {
+            "@disabled": False,
             "crit": 10,
             "warn": 30,
         },

@@ -21,11 +21,6 @@ from ch_tools.common.result import CRIT, OK, WARNING, Result
 LOAD_MONITOR_FLAG_PATH = "/tmp/load-monitor-userfault.flag"
 RESTORE_CONTEXT_PATH = "/tmp/ch_backup_restore_state.json"
 FAILED_PARTS_THRESHOLD = 10
-USERFAULT_ERRORS = [
-    "NOT_ENOUGH_SPACE",
-    "Disk quota exceeded",
-    "No space left on device",
-]
 
 
 @command("backup")
@@ -256,7 +251,7 @@ def _suppress_if_required(
         result.code = WARNING
         result.message += " (suppressed by low ClickHouse uptime)"
 
-    if _is_backup_failed_by_userfault_error(backups):
+    if _is_backup_failed_by_user_fault_error(ctx, backups):
         result.code = WARNING
         result.message += " (suppressed due to user fault errors)"
 
@@ -288,7 +283,10 @@ def _merge_results(*results: Result) -> Result:
     return merged_result
 
 
-def _is_backup_failed_by_userfault_error(backups: Sequence[Dict]) -> bool:
+def _is_backup_failed_by_user_fault_error(
+    ctx: Context,
+    backups: Sequence[Dict],
+) -> bool:
     failed_backup = None
     for i, backup in enumerate(backups):
         state = backup["state"]
@@ -301,5 +299,8 @@ def _is_backup_failed_by_userfault_error(backups: Sequence[Dict]) -> bool:
     if not failed_backup:
         return False
 
+    monitoring_config = ctx.obj["config"]["ch-monitoring"]
+    user_fault_errors = monitoring_config["backup"]["user_fault_errors"]
+
     exception_msg = failed_backup.get("exception") or ""
-    return any(value in exception_msg for value in USERFAULT_ERRORS)
+    return any(value in exception_msg for value in user_fault_errors)
