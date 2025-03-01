@@ -1,12 +1,14 @@
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Sequence
 
+from click import Command, Context
 from pytest import mark
 
+from ch_tools.common.config import DEFAULT_CONFIG
 from ch_tools.common.result import CRIT, OK, WARNING
 from ch_tools.monrun_checks.ch_backup import (
     _check_backup_age,
-    _is_backup_failed_by_userfault_error,
+    _is_backup_failed_by_user_fault_error,
 )
 
 
@@ -68,10 +70,11 @@ from ch_tools.monrun_checks.ch_backup import (
         ),
     ],
 )
-def test_is_backup_failed_by_userfault_error(
+def test_is_backup_failed_by_user_fault_error(
     backups: Sequence[Dict], result: bool
 ) -> None:
-    assert _is_backup_failed_by_userfault_error(backups) == result
+    ctx = Context(Command("backup"), obj=dict(config=DEFAULT_CONFIG))
+    assert _is_backup_failed_by_user_fault_error(ctx, backups) == result
 
 
 @mark.parametrize(
