@@ -321,7 +321,7 @@ max-statements=65
 min-public-methods=2
 
 # Maximum number of positional arguments for function / method.
-max-positional-arguments = 18
+max-positional-arguments = 20
 
 
 [EXCEPTIONS]

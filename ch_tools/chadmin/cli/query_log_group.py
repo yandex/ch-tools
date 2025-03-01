@@ -62,7 +62,16 @@ def get_query_command(ctx, **kwargs):
     default=None,
     help="Output only log records on failed / successful part operations.",
 )
-@option("--error", help="Filter log records to output by error pattern.")
+@option(
+    "--error",
+    "error_pattern",
+    help="Filter log records to output by error pattern.",
+)
+@option(
+    "--exclude-error",
+    "exclude_error_pattern",
+    help="Filter log records to not output by error pattern.",
+)
 @option("--client", help="Filter log records to output by client.")
 @option(
     "--is-initial-query",
@@ -287,7 +296,8 @@ def get_queries(
     query_id=None,
     query_pattern=None,
     exclude_query_pattern=None,
-    error=None,
+    error_pattern=None,
+    exclude_error_pattern=None,
     min_date=None,
     max_date=None,
     min_time=None,
@@ -380,8 +390,11 @@ def get_queries(
         {% elif is_initial_query is false -%}
           AND is_initial_query = 0
         {% endif -%}
-        {% if error -%}
-          AND lower(exception) LIKE lower('{{ error }}')
+        {% if error_pattern -%}
+          AND lower(exception) LIKE lower('{{ error_pattern }}')
+        {% endif -%}
+        {% if exclude_error_pattern -%}
+          AND lower(exception) NOT LIKE lower('{{ exclude_error_pattern }}')
         {% endif -%}
         {% if not query_id -%}
         ORDER BY {{ order_by }} DESC
@@ -398,7 +411,8 @@ def get_queries(
         query_id=query_id,
         query_pattern=query_pattern,
         exclude_query_pattern=exclude_query_pattern,
-        error=error,
+        error_pattern=error_pattern,
+        exclude_error_pattern=exclude_error_pattern,
         min_date=min_date,
         max_date=max_date,
         min_time=min_time,
