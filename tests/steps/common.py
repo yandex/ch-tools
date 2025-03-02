@@ -136,17 +136,14 @@ def install_ch_tools_config_with_version(context, node):
     )
 
 
-@given("installed clickhouse-tools config with user on {nodes}")
-def install_ch_tools_config_with_user(context, nodes):
+@given("clickhouse-tools configuration on {nodes}")
+def clickhouse_tools_configuration(context, nodes):
     nodes_list = nodes.split(",")
-    user = "_admin"
-    password = ""
+    conf = context.text
 
     for node in nodes_list:
         container = docker.get_container(context, node)
-        config_data = yaml.dump({"clickhouse": {"user": user, "password": password}})
-
         container.exec_run(["bash", "-c", "mkdir /etc/clickhouse-tools"])
         container.exec_run(
-            ["bash", "-c", f"echo '{config_data}' > /etc/clickhouse-tools/config.yaml"]
+            ["bash", "-c", f"echo '{conf}' > /etc/clickhouse-tools/config.yaml"]
         )
