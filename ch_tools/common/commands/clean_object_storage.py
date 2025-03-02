@@ -18,9 +18,9 @@ from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.utils import chunked, execute_query
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
+from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
-from ch_tools.common.utils import query_hide_password
 from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
 # Batch size for inserts in a listing table
@@ -149,16 +149,17 @@ def _clean_object_storage(
     if match_ch_version(ctx, min_version="24.3"):
         settings = "SETTINGS traverse_shadow_remote_data_paths=1"
 
-    antijoin_query = f"""
+    antijoin_query = Query(
+        f"""
         SELECT obj_path, obj_size FROM {listing_table} AS object_storage
           LEFT ANTI JOIN {remote_data_paths_table} AS object_table
           ON object_table.remote_path = object_storage.obj_path
             AND object_table.disk_name = '{disk_conf.name}'
         {settings}
-    """
-    logging.info(
-        "Antijoin query: {}", query_hide_password(antijoin_query, user_password)
+    """,
+        user_password,
     )
+    logging.info("Antijoin query: {}", antijoin_query.for_logging())
 
     if dry_run:
         logging.info("Counting orphaned objects...")
