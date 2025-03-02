@@ -172,7 +172,3 @@ def update_by_key_path(object_, key_path, value):
                 _update(obj[key], path, value, current_path_str)
 
     _update(object_, key_path.split("."), value, "")
-
-
-def query_hide_password(query: str, password: str) -> str:
-    return query.replace(password, "*****")
