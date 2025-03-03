@@ -307,6 +307,8 @@ def list_part_log(
     max_date=None,
     min_time=None,
     max_time=None,
+    event_type=None,
+    exclude_event_type=None,
     failed=None,
     order_by=None,
     limit=None,
@@ -379,6 +381,12 @@ def list_part_log(
         {% if max_time %}
           AND event_time <= toDateTime('{{ max_time }}')
         {% endif %}
+        {% if event_type %}
+          AND event_type::text {{ format_str_match(event_type) }}
+        {% endif %}
+        {% if exclude_event_type %}
+          AND event_type::text NOT {{ format_str_match(exclude_event_type) }}
+        {% endif %}
         {% if failed is true -%}
           AND exception != ''
         {% elif failed is false -%}
@@ -401,6 +409,8 @@ def list_part_log(
         max_date=max_date,
         min_time=min_time,
         max_time=max_time,
+        event_type=event_type,
+        exclude_event_type=exclude_event_type,
         order_by=order_by,
         failed=failed,
         limit=limit,
