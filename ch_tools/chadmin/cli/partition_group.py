@@ -1,8 +1,8 @@
 import json
 from collections import OrderedDict
 
-from cloup import Choice, group, option, option_group, pass_context
-from cloup.constraints import If, IsSet, RequireAtLeast, RequireExactly
+from cloup import Choice, constraint, group, option, option_group, pass_context
+from cloup.constraints import AnySet, If, IsSet, RequireAtLeast, RequireExactly
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.partition import (
@@ -110,6 +110,17 @@ def partition_group():
 @option("--order-by", type=Choice(["size", "parts", "rows"]), help="Sorting order.")
 @option(
     "-l", "--limit", type=int, help="Limit the max number of objects in the output."
+)
+@constraint(
+    If(
+        AnySet(
+            "min_replication_task_postpone_count",
+            "max_replication_task_postpone_count",
+            "replication_task_exception",
+        ),
+        then=RequireExactly(1),
+    ),
+    ["has_replication_tasks"],
 )
 @pass_context
 def list_partitions_command(ctx, **kwargs):
@@ -282,6 +293,17 @@ def attach_partitions_command(
         type=str,
         help="Use list of partitions from the file. Example 'SELECT database, table, partition_id ... FORMAT JSON' > file && chadmin partition detach --use-partition-list-from-json <file>.",
     ),
+    constraint(
+        If(
+            AnySet(
+                "min_replication_task_postpone_count",
+                "max_replication_task_postpone_count",
+                "replication_task_exception",
+            ),
+            then=RequireExactly(1),
+        ),
+        ["has_replication_tasks"],
+    ),
     constraint=If(
         IsSet("use_partition_list_from_json"),
         then=RequireExactly(1),
@@ -425,6 +447,17 @@ def detach_partitions_command(
         default=None,
         type=str,
         help="Use list of partitions from the file. Example 'SELECT database, table, partition_id ... FORMAT JSON' > file && chadmin partition rettach --use-partition-list-from-json <file>.",
+    ),
+    constraint(
+        If(
+            AnySet(
+                "min_replication_task_postpone_count",
+                "max_replication_task_postpone_count",
+                "replication_task_exception",
+            ),
+            then=RequireExactly(1),
+        ),
+        ["has_replication_tasks"],
     ),
     constraint=If(
         IsSet("use_partition_list_from_json"),
