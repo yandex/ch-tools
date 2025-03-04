@@ -134,3 +134,16 @@ def install_ch_tools_config_with_version(context, node):
     container.exec_run(
         ["bash", "-c", f"echo '{config_data}' > /etc/clickhouse-tools/config.yaml"]
     )
+
+
+@given("clickhouse-tools configuration on {nodes}")
+def clickhouse_tools_configuration(context, nodes):
+    nodes_list = nodes.split(",")
+    conf = context.text
+
+    for node in nodes_list:
+        container = docker.get_container(context, node)
+        container.exec_run(["bash", "-c", "mkdir /etc/clickhouse-tools"])
+        container.exec_run(
+            ["bash", "-c", f"echo '{conf}' > /etc/clickhouse-tools/config.yaml"]
+        )

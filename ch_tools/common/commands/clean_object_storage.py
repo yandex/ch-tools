@@ -18,6 +18,7 @@ from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.utils import chunked, execute_query
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
+from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
@@ -121,6 +122,9 @@ def _clean_object_storage(
         _traverse_object_storage(ctx, listing_table, from_time, to_time, prefix)
 
     ch_client = clickhouse_client(ctx)
+    user_name = ch_client.user or ""
+    user_password = ch_client.password or ""
+
     remote_data_paths_table = "system.remote_data_paths"
 
     if clean_scope == CleanScope.CLUSTER:
@@ -139,22 +143,23 @@ def _clean_object_storage(
             )
 
         replicas = ",".join(ClickhouseInfo.get_replicas(ctx))
-        remote_data_paths_table = (
-            f"{remote_clause}('{replicas}', {remote_data_paths_table})"
-        )
+        remote_data_paths_table = f"{remote_clause}('{replicas}', {remote_data_paths_table}, '{user_name}', '{{user_password}}')"
 
     settings = ""
     if match_ch_version(ctx, min_version="24.3"):
         settings = "SETTINGS traverse_shadow_remote_data_paths=1"
 
-    antijoin_query = f"""
+    antijoin_query = Query(
+        f"""
         SELECT obj_path, obj_size FROM {listing_table} AS object_storage
           LEFT ANTI JOIN {remote_data_paths_table} AS object_table
           ON object_table.remote_path = object_storage.obj_path
             AND object_table.disk_name = '{disk_conf.name}'
         {settings}
-    """
-    logging.info("Antijoin query: {}", antijoin_query)
+    """,
+        sensitive_args={"user_password": user_password},
+    )
+    logging.info("Antijoin query: {}", str(antijoin_query))
 
     if dry_run:
         logging.info("Counting orphaned objects...")

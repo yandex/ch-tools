@@ -1,7 +1,7 @@
 import json
 import subprocess
 from datetime import timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 import requests
 from click import Context
@@ -9,6 +9,7 @@ from jinja2 import Environment
 from typing_extensions import Self
 
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.utils import version_ge
 
 from ..config import get_clickhouse_config
@@ -165,7 +166,7 @@ class ClickhouseClient:
     @retry(requests.exceptions.ConnectionError)
     def query(
         self: Self,
-        query: str,
+        query: Union[str, Query],
         query_args: Optional[Dict[str, Any]] = None,
         format_: Optional[str] = None,
         post_data: Any = None,
@@ -179,14 +180,15 @@ class ClickhouseClient:
         """
         Execute query.
         """
-        if query_args:
-            query = self.render_query(query, **query_args)
+        query = query or ""
+        if isinstance(query, str):
+            query = Query(query, args=query_args)
 
         if format_:
-            query += f" FORMAT {format_}"
+            query.value += f" FORMAT {format_}"
 
         if echo:
-            print(query, "\n")
+            print(str(query), "\n")
 
         if dry_run:
             return None
@@ -205,7 +207,7 @@ class ClickhouseClient:
             if port is None:
                 raise UserWarning(2, "Can't find any port in clickhouse-server config")
 
-        logging.debug("Executing query: {}", query)
+        logging.debug("Executing query: {}", str(query))
         if port in [ClickhousePort.HTTPS, ClickhousePort.HTTP]:
             return self._execute_http(
                 query,
