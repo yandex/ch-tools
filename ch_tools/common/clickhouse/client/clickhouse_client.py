@@ -182,16 +182,13 @@ class ClickhouseClient:
         """
         query = query or ""
         if isinstance(query, str):
-            query = Query(query)
-
-        if query_args:
-            query.value = self.render_query(query.value, **query_args)
+            query = Query(query, args=query_args)
 
         if format_:
             query.value += f" FORMAT {format_}"
 
         if echo:
-            print(query.for_logging(), "\n")
+            print(str(query), "\n")
 
         if dry_run:
             return None
@@ -210,10 +207,10 @@ class ClickhouseClient:
             if port is None:
                 raise UserWarning(2, "Can't find any port in clickhouse-server config")
 
-        logging.debug("Executing query: {}", query.for_logging())
+        logging.debug("Executing query: {}", str(query))
         if port in [ClickhousePort.HTTPS, ClickhousePort.HTTP]:
             return self._execute_http(
-                query.for_execute(),
+                query,
                 format_,
                 post_data,
                 timeout,
@@ -221,7 +218,7 @@ class ClickhouseClient:
                 per_query_settings,
                 port,
             )
-        return self._execute_tcp(query.for_execute(), format_, port)
+        return self._execute_tcp(query, format_, port)
 
     def query_json_data(
         self: Self,
