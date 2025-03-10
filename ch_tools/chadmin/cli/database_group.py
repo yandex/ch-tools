@@ -2,7 +2,14 @@ from cloup import argument, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
+from ch_tools.chadmin.cli.database_metadata import parse_database_metadata
+from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_METADATA_PATH
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.chadmin.internal.zookeeper import (
+    get_zk_node,
+    list_zk_nodes,
+    update_zk_nodes,
+)
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_cluster_name
 
@@ -165,4 +172,73 @@ def get_databases(
         exclude_database=exclude_database,
         active_parts=active_parts,
         format_=format_,
+    )
+
+
+@database_group.command("migrate")
+@option("-d", "--database")
+@pass_context
+def migrate_engine_command(ctx, database):
+    query = """
+        CREATE DATABASE temp_db ENGINE = Replicated('/clickhouse/{database}', '{{shard}}', '{{replica}}')
+    """.format(
+        database=database
+    )
+
+    execute_query(
+        ctx,
+        query,
+        echo=True,
+    )
+
+    target_metadata_path = CLICKHOUSE_METADATA_PATH + f"/{database}.sql"
+    temp_metadata_path = CLICKHOUSE_METADATA_PATH + "/temp_db.sql"
+
+    metadata_non_repl_db = parse_database_metadata(target_metadata_path)
+    metadata_temp_db = parse_database_metadata(temp_metadata_path)
+
+    query = f"""
+        DETACH DATABASE {database}
+    """
+    execute_query(
+        ctx,
+        query,
+        echo=True,
+    )
+
+    query = """
+        DETACH DATABASE temp_db
+    """
+    execute_query(
+        ctx,
+        query,
+        echo=True,
+    )
+
+    metadata_non_repl_db.set_engine_from(metadata_temp_db)
+    metadata_non_repl_db.update_metadata_file(target_metadata_path)
+
+    # target_zk_data = get_zk_node(ctx, f"/clickhouse/{database}/first_replica_database_name")
+    update_zk_nodes(
+        ctx, [f"/clickhouse/{database}/first_replica_database_name"], database
+    )
+
+    # target_zk_data = get_zk_node(ctx, f"/clickhouse/{database}/first_replica_database_name")
+    # logging.info("after target_zk_data first_replica_database_name={}", target_zk_data)
+
+    for replica_path in list_zk_nodes(ctx, f"/clickhouse/{database}/replicas"):
+        replica_data = get_zk_node(ctx, replica_path)
+
+        prefix = replica_data.split(":")
+        new_data = f"{prefix[0]}:{prefix[1]}:{metadata_non_repl_db.database_uuid}"
+
+        update_zk_nodes(ctx, [replica_path], new_data)
+
+    query = f"""
+        ATTACH DATABASE {database}
+    """
+    execute_query(
+        ctx,
+        query,
+        echo=True,
     )
