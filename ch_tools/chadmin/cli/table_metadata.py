@@ -2,12 +2,12 @@ import grp
 import os
 import pwd
 import re
-import uuid
 from enum import Enum
 from typing import Tuple
 
 from click import Context
 
+from ch_tools.chadmin.cli import metadata
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
 from ch_tools.chadmin.internal.zookeeper import get_zk_node
 from ch_tools.common import logging
@@ -73,7 +73,7 @@ def parse_table_metadata(table_metadata_path: str) -> TableMetadata:
         for line in metadata_file:
             if line.startswith("ATTACH TABLE") and UUID_TOKEN in line:
                 assert table_uuid is None
-                table_uuid = _parse_uuid(line)
+                table_uuid = metadata.parse_uuid(line)
             if line.startswith("ENGINE ="):
                 assert table_engine is None
                 table_engine = _parse_engine(line)
@@ -87,27 +87,6 @@ def parse_table_metadata(table_metadata_path: str) -> TableMetadata:
         raise RuntimeError(f"Empty table engine from metadata: '{table_metadata_path}'")
 
     return TableMetadata(table_uuid, table_engine, replica_path, replica_name)
-
-
-def _is_valid_uuid(uuid_str: str) -> bool:
-    try:
-        val = uuid.UUID(uuid_str)
-    except ValueError:
-        return False
-    return str(val) == uuid_str
-
-
-def _parse_uuid(line: str) -> str:
-    uuid_pattern = re.compile(r"UUID\s+'([a-f0-9-]+)'", re.IGNORECASE)
-    match = uuid_pattern.search(line)
-
-    if not match:
-        raise RuntimeError("Failed parse UUID from metadata.")
-
-    result = match.group(1)
-    if not _is_valid_uuid(result):
-        raise RuntimeError("Failed parse UUID from metadata.")
-    return result
 
 
 def _parse_engine(line: str) -> MergeTreeFamilyEngines:
