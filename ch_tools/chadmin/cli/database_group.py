@@ -189,8 +189,7 @@ def is_first_replica_migrate(ctx: Context, migrating_database_name: str) -> bool
             "Node for {} not exists. Finish checking.", migrating_database_name
         )
         return True
-    else:
-        logging.info("Node for {} exists. Continue checking.", migrating_database_name)
+    logging.info("Node for {} exists. Continue checking.", migrating_database_name)
 
     db_in_node = get_zk_node(ctx, first_replica_database_name)
     logging.info(
