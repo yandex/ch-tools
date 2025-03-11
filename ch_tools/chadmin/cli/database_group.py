@@ -7,6 +7,7 @@ from ch_tools.chadmin.cli.database_metadata import (
     DatabaseMetadata,
     parse_database_from_metadata,
 )
+from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
@@ -15,6 +16,7 @@ from ch_tools.chadmin.internal.zookeeper import (
     update_zk_nodes,
 )
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 from ch_tools.common.clickhouse.config import get_cluster_name
 
 
@@ -212,7 +214,29 @@ def detach_dbs(ctx, dbs):
         )
 
 
-def update_zk_for_migrate(ctx: Context, metadata_non_repl_db: DatabaseMetadata) -> None:
+def update_zk_tables_metadata(ctx, metadata_non_repl_db, tables):
+    for metadata_path in list_zk_nodes(
+        ctx, f"/clickhouse/{metadata_non_repl_db.database_name}/metadata"
+    ):
+        data = get_zk_node(ctx, metadata_path)
+
+        logging.info(
+            "found node for table. path={}, contains data={}", metadata_path, data
+        )
+        table_name = metadata_path.split("/")[-1]
+        target_metadata = tables[table_name]
+
+        logging.info("new metadata for node {}", target_metadata)
+
+        update_zk_nodes(ctx, [metadata_path], target_metadata)
+
+        data = get_zk_node(ctx, metadata_path)
+        logging.info("after update data={}", data)
+
+
+def update_zk_for_migrate(
+    ctx: Context, metadata_non_repl_db: DatabaseMetadata, tables: dict
+) -> None:
     first_replica_database_name = (
         f"/clickhouse/{metadata_non_repl_db.database_name}/first_replica_database_name"
     )
@@ -223,6 +247,8 @@ def update_zk_for_migrate(ctx: Context, metadata_non_repl_db: DatabaseMetadata) 
         update_zk_nodes(
             ctx, [first_replica_database_name], metadata_non_repl_db.database_name
         )
+
+        update_zk_tables_metadata(ctx, metadata_non_repl_db, tables)
     else:
         logging.info(
             "first_replica_database_name was migrated early. Skip on current replica."
@@ -261,6 +287,44 @@ def remove_temp_db(ctx: Context, metadata_temp_db: DatabaseMetadata) -> None:
     )
 
 
+def get_tables_local_metadata(ctx, database, temp_db):
+    query = f"""
+        SELECT name, create_table_query, metadata_path FROM system.tables WHERE database='{database}'
+    """
+    r = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
+
+    table = {}
+
+    for row in r["data"]:
+        name = row["name"]
+        metadata_path = row["metadata_path"]
+        create_table_query = row["create_table_query"]
+
+        logging.info(
+            "name={}, metadata_path={}, create_table_query={}",
+            name,
+            metadata_path,
+            create_table_query,
+        )
+
+        create_table_query = create_table_query.replace(database, temp_db)
+        logging.info("after replacing create_table_query={}", create_table_query)
+
+        execute_query(
+            ctx,
+            create_table_query,
+            echo=True,
+        )
+
+        with open(
+            CLICKHOUSE_PATH + "/" + metadata_path, "r", encoding="utf-8"
+        ) as metadata_file:
+            table[name] = metadata_file.read()
+
+    logging.info("total tables: {}", table)
+    return table
+
+
 def migrate_as_first_replica(ctx, database, temp_db):
     query = """
         CREATE DATABASE {temp_db} ON CLUSTER '{{cluster}}' ENGINE = Replicated('/clickhouse/{database}', '{{shard}}', '{{replica}}')
@@ -274,6 +338,8 @@ def migrate_as_first_replica(ctx, database, temp_db):
         echo=True,
     )
 
+    table = get_tables_local_metadata(ctx, database, temp_db)
+
     metadata_non_repl_db = parse_database_from_metadata(database)
     metadata_temp_db = parse_database_from_metadata(temp_db)
 
@@ -284,7 +350,7 @@ def migrate_as_first_replica(ctx, database, temp_db):
     metadata_non_repl_db.set_engine_from(metadata_temp_db)
     metadata_non_repl_db.update_metadata_file()
 
-    update_zk_for_migrate(ctx, metadata_non_repl_db)
+    update_zk_for_migrate(ctx, metadata_non_repl_db, table)
 
     query = f"""
         ATTACH DATABASE {database}
