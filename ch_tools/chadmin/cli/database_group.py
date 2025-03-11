@@ -1,9 +1,9 @@
+from click import Context
 from cloup import argument, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.cli.database_metadata import (
-    DatabaseEngine,
     DatabaseMetadata,
     parse_database_from_metadata,
 )
@@ -179,7 +179,7 @@ def get_databases(
     )
 
 
-def is_first_replica_migrate(ctx, migrating_database_name: str) -> bool:
+def is_first_replica_migrate(ctx: Context, migrating_database_name: str) -> bool:
     first_replica_database_name = (
         f"/clickhouse/{migrating_database_name}/first_replica_database_name"
     )
@@ -213,7 +213,7 @@ def detach_dbs(ctx, dbs):
         )
 
 
-def update_zk_for_migrate(ctx, metadata_non_repl_db: DatabaseMetadata):
+def update_zk_for_migrate(ctx: Context, metadata_non_repl_db: DatabaseMetadata) -> None:
     first_replica_database_name = (
         f"/clickhouse/{metadata_non_repl_db.database_name}/first_replica_database_name"
     )
@@ -241,7 +241,7 @@ def update_zk_for_migrate(ctx, metadata_non_repl_db: DatabaseMetadata):
         update_zk_nodes(ctx, [replica_path], new_data)
 
 
-def remove_temp_db(ctx, metadata_temp_db: DatabaseMetadata):
+def remove_temp_db(ctx: Context, metadata_temp_db: DatabaseMetadata) -> None:
     metadata_temp_db.update_metadata_file()
     query = f"""
         ATTACH DATABASE {metadata_temp_db.database_name}

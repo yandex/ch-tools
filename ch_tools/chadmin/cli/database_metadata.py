@@ -52,7 +52,7 @@ class DatabaseMetadata:
         if self.database_engine == DatabaseEngine.REPLICATED:
             engine_line = f"ENGINE = Replicated('{self.replica_path}', '{self.shard}', '{ self.replica_name}')"
         else:
-            engine_line = f"ENGINE = Atomic"
+            engine_line = "ENGINE = Atomic"
 
         lines[1] = engine_line
 
