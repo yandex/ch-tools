@@ -3,6 +3,7 @@ from enum import Enum
 from typing import Tuple
 
 from ch_tools.chadmin.cli import metadata
+from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_METADATA_PATH
 
 
 class DatabaseEngine(Enum):
@@ -23,12 +24,14 @@ class DatabaseEngine(Enum):
 class DatabaseMetadata:
     def __init__(
         self,
+        database_name,
         database_uuid,
         database_engine,
         replica_path=None,
         shard=None,
         replica_name=None,
     ):
+        self.database_name = database_name
         self.database_uuid = database_uuid
         self.database_engine = database_engine
         self.replica_path = replica_path
@@ -41,17 +44,29 @@ class DatabaseMetadata:
         self.shard = db_metadata.shard
         self.replica_name = db_metadata.replica_name
 
-    def update_metadata_file(self, file_path):
+    def update_metadata_file(self):
+        file_path = db_metadata_path(self.database_name)
+
         with open(file_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
-        engine_line = f"ENGINE = Replicated('{self.replica_path}', '{self.shard}', '{ self.replica_name}')"
+        if self.database_engine == DatabaseEngine.REPLICATED:
+            engine_line = f"ENGINE = Replicated('{self.replica_path}', '{self.shard}', '{ self.replica_name}')"
+        else:
+            engine_line = f"ENGINE = Atomic"
+
         lines[1] = engine_line
 
         with open(file_path, "w", encoding="utf-8") as f:
             f.writelines(lines)
 
 
-def parse_database_metadata(database_metadata_path: str) -> DatabaseMetadata:
+def db_metadata_path(database_name: str) -> str:
+    return CLICKHOUSE_METADATA_PATH + f"/{database_name}.sql"
+
+
+def parse_database_from_metadata(database_name: str) -> DatabaseMetadata:
+    database_metadata_path = db_metadata_path(database_name)
+
     assert database_metadata_path.endswith(".sql")
     database_uuid = None
     database_engine = None
@@ -81,6 +96,7 @@ def parse_database_metadata(database_metadata_path: str) -> DatabaseMetadata:
         )
 
     return DatabaseMetadata(
+        database_name,
         database_uuid,
         database_engine,
         replica_path=replica_path,
