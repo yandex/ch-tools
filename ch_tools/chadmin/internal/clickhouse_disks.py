@@ -35,7 +35,11 @@ def make_ch_disks_config(disk: str) -> str:
 
 
 def remove_from_ch_disk(
-    disk: str, path: str, ch_version: str, disk_config_path: Optional[str] = None
+    disk: str,
+    path: str,
+    ch_version: str,
+    disk_config_path: Optional[str] = None,
+    dry_run: bool = False,
 ) -> Tuple[int, bytes]:
     cmd = f"clickhouse-disks {'-C ' + disk_config_path if disk_config_path else ''} --disk {disk}"
     if match_str_ch_version(ch_version, "24.7"):
@@ -44,6 +48,9 @@ def remove_from_ch_disk(
         cmd += f" remove {path}"
 
     logging.info("Run : {}", cmd)
+
+    if dry_run:
+        return (0, b"")
 
     proc = subprocess.run(
         cmd,
