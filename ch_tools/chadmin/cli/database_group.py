@@ -8,6 +8,7 @@ from ch_tools.chadmin.cli.database_metadata import (
     parse_database_from_metadata,
 )
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
+from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
@@ -291,11 +292,11 @@ def get_tables_local_metadata(ctx, database, temp_db):
     query = f"""
         SELECT name, create_table_query, metadata_path FROM system.tables WHERE database='{database}'
     """
-    r = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
+    rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
 
-    table = {}
+    tables = {}
 
-    for row in r["data"]:
+    for row in rows["data"]:
         name = row["name"]
         metadata_path = row["metadata_path"]
         create_table_query = row["create_table_query"]
@@ -316,13 +317,14 @@ def get_tables_local_metadata(ctx, database, temp_db):
             echo=True,
         )
 
-        with open(
-            CLICKHOUSE_PATH + "/" + metadata_path, "r", encoding="utf-8"
-        ) as metadata_file:
-            table[name] = metadata_file.read()
+        if match_str_ch_version(get_version(ctx), "25.1"):
+            metadata_path = CLICKHOUSE_PATH + "/" + metadata_path
 
-    logging.info("total tables: {}", table)
-    return table
+        with open(metadata_path, "r", encoding="utf-8") as metadata_file:
+            tables[name] = metadata_file.read()
+
+    logging.info("total tables: {}", tables)
+    return tables
 
 
 def migrate_as_first_replica(ctx, database, temp_db):
