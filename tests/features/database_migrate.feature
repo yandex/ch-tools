@@ -7,6 +7,7 @@ Feature: chadmin database migrate command
     And a working clickhouse on clickhouse01
     And a working clickhouse on clickhouse02
     
+  @require_version_24.8
   Scenario: Migrate empty database in host
     When we execute query on clickhouse01
     """
@@ -42,6 +43,7 @@ Feature: chadmin database migrate command
     bar2
     """
 
+  @require_version_24.8
   Scenario: Migrate database with MergeTree table in host
     When we execute query on clickhouse01
     """
@@ -86,6 +88,7 @@ Feature: chadmin database migrate command
     (42,'value')
     """
 
+ @require_version_24.8
   Scenario: Migrate empty database in cluster
     When we execute query on clickhouse01
     """
@@ -142,6 +145,7 @@ Feature: chadmin database migrate command
     bar2
     """
 
+#   @require_version_24.8
 #   Scenario: Migrate database with MergeTree table in cluster
 #     When we execute query on clickhouse01
 #     """
