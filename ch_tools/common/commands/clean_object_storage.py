@@ -143,7 +143,7 @@ def _clean_object_storage(
             )
 
         replicas = ",".join(ClickhouseInfo.get_replicas(ctx))
-        remote_data_paths_table = f"{remote_clause}('{replicas}', {remote_data_paths_table}, '{user_name}', '{user_password}')"
+        remote_data_paths_table = f"{remote_clause}('{replicas}', {remote_data_paths_table}, '{user_name}', '{{user_password}}')"
 
     settings = ""
     if match_ch_version(ctx, min_version="24.3"):
@@ -157,9 +157,9 @@ def _clean_object_storage(
             AND object_table.disk_name = '{disk_conf.name}'
         {settings}
     """,
-        user_password,
+        sensitive_args={"user_password": user_password},
     )
-    logging.info("Antijoin query: {}", antijoin_query.for_logging())
+    logging.info("Antijoin query: {}", str(antijoin_query))
 
     if dry_run:
         logging.info("Counting orphaned objects...")

@@ -93,7 +93,7 @@ class ClickhouseClient:
                     url,
                     params={
                         **self._settings,
-                        "query": query,
+                        "query": query.for_execute(),
                         **per_query_settings,  # overwrites previous settings
                     },
                     headers=headers,
@@ -122,7 +122,7 @@ class ClickhouseClient:
 
             return response.text.strip()
         except requests.exceptions.HTTPError as e:
-            raise ClickhouseError(query, e.response) from None
+            raise ClickhouseError(str(query), e.response) from None
 
     def _execute_tcp(self, query, format_, port):
         # Private method, we are sure that port is tcps or tcp and presents in config
@@ -149,7 +149,7 @@ class ClickhouseClient:
         proc = subprocess.Popen(
             cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE  # type: ignore[arg-type]
         )
-        stdout, stderr = proc.communicate(input=query.encode())
+        stdout, stderr = proc.communicate(input=query.for_execute().encode())
 
         if proc.returncode:
             raise RuntimeError(
@@ -180,7 +180,6 @@ class ClickhouseClient:
         """
         Execute query.
         """
-        query = query or ""
         if isinstance(query, str):
             query = Query(query)
 
@@ -188,10 +187,10 @@ class ClickhouseClient:
             query.value = self.render_query(query.value, **query_args)
 
         if format_:
-            query.value += f" FORMAT {format_}"
+            query += f" FORMAT {format_}"
 
         if echo:
-            print(query.for_logging(), "\n")
+            print(str(query), "\n")
 
         if dry_run:
             return None
@@ -210,10 +209,10 @@ class ClickhouseClient:
             if port is None:
                 raise UserWarning(2, "Can't find any port in clickhouse-server config")
 
-        logging.debug("Executing query: {}", query.for_logging())
+        logging.debug("Executing query: {}", str(query))
         if port in [ClickhousePort.HTTPS, ClickhousePort.HTTP]:
             return self._execute_http(
-                query.for_execute(),
+                query,
                 format_,
                 post_data,
                 timeout,
@@ -221,7 +220,7 @@ class ClickhouseClient:
                 per_query_settings,
                 port,
             )
-        return self._execute_tcp(query.for_execute(), format_, port)
+        return self._execute_tcp(query, format_, port)
 
     def query_json_data(
         self: Self,
