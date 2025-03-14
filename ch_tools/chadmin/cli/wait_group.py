@@ -109,8 +109,8 @@ def wait_replication_sync_command(
                 "Lightweight sync requires version 23.4, will do full sync instead."
             )
             lightweight = False
-    except Exception:
-        logging.error("Connection error while getting CH version.")
+    except Exception as e:
+        logging.error(f"Connection error while getting CH version: {e}")
         sys.exit(1)
 
     start_time = time.time()
