@@ -241,7 +241,7 @@ Feature: chadmin commands.
     """
     SYSTEM SYNC REPLICA test.table_01
     """
-    And we execute query on clickhouse03
+    And we execute query on clickhouse02
     """
     SELECT count() FROM system.parts WHERE table = 'table_01' and database = 'test'
     """
