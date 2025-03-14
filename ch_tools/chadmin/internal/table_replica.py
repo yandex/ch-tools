@@ -168,3 +168,31 @@ def system_table_drop_replica(ctx, replica, database, table, dry_run=False):
     timeout = ctx.obj["config"]["clickhouse"]["drop_replica_timeout"]
     query = f"SYSTEM DROP REPLICA '{replica}' FROM TABLE `{database}`.`{table}`"
     execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
+
+
+def list_active_parts(
+    ctx,
+    database_name,
+    table_name,
+):
+    """
+    List active parts of a table.
+    """
+    query = "SELECT database, table, name FROM system.parts WHERE database = '{{database_name}}' AND table = '{{table_name}}' AND active = 1"
+    return execute_query(
+        ctx,
+        query,
+        database_name=database_name,
+        table_name=table_name,
+        format_="JSON",
+    )["data"]
+
+
+def no_replicas_in_zookeeper(ctx, database_name, table_name):
+    replicas_path = get_table_replica(ctx, database_name, table_name)["zookeeper_path"] + "/replicas"
+    from ch_tools.chadmin.internal.zookeeper import check_zk_node
+    return not bool(check_zk_node(ctx, replicas_path))
+
+
+def table_is_readonly(ctx, database_name, table_name):
+    return bool(get_table_replica(ctx, database_name, table_name)["is_readonly"])
