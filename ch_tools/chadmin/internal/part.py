@@ -1,5 +1,8 @@
 import json
+import re
 
+from ch_tools.chadmin.internal.clickhouse_disks import remove_from_ch_disk
+from ch_tools.chadmin.internal.system import get_version
 from ch_tools.chadmin.internal.utils import execute_query
 
 
@@ -167,6 +170,7 @@ def list_detached_parts(
             name,
             disk "disk_name",
         {% if version_ge('23.1') -%}
+            path,
             bytes_on_disk,
         {% endif -%}
             reason
@@ -228,6 +232,22 @@ def list_detached_parts(
         limit=limit,
         format_="JSON",
     )["data"]
+
+
+def get_disks(ctx):
+    """
+    Get disks.
+    """
+    query = """
+        SELECT name, path, type FROM system.disks
+        """
+    disks = execute_query(
+        ctx,
+        query,
+        format_="JSON",
+    )["data"]
+
+    return {disk["name"]: disk for disk in disks}
 
 
 def attach_part(ctx, database, table, part_name, dry_run=False):
@@ -294,6 +314,17 @@ def drop_detached_part(ctx, database, table, part_name, dry_run=False):
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
     query = f"ALTER TABLE `{database}`.`{table}` DROP DETACHED PART '{part_name}'"
     execute_query(ctx, query, timeout=timeout, format_=None, echo=True, dry_run=dry_run)
+
+
+def drop_detached_part_from_disk(ctx, disk, path, dry_run=False):
+    """
+    Drop the specified detached data part using clickhouse-disks.
+    """
+    # removeprefix() is not allowed for Python < 3.9
+    assert path.startswith(disk["path"])
+    path_on_disk = path[len(disk["path"]) :]
+
+    remove_from_ch_disk(disk["name"], path_on_disk, get_version(ctx), dry_run=dry_run)
 
 
 def list_part_log(
@@ -434,3 +465,7 @@ def read_and_validate_parts_from_json(json_path):
             if "name" not in p:
                 raise ValueError(base_exception_str.format("name"))
     return json_obj
+
+
+def part_has_suffix(part_name):
+    return re.match(r".*_try[1-9]$", part_name)

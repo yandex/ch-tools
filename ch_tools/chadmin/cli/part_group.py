@@ -8,10 +8,13 @@ from ch_tools.chadmin.internal.part import (
     attach_part,
     detach_part,
     drop_detached_part,
+    drop_detached_part_from_disk,
     drop_part,
+    get_disks,
     list_detached_parts,
     list_parts,
     move_part,
+    part_has_suffix,
 )
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.common import logging
@@ -402,12 +405,28 @@ def delete_parts_command(
             max_size=max_size,
             **kwargs,
         )
+    disks = get_disks(ctx)
     for part in parts:
         try:
             if detached:
-                drop_detached_part(
-                    ctx, part["database"], part["table"], part["name"], dry_run=dry_run
-                )
+                # ClickHouse can't parse detached parts with _tryN suffix
+                # Should delete them using clickhouse-disks
+                # TODO: Remove it after suffixes are allowed in ClickHouse
+                if part_has_suffix(part["name"]):
+                    drop_detached_part_from_disk(
+                        ctx,
+                        disks[part["disk_name"]],
+                        part["path"],
+                        dry_run,
+                    )
+                else:
+                    drop_detached_part(
+                        ctx,
+                        part["database"],
+                        part["table"],
+                        part["name"],
+                        dry_run=dry_run,
+                    )
             else:
                 drop_part(
                     ctx, part["database"], part["table"], part["name"], dry_run=dry_run

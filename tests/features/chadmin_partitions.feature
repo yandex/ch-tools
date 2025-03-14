@@ -101,3 +101,30 @@ Feature: chadmin partitions commands.
     """
     0
     """
+
+  @require_version_23.1
+  Scenario: Drop detached parts.
+    When we execute command on clickhouse01
+    """
+    chadmin part detach -t test
+    """
+    And we execute command on clickhouse01
+    """
+    mkdir /var/lib/clickhouse/data/default/test/detached/1_1_1_0_try1
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin part delete -t test --detached
+    """
+    Then we get response contains
+    """
+    detached/1_1_1_0_try1
+    """
+    When we execute command on clickhouse01
+    """
+    clickhouse client --query "SELECT count() FROM system.detached_parts WHERE table='test'"
+    """
+    Then we get response
+    """
+    0
+    """
