@@ -198,4 +198,54 @@ Feature: chadmin commands.
       | 5              | 1      |
       | 12             | 4      |
       | 30             | 12     |
-     
+
+  Scenario: Check replica restore with broken part
+    Given we have executed queries on clickhouse01
+    """
+    CREATE DATABASE IF NOT EXISTS test ON CLUSTER 'cluster';
+
+    CREATE TABLE IF NOT EXISTS test.table_01 ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n;
+
+    INSERT INTO test.table_01 SELECT number FROM numbers(5);
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper delete /tables/table_01 && chadmin replica restart -t table_01
+    """
+    And we execute command on clickhouse01
+    """
+    rm /var/lib/clickhouse/data/test/table_01/2_0_0_0/columns.txt
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin replica restore -t table_01
+    """
+    Then we get response contains
+    """
+    No columns.txt in part 2_0_0_0
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT count() FROM system.parts WHERE table = 'table_01' and database = 'test'
+    """
+    Then we get response
+    """
+    4
+    """
+    When we execute command on clickhouse02
+    """
+    chadmin replica restart -t table_01 && chadmin replica restore -t table_01
+    """
+    And we execute query on clickhouse02
+    """
+    SYSTEM SYNC REPLICA test.table_01
+    """
+    And we execute query on clickhouse02
+    """
+    SELECT count() FROM system.parts WHERE table = 'table_01' and database = 'test'
+    """
+    Then we get response
+    """
+    4
+    """

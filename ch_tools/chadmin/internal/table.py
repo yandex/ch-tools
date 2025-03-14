@@ -15,7 +15,7 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
 )
 from ch_tools.chadmin.internal.system import get_version
 from ch_tools.chadmin.internal.utils import execute_query, remove_from_disk
-from ch_tools.chadmin.internal.zookeeper import clean_zk_metadata_for_hosts
+from ch_tools.chadmin.internal.zookeeper_clean import clean_zk_metadata_for_hosts
 from ch_tools.common import logging
 
 DISK_LOCAL_KEY = "local"
