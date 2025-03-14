@@ -5,7 +5,7 @@ from click import Choice, Context, group, option, pass_context
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.diagnostics.flamegraph import (
-    SUPPORTED_SAMLE_TYPES,
+    SUPPORTED_SAMPLE_TYPES,
     ClickhouseTempFlamegraphConfigs,
     collect_flamegraph,
     remove_flamegraph_settings,
@@ -39,7 +39,7 @@ def flamegraph_group():
 @option(
     "--trace-type",
     "trace_type",
-    type=Choice(SUPPORTED_SAMLE_TYPES),
+    type=Choice(SUPPORTED_SAMPLE_TYPES),
     help="Trace type to build flamegraph.",
 )
 @option(
@@ -70,7 +70,7 @@ def collect_by_interval(
 @option(
     "--trace-type",
     "trace_type",
-    type=Choice(SUPPORTED_SAMLE_TYPES),
+    type=Choice(SUPPORTED_SAMPLE_TYPES),
     help="Trace type to build the flamegraph. Required here to setup needed settings for the ch-server.",
 )
 def setup_clickhouse_settings_flamegraph(ctx: Context, trace_type: str) -> None:
@@ -85,7 +85,7 @@ def setup_clickhouse_settings_flamegraph(ctx: Context, trace_type: str) -> None:
 @option(
     "--trace-type",
     "trace_type",
-    type=Choice(SUPPORTED_SAMLE_TYPES),
+    type=Choice(SUPPORTED_SAMPLE_TYPES),
     help="Trace type to build the flamegraph.",
 )
 def cleanup_clickhouse_settings_flamegraph(ctx: Context, trace_type: str) -> None:
@@ -100,7 +100,7 @@ def cleanup_clickhouse_settings_flamegraph(ctx: Context, trace_type: str) -> Non
 @option(
     "--trace-type",
     "trace_type",
-    type=Choice(SUPPORTED_SAMLE_TYPES),
+    type=Choice(SUPPORTED_SAMPLE_TYPES),
     help="Trace type to build the flamegraph.",
 )
 @option(
