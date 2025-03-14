@@ -88,7 +88,7 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
 @option(
     "--cluster",
     "cluster_name",
-    default="{cluster}",
+    default="{{cluster}}",
     help=("Cluster to be cleaned. Default value is macro."),
 )
 @option(

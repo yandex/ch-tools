@@ -1,7 +1,7 @@
 import json
 import subprocess
 from datetime import timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 import requests
 from click import Context
@@ -9,6 +9,7 @@ from jinja2 import Environment
 from typing_extensions import Self
 
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.utils import version_ge
 
 from ..config import get_clickhouse_config
@@ -92,7 +93,7 @@ class ClickhouseClient:
                     url,
                     params={
                         **self._settings,
-                        "query": query,
+                        "query": query.for_execute(),
                         **per_query_settings,  # overwrites previous settings
                     },
                     headers=headers,
@@ -121,7 +122,7 @@ class ClickhouseClient:
 
             return response.text.strip()
         except requests.exceptions.HTTPError as e:
-            raise ClickhouseError(query, e.response) from None
+            raise ClickhouseError(str(query), e.response) from None
 
     def _execute_tcp(self, query, format_, port):
         # Private method, we are sure that port is tcps or tcp and presents in config
@@ -148,7 +149,7 @@ class ClickhouseClient:
         proc = subprocess.Popen(
             cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE  # type: ignore[arg-type]
         )
-        stdout, stderr = proc.communicate(input=query.encode())
+        stdout, stderr = proc.communicate(input=query.for_execute().encode())
 
         if proc.returncode:
             raise RuntimeError(
@@ -165,7 +166,7 @@ class ClickhouseClient:
     @retry(requests.exceptions.ConnectionError)
     def query(
         self: Self,
-        query: str,
+        query: Union[str, Query],
         query_args: Optional[Dict[str, Any]] = None,
         format_: Optional[str] = None,
         post_data: Any = None,
@@ -179,14 +180,17 @@ class ClickhouseClient:
         """
         Execute query.
         """
+        if isinstance(query, str):
+            query = Query(query)
+
         if query_args:
-            query = self.render_query(query, **query_args)
+            query.value = self.render_query(query.value, **query_args)
 
         if format_:
             query += f" FORMAT {format_}"
 
         if echo:
-            print(query, "\n")
+            print(str(query), "\n")
 
         if dry_run:
             return None
@@ -205,7 +209,7 @@ class ClickhouseClient:
             if port is None:
                 raise UserWarning(2, "Can't find any port in clickhouse-server config")
 
-        logging.debug("Executing query: {}", query)
+        logging.debug("Executing query: {}", str(query))
         if port in [ClickhousePort.HTTPS, ClickhousePort.HTTP]:
             return self._execute_http(
                 query,
