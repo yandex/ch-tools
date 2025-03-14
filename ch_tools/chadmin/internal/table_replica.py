@@ -4,6 +4,7 @@ from click import ClickException
 
 from ch_tools.chadmin.internal.part import attach_part
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.chadmin.internal.zookeeper import check_zk_node
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.error import ClickhouseError
 
@@ -200,8 +201,6 @@ def no_replicas_in_zookeeper(ctx, database_name, table_name):
         get_table_replica(ctx, database_name, table_name)["zookeeper_path"]
         + "/replicas"
     )
-    from ch_tools.chadmin.internal.zookeeper import check_zk_node
-
     return not bool(check_zk_node(ctx, replicas_path))
 
 
