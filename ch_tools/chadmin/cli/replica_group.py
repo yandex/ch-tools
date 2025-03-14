@@ -1,38 +1,20 @@
 from collections import OrderedDict
-import json
 from typing import List
 
 from click import ClickException
-from cloup import (
-    Context,
-    argument,
-    constraint,
-    group,
-    option,
-    option_group,
-    pass_context,
-)
+from cloup import argument, constraint, group, option, option_group, pass_context
 from cloup.constraints import AnySet, If, RequireAtLeast, accept_none, require_all
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
-from ch_tools.chadmin.internal.part import attach_part
 from ch_tools.chadmin.internal.table_replica import (
     get_table_replica,
-    list_active_parts,
     list_table_replicas,
-    no_replicas_in_zookeeper,
     restart_table_replica,
-    restore_table_replica,
-    table_is_readonly,
+    restore_replica,
 )
-from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
-from ch_tools.common.clickhouse.client import ClickhouseError
 from ch_tools.common.clickhouse.config import get_cluster_name
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
-
-
-RESTORE_STATE_FILE_PATH = "/tmp/restore_replica_parts.json"
 
 
 @group("replica", cls=Chadmin)
@@ -317,78 +299,3 @@ def restore_command(
             )
         )
     execute_tasks_in_parallel(tasks, max_workers=workers, keep_going=keep_going)
-
-
-def restore_replica(
-    ctx: Context, database: str, table: str, cluster: str, dry_run: bool
-) -> None:
-    # TODO: remove attach when restore is fixed in ClickHouse
-    is_first_replica = no_replicas_in_zookeeper(ctx, database, table)
-    parts_to_attach = (
-        list_active_parts(ctx, database, table) if is_first_replica else None
-    )
-    try:
-        restore_table_replica(
-            ctx,
-            database,
-            table,
-            cluster=cluster,
-            dry_run=dry_run,
-        )
-    except ClickhouseError as e:
-
-        def _dump_json_with_parts(parts_to_attach):
-            logging.error(
-                """
-                Failed to restore replica with, try again when connection to ZooKeeper is restored.
-                List of active parts before restore will be saved to "{}" file in case they are detached"
-                """,
-                RESTORE_STATE_FILE_PATH,
-            )
-            # "data" key is required in attach command
-            data = {"data": parts_to_attach}
-            with open(RESTORE_STATE_FILE_PATH, "w", encoding="utf-8") as f:
-                json.dump(data, f)
-
-        msg = e.response.text.strip()
-        if "BAD_ARGUMENTS" in msg:
-            logging.warning(
-                'Failed to restore replica with error "{}", attempting to recover by restarting replica',
-                msg,
-            )
-            restart_table_replica(
-                ctx,
-                database,
-                table,
-                cluster=cluster,
-                dry_run=dry_run,
-            )
-        elif "NO_ZOOKEEPER" in msg or "Session expired" in msg:
-            _dump_json_with_parts(msg, parts_to_attach)
-            raise
-        elif not is_first_replica:
-            raise
-        else:
-            restart_table_replica(
-                ctx,
-                database,
-                table,
-                cluster=cluster,
-                dry_run=dry_run,
-            )
-            if table_is_readonly(ctx, database, table):
-                _dump_json_with_parts(msg, parts_to_attach)
-                raise
-            logging.warning(
-                'Replica was restored, but some part failed to attach with error "{}". Will attach other parts',
-                msg,
-            )
-
-            for part in parts_to_attach:
-                try:
-                    attach_part(ctx, database, table, part["name"], dry_run)
-                except ClickhouseError as e:
-                    msg = e.response.text.strip()
-                    if "NO_ZOOKEEPER" in msg or "Session expired" in msg:
-                        _dump_json_with_parts(msg, parts_to_attach)
-                        raise
