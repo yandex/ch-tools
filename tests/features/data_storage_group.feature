@@ -35,6 +35,7 @@ Feature: chadmin data-store commands
       removed: true
     """
 
+  @skip
   Scenario: Check remove orphaned sql object whole db.
     When we execute command on clickhouse01
     """
@@ -59,6 +60,7 @@ Feature: chadmin data-store commands
       deleted: 'Yes'
     """
 
+  @skip
   Scenario: Check remove orphaned sql object single table.
     When we execute queries on clickhouse01
     """

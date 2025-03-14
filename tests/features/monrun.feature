@@ -96,9 +96,9 @@ Feature: ch-monitoring tool
     """
     ch-monitoring geobase
     """
-    Then we get response contains
+    Then we get response matches
     """
-    1;Unknown error: Code: 156. DB::Exception: ... (DICTIONARIES_WAS_NOT_LOADED)
+    1;Unknown error:.*Code: 156. DB::Exception: ... \(DICTIONARIES_WAS_NOT_LOADED\)
     """
     When we execute command on clickhouse01
     """

@@ -89,6 +89,11 @@ def _check_tags(context, scenario):
             logging.info("Skipping scenario due to require_version_less_than mismatch")
             scenario.mark_skipped()
             return False
+    
+    if "skip" in scenario.tags:
+        logging.info("Skipping scenario due to skip tag")
+        scenario.mark_skipped()
+        return False
 
     return True
 
