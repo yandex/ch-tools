@@ -169,8 +169,8 @@ def list_detached_parts(
             partition_id,
             name,
             disk "disk_name",
-            path,
         {% if version_ge('23.1') -%}
+            path,
             bytes_on_disk,
         {% endif -%}
             reason

@@ -102,6 +102,7 @@ Feature: chadmin partitions commands.
     0
     """
 
+  @require_version_23.1
   Scenario: Drop detached parts.
     When we execute command on clickhouse01
     """
