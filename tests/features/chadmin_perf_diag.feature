@@ -43,6 +43,6 @@ Feature: chadmin performance diagnostics.
     """
     And we execute command on clickhouse01
     """
-    chadmin flamegraph cleanup --trace-type MemorySample
+    chadmin flamegraph cleanup --trace-type Real
     """
     Then it completes successfully
