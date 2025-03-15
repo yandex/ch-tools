@@ -1,10 +1,8 @@
 import re
-import uuid
 from enum import Enum
 from typing import Tuple
 
-UUID_PATTERN = "UUID"
-ENGINE_PATTERN = "ENGINE"
+from ch_tools.chadmin.cli import metadata
 
 
 class MergeTreeFamilyEngines(Enum):
@@ -59,9 +57,9 @@ def parse_table_metadata(table_metadata_path: str) -> TableMetadata:
 
     with open(table_metadata_path, "r", encoding="utf-8") as metadata_file:
         for line in metadata_file:
-            if line.startswith("ATTACH TABLE") and UUID_PATTERN in line:
+            if line.startswith("ATTACH TABLE") and metadata.UUID_PATTERN in line:
                 assert table_uuid is None
-                table_uuid = _parse_uuid(line)
+                table_uuid = metadata.parse_uuid(line)
             if line.startswith("ENGINE ="):
                 assert table_engine is None
                 table_engine = _parse_engine(line)
@@ -77,33 +75,12 @@ def parse_table_metadata(table_metadata_path: str) -> TableMetadata:
     return TableMetadata(table_uuid, table_engine, replica_path, replica_name)
 
 
-def _is_valid_uuid(uuid_str: str) -> bool:
-    try:
-        val = uuid.UUID(uuid_str)
-    except ValueError:
-        return False
-    return str(val) == uuid_str
-
-
-def _parse_uuid(line: str) -> str:
-    uuid_pattern = re.compile(r"UUID\s+'([a-f0-9-]+)'", re.IGNORECASE)
-    match = uuid_pattern.search(line)
-
-    if not match:
-        raise RuntimeError("Failed parse UUID from metadata.")
-
-    result = match.group(1)
-    if not _is_valid_uuid(result):
-        raise RuntimeError("Failed parse UUID from metadata.")
-    return result
-
-
 def _parse_engine(line: str) -> MergeTreeFamilyEngines:
     pattern = re.compile(r"ENGINE = (\w+)")
 
     match = pattern.search(line)
     if not match:
-        raise RuntimeError(f"Failed parse {ENGINE_PATTERN} from metadata.")
+        raise RuntimeError(f"Failed parse {metadata.ENGINE_PATTERN} from metadata.")
 
     return MergeTreeFamilyEngines.from_str(match.group(1))
 
