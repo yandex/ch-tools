@@ -72,7 +72,8 @@ RUN rm -rf /etc/supervisor && \
     chmod 750 /etc/clickhouse-server/ssl && \
     chmod 640 /etc/clickhouse-server/ssl/server.crt && \
     chmod 640 /etc/clickhouse-server/ssl/allCAs.pem && \
-    chown -R clickhouse:clickhouse /etc/clickhouse-server/ /usr/bin/clickhouse
+    chown -R clickhouse:clickhouse /etc/clickhouse-server/ /usr/bin/clickhouse && \
+    chmod ugo+Xrw -R /etc/clickhouse-server /etc/clickhouse-client
 
 EXPOSE 8123 8443 9000 9440
 
