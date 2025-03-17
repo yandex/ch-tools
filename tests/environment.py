@@ -90,6 +90,11 @@ def _check_tags(context, scenario):
             scenario.mark_skipped()
             return False
 
+    if "skip" in scenario.tags:
+        logging.info("Skipping scenario due to skip tag")
+        scenario.mark_skipped()
+        return False
+
     return True
 
 
