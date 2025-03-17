@@ -224,6 +224,9 @@ def restore_replica(ctx, database, table, cluster, dry_run):
         )
     except ClickhouseError as e:
         msg = e.response.text.strip()
+        # Possible errors:
+        # Replica must be readonly
+        # Replica path is present at {} - nothing to restore
         if "BAD_ARGUMENTS" in msg:
             logging.warning(
                 'Failed to restore replica with error "{}", attempting to recover by restarting replica',
