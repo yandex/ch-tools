@@ -27,6 +27,8 @@ STREAM_TIMEOUT = 10 * 60
 
 STATE_LOCAL_PATH = "/tmp/object_storage_cleanup_state.json"
 
+DEFAULT_CLUSTER_NAME = "{cluster}"
+
 
 @group("object-storage", cls=Chadmin)
 @option(
@@ -88,7 +90,7 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
 @option(
     "--cluster",
     "cluster_name",
-    default="{{cluster}}",
+    default=DEFAULT_CLUSTER_NAME,
     help=("Cluster to be cleaned. Default value is macro."),
 )
 @option(
@@ -143,6 +145,10 @@ def clean_command(
     deleted = 0
     total_size = 0
     error_msg = ""
+
+    # Need for correctly call format in Query
+    if cluster_name == DEFAULT_CLUSTER_NAME:
+        cluster_name = "{" + cluster_name + "}"
 
     try:
         deleted, total_size = clean(

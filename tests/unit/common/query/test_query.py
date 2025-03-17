@@ -28,7 +28,7 @@ def test_str():
 def test_repr():
     assert (
         repr(query_1)
-        == "Query(value='SELECT * FROM users WHERE name = {{name}} AND password = {password}', sensitive_args={'password': '123'})"
+        == "Query(value='SELECT * FROM users WHERE name = {name} AND password = *****', sensitive_args={'password': '*****'})"
     )
     assert (
         repr(query_2)
@@ -36,7 +36,7 @@ def test_repr():
     )
     assert (
         repr(query_3)
-        == "Query(value='SELECT * FROM users WHERE password = {password}', sensitive_args={'password': '123'})"
+        == "Query(value='SELECT * FROM users WHERE password = *****', sensitive_args={'password': '*****'})"
     )
 
 

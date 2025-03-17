@@ -18,17 +18,19 @@ class Query:
     def _render(self, mask_sensitive: bool = True) -> str:
         if not self.sensitive_args:
             return self.value
-        if mask_sensitive:
-            sensitive_args = {key: self.mask for key in self.sensitive_args}
-        else:
-            sensitive_args = self.sensitive_args
+        sensitive_args = (
+            self._sensitive_args_mask() if mask_sensitive else self.sensitive_args
+        )
         return self.value.format(**sensitive_args)
+
+    def _sensitive_args_mask(self) -> Dict[str, str]:
+        return {key: self.mask for key in self.sensitive_args}
 
     def __str__(self) -> str:
         return self._render(True)
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(value={self.value!r}, sensitive_args={self.sensitive_args!r})"
+        return f"{self.__class__.__name__}(value='{str(self)}', sensitive_args={self._sensitive_args_mask()})"
 
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, self.__class__) and repr(self) == repr(other)
