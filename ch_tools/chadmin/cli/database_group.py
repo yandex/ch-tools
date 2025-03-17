@@ -1,7 +1,12 @@
+import grp
+import os
+import pwd
+
 from click import Context
 from cloup import argument, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
 
+from ch_tools.chadmin.cli import metadata
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.cli.database_metadata import (
     DatabaseMetadata,
@@ -227,12 +232,12 @@ def update_zk_tables_metadata(ctx, metadata_non_repl_db, tables):
         table_name = metadata_path.split("/")[-1]
         target_metadata = tables[table_name]
 
-        logging.info("new metadata for node {}", target_metadata)
+        logging.info("new metadata for node:\n{}\n===", target_metadata)
 
         update_zk_nodes(ctx, [metadata_path], target_metadata)
 
         data = get_zk_node(ctx, metadata_path)
-        logging.info("after update data={}", data)
+        logging.info("after update data:\n{}\n===", data)
 
 
 def update_zk_for_migrate(
@@ -244,7 +249,10 @@ def update_zk_for_migrate(
 
     data = get_zk_node(ctx, first_replica_database_name)
 
+    logging.info("first_replica_database_name contains: {}", data)
+
     if data != metadata_non_repl_db.database_name:
+        logging.info("update zk path {}", first_replica_database_name)
         update_zk_nodes(
             ctx, [first_replica_database_name], metadata_non_repl_db.database_name
         )
@@ -288,9 +296,9 @@ def remove_temp_db(ctx: Context, metadata_temp_db: DatabaseMetadata) -> None:
     )
 
 
-def get_tables_local_metadata(ctx, database, temp_db):
+def create_tables_from_migrating_database(ctx, migrating_database, temp_db):
     query = f"""
-        SELECT name, create_table_query, metadata_path FROM system.tables WHERE database='{database}'
+        SELECT name, create_table_query, metadata_path FROM system.tables WHERE database='{migrating_database}'
     """
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
 
@@ -302,14 +310,14 @@ def get_tables_local_metadata(ctx, database, temp_db):
         create_table_query = row["create_table_query"]
 
         logging.info(
-            "name={}, metadata_path={}, create_table_query={}",
+            "name={}, metadata_path={}, create_table_query=[{}]",
             name,
             metadata_path,
             create_table_query,
         )
 
-        create_table_query = create_table_query.replace(database, temp_db)
-        logging.info("after replacing create_table_query={}", create_table_query)
+        create_table_query = create_table_query.replace(migrating_database, temp_db)
+        logging.info("after replacing create_table_query=[{}]", create_table_query)
 
         execute_query(
             ctx,
@@ -321,18 +329,68 @@ def get_tables_local_metadata(ctx, database, temp_db):
             metadata_path = CLICKHOUSE_PATH + "/" + metadata_path
 
         with open(metadata_path, "r", encoding="utf-8") as metadata_file:
+            # todo
             tables[name] = metadata_file.read()
+            logging.info("add from file with metadata to tables: {}", tables[name])
 
+    query = f"""
+        SYSTEM SYNC DATABASE REPLICA {temp_db}
+    """
+    execute_query(
+        ctx,
+        query,
+        echo=True,
+        format_=None,
+    )
     logging.info("total tables: {}", tables)
     return tables
 
 
-def migrate_as_first_replica(ctx, database, temp_db):
+def get_tables_local_metadata_path(ctx, database_name):
+    query = f"""
+        SELECT database, name, uuid, create_table_query, metadata_path FROM system.tables WHERE database='{database_name}'
+    """
+    rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
+
+    tables = rows["data"]
+
+    for row in rows["data"]:
+        logging.info("got row={}", row)
+        name = row["name"]
+        metadata_path = row["metadata_path"]
+        create_table_query = row["create_table_query"]
+
+        logging.info(
+            "name={}, metadata_path={}, create_table_query={}",
+            name,
+            metadata_path,
+            create_table_query,
+        )
+
+        # wtf?
+        query = f"""
+            DETACH TABLE {database_name}.{name}
+        """
+        execute_query(
+            ctx,
+            query,
+            echo=True,
+            format_=None,
+        )
+
+        # if match_str_ch_version(get_version(ctx), "25.1"):
+        #     metadata_path = CLICKHOUSE_PATH + "/" + metadata_path
+
+    logging.info("Database {} contains tables: {}", database_name, tables)
+    return tables
+
+
+def migrate_as_first_replica(ctx, migrating_database, temp_db):
     query = """
         CREATE DATABASE {temp_db} ON CLUSTER '{{cluster}}' ENGINE = Replicated('/clickhouse/{database}', '{{shard}}', '{{replica}}')
     """.format(
         temp_db=temp_db,
-        database=database,
+        database=migrating_database,
     )
     execute_query(
         ctx,
@@ -340,22 +398,32 @@ def migrate_as_first_replica(ctx, database, temp_db):
         echo=True,
     )
 
-    table = get_tables_local_metadata(ctx, database, temp_db)
+    query = f"""
+        SYSTEM SYNC DATABASE REPLICA {temp_db}
+    """
+    execute_query(
+        ctx,
+        query,
+        echo=True,
+        format_=None,
+    )
 
-    metadata_non_repl_db = parse_database_from_metadata(database)
+    tables = create_tables_from_migrating_database(ctx, migrating_database, temp_db)
+
+    metadata_non_repl_db = parse_database_from_metadata(migrating_database)
     metadata_temp_db = parse_database_from_metadata(temp_db)
 
     original_engine = metadata_non_repl_db.database_engine
 
-    detach_dbs(ctx, dbs=[database, temp_db])
+    detach_dbs(ctx, dbs=[migrating_database, temp_db])
 
     metadata_non_repl_db.set_engine_from(metadata_temp_db)
     metadata_non_repl_db.update_metadata_file()
 
-    update_zk_for_migrate(ctx, metadata_non_repl_db, table)
+    update_zk_for_migrate(ctx, metadata_non_repl_db, tables)
 
     query = f"""
-        ATTACH DATABASE {database}
+        ATTACH DATABASE {migrating_database}
     """
     execute_query(
         ctx,
@@ -369,25 +437,94 @@ def migrate_as_first_replica(ctx, database, temp_db):
     remove_temp_db(ctx, metadata_temp_db)
 
 
-def migrate_as_non_first_replica(ctx, database, temp_db):
-    metadata_non_repl_db = parse_database_from_metadata(database)
+def change_uuid_tables(ctx, tables, database_name):
+    for row in tables:
+        table_local_metadata_path = row["metadata_path"]
+        if match_str_ch_version(get_version(ctx), "25.1"):
+            table_local_metadata_path = CLICKHOUSE_PATH + "/" + row["metadata_path"]
+
+        table_name = row["name"]
+        database_name = row["database"]
+
+        nodes = list_zk_nodes(ctx, f"/clickhouse/{database_name}/metadata")
+        logging.info("Found nodes in metadata: {}", nodes)
+
+        zk_metadata_path = f"/clickhouse/{database_name}/metadata/{table_name}"
+        zk_table_metadata = get_zk_node(ctx, zk_metadata_path)
+
+        logging.info("zk_table_metadata: \n{}\n", zk_table_metadata)
+
+        # todo form zk?
+        old_table_uuid = ""
+        with open(table_local_metadata_path, "r", encoding="utf-8") as metadata_file:
+            line = metadata_file.readline()
+            if line.startswith("ATTACH TABLE") and metadata.UUID_PATTERN in line:
+                old_table_uuid = metadata.parse_uuid(line)
+
+        old_path = f"{CLICKHOUSE_PATH}/store/{old_table_uuid[:3]}/{old_table_uuid}"
+        logging.info("old_path={}", old_path)
+
+        assert os.path.exists(old_path)
+
+        logging.info("old_table_uuid={} for table={}", old_table_uuid, table_name)
+
+        with open(
+            table_local_metadata_path, "w", encoding="utf-8"
+        ) as local_metadata_file:
+            local_metadata_file.write(zk_table_metadata + "\n")
+
+        target_table_uuid = ""
+        with open(table_local_metadata_path, "r", encoding="utf-8") as metadata_file:
+            line = metadata_file.readline()
+            if line.startswith("ATTACH TABLE") and metadata.UUID_PATTERN in line:
+                # assert target_table_uuid is None
+                target_table_uuid = metadata.parse_uuid(line)
+
+        logging.info("New from zk  uuid={} for table={}", target_table_uuid, table_name)
+
+        target = f"{CLICKHOUSE_PATH}/store/{target_table_uuid[:3]}"
+        if not os.path.exists(target):
+            # old = f"{CLICKHOUSE_PATH}/store/{old_table_uuid[:3]}"
+            logging.info("need create path={}", target)
+            # st = os.stat(old)
+            # mode = os.stat.S_IMODE(st.st_mode)
+            os.mkdir(target)
+            os.chmod(target, 0o750)
+            uid = pwd.getpwnam("clickhouse").pw_uid
+            gid = grp.getgrnam("clickhouse").gr_gid
+
+            os.chown(target, uid, gid)
+        else:
+            logging.info("path exists: {}", target)
+
+        dst_path = (
+            f"{CLICKHOUSE_PATH}/store/{target_table_uuid[:3]}/{target_table_uuid}"
+        )
+        logging.info("dst_path={}", dst_path)
+
+        os.rename(old_path, dst_path)
+
+        uid = pwd.getpwnam("clickhouse").pw_uid
+        gid = grp.getgrnam("clickhouse").gr_gid
+        os.chown(dst_path, uid, gid)
+
+        # assert len(zk_table_metadata) == len(table_local_metadata_after)
+
+
+def migrate_as_non_first_replica(ctx, database_name, temp_db):
+    metadata_non_repl_db = parse_database_from_metadata(database_name)
     metadata_temp_db = parse_database_from_metadata(temp_db)
 
     original_engine = metadata_non_repl_db.database_engine
 
-    detach_dbs(ctx, dbs=[database, temp_db])
+    tables = get_tables_local_metadata_path(ctx, database_name)
+
+    detach_dbs(ctx, dbs=[database_name, temp_db])
 
     metadata_non_repl_db.set_engine_from(metadata_temp_db)
     metadata_non_repl_db.update_metadata_file()
 
-    query = f"""
-        ATTACH DATABASE {database}
-    """
-    execute_query(
-        ctx,
-        query,
-        echo=True,
-    )
+    change_uuid_tables(ctx, tables, database_name)
 
     metadata_temp_db.database_engine = original_engine
     metadata_temp_db.update_metadata_file()
@@ -402,6 +539,7 @@ def migrate_engine_command(ctx, database):
     temp_db = f"temp_migrate_{database}"
 
     if is_first_replica_migrate(ctx, database):
+        logging.info("First migrate")
         migrate_as_first_replica(ctx, database, temp_db)
     else:
         migrate_as_non_first_replica(ctx, database, temp_db)
