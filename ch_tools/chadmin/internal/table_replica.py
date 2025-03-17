@@ -204,16 +204,26 @@ def no_replicas_in_zookeeper(ctx, database_name, table_name):
     return not bool(check_zk_node(ctx, replicas_path))
 
 
+def is_first_replica(ctx, database_name, table_name):
+    # This condition can't be checked by just looking at table's zk path
+    # before restore. There is a race condition when more than 1 replica is
+    # restored at the same time.
+    replica = get_table_replica(ctx, database_name, table_name)
+    replicas_path = replica["zookeeper_path"] + "/replicas"
+    czxid_replicas = check_zk_node(ctx, replicas_path).creation_transaction_id
+    czxid_current_replica = check_zk_node(
+        ctx, replica["replica_path"]
+    ).creation_transaction_id
+    return czxid_replicas == czxid_current_replica
+
+
 def table_is_readonly(ctx, database_name, table_name):
     return bool(get_table_replica(ctx, database_name, table_name)["is_readonly"])
 
 
 def restore_replica(ctx, database, table, cluster, dry_run):
     # TODO: remove attach when restore is fixed in ClickHouse
-    is_first_replica = no_replicas_in_zookeeper(ctx, database, table)
-    parts_to_attach = (
-        list_active_parts(ctx, database, table) if is_first_replica else None
-    )
+    parts_to_attach = list_active_parts(ctx, database, table)
     try:
         restore_table_replica(
             ctx,
@@ -242,7 +252,7 @@ def restore_replica(ctx, database, table, cluster, dry_run):
         elif "NO_ZOOKEEPER" in msg or "Session expired" in msg:
             _dump_json_with_parts(parts_to_attach)
             raise
-        elif not is_first_replica:
+        elif not is_first_replica(ctx, database, table):
             raise
         else:
             restart_table_replica(
