@@ -8,7 +8,6 @@ from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.table_replica import get_table_replica
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
-    clean_zk_metadata_for_hosts,
     create_zk_nodes,
     delete_zk_nodes,
     get_zk_node,
@@ -17,6 +16,7 @@ from ch_tools.chadmin.internal.zookeeper import (
     update_acls_zk_node,
     update_zk_nodes,
 )
+from ch_tools.chadmin.internal.zookeeper_clean import clean_zk_metadata_for_hosts
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_json, print_response
 from ch_tools.common.cli.parameters import ListParamType, StringParamType

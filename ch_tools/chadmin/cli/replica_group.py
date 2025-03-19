@@ -2,15 +2,7 @@ from collections import OrderedDict
 from typing import List
 
 from click import ClickException
-from cloup import (
-    Context,
-    argument,
-    constraint,
-    group,
-    option,
-    option_group,
-    pass_context,
-)
+from cloup import argument, constraint, group, option, option_group, pass_context
 from cloup.constraints import AnySet, If, RequireAtLeast, accept_none, require_all
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -18,11 +10,9 @@ from ch_tools.chadmin.internal.table_replica import (
     get_table_replica,
     list_table_replicas,
     restart_table_replica,
-    restore_table_replica,
+    restore_replica,
 )
-from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
-from ch_tools.common.clickhouse.client import ClickhouseError
 from ch_tools.common.clickhouse.config import get_cluster_name
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
 
@@ -309,51 +299,3 @@ def restore_command(
             )
         )
     execute_tasks_in_parallel(tasks, max_workers=workers, keep_going=keep_going)
-
-
-def restore_replica(
-    ctx: Context, database: str, table: str, cluster: str, dry_run: bool
-) -> None:
-    try:
-        restore_table_replica(
-            ctx,
-            database,
-            table,
-            cluster=cluster,
-            dry_run=dry_run,
-        )
-    except ClickhouseError as e:
-        msg = e.response.text.strip()
-        if "NO_ZOOKEEPER" in msg or "Session expired" in msg:
-            logging.warning(
-                'Failed to restore replica with error "{}", attempting to recover by restarting replica and retrying restore',
-                msg,
-            )
-            restart_table_replica(
-                ctx,
-                database,
-                table,
-                cluster=cluster,
-                dry_run=dry_run,
-            )
-            restore_table_replica(
-                ctx,
-                database,
-                table,
-                cluster=cluster,
-                dry_run=dry_run,
-            )
-        elif "Replica path is present" in msg:
-            logging.warning(
-                'Failed to restore replica with error "{}", attempting to recover by restarting replica',
-                msg,
-            )
-            restart_table_replica(
-                ctx,
-                database,
-                table,
-                cluster=cluster,
-                dry_run=dry_run,
-            )
-        else:
-            raise

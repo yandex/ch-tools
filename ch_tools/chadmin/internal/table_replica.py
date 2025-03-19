@@ -1,6 +1,14 @@
+import json
+
 from click import ClickException
 
+from ch_tools.chadmin.internal.part import attach_part
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.chadmin.internal.zookeeper import check_zk_node
+from ch_tools.common import logging
+from ch_tools.common.clickhouse.client.error import ClickhouseError
+
+RESTORE_STATE_FILE_PATH = "/tmp/restore_replica_parts.json"
 
 
 def get_table_replica(ctx, database_name, table_name):
@@ -168,3 +176,119 @@ def system_table_drop_replica(ctx, replica, database, table, dry_run=False):
     timeout = ctx.obj["config"]["clickhouse"]["drop_replica_timeout"]
     query = f"SYSTEM DROP REPLICA '{replica}' FROM TABLE `{database}`.`{table}`"
     execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
+
+
+def list_active_parts(
+    ctx,
+    database_name,
+    table_name,
+):
+    """
+    List active parts of a table.
+    """
+    query = "SELECT database, table, name FROM system.parts WHERE database = '{{database_name}}' AND table = '{{table_name}}' AND active = 1"
+    return execute_query(
+        ctx,
+        query,
+        database_name=database_name,
+        table_name=table_name,
+        format_="JSON",
+    )["data"]
+
+
+def no_replicas_in_zookeeper(ctx, database_name, table_name):
+    replicas_path = (
+        get_table_replica(ctx, database_name, table_name)["zookeeper_path"]
+        + "/replicas"
+    )
+    return not bool(check_zk_node(ctx, replicas_path))
+
+
+def is_first_replica(ctx, database_name, table_name):
+    # This condition can't be checked by just looking at table's zk path
+    # before restore. There is a race condition when more than 1 replica is
+    # restored at the same time.
+    replica = get_table_replica(ctx, database_name, table_name)
+    replicas_path = replica["zookeeper_path"] + "/replicas"
+    czxid_replicas = check_zk_node(ctx, replicas_path).creation_transaction_id
+    czxid_current_replica = check_zk_node(
+        ctx, replica["replica_path"]
+    ).creation_transaction_id
+    return czxid_replicas == czxid_current_replica
+
+
+def table_is_readonly(ctx, database_name, table_name):
+    return bool(get_table_replica(ctx, database_name, table_name)["is_readonly"])
+
+
+def restore_replica(ctx, database, table, cluster, dry_run):
+    # TODO: remove attach when restore is fixed in ClickHouse
+    parts_to_attach = list_active_parts(ctx, database, table)
+    try:
+        restore_table_replica(
+            ctx,
+            database,
+            table,
+            cluster=cluster,
+            dry_run=dry_run,
+        )
+    except ClickhouseError as e:
+        msg = e.response.text.strip()
+        # Possible errors:
+        # Replica must be readonly
+        # Replica path is present at {} - nothing to restore
+        if "BAD_ARGUMENTS" in msg:
+            logging.warning(
+                'Failed to restore replica with error "{}", attempting to recover by restarting replica',
+                msg,
+            )
+            restart_table_replica(
+                ctx,
+                database,
+                table,
+                cluster=cluster,
+                dry_run=dry_run,
+            )
+        elif "NO_ZOOKEEPER" in msg or "Session expired" in msg:
+            _dump_json_with_parts(parts_to_attach)
+            raise
+        elif not is_first_replica(ctx, database, table):
+            raise
+        else:
+            restart_table_replica(
+                ctx,
+                database,
+                table,
+                cluster=cluster,
+                dry_run=dry_run,
+            )
+            if table_is_readonly(ctx, database, table):
+                _dump_json_with_parts(parts_to_attach)
+                raise
+            logging.warning(
+                'Replica was restored, but some part failed to attach with error "{}". Will attach other parts',
+                msg,
+            )
+
+            for part in parts_to_attach:
+                try:
+                    attach_part(ctx, database, table, part["name"], dry_run)
+                except ClickhouseError as e_:
+                    msg = e_.response.text.strip()
+                    if "NO_ZOOKEEPER" in msg or "Session expired" in msg:
+                        _dump_json_with_parts(parts_to_attach)
+                        raise
+
+
+def _dump_json_with_parts(parts_to_attach):
+    logging.error(
+        """
+                Failed to restore replica with, try again when connection to ZooKeeper is restored.
+                List of active parts before restore will be saved to "{}" file in case they are detached"
+                """,
+        RESTORE_STATE_FILE_PATH,
+    )
+    # "data" key is required in attach command
+    data = {"data": parts_to_attach}
+    with open(RESTORE_STATE_FILE_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f)
