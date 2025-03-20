@@ -1,4 +1,6 @@
+import grp
 import os
+import pwd
 from collections import OrderedDict
 from typing import Any
 
@@ -13,6 +15,9 @@ from cloup.constraints import (
 )
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
+from ch_tools.chadmin.cli.table_metadata import parse_table_metadata
+from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
+from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
 from ch_tools.chadmin.internal.table import (
     attach_table,
     delete_detached_table,
@@ -26,6 +31,7 @@ from ch_tools.chadmin.internal.table import (
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import format_bytes, print_response
+from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 from ch_tools.common.clickhouse.config import get_cluster_name
 
 FIELD_FORMATTERS = {
@@ -833,3 +839,76 @@ def set_flag_command(
     if verbose:
         for table_, flag_path in zip(tables, flag_paths):
             logging.info("{}: {}", table_["name"], flag_path)
+
+
+@table_group.command("change")
+@option("-d", "--database")
+@option("-t", "--table")
+@option("-uuid", "--uuid")
+@pass_context
+def change_uuid_command(ctx, database, table, uuid):
+    query = f"""
+        SELECT uuid, metadata_path FROM system.tables WHERE database='{database}' AND table='{table}'
+    """
+    rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)["data"]
+
+    logging.info("got rows: {}", rows)
+
+    assert len(rows) == 1
+
+    old_table_uuid = rows[0]["uuid"]
+    table_local_metadata_path = rows[0]["metadata_path"]
+
+    if match_str_ch_version(get_version(ctx), "25.1"):
+        table_local_metadata_path = CLICKHOUSE_PATH + "/" + table_local_metadata_path
+
+    # detach_table(
+    #     ctx,
+    #     database_name=database,
+    #     table_name=table,
+    #     echo=True,
+    # )
+    query = f"""
+        DETACH TABLE '{database}'.'{table}'
+    """
+
+    table_metadata = parse_table_metadata(table_local_metadata_path)
+    table_metadata.set_uuid(table_uuid=uuid)
+
+    table_metadata.update_metadata_file(table_local_metadata_path)
+
+    old_table_store_path = (
+        f"{CLICKHOUSE_PATH}/store/{old_table_uuid[:3]}/{old_table_uuid}"
+    )
+    logging.info("old_table_store_path={}", old_table_store_path)
+
+    assert os.path.exists(old_table_store_path)
+
+    # get_version
+    target = f"{CLICKHOUSE_PATH}/store/{uuid[:3]}"
+    if not os.path.exists(target):
+        logging.info("need create path={}", target)
+        os.mkdir(target)
+        os.chmod(target, 0o750)
+        uid = pwd.getpwnam("clickhouse").pw_uid
+        gid = grp.getgrnam("clickhouse").gr_gid
+
+        os.chown(target, uid, gid)
+    else:
+        logging.info("path exists: {}", target)
+
+    new_table_store_path = f"{CLICKHOUSE_PATH}/store/{uuid[:3]}/{uuid}"
+    logging.info("new_table_store_path={}", new_table_store_path)
+
+    os.rename(old_table_store_path, new_table_store_path)
+
+    uid = pwd.getpwnam("clickhouse").pw_uid
+    gid = grp.getgrnam("clickhouse").gr_gid
+    os.chown(new_table_store_path, uid, gid)
+
+    # attach_table(
+    #     ctx,
+    #     database_name=database,
+    #     table_name=table,
+    #     echo=True,
+    # )

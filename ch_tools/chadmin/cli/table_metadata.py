@@ -49,6 +49,22 @@ class TableMetadata:
         self.replica_path = replica_path
         self.replica_name = replica_name
 
+    def set_uuid(self, table_uuid):
+        assert _is_valid_uuid(table_uuid)
+        self.table_uuid = table_uuid
+
+    # todo
+    def update_metadata_file(self, file_path):
+        with open(file_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        uuid_pattern = r"UUID '[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}'"
+
+        lines[0] = re.sub(uuid_pattern, f"UUID '{self.table_uuid}'", lines[0])
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+
 
 def parse_table_metadata(table_metadata_path: str) -> TableMetadata:
     assert table_metadata_path.endswith(".sql")
