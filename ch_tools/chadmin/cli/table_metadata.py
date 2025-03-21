@@ -1,7 +1,13 @@
+import grp
+import os
+import pwd
 import re
 import uuid
 from enum import Enum
 from typing import Tuple
+
+from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
+from ch_tools.common import logging
 
 UUID_PATTERN = "UUID"
 ENGINE_PATTERN = "ENGINE"
@@ -118,3 +124,52 @@ def _parse_replica_params(line: str) -> Tuple[str, str]:
     path = match.group(1)
     name = match.group(2)
     return path, name
+
+
+def check_replica_path_contains_macros(path, macros):
+    pattern = rf"\{{{macros}\}}"
+    match = re.search(pattern, path)
+    return match is not None
+
+
+def update_uuid_table_metadata_file(table_local_metadata_path, new_uuid):
+    with open(table_local_metadata_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    uuid_pattern = r"UUID '[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}'"
+
+    lines[0] = re.sub(uuid_pattern, f"UUID '{new_uuid}'", lines[0])
+
+    with open(table_local_metadata_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+
+def change_table_uuid_local_disk(old_table_uuid, new_uuid):
+    old_table_store_path = (
+        f"{CLICKHOUSE_PATH}/store/{old_table_uuid[:3]}/{old_table_uuid}"
+    )
+    logging.info("old_table_store_path={}", old_table_store_path)
+
+    assert os.path.exists(old_table_store_path)
+
+    target = f"{CLICKHOUSE_PATH}/store/{new_uuid[:3]}"
+
+    if not os.path.exists(target):
+        logging.info("need create path={}", target)
+        os.mkdir(target)
+        os.chmod(target, 0o750)
+        uid = pwd.getpwnam("clickhouse").pw_uid
+        gid = grp.getgrnam("clickhouse").gr_gid
+
+        os.chown(target, uid, gid)
+    else:
+        logging.info("path exists: {}", target)
+
+    new_table_store_path = f"{CLICKHOUSE_PATH}/store/{new_uuid[:3]}/{new_uuid}"
+    logging.info("new_table_store_path={}", new_table_store_path)
+
+    os.rename(old_table_store_path, new_table_store_path)
+
+    uid = pwd.getpwnam("clickhouse").pw_uid
+    gid = grp.getgrnam("clickhouse").gr_gid
+    os.chown(new_table_store_path, uid, gid)
