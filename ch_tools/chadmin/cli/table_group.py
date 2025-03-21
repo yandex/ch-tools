@@ -1,4 +1,5 @@
 import os
+import sys
 from collections import OrderedDict
 from typing import Any
 
@@ -15,6 +16,8 @@ from cloup.constraints import (
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.cli.table_metadata import (
     change_table_uuid_local_disk,
+    check_replica_path_contains_macros,
+    parse_table_metadata,
     update_uuid_table_metadata_file,
 )
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
@@ -842,6 +845,23 @@ def set_flag_command(
             logging.info("{}: {}", table_["name"], flag_path)
 
 
+def verify_possible_change_uuid(table_local_metadata_path):
+    metadata = parse_table_metadata(table_local_metadata_path)
+
+    if metadata.table_engine.is_table_engine_replicated():
+        logging.info(
+            "Metadata={} with Replicated table engine, replica_name={}, replica_path={}",
+            table_local_metadata_path,
+            metadata.replica_name,
+            metadata.replica_path,
+        )
+        if check_replica_path_contains_macros(metadata.replica_path, "uuid"):
+            logging.error(
+                f"Changing talbe uuid wasnt allowed for table with replica_path={metadata.replica_path}"
+            )
+            sys.exit(1)
+
+
 @table_group.command("change")
 @option("-d", "--database")
 @option("-t", "--table")
@@ -857,6 +877,8 @@ def change_uuid_command(ctx, database, table, uuid):
     table_local_metadata_path = rows[0]["metadata_path"]
     if match_str_ch_version(get_version(ctx), "25.1"):
         table_local_metadata_path = CLICKHOUSE_PATH + "/" + table_local_metadata_path
+
+    verify_possible_change_uuid(table_local_metadata_path)
 
     query = f"""
         DETACH TABLE '{database}'.'{table}'
@@ -874,3 +896,4 @@ def change_uuid_command(ctx, database, table, uuid):
             f"{database}.{table}",
             ex,
         )
+        sys.exit(1)

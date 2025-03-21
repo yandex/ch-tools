@@ -126,6 +126,13 @@ def _parse_replica_params(line: str) -> Tuple[str, str]:
     return path, name
 
 
+def check_replica_path_contains_macros(path, macros):
+    pattern = fr"\{{{macros}\}}"
+
+    match = re.search(pattern, path)
+    return match is not None
+
+
 def update_uuid_table_metadata_file(table_local_metadata_path, new_uuid):
     with open(table_local_metadata_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
@@ -162,11 +169,7 @@ def change_table_uuid_local_disk(old_table_uuid, new_uuid):
     new_table_store_path = f"{CLICKHOUSE_PATH}/store/{new_uuid[:3]}/{new_uuid}"
     logging.info("new_table_store_path={}", new_table_store_path)
 
-    try:
-        os.rename(old_table_store_path, new_table_store_path)
-    except Exception as ex:
-        logging.error("Failed rename store directory from {} to {}. Need restore uuid in table metadata. {}", old_table_store_path, new_table_store_path, ex)
-        pass
+    os.rename(old_table_store_path, new_table_store_path)
 
     uid = pwd.getpwnam("clickhouse").pw_uid
     gid = grp.getgrnam("clickhouse").gr_gid
