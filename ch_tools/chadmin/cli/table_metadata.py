@@ -127,8 +127,7 @@ def _parse_replica_params(line: str) -> Tuple[str, str]:
 
 
 def check_replica_path_contains_macros(path, macros):
-    pattern = fr"\{{{macros}\}}"
-
+    pattern = rf"\{{{macros}\}}"
     match = re.search(pattern, path)
     return match is not None
 
