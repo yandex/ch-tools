@@ -240,5 +240,5 @@ Feature: chadmin table change uuid
     """
     Then it fails with response contains
     """
-    Changing talbe uuid wasnt allowed for table with replica_path=/clickhouse/foo/{uuid}
+    Changing talbe uuid was not allowed for table with replica_path=/clickhouse/foo/{uuid}
     """
