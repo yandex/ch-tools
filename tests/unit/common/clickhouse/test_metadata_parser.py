@@ -246,7 +246,7 @@ def test_last_merge_tree_family_engine():
         pytest.param(
             "/clickhouse/foo/uuid_something",
             False,
-            id="with simular uuid",
+            id="with similar uuid",
         ),
         pytest.param(
             "/clickhouse/foo/something",
