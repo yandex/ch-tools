@@ -857,7 +857,7 @@ def verify_possible_change_uuid(table_local_metadata_path):
         )
         if check_replica_path_contains_macros(metadata.replica_path, "uuid"):
             logging.error(
-                f"Changing table uuid was not allowed for table with replica_path={metadata.replica_path}"
+                f"Changing uuid for ReplicatedMergeTree that contains macros uuid in replica path was not allowed. replica_path={metadata.replica_path}"
             )
             sys.exit(1)
 

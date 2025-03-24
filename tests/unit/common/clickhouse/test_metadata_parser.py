@@ -2,6 +2,7 @@ import pytest
 
 from ch_tools.chadmin.cli.table_metadata import (
     MergeTreeFamilyEngines,
+    check_replica_path_contains_macros,
     parse_table_metadata,
 )
 
@@ -232,3 +233,27 @@ def test_is_engine_replicated(start, finish, is_replicated):
 def test_last_merge_tree_family_engine():
     engines_list = list(MergeTreeFamilyEngines)
     assert MergeTreeFamilyEngines.REPLICATED_GRAPHITE_MERGE_TREE == engines_list[-1]
+
+
+@pytest.mark.parametrize(
+    "path,result",
+    [
+        pytest.param(
+            "/clickhouse/foo/\\{uuid\\}",
+            True,
+            id="with uuid",
+        ),
+        pytest.param(
+            "/clickhouse/foo/uuid_something",
+            False,
+            id="with simular uuid",
+        ),
+        pytest.param(
+            "/clickhouse/foo/something",
+            False,
+            id="wo uuid",
+        ),
+    ],
+)
+def test_replicated_path_contains_uuid_macros(path, result):
+    assert result == check_replica_path_contains_macros(path=path, macros="uuid")
