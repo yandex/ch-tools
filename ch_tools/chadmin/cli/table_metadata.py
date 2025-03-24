@@ -130,7 +130,7 @@ def check_replica_path_contains_macros(path, macros):
     pattern = rf"\{{{macros}\}}"
     match = re.search(pattern, path)
     result = match is not None
-    logging.info("Check that {} contains macros {}, reuslt {}", path, macros, result)
+    logging.info("Check that {} contains macros {}, result {}", path, macros, result)
     return result
 
 
