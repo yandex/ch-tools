@@ -239,7 +239,7 @@ def test_last_merge_tree_family_engine():
     "path,result",
     [
         pytest.param(
-            "/clickhouse/foo/\\{uuid\\}",
+            "/clickhouse/foo/{uuid}",
             True,
             id="with uuid",
         ),

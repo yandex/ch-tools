@@ -129,9 +129,7 @@ def _parse_replica_params(line: str) -> Tuple[str, str]:
 def check_replica_path_contains_macros(path, macros):
     pattern = rf"\{{{macros}\}}"
     match = re.search(pattern, path)
-    result = match is not None
-    logging.info("Check that {} contains macros {}, result {}", path, macros, result)
-    return result
+    return match is not None
 
 
 def update_uuid_table_metadata_file(table_local_metadata_path, new_uuid):
