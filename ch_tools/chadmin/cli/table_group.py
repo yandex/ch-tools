@@ -1,4 +1,5 @@
 import os
+import sys
 from collections import OrderedDict
 from typing import Any
 
@@ -26,6 +27,7 @@ from ch_tools.chadmin.internal.table import (
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import format_bytes, print_response
+from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 from ch_tools.common.clickhouse.config import get_cluster_name
 
 FIELD_FORMATTERS = {
@@ -833,3 +835,20 @@ def set_flag_command(
     if verbose:
         for table_, flag_path in zip(tables, flag_paths):
             logging.info("{}: {}", table_["name"], flag_path)
+
+
+@table_group.command("check_no_different_uuid")
+@option("-d", "--database")
+@option("-t", "--table")
+@pass_context
+def check_no_different_uuid(ctx, database, table):
+    query = f"""
+        SELECT uuid FROM clusterAllReplicas('{{cluster}}', system.tables) WHERE database='{database}' AND table='{table}'
+    """
+    rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)["data"]
+    rows = set(row["uuid"] for row in rows)
+    logging.info("Table {} has uuid: {}", table, rows)
+
+    if len(rows) > 1:
+        logging.error("Table {} has different uuid", table)
+        sys.exit(1)
