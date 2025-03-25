@@ -133,7 +133,9 @@ def check_replica_path_contains_macros(path: str, macros: str) -> bool:
     return f"{{{macros}}}" in path
 
 
-def update_uuid_table_metadata_file(table_local_metadata_path: str, new_uuid: str) -> None:
+def update_uuid_table_metadata_file(
+    table_local_metadata_path: str, new_uuid: str
+) -> None:
     with open(table_local_metadata_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
