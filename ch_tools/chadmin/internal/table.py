@@ -17,6 +17,7 @@ from ch_tools.chadmin.internal.system import get_version
 from ch_tools.chadmin.internal.utils import execute_query, remove_from_disk
 from ch_tools.chadmin.internal.zookeeper_clean import clean_zk_metadata_for_hosts
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 
 DISK_LOCAL_KEY = "local"
 DISK_OBJECT_STORAGE_KEY = "object_storage"
@@ -182,6 +183,7 @@ def detach_table(
     ctx,
     database_name,
     table_name,
+    permanently=True,
     *,
     cluster=None,
     echo=False,
@@ -190,6 +192,8 @@ def detach_table(
     """
     Perform "DETACH TABLE" for the specified table.
     """
+    # pylint: disable=unused-argument
+
     logging.info("Detaching table `{}`.`{}`", database_name, table_name)
     timeout = ctx.obj["config"]["clickhouse"]["detach_table_timeout"]
     query = """
@@ -197,7 +201,9 @@ def detach_table(
         {%- if cluster %}
         ON CLUSTER '{{ cluster }}'
         {%- endif %}
+        {%- if permanently %}
         NO DELAY
+        {%- endif %}
         """
     execute_query(
         ctx,
@@ -464,3 +470,12 @@ def materialize_ttl(ctx, database_name, table_name, echo=False, dry_run=False):
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
     query = f"ALTER TABLE `{database_name}`.`{table_name}` MATERIALIZE TTL"
     execute_query(ctx, query, timeout=timeout, echo=echo, dry_run=dry_run, format_=None)
+
+
+def get_info_from_system_tables(ctx, database, table):
+    query = f"""
+        SELECT uuid, metadata_path FROM system.tables WHERE database='{database}' AND table='{table}'
+    """
+    rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)["data"]
+
+    return rows[0]

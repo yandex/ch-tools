@@ -9,8 +9,11 @@ from typing import Tuple
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
 from ch_tools.common import logging
 
-UUID_PATTERN = "UUID"
-ENGINE_PATTERN = "ENGINE"
+UUID_TOKEN = "UUID"
+ENGINE_TOKEN = "ENGINE"
+UUID_PATTERN = re.compile(
+    r"UUID '[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}'"
+)
 
 
 class MergeTreeFamilyEngines(Enum):
@@ -65,7 +68,7 @@ def parse_table_metadata(table_metadata_path: str) -> TableMetadata:
 
     with open(table_metadata_path, "r", encoding="utf-8") as metadata_file:
         for line in metadata_file:
-            if line.startswith("ATTACH TABLE") and UUID_PATTERN in line:
+            if line.startswith("ATTACH TABLE") and UUID_TOKEN in line:
                 assert table_uuid is None
                 table_uuid = _parse_uuid(line)
             if line.startswith("ENGINE ="):
@@ -109,7 +112,7 @@ def _parse_engine(line: str) -> MergeTreeFamilyEngines:
 
     match = pattern.search(line)
     if not match:
-        raise RuntimeError(f"Failed parse {ENGINE_PATTERN} from metadata.")
+        raise RuntimeError(f"Failed parse {ENGINE_TOKEN} from metadata.")
 
     return MergeTreeFamilyEngines.from_str(match.group(1))
 
@@ -126,28 +129,28 @@ def _parse_replica_params(line: str) -> Tuple[str, str]:
     return path, name
 
 
-def check_replica_path_contains_macros(path, macros):
-    pattern = rf"\{{{macros}\}}"
-    match = re.search(pattern, path)
-    return match is not None
+def check_replica_path_contains_macros(path: str, macros: str) -> bool:
+    return f"{{{macros}}}" in path
 
 
-def update_uuid_table_metadata_file(table_local_metadata_path, new_uuid):
+def update_uuid_table_metadata_file(table_local_metadata_path: str, new_uuid: str) -> None:
     with open(table_local_metadata_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
-    uuid_pattern = r"UUID '[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}'"
+    assert len(lines[0]) != 0
 
-    lines[0] = re.sub(uuid_pattern, f"UUID '{new_uuid}'", lines[0])
+    lines[0] = re.sub(UUID_PATTERN, f"UUID '{new_uuid}'", lines[0])
 
     with open(table_local_metadata_path, "w", encoding="utf-8") as f:
         f.writelines(lines)
 
 
-def change_table_uuid_local_disk(old_table_uuid, new_uuid):
-    old_table_store_path = (
-        f"{CLICKHOUSE_PATH}/store/{old_table_uuid[:3]}/{old_table_uuid}"
-    )
+def get_table_store_path(table_uuid: str) -> str:
+    return f"{CLICKHOUSE_PATH}/store/{table_uuid[:3]}/{table_uuid}"
+
+
+def move_table_local_store(old_table_uuid: str, new_uuid: str) -> None:
+    old_table_store_path = get_table_store_path(old_table_uuid)
     logging.info("old_table_store_path={}", old_table_store_path)
 
     assert os.path.exists(old_table_store_path)
@@ -165,7 +168,7 @@ def change_table_uuid_local_disk(old_table_uuid, new_uuid):
     else:
         logging.info("path exists: {}", target)
 
-    new_table_store_path = f"{CLICKHOUSE_PATH}/store/{new_uuid[:3]}/{new_uuid}"
+    new_table_store_path = get_table_store_path(new_uuid)
     logging.info("new_table_store_path={}", new_table_store_path)
 
     os.rename(old_table_store_path, new_table_store_path)

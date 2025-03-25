@@ -15,8 +15,8 @@ from cloup.constraints import (
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.cli.table_metadata import (
-    change_table_uuid_local_disk,
     check_replica_path_contains_macros,
+    move_table_local_store,
     parse_table_metadata,
     update_uuid_table_metadata_file,
 )
@@ -27,6 +27,7 @@ from ch_tools.chadmin.internal.table import (
     delete_detached_table,
     delete_table,
     detach_table,
+    get_info_from_system_tables,
     get_table,
     list_table_columns,
     list_tables,
@@ -35,7 +36,6 @@ from ch_tools.chadmin.internal.table import (
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import format_bytes, print_response
-from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 from ch_tools.common.clickhouse.config import get_cluster_name
 
 FIELD_FORMATTERS = {
@@ -845,7 +845,7 @@ def set_flag_command(
             logging.info("{}: {}", table_["name"], flag_path)
 
 
-def verify_possible_change_uuid(table_local_metadata_path):
+def verify_possible_change_uuid(table_local_metadata_path: str) -> None:
     metadata = parse_table_metadata(table_local_metadata_path)
 
     if metadata.table_engine.is_table_engine_replicated():
@@ -863,34 +863,28 @@ def verify_possible_change_uuid(table_local_metadata_path):
 
 
 @table_group.command("change")
-@option("-d", "--database")
-@option("-t", "--table")
-@option("-uuid", "--uuid")
+@option("-d", "--database", required=True)
+@option("-t", "--table", required=True)
+@option("-uuid", "--uuid", required=True)
 @pass_context
 def change_uuid_command(ctx, database, table, uuid):
-    query = f"""
-        SELECT uuid, metadata_path FROM system.tables WHERE database='{database}' AND table='{table}'
-    """
-    rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)["data"]
+    table_info = get_info_from_system_tables(ctx, database, table)
 
-    old_table_uuid = rows[0]["uuid"]
-    table_local_metadata_path = rows[0]["metadata_path"]
+    old_table_uuid = table_info["uuid"]
+    table_local_metadata_path = table_info["metadata_path"]
+
     if match_str_ch_version(get_version(ctx), "25.1"):
         table_local_metadata_path = CLICKHOUSE_PATH + "/" + table_local_metadata_path
 
     verify_possible_change_uuid(table_local_metadata_path)
-
-    query = f"""
-        DETACH TABLE '{database}'.'{table}'
-    """
-
+    detach_table(ctx, database_name=database, table_name=table, permanently=False)
     update_uuid_table_metadata_file(table_local_metadata_path, uuid)
 
     try:
-        change_table_uuid_local_disk(old_table_uuid, uuid)
+        move_table_local_store(old_table_uuid, uuid)
     except Exception as ex:
         logging.error(
-            "Failed change_table_uuid_local_disk. old uuid={}, new_uuid={}. Need restore uuid in metadata for table={}. error={}",
+            "Failed move_table_local_store. old uuid={}, new_uuid={}. Need restore uuid in metadata for table={}. error={}",
             old_table_uuid,
             uuid,
             f"{database}.{table}",
