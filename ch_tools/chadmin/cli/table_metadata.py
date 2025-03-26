@@ -6,7 +6,10 @@ import uuid
 from enum import Enum
 from typing import Tuple
 
+from click import Context
+
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
+from ch_tools.chadmin.internal.zookeeper import get_zk_node
 from ch_tools.common import logging
 
 UUID_TOKEN = "UUID"
@@ -178,3 +181,12 @@ def move_table_local_store(old_table_uuid: str, new_uuid: str) -> None:
     uid = pwd.getpwnam("clickhouse").pw_uid
     gid = grp.getgrnam("clickhouse").gr_gid
     os.chown(new_table_store_path, uid, gid)
+
+
+def get_table_shared_id(ctx: Context, zookeeper_path: str) -> str:
+    table_shared_id_node_path = zookeeper_path + "/table_shared_id"
+
+    table_uuid = get_zk_node(ctx, table_shared_id_node_path)
+    logging.info("zk_path={} contains table_shared_id={}", zookeeper_path, table_uuid)
+
+    return table_uuid

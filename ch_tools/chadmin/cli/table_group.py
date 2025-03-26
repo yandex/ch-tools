@@ -16,6 +16,7 @@ from cloup.constraints import (
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.cli.table_metadata import (
     check_replica_path_contains_macros,
+    get_table_shared_id,
     move_table_local_store,
     parse_table_metadata,
     update_uuid_table_metadata_file,
@@ -845,7 +846,9 @@ def set_flag_command(
             logging.info("{}: {}", table_["name"], flag_path)
 
 
-def verify_possible_change_uuid(table_local_metadata_path: str) -> None:
+def verify_possible_change_uuid(
+    ctx: Context, table_local_metadata_path: str, dst_uuid: str
+) -> None:
     metadata = parse_table_metadata(table_local_metadata_path)
 
     if metadata.table_engine.is_table_engine_replicated():
@@ -860,6 +863,18 @@ def verify_possible_change_uuid(table_local_metadata_path: str) -> None:
                 f"Changing uuid for ReplicatedMergeTree that contains macros uuid in replica path was not allowed. replica_path={metadata.replica_path}"
             )
             sys.exit(1)
+
+        table_shared_id = get_table_shared_id(ctx, metadata.replica_path)
+
+        if dst_uuid != table_shared_id:
+            logging.error(
+                f"Changing uuid for ReplicatedMergeTree that different from table_shared_id path was not allowed. replica_path={metadata.replica_path}, dst_uuid={dst_uuid}, table_shared_id={table_shared_id}"
+            )
+            sys.exit(1)
+
+    if metadata.table_uuid == dst_uuid:
+        logging.error("Table has already had uuid {}", metadata.table_uuid)
+        sys.exit(1)
 
 
 @table_group.command("change")
@@ -876,7 +891,7 @@ def change_uuid_command(ctx, database, table, uuid):
     if match_str_ch_version(get_version(ctx), "25.1"):
         table_local_metadata_path = CLICKHOUSE_PATH + "/" + table_local_metadata_path
 
-    verify_possible_change_uuid(table_local_metadata_path)
+    verify_possible_change_uuid(ctx, table_local_metadata_path, uuid)
     detach_table(ctx, database_name=database, table_name=table, permanently=False)
     update_uuid_table_metadata_file(table_local_metadata_path, uuid)
 
