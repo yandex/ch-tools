@@ -1,3 +1,4 @@
+import operator
 import re
 
 from click import Context
@@ -7,9 +8,17 @@ from ch_tools.chadmin.internal.utils import clickhouse_client
 
 
 def validate_version(version: str) -> None:
-    pattern = r"^\d+\.\d+\.\d+\.\d+$"
+    pattern = r"^\d+\.\d+\.\d+\.\d+(.+)?$"
 
     assert re.match(pattern, version), f"version={version} has broken format"
+
+
+def strip_version_suffix(version: str) -> str:
+    """
+    Strips suffix after numeric version.
+    """
+
+    return re.sub(r"^(\d+\.\d+\.\d+\.\d+)(.+)?$", r"\1", version)
 
 
 def get_version(ctx: Context) -> str:
@@ -35,4 +44,8 @@ def match_str_ch_version(version: str, min_version: str) -> bool:
     Returns True if ClickHouse version >= min_version.
     """
     validate_version(version)
-    return parse_version(version) >= parse_version(min_version)
+
+    return operator.ge(
+        parse_version(strip_version_suffix(version)),
+        parse_version(strip_version_suffix(min_version)),
+    )
