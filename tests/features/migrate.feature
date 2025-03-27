@@ -110,7 +110,7 @@ Feature: migrate engine
     Table foo has different uuid
     """
 
-    @require_version_24.8
+  @require_version_24.8
   Scenario: Check uuid for ReplicatedMergeTree with uuid macros
     When we execute query on clickhouse01
     """
