@@ -909,11 +909,11 @@ def change_uuid_command(ctx, database, table, uuid):
         sys.exit(1)
 
 
-@table_group.command("check_no_different_uuid")
+@table_group.command("check-uuid-equal")
 @option("-d", "--database", required=True)
 @option("-t", "--table", required=True)
 @pass_context
-def check_no_different_uuid(ctx, database, table):
+def check_uuid_equal(ctx, database, table):
     uuids = get_table_uuids_from_cluster(ctx, database, table)
     logging.info("Table {} has uuid: {}", table, uuids)
 

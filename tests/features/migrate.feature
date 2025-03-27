@@ -24,7 +24,7 @@ Feature: migrate engine
     """
     And we execute command on clickhouse01
     """
-    chadmin table check_no_different_uuid -d non_repl_db -t foo
+    chadmin table check-uuid-equal -d non_repl_db -t foo
     """
     Then it completes successfully
 
@@ -54,7 +54,7 @@ Feature: migrate engine
     """
     When we try to execute command on clickhouse01
     """
-    chadmin table check_no_different_uuid -d non_repl_db -t foo
+    chadmin table check-uuid-equal -d non_repl_db -t foo
     """
     Then it fails with response contains
     """
@@ -62,7 +62,7 @@ Feature: migrate engine
     """
     When we try to execute command on clickhouse02
     """
-    chadmin table check_no_different_uuid -d non_repl_db -t foo
+    chadmin table check-uuid-equal -d non_repl_db -t foo
     """
     Then it fails with response contains
     """
@@ -95,7 +95,7 @@ Feature: migrate engine
     """
     When we try to execute command on clickhouse01
     """
-    chadmin table check_no_different_uuid -d non_repl_db -t foo
+    chadmin table check-uuid-equal -d non_repl_db -t foo
     """
     Then it fails with response contains
     """
@@ -103,7 +103,7 @@ Feature: migrate engine
     """
     When we try to execute command on clickhouse02
     """
-    chadmin table check_no_different_uuid -d non_repl_db -t foo
+    chadmin table check-uuid-equal -d non_repl_db -t foo
     """
     Then it fails with response contains
     """
@@ -128,11 +128,11 @@ Feature: migrate engine
     """
     When we execute command on clickhouse01
     """
-    chadmin table check_no_different_uuid -d non_repl_db -t foo
+    chadmin table check-uuid-equal -d non_repl_db -t foo
     """
     Then it completes successfully
     When we execute command on clickhouse02
     """
-    chadmin table check_no_different_uuid -d non_repl_db -t foo
+    chadmin table check-uuid-equal -d non_repl_db -t foo
     """
     Then it completes successfully
