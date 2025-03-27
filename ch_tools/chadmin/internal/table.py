@@ -486,4 +486,4 @@ def get_table_uuids_from_cluster(ctx: Context, database: str, table: str) -> lis
         SELECT uuid FROM clusterAllReplicas('{{cluster}}', system.tables) WHERE database='{database}' AND table='{table}'
     """
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)["data"]
-    return set(row["uuid"] for row in rows)
+    return list(set(row["uuid"] for row in rows))
