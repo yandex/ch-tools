@@ -101,6 +101,32 @@ def step_save_table_uuid(context, table, node):
     context.uuid_to_table[table] = response
 
 
+@then(
+    "check uuid table {table} equal to table_shared_id by path {table_shared_id_path} on {node:w}"
+)
+def step_check_table_uuid_equal_zk(context, table, table_shared_id_path, node):
+    query = f"SELECT uuid FROM system.tables WHERE name='{table}'"
+    ret_code, local_uuid = get_response(context, node, query)
+    assert 200 == ret_code
+
+    container = get_container(context, node)
+    context.command = f"chadmin zookeeper get '{table_shared_id_path}'"
+    result = container.exec_run(["bash", "-c", context.command], user="root")
+
+    assert result.exit_code == 0, (
+        f'"{context.command}" failed with exit code {result.exit_code},'
+        f" output:\n {result.response}"
+    )
+
+    table_shared_id = result.output.decode().strip()
+
+    assert_that(
+        local_uuid,
+        equal_to(table_shared_id),
+        f"local_uuid {local_uuid} not equal table_shared_id {table_shared_id}",
+    )
+
+
 @then("check {disk} disk contains table {table} data in {node:w}")
 def step_check_disk_contains_table_data(context, disk, table, node):
     """

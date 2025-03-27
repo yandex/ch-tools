@@ -1,10 +1,22 @@
+import grp
+import os
+import pwd
 import re
 import uuid
 from enum import Enum
 from typing import Tuple
 
-UUID_PATTERN = "UUID"
-ENGINE_PATTERN = "ENGINE"
+from click import Context
+
+from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
+from ch_tools.chadmin.internal.zookeeper import get_zk_node
+from ch_tools.common import logging
+
+UUID_TOKEN = "UUID"
+ENGINE_TOKEN = "ENGINE"
+UUID_PATTERN = re.compile(
+    r"UUID '[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}'"
+)
 
 
 class MergeTreeFamilyEngines(Enum):
@@ -59,7 +71,7 @@ def parse_table_metadata(table_metadata_path: str) -> TableMetadata:
 
     with open(table_metadata_path, "r", encoding="utf-8") as metadata_file:
         for line in metadata_file:
-            if line.startswith("ATTACH TABLE") and UUID_PATTERN in line:
+            if line.startswith("ATTACH TABLE") and UUID_TOKEN in line:
                 assert table_uuid is None
                 table_uuid = _parse_uuid(line)
             if line.startswith("ENGINE ="):
@@ -103,7 +115,7 @@ def _parse_engine(line: str) -> MergeTreeFamilyEngines:
 
     match = pattern.search(line)
     if not match:
-        raise RuntimeError(f"Failed parse {ENGINE_PATTERN} from metadata.")
+        raise RuntimeError(f"Failed parse {ENGINE_TOKEN} from metadata.")
 
     return MergeTreeFamilyEngines.from_str(match.group(1))
 
@@ -118,3 +130,63 @@ def _parse_replica_params(line: str) -> Tuple[str, str]:
     path = match.group(1)
     name = match.group(2)
     return path, name
+
+
+def check_replica_path_contains_macros(path: str, macros: str) -> bool:
+    return f"{{{macros}}}" in path
+
+
+def update_uuid_table_metadata_file(
+    table_local_metadata_path: str, new_uuid: str
+) -> None:
+    with open(table_local_metadata_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    assert len(lines[0]) != 0
+
+    lines[0] = re.sub(UUID_PATTERN, f"UUID '{new_uuid}'", lines[0])
+
+    with open(table_local_metadata_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+
+def get_table_store_path(table_uuid: str) -> str:
+    return f"{CLICKHOUSE_PATH}/store/{table_uuid[:3]}/{table_uuid}"
+
+
+def move_table_local_store(old_table_uuid: str, new_uuid: str) -> None:
+    old_table_store_path = get_table_store_path(old_table_uuid)
+    logging.info("old_table_store_path={}", old_table_store_path)
+
+    assert os.path.exists(old_table_store_path)
+
+    target = f"{CLICKHOUSE_PATH}/store/{new_uuid[:3]}"
+
+    if not os.path.exists(target):
+        logging.info("need create path={}", target)
+        os.mkdir(target)
+        os.chmod(target, 0o750)
+        uid = pwd.getpwnam("clickhouse").pw_uid
+        gid = grp.getgrnam("clickhouse").gr_gid
+
+        os.chown(target, uid, gid)
+    else:
+        logging.info("path exists: {}", target)
+
+    new_table_store_path = get_table_store_path(new_uuid)
+    logging.info("new_table_store_path={}", new_table_store_path)
+
+    os.rename(old_table_store_path, new_table_store_path)
+
+    uid = pwd.getpwnam("clickhouse").pw_uid
+    gid = grp.getgrnam("clickhouse").gr_gid
+    os.chown(new_table_store_path, uid, gid)
+
+
+def get_table_shared_id(ctx: Context, zookeeper_path: str) -> str:
+    table_shared_id_node_path = zookeeper_path + "/table_shared_id"
+
+    table_uuid = get_zk_node(ctx, table_shared_id_node_path)
+    logging.info("zk_path={} contains table_shared_id={}", zookeeper_path, table_uuid)
+
+    return table_uuid
