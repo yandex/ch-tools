@@ -479,3 +479,11 @@ def get_info_from_system_tables(ctx, database, table):
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)["data"]
 
     return rows[0]
+
+
+def get_table_uuids_from_cluster(ctx: Context, database: str, table: str) -> list:
+    query = f"""
+        SELECT uuid FROM clusterAllReplicas('{{cluster}}', system.tables) WHERE database='{database}' AND table='{table}'
+    """
+    rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)["data"]
+    return list(set(row["uuid"] for row in rows))

@@ -30,6 +30,7 @@ from ch_tools.chadmin.internal.table import (
     detach_table,
     get_info_from_system_tables,
     get_table,
+    get_table_uuids_from_cluster,
     list_table_columns,
     list_tables,
     materialize_ttl,
@@ -905,4 +906,17 @@ def change_uuid_command(ctx, database, table, uuid):
             f"{database}.{table}",
             ex,
         )
+        sys.exit(1)
+
+
+@table_group.command("check-uuid-equal")
+@option("-d", "--database", required=True)
+@option("-t", "--table", required=True)
+@pass_context
+def check_uuid_equal(ctx, database, table):
+    uuids = get_table_uuids_from_cluster(ctx, database, table)
+    logging.info("Table {} has uuid: {}", table, uuids)
+
+    if len(uuids) > 1:
+        logging.error("Table {} has different uuid in cluster", table)
         sys.exit(1)
