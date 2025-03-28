@@ -1,19 +1,9 @@
-import grp
-import os
-import pwd
 import re
-import uuid
 from enum import Enum
 from typing import Tuple
 
-from click import Context
+from ch_tools.chadmin.cli import metadata
 
-from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
-from ch_tools.chadmin.internal.zookeeper import get_zk_node
-from ch_tools.common import logging
-
-UUID_TOKEN = "UUID"
-ENGINE_TOKEN = "ENGINE"
 UUID_PATTERN = re.compile(
     r"UUID '[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}'"
 )
@@ -71,9 +61,9 @@ def parse_table_metadata(table_metadata_path: str) -> TableMetadata:
 
     with open(table_metadata_path, "r", encoding="utf-8") as metadata_file:
         for line in metadata_file:
-            if line.startswith("ATTACH TABLE") and UUID_TOKEN in line:
+            if line.startswith("ATTACH TABLE") and metadata.UUID_TOKEN in line:
                 assert table_uuid is None
-                table_uuid = _parse_uuid(line)
+                table_uuid = metadata.parse_uuid(line)
             if line.startswith("ENGINE ="):
                 assert table_engine is None
                 table_engine = _parse_engine(line)
@@ -89,37 +79,17 @@ def parse_table_metadata(table_metadata_path: str) -> TableMetadata:
     return TableMetadata(table_uuid, table_engine, replica_path, replica_name)
 
 
-def _is_valid_uuid(uuid_str: str) -> bool:
-    try:
-        val = uuid.UUID(uuid_str)
-    except ValueError:
-        return False
-    return str(val) == uuid_str
-
-
-def _parse_uuid(line: str) -> str:
-    uuid_pattern = re.compile(r"UUID\s+'([a-f0-9-]+)'", re.IGNORECASE)
-    match = uuid_pattern.search(line)
-
-    if not match:
-        raise RuntimeError("Failed parse UUID from metadata.")
-
-    result = match.group(1)
-    if not _is_valid_uuid(result):
-        raise RuntimeError("Failed parse UUID from metadata.")
-    return result
-
-
 def _parse_engine(line: str) -> MergeTreeFamilyEngines:
     pattern = re.compile(r"ENGINE = (\w+)")
 
     match = pattern.search(line)
     if not match:
-        raise RuntimeError(f"Failed parse {ENGINE_TOKEN} from metadata.")
+        raise RuntimeError(f"Failed parse {metadata.ENGINE_TOKEN} from metadata.")
 
     return MergeTreeFamilyEngines.from_str(match.group(1))
 
 
+# table_replca?
 def _parse_replica_params(line: str) -> Tuple[str, str]:
     pattern = r"ENGINE = Replicated\w*MergeTree\('([^']*)', '([^']*)'(?:, [^)]*)?\)"
     match = re.match(pattern, line)
@@ -132,6 +102,7 @@ def _parse_replica_params(line: str) -> Tuple[str, str]:
     return path, name
 
 
+# @todo move to table/replica?
 def check_replica_path_contains_macros(path: str, macros: str) -> bool:
     return f"{{{macros}}}" in path
 
@@ -148,45 +119,3 @@ def update_uuid_table_metadata_file(
 
     with open(table_local_metadata_path, "w", encoding="utf-8") as f:
         f.writelines(lines)
-
-
-def get_table_store_path(table_uuid: str) -> str:
-    return f"{CLICKHOUSE_PATH}/store/{table_uuid[:3]}/{table_uuid}"
-
-
-def move_table_local_store(old_table_uuid: str, new_uuid: str) -> None:
-    old_table_store_path = get_table_store_path(old_table_uuid)
-    logging.info("old_table_store_path={}", old_table_store_path)
-
-    assert os.path.exists(old_table_store_path)
-
-    target = f"{CLICKHOUSE_PATH}/store/{new_uuid[:3]}"
-
-    if not os.path.exists(target):
-        logging.info("need create path={}", target)
-        os.mkdir(target)
-        os.chmod(target, 0o750)
-        uid = pwd.getpwnam("clickhouse").pw_uid
-        gid = grp.getgrnam("clickhouse").gr_gid
-
-        os.chown(target, uid, gid)
-    else:
-        logging.info("path exists: {}", target)
-
-    new_table_store_path = get_table_store_path(new_uuid)
-    logging.info("new_table_store_path={}", new_table_store_path)
-
-    os.rename(old_table_store_path, new_table_store_path)
-
-    uid = pwd.getpwnam("clickhouse").pw_uid
-    gid = grp.getgrnam("clickhouse").gr_gid
-    os.chown(new_table_store_path, uid, gid)
-
-
-def get_table_shared_id(ctx: Context, zookeeper_path: str) -> str:
-    table_shared_id_node_path = zookeeper_path + "/table_shared_id"
-
-    table_uuid = get_zk_node(ctx, table_shared_id_node_path)
-    logging.info("zk_path={} contains table_shared_id={}", zookeeper_path, table_uuid)
-
-    return table_uuid

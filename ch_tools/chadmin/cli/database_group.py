@@ -2,6 +2,11 @@ from cloup import argument, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
+from ch_tools.chadmin.internal.migration import (
+    is_first_replica_migrate,
+    migrate_as_first_replica,
+    migrate_as_non_first_replica,
+)
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_cluster_name
@@ -166,3 +171,17 @@ def get_databases(
         active_parts=active_parts,
         format_=format_,
     )
+
+
+@database_group.command("migrate")
+@option("-d", "--database", required=True)
+@pass_context
+def migrate_engine_command(ctx, database):
+    # @todo try-except
+    temp_db = f"temp_migrate_{database}"
+
+    if is_first_replica_migrate(ctx, database):
+        logging.info("First migrate")
+        migrate_as_first_replica(ctx, database, temp_db)
+    else:
+        migrate_as_non_first_replica(ctx, database, temp_db)
