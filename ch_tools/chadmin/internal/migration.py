@@ -11,6 +11,7 @@ from ch_tools.chadmin.cli.database_metadata import (
 )
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
 from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
+from ch_tools.chadmin.internal.table import change_table_uuid, detach_table
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
@@ -113,19 +114,15 @@ def migrate_as_first_replica(
 def migrate_as_non_first_replica(ctx, database_name, temp_db):
     metadata_non_repl_db = parse_database_from_metadata(database_name)
     metadata_temp_db = parse_database_from_metadata(temp_db)
-
     original_engine = metadata_non_repl_db.database_engine
-
-    # @todo what is tables?
-    tables = _get_tables_local_metadata_path(ctx, database_name)
+    tables_info = _get_tables_info_and_detach(ctx, database_name)
 
     _detach_dbs(ctx, dbs=[database_name, temp_db])
 
     metadata_non_repl_db.set_engine_from(metadata_temp_db)
     metadata_non_repl_db.update_metadata_file()
 
-    # @todo use chadmon as preparation instead this
-    _change_uuid_tables(ctx, tables, database_name)
+    _change_tables_uuid(ctx, tables_info, database_name)
 
     metadata_temp_db.database_engine = original_engine
     metadata_temp_db.update_metadata_file()
@@ -289,8 +286,7 @@ def _remove_temp_db(ctx: Context, metadata_temp_db: DatabaseMetadata) -> None:
     )
 
 
-# @todo not suitable name
-def _get_tables_local_metadata_path(ctx: Context, database_name: str) -> dict:
+def _get_tables_info_and_detach(ctx: Context, database_name: str) -> dict:
     query = f"""
         SELECT database, name, uuid, create_table_query, metadata_path FROM system.tables WHERE database='{database_name}'
     """
@@ -311,25 +307,15 @@ def _get_tables_local_metadata_path(ctx: Context, database_name: str) -> dict:
             create_table_query,
         )
 
-        # @todo change
-        query = f"""
-            DETACH TABLE {database_name}.{table_name}
-        """
-        execute_query(
-            ctx,
-            query,
-            echo=True,
-            format_=None,
+        detach_table(
+            ctx, database_name=database_name, table_name=table_name, permanently=False
         )
-
-        # if match_str_ch_version(get_version(ctx), "25.1"):
-        #     metadata_path = CLICKHOUSE_PATH + "/" + metadata_path
 
     logging.info("Database {} contains tables: {}", database_name, tables)
     return tables
 
 
-def _change_uuid_tables(ctx: Context, tables: dict, database_name: str) -> None:
+def _change_tables_uuid(ctx: Context, tables: dict, database_name: str) -> None:
     for row in tables:
         table_local_metadata_path = row["metadata_path"]
         if match_str_ch_version(get_version(ctx), "25.1"):
@@ -337,67 +323,26 @@ def _change_uuid_tables(ctx: Context, tables: dict, database_name: str) -> None:
 
         table_name = row["name"]
         database_name = row["database"]
-
-        nodes = list_zk_nodes(ctx, f"/clickhouse/{database_name}/metadata")
-        logging.info("Found nodes in metadata: {}", nodes)
+        old_table_uuid = row["uuid"]
 
         zk_metadata_path = f"/clickhouse/{database_name}/metadata/{table_name}"
         zk_table_metadata = get_zk_node(ctx, zk_metadata_path)
 
-        logging.info("zk_table_metadata: \n{}\n", zk_table_metadata)
+        zk_table_uuid = metadata.parse_uuid(zk_table_metadata)
 
-        # todo form zk?
-        old_table_uuid = ""
-        with open(table_local_metadata_path, "r", encoding="utf-8") as metadata_file:
-            line = metadata_file.readline()
-            if line.startswith("ATTACH TABLE") and metadata.UUID_TOKEN in line:
-                old_table_uuid = metadata.parse_uuid(line)
-
-        old_path = f"{CLICKHOUSE_PATH}/store/{old_table_uuid[:3]}/{old_table_uuid}"
-        logging.info("old_path={}", old_path)
-
-        assert os.path.exists(old_path)
-
-        logging.info("old_table_uuid={} for table={}", old_table_uuid, table_name)
-
-        with open(
-            table_local_metadata_path, "w", encoding="utf-8"
-        ) as local_metadata_file:
-            local_metadata_file.write(zk_table_metadata + "\n")
-
-        target_table_uuid = ""
-        with open(table_local_metadata_path, "r", encoding="utf-8") as metadata_file:
-            line = metadata_file.readline()
-            if line.startswith("ATTACH TABLE") and metadata.UUID_TOKEN in line:
-                # assert target_table_uuid is None
-                target_table_uuid = metadata.parse_uuid(line)
-
-        logging.info("New from zk  uuid={} for table={}", target_table_uuid, table_name)
-
-        target = f"{CLICKHOUSE_PATH}/store/{target_table_uuid[:3]}"
-        if not os.path.exists(target):
-            # old = f"{CLICKHOUSE_PATH}/store/{old_table_uuid[:3]}"
-            logging.info("need create path={}", target)
-            # st = os.stat(old)
-            # mode = os.stat.S_IMODE(st.st_mode)
-            os.mkdir(target)
-            os.chmod(target, 0o750)
-            uid = pwd.getpwnam("clickhouse").pw_uid
-            gid = grp.getgrnam("clickhouse").gr_gid
-
-            os.chown(target, uid, gid)
-        else:
-            logging.info("path exists: {}", target)
-
-        dst_path = (
-            f"{CLICKHOUSE_PATH}/store/{target_table_uuid[:3]}/{target_table_uuid}"
+        logging.info(
+            "Table {} has old_table_uuid={}, zk_table_uuid={}",
+            table_name,
+            old_table_uuid,
+            zk_table_uuid,
         )
-        logging.info("dst_path={}", dst_path)
 
-        os.rename(old_path, dst_path)
-
-        uid = pwd.getpwnam("clickhouse").pw_uid
-        gid = grp.getgrnam("clickhouse").gr_gid
-        os.chown(dst_path, uid, gid)
-
-        # assert len(zk_table_metadata) == len(table_local_metadata_after)
+        change_table_uuid(
+            ctx,
+            database=database_name,
+            table=table_name,
+            new_uuid=zk_table_uuid,
+            old_table_uuid=old_table_uuid,
+            table_local_metadata_path=table_local_metadata_path,
+            attached=False,
+        )

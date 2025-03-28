@@ -20,6 +20,7 @@ from ch_tools.chadmin.internal.table import (
     delete_detached_table,
     delete_table,
     detach_table,
+    get_info_from_system_tables,
     get_table,
     get_table_uuids_from_cluster,
     list_table_columns,
@@ -844,7 +845,20 @@ def set_flag_command(
 @option("-uuid", "--uuid", required=True)
 @pass_context
 def change_uuid_command(ctx, database, table, uuid):
-    change_table_uuid(ctx, database, table, uuid)
+    table_info = get_info_from_system_tables(ctx, database, table)
+
+    old_table_uuid = table_info["uuid"]
+    table_local_metadata_path = table_info["metadata_path"]
+
+    change_table_uuid(
+        ctx,
+        database,
+        table,
+        new_uuid=uuid,
+        old_table_uuid=old_table_uuid,
+        table_local_metadata_path=table_local_metadata_path,
+        attached=True,
+    )
 
 
 @table_group.command("check-uuid-equal")

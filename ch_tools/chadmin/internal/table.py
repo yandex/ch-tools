@@ -19,7 +19,7 @@ from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
 from ch_tools.chadmin.internal.table_metadata import (
     check_replica_path_contains_macros,
     parse_table_metadata,
-    update_uuid_table_metadata_file
+    update_uuid_table_metadata_file,
 )
 from ch_tools.chadmin.internal.utils import execute_query, remove_from_disk
 from ch_tools.chadmin.internal.zookeeper import get_zk_node
@@ -571,26 +571,30 @@ def _move_table_local_store(old_table_uuid: str, new_uuid: str) -> None:
     os.chown(new_table_store_path, uid, gid)
 
 
-def change_table_uuid(ctx, database, table, uuid):
-    table_info = get_info_from_system_tables(ctx, database, table)
-
-    old_table_uuid = table_info["uuid"]
-    table_local_metadata_path = table_info["metadata_path"]
-
+def change_table_uuid(
+    ctx: Context,
+    database: str,
+    table: str,
+    new_uuid: str,
+    old_table_uuid: str,
+    table_local_metadata_path: str,
+    attached: bool,
+) -> None:
     if match_str_ch_version(get_version(ctx), "25.1"):
         table_local_metadata_path = CLICKHOUSE_PATH + "/" + table_local_metadata_path
 
-    _verify_possible_change_uuid(ctx, table_local_metadata_path, uuid)
-    detach_table(ctx, database_name=database, table_name=table, permanently=False)
-    update_uuid_table_metadata_file(table_local_metadata_path, uuid)
+    _verify_possible_change_uuid(ctx, table_local_metadata_path, new_uuid)
+    if attached:
+        detach_table(ctx, database_name=database, table_name=table, permanently=False)
+    update_uuid_table_metadata_file(table_local_metadata_path, new_uuid)
 
     try:
-        _move_table_local_store(old_table_uuid, uuid)
+        _move_table_local_store(old_table_uuid, new_uuid)
     except Exception as ex:
         logging.error(
             "Failed move_table_local_store. old uuid={}, new_uuid={}. Need restore uuid in metadata for table={}. error={}",
             old_table_uuid,
-            uuid,
+            new_uuid,
             f"{database}.{table}",
             ex,
         )
