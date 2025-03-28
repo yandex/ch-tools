@@ -1,7 +1,3 @@
-import grp
-import os
-import pwd
-
 from click import Context
 
 from ch_tools.chadmin.cli import metadata
