@@ -1,16 +1,8 @@
-import grp
-import os
-import pwd
 import re
 from enum import Enum
 from typing import Tuple
 
-from click import Context
-
 from ch_tools.chadmin.cli import metadata
-from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
-from ch_tools.chadmin.internal.zookeeper import get_zk_node
-from ch_tools.common import logging
 
 UUID_PATTERN = re.compile(
     r"UUID '[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}'"
@@ -97,6 +89,7 @@ def _parse_engine(line: str) -> MergeTreeFamilyEngines:
     return MergeTreeFamilyEngines.from_str(match.group(1))
 
 
+# table_replca?
 def _parse_replica_params(line: str) -> Tuple[str, str]:
     pattern = r"ENGINE = Replicated\w*MergeTree\('([^']*)', '([^']*)'(?:, [^)]*)?\)"
     match = re.match(pattern, line)
@@ -109,6 +102,7 @@ def _parse_replica_params(line: str) -> Tuple[str, str]:
     return path, name
 
 
+# @todo move to table/replica?
 def check_replica_path_contains_macros(path: str, macros: str) -> bool:
     return f"{{{macros}}}" in path
 
@@ -125,45 +119,3 @@ def update_uuid_table_metadata_file(
 
     with open(table_local_metadata_path, "w", encoding="utf-8") as f:
         f.writelines(lines)
-
-
-def get_table_store_path(table_uuid: str) -> str:
-    return f"{CLICKHOUSE_PATH}/store/{table_uuid[:3]}/{table_uuid}"
-
-
-def move_table_local_store(old_table_uuid: str, new_uuid: str) -> None:
-    old_table_store_path = get_table_store_path(old_table_uuid)
-    logging.info("old_table_store_path={}", old_table_store_path)
-
-    assert os.path.exists(old_table_store_path)
-
-    target = f"{CLICKHOUSE_PATH}/store/{new_uuid[:3]}"
-
-    if not os.path.exists(target):
-        logging.info("need create path={}", target)
-        os.mkdir(target)
-        os.chmod(target, 0o750)
-        uid = pwd.getpwnam("clickhouse").pw_uid
-        gid = grp.getgrnam("clickhouse").gr_gid
-
-        os.chown(target, uid, gid)
-    else:
-        logging.info("path exists: {}", target)
-
-    new_table_store_path = get_table_store_path(new_uuid)
-    logging.info("new_table_store_path={}", new_table_store_path)
-
-    os.rename(old_table_store_path, new_table_store_path)
-
-    uid = pwd.getpwnam("clickhouse").pw_uid
-    gid = grp.getgrnam("clickhouse").gr_gid
-    os.chown(new_table_store_path, uid, gid)
-
-
-def get_table_shared_id(ctx: Context, zookeeper_path: str) -> str:
-    table_shared_id_node_path = zookeeper_path + "/table_shared_id"
-
-    table_uuid = get_zk_node(ctx, table_shared_id_node_path)
-    logging.info("zk_path={} contains table_shared_id={}", zookeeper_path, table_uuid)
-
-    return table_uuid

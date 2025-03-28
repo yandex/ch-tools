@@ -1,6 +1,6 @@
 import pytest
 
-from ch_tools.chadmin.cli.table_metadata import (
+from ch_tools.chadmin.internal.table_metadata import (
     MergeTreeFamilyEngines,
     check_replica_path_contains_macros,
     parse_table_metadata,
