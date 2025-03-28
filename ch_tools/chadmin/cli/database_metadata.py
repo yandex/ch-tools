@@ -76,7 +76,7 @@ def parse_database_from_metadata(database_name: str) -> DatabaseMetadata:
 
     with open(database_metadata_path, "r", encoding="utf-8") as metadata_file:
         for line in metadata_file:
-            if line.startswith("ATTACH DATABASE") and metadata.UUID_PATTERN in line:
+            if line.startswith("ATTACH DATABASE") and metadata.UUID_TOKEN in line:
                 assert database_uuid is None
                 database_uuid = metadata.parse_uuid(line)
             if line.startswith("ENGINE ="):
@@ -110,7 +110,7 @@ def _parse_engine(line: str) -> DatabaseEngine:
 
     match = pattern.search(line)
     if not match:
-        raise RuntimeError(f"Failed parse {metadata.ENGINE_PATTERN} from metadata.")
+        raise RuntimeError(f"Failed parse {metadata.ENGINE_TOKEN} from metadata.")
 
     return DatabaseEngine.from_str(match.group(1))
 

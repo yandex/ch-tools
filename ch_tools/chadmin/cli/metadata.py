@@ -1,8 +1,8 @@
 import re
 import uuid
 
-UUID_PATTERN = "UUID"
-ENGINE_PATTERN = "ENGINE"
+UUID_TOKEN = "UUID"
+ENGINE_TOKEN = "ENGINE"
 
 
 def _is_valid_uuid(uuid_str: str) -> bool:

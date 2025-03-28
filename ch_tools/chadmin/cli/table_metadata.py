@@ -12,8 +12,6 @@ from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
 from ch_tools.chadmin.internal.zookeeper import get_zk_node
 from ch_tools.common import logging
 
-UUID_TOKEN = "UUID"
-ENGINE_TOKEN = "ENGINE"
 UUID_PATTERN = re.compile(
     r"UUID '[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}'"
 )
@@ -71,7 +69,7 @@ def parse_table_metadata(table_metadata_path: str) -> TableMetadata:
 
     with open(table_metadata_path, "r", encoding="utf-8") as metadata_file:
         for line in metadata_file:
-            if line.startswith("ATTACH TABLE") and UUID_TOKEN in line:
+            if line.startswith("ATTACH TABLE") and metadata.UUID_TOKEN in line:
                 assert table_uuid is None
                 table_uuid = metadata.parse_uuid(line)
             if line.startswith("ENGINE ="):
@@ -94,7 +92,7 @@ def _parse_engine(line: str) -> MergeTreeFamilyEngines:
 
     match = pattern.search(line)
     if not match:
-        raise RuntimeError(f"Failed parse {ENGINE_TOKEN} from metadata.")
+        raise RuntimeError(f"Failed parse {metadata.ENGINE_TOKEN} from metadata.")
 
     return MergeTreeFamilyEngines.from_str(match.group(1))
 
