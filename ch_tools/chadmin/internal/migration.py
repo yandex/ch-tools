@@ -314,8 +314,6 @@ def _get_tables_info_and_detach(ctx: Context, database_name: str) -> dict:
 def _change_tables_uuid(ctx: Context, tables: dict, database_name: str) -> None:
     for row in tables:
         table_local_metadata_path = row["metadata_path"]
-        if match_str_ch_version(get_version(ctx), "25.1"):
-            table_local_metadata_path = CLICKHOUSE_PATH + "/" + row["metadata_path"]
 
         table_name = row["name"]
         database_name = row["database"]
