@@ -26,9 +26,10 @@ def is_first_replica_migrate(ctx: Context, migrating_database_name: str) -> bool
 
     if not check_zk_node(ctx, first_replica_database_name):
         logging.info(
-            "Node for {} not exists. Finish checking.", migrating_database_name
+            "Node for {} does not exists. Finish checking.", migrating_database_name
         )
         return True
+
     logging.info("Node for {} exists. Continue checking.", migrating_database_name)
 
     db_in_node = get_zk_node(ctx, first_replica_database_name)
@@ -39,10 +40,8 @@ def is_first_replica_migrate(ctx: Context, migrating_database_name: str) -> bool
     )
 
     if db_in_node != migrating_database_name:
-        logging.error(
-            "Node={} contains {}. Migration is not allowed.",
-            first_replica_database_name,
-            db_in_node,
+        raise RuntimeError(
+            f"Node={first_replica_database_name} contains {db_in_node} that different from migrating database={migrating_database_name}. Migration is not allowed.",
         )
 
     return False
@@ -51,29 +50,19 @@ def is_first_replica_migrate(ctx: Context, migrating_database_name: str) -> bool
 def migrate_as_first_replica(
     ctx: Context, migrating_database: str, temp_db: str
 ) -> None:
-
-    # @todo specify the replica_path
+    # @todo specify the replica_path in chadmin command
     query = """
         CREATE DATABASE {temp_db} ON CLUSTER '{{cluster}}' ENGINE = Replicated('/clickhouse/{database}', '{{shard}}', '{{replica}}')
     """.format(
         temp_db=temp_db,
         database=migrating_database,
     )
-    execute_query(
-        ctx,
-        query,
-        echo=True,
-    )
 
-    # @todo useful?
-    query = f"""
-        SYSTEM SYNC DATABASE REPLICA {temp_db}
-    """
+    # @todo if we could not create db on every host - would that be aacceptable behavior?
     execute_query(
         ctx,
         query,
         echo=True,
-        format_=None,
     )
 
     mapping_table_to_metadata = _create_tables_from_migrating_database(
@@ -95,6 +84,8 @@ def migrate_as_first_replica(
     query = f"""
         ATTACH DATABASE {migrating_database}
     """
+
+    # @todo discuss timeout and process error after attach
     execute_query(
         ctx,
         query,
@@ -161,30 +152,18 @@ def _create_tables_from_migrating_database(
             metadata_path = CLICKHOUSE_PATH + "/" + metadata_path
 
         with open(metadata_path, "r", encoding="utf-8") as metadata_file:
-            # todo
             mapping_table_to_metadata[table_name] = metadata_file.read()
             logging.info(
                 "add from file with metadata to tables: {}",
                 mapping_table_to_metadata[table_name],
             )
 
-    # @todo useful?
-    query = f"""
-        SYSTEM SYNC DATABASE REPLICA {temp_db}
-    """
-    execute_query(
-        ctx,
-        query,
-        echo=True,
-        format_=None,
-    )
     logging.info("total mapping_table_to_metadata: {}", mapping_table_to_metadata)
     return mapping_table_to_metadata
 
 
 def _detach_dbs(ctx: Context, dbs: list) -> None:
     for db in dbs:
-        # @todo move detach query
         query = f"""
             DETACH DATABASE {db}
         """
@@ -200,12 +179,8 @@ def _update_zk_for_migrate(
     metadata_non_repl_db: DatabaseMetadata,
     mapping_table_to_metadata: dict,
 ) -> None:
-    # @todo transaction
-
     zk_db_path = f"/clickhouse/{metadata_non_repl_db.database_name}"
-
     first_replica_database_name = zk_db_path + "/first_replica_database_name"
-
     node_data = get_zk_node(ctx, first_replica_database_name)
 
     logging.info(
@@ -214,19 +189,26 @@ def _update_zk_for_migrate(
         node_data,
     )
 
-    if node_data != metadata_non_repl_db.database_name:
+    if node_data == metadata_non_repl_db.database_name:
         logging.info(
-            "update first_replica_database_name, path {}", first_replica_database_name
+            "first_replica_database_name was migrated early. Skip updating zookeeper."
         )
-        update_zk_nodes(
-            ctx, [first_replica_database_name], metadata_non_repl_db.database_name
-        )
+        return
 
-        _update_zk_tables_metadata(ctx, zk_db_path, mapping_table_to_metadata)
-    else:
-        logging.info(
-            "first_replica_database_name was migrated early. Skip on current replica."
-        )
+    logging.info(
+        "update first_replica_database_name, path {}", first_replica_database_name
+    )
+
+    # I assume that we need to use a transaction here
+    # because the second replica could perform the migration as well.
+    # Therefore, we do not have guarantees that nodes with metadata
+    # will be ready to work with the second node.
+    # However, if we work sequentially, it would be reliable.
+    update_zk_nodes(
+        ctx, [first_replica_database_name], metadata_non_repl_db.database_name
+    )
+
+    _update_zk_tables_metadata(ctx, zk_db_path, mapping_table_to_metadata)
 
     for replica_path in list_zk_nodes(ctx, zk_db_path + "/replicas"):
         logging.info("Update replica: {}", replica_path)
@@ -242,6 +224,8 @@ def _update_zk_tables_metadata(
     ctx: Context, zk_db_path: str, mapping_table_to_metadata: dict
 ) -> None:
     for metadata_path in list_zk_nodes(ctx, zk_db_path + "/metadata"):
+        logging.info("update metadata path={}", metadata_path)
+
         data = get_zk_node(ctx, metadata_path)
 
         logging.info(
@@ -255,10 +239,6 @@ def _update_zk_tables_metadata(
         )
 
         update_zk_nodes(ctx, [metadata_path], target_metadata)
-
-        # just check
-        data = get_zk_node(ctx, metadata_path)
-        logging.info("After update data:\n{}\n===", data)
 
 
 def _remove_temp_db(ctx: Context, metadata_temp_db: DatabaseMetadata) -> None:
@@ -340,3 +320,12 @@ def _change_tables_uuid(ctx: Context, tables: dict, database_name: str) -> None:
             table_local_metadata_path=table_local_metadata_path,
             attached=False,
         )
+
+
+def is_database_exists(ctx: Context, database_name: str) -> bool:
+    query = f"""
+        SELECT 1 FROM system.databases WHERE database='{database_name}'
+    """
+    rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
+
+    return 1 == len(rows["data"])

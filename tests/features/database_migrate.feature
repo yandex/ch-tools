@@ -44,6 +44,17 @@ Feature: chadmin database migrate command
     """
 
   @require_version_24.8
+  Scenario: Migrate non exists database
+    When we try to execute command on clickhouse01
+    """
+    chadmin database migrate -d non_exists_db 
+    """
+    Then it fails with response contains
+    """
+    Database non_exists_db does not exists, skip migrating
+    """
+
+  @require_version_24.8
   Scenario: Migrate database with MergeTree table in host
     When we execute query on clickhouse01
     """

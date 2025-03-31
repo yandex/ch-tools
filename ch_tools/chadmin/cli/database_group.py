@@ -1,8 +1,11 @@
+import sys
+
 from cloup import argument, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.migration import (
+    is_database_exists,
     is_first_replica_migrate,
     migrate_as_first_replica,
     migrate_as_non_first_replica,
@@ -177,11 +180,19 @@ def get_databases(
 @option("-d", "--database", required=True)
 @pass_context
 def migrate_engine_command(ctx, database):
-    # @todo try-except
     temp_db = f"temp_migrate_{database}"
 
-    if is_first_replica_migrate(ctx, database):
-        logging.info("First migrate")
-        migrate_as_first_replica(ctx, database, temp_db)
-    else:
-        migrate_as_non_first_replica(ctx, database, temp_db)
+    try:
+        if not is_database_exists(ctx, database):
+            logging.error("Database {} does not exists, skip migrating", database)
+            sys.exit(1)
+
+        # @todo add check migrating engine
+
+        if is_first_replica_migrate(ctx, database):
+            migrate_as_first_replica(ctx, database, temp_db)
+        else:
+            migrate_as_non_first_replica(ctx, database, temp_db)
+    except Exception as ex:
+        logging.error("Got exception: {}", ex)
+        sys.exit(1)
