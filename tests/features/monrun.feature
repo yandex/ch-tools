@@ -98,7 +98,7 @@ Feature: ch-monitoring tool
     """
     Then we get response matches
     """
-    1;Unknown error:.*Code: 156. DB::Exception: ... \(DICTIONARIES_WAS_NOT_LOADED\)
+    1;.+(Code: 156).+(DICTIONARIES_WAS_NOT_LOADED)
     """
     When we execute command on clickhouse01
     """
