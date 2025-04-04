@@ -187,8 +187,6 @@ def migrate_engine_command(ctx, database):
             logging.error("Database {} does not exists, skip migrating", database)
             sys.exit(1)
 
-        # @todo add check migrating engine
-
         if is_first_replica_migrate(ctx, database):
             migrate_as_first_replica(ctx, database, temp_db)
         else:

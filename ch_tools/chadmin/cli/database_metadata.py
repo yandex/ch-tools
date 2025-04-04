@@ -1,6 +1,7 @@
 import re
+from dataclasses import dataclass
 from enum import Enum
-from typing import Tuple
+from typing import Optional, Tuple
 
 from ch_tools.chadmin.cli import metadata
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_METADATA_PATH
@@ -21,22 +22,14 @@ class DatabaseEngine(Enum):
         return self == DatabaseEngine.REPLICATED
 
 
+@dataclass
 class DatabaseMetadata:
-    def __init__(
-        self,
-        database_name,
-        database_uuid,
-        database_engine,
-        replica_path=None,
-        shard=None,
-        replica_name=None,
-    ):
-        self.database_name = database_name
-        self.database_uuid = database_uuid
-        self.database_engine = database_engine
-        self.replica_path = replica_path
-        self.shard = shard
-        self.replica_name = replica_name
+    database_name: str
+    database_uuid: str
+    database_engine: DatabaseEngine
+    replica_path: Optional[str]
+    shard: Optional[str]
+    replica_name: Optional[str]
 
     def set_engine_from(self, db_metadata):
         self.database_engine = db_metadata.database_engine

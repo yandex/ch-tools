@@ -4,9 +4,7 @@ from typing import Tuple
 
 from ch_tools.chadmin.cli import metadata
 
-UUID_PATTERN = re.compile(
-    r"UUID '[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}'"
-)
+UUID_PATTERN = re.compile(r"UUID\s+'([a-f0-9-]+)'", re.IGNORECASE)
 
 
 class MergeTreeFamilyEngines(Enum):
@@ -89,7 +87,6 @@ def _parse_engine(line: str) -> MergeTreeFamilyEngines:
     return MergeTreeFamilyEngines.from_str(match.group(1))
 
 
-# table_replca?
 def _parse_replica_params(line: str) -> Tuple[str, str]:
     pattern = r"ENGINE = Replicated\w*MergeTree\('([^']*)', '([^']*)'(?:, [^)]*)?\)"
     match = re.match(pattern, line)
@@ -102,7 +99,6 @@ def _parse_replica_params(line: str) -> Tuple[str, str]:
     return path, name
 
 
-# @todo move to table/replica?
 def check_replica_path_contains_macros(path: str, macros: str) -> bool:
     return f"{{{macros}}}" in path
 

@@ -1,5 +1,6 @@
-import re
 import uuid
+
+from ch_tools.chadmin.internal.table_metadata import UUID_PATTERN
 
 UUID_TOKEN = "UUID"
 ENGINE_TOKEN = "ENGINE"
@@ -14,8 +15,7 @@ def _is_valid_uuid(uuid_str: str) -> bool:
 
 
 def parse_uuid(line: str) -> str:
-    uuid_pattern = re.compile(r"UUID\s+'([a-f0-9-]+)'", re.IGNORECASE)
-    match = uuid_pattern.search(line)
+    match = UUID_PATTERN.search(line)
 
     if not match:
         raise RuntimeError("Failed parse UUID from metadata.")
