@@ -4,8 +4,6 @@ from typing import Tuple
 
 from ch_tools.chadmin.cli import metadata
 
-UUID_PATTERN = re.compile(r"UUID\s+'([a-f0-9-]+)'", re.IGNORECASE)
-
 
 class MergeTreeFamilyEngines(Enum):
     MERGE_TREE = "MergeTree"
@@ -111,7 +109,7 @@ def update_uuid_table_metadata_file(
 
     assert len(lines[0]) != 0
 
-    lines[0] = re.sub(UUID_PATTERN, f"UUID '{new_uuid}'", lines[0])
+    lines[0] = re.sub(metadata.UUID_PATTERN, f"UUID '{new_uuid}'", lines[0])
 
     with open(table_local_metadata_path, "w", encoding="utf-8") as f:
         f.writelines(lines)

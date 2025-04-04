@@ -1,9 +1,9 @@
+import re
 import uuid
-
-from ch_tools.chadmin.internal.table_metadata import UUID_PATTERN
 
 UUID_TOKEN = "UUID"
 ENGINE_TOKEN = "ENGINE"
+UUID_PATTERN = re.compile(r"UUID\s+'([a-f0-9-]+)'", re.IGNORECASE)
 
 
 def _is_valid_uuid(uuid_str: str) -> bool:
