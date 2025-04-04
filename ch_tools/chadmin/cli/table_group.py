@@ -14,17 +14,9 @@ from cloup.constraints import (
 )
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
-from ch_tools.chadmin.cli.table_metadata import (
-    check_replica_path_contains_macros,
-    get_table_shared_id,
-    move_table_local_store,
-    parse_table_metadata,
-    update_uuid_table_metadata_file,
-)
-from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
-from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
 from ch_tools.chadmin.internal.table import (
     attach_table,
+    change_table_uuid,
     delete_detached_table,
     delete_table,
     detach_table,
@@ -847,37 +839,6 @@ def set_flag_command(
             logging.info("{}: {}", table_["name"], flag_path)
 
 
-def verify_possible_change_uuid(
-    ctx: Context, table_local_metadata_path: str, dst_uuid: str
-) -> None:
-    metadata = parse_table_metadata(table_local_metadata_path)
-
-    if metadata.table_engine.is_table_engine_replicated():
-        logging.info(
-            "Metadata={} with Replicated table engine, replica_name={}, replica_path={}",
-            table_local_metadata_path,
-            metadata.replica_name,
-            metadata.replica_path,
-        )
-        if check_replica_path_contains_macros(metadata.replica_path, "uuid"):
-            logging.error(
-                f"Changing uuid for ReplicatedMergeTree that contains macros uuid in replica path was not allowed. replica_path={metadata.replica_path}"
-            )
-            sys.exit(1)
-
-        table_shared_id = get_table_shared_id(ctx, metadata.replica_path)
-
-        if dst_uuid != table_shared_id:
-            logging.error(
-                f"Changing uuid for ReplicatedMergeTree that different from table_shared_id path was not allowed. replica_path={metadata.replica_path}, dst_uuid={dst_uuid}, table_shared_id={table_shared_id}"
-            )
-            sys.exit(1)
-
-    if metadata.table_uuid == dst_uuid:
-        logging.error("Table has already had uuid {}", metadata.table_uuid)
-        sys.exit(1)
-
-
 @table_group.command("change")
 @option("-d", "--database", required=True)
 @option("-t", "--table", required=True)
@@ -889,24 +850,15 @@ def change_uuid_command(ctx, database, table, uuid):
     old_table_uuid = table_info["uuid"]
     table_local_metadata_path = table_info["metadata_path"]
 
-    if match_str_ch_version(get_version(ctx), "25.1"):
-        table_local_metadata_path = CLICKHOUSE_PATH + "/" + table_local_metadata_path
-
-    verify_possible_change_uuid(ctx, table_local_metadata_path, uuid)
-    detach_table(ctx, database_name=database, table_name=table, permanently=False)
-    update_uuid_table_metadata_file(table_local_metadata_path, uuid)
-
-    try:
-        move_table_local_store(old_table_uuid, uuid)
-    except Exception as ex:
-        logging.error(
-            "Failed move_table_local_store. old uuid={}, new_uuid={}. Need restore uuid in metadata for table={}. error={}",
-            old_table_uuid,
-            uuid,
-            f"{database}.{table}",
-            ex,
-        )
-        sys.exit(1)
+    change_table_uuid(
+        ctx,
+        database,
+        table,
+        new_uuid=uuid,
+        old_table_uuid=old_table_uuid,
+        table_local_metadata_path=table_local_metadata_path,
+        attached=True,
+    )
 
 
 @table_group.command("check-uuid-equal")
@@ -914,6 +866,7 @@ def change_uuid_command(ctx, database, table, uuid):
 @option("-t", "--table", required=True)
 @pass_context
 def check_uuid_equal(ctx, database, table):
+    # @todo refactoring
     uuids = get_table_uuids_from_cluster(ctx, database, table)
     logging.info("Table {} has uuid: {}", table, uuids)
 
