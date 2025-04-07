@@ -6,12 +6,12 @@ from cloup.constraints import RequireAtLeast
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.migration import (
     is_database_exists,
-    is_first_replica_migrate,
     migrate_as_first_replica,
     migrate_as_non_first_replica,
 )
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.client.error import ClickhouseError
 from ch_tools.common.clickhouse.config import get_cluster_name
 
 
@@ -187,10 +187,15 @@ def migrate_engine_command(ctx, database):
             logging.error("Database {} does not exists, skip migrating", database)
             sys.exit(1)
 
-        if is_first_replica_migrate(ctx, database):
+        try:
             migrate_as_first_replica(ctx, database, temp_db)
-        else:
-            migrate_as_non_first_replica(ctx, database, temp_db)
+        except ClickhouseError as ex:
+            if "REPLICA_ALREADY_EXISTS" in str(ex):
+                logging.info(
+                    "Exception contains REPLICA_ALREADY_EXISTS, migrate as non first replica"
+                )
+                migrate_as_non_first_replica(ctx, database, temp_db)
+
     except Exception as ex:
         logging.error("Got exception: {}", ex)
         sys.exit(1)

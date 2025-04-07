@@ -10,41 +10,12 @@ from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
 from ch_tools.chadmin.internal.table import change_table_uuid, detach_table
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import (
-    check_zk_node,
     get_zk_node,
     list_zk_nodes,
     update_zk_nodes,
 )
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
-
-
-def is_first_replica_migrate(ctx: Context, migrating_database_name: str) -> bool:
-    first_replica_database_name = (
-        f"/clickhouse/{migrating_database_name}/first_replica_database_name"
-    )
-
-    if not check_zk_node(ctx, first_replica_database_name):
-        logging.info(
-            "Node for {} does not exists. Finish checking.", migrating_database_name
-        )
-        return True
-
-    logging.info("Node for {} exists. Continue checking.", migrating_database_name)
-
-    db_in_node = get_zk_node(ctx, first_replica_database_name)
-    logging.info(
-        "migrating_database_name={}, node contains name={}",
-        migrating_database_name,
-        db_in_node,
-    )
-
-    if db_in_node != migrating_database_name:
-        raise RuntimeError(
-            f"Node={first_replica_database_name} contains {db_in_node} that different from migrating database={migrating_database_name}. Migration is not allowed.",
-        )
-
-    return False
 
 
 def migrate_as_first_replica(
