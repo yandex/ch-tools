@@ -8,6 +8,7 @@ from ch_tools.chadmin.cli.database_metadata import (
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
 from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
 from ch_tools.chadmin.internal.table import change_table_uuid, detach_table
+from ch_tools.chadmin.internal.table_metadata import remove_replciated_params
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import (
     get_zk_node,
@@ -111,7 +112,18 @@ def _create_tables_from_migrating_database(
         )
 
         create_table_query = create_table_query.replace(migrating_database, temp_db)
-        logging.info("after replacing create_table_query=[{}]", create_table_query)
+        logging.info(
+            "after replacing database create_table_query=[{}]", create_table_query
+        )
+
+        # If we want to create ReplicatedMergeTree table in Replicated database
+        # we cann't use params (zookeeper path and replica name)
+        create_table_query = remove_replciated_params(create_table_query)
+
+        logging.info(
+            "after replacing replicated params create_table_query=[{}]",
+            create_table_query,
+        )
 
         execute_query(
             ctx,

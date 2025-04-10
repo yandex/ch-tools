@@ -12,6 +12,8 @@ from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
 from ch_tools.chadmin.internal.zookeeper import get_zk_node
 from ch_tools.common import logging
 
+REPLICATED_MERGE_TREE_PATTERN = r"ReplicatedMergeTree\([^\)]*\)"
+
 
 class MergeTreeFamilyEngines(Enum):
     MERGE_TREE = "MergeTree"
@@ -163,3 +165,9 @@ def get_table_shared_id(ctx: Context, zookeeper_path: str) -> str:
     logging.info("zk_path={} contains table_shared_id={}", zookeeper_path, table_uuid)
 
     return table_uuid
+
+
+def remove_replciated_params(create_table_query: str) -> str:
+    return re.sub(
+        REPLICATED_MERGE_TREE_PATTERN, "ReplicatedMergeTree", create_table_query
+    )
