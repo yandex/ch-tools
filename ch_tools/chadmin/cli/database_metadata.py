@@ -11,13 +11,6 @@ class DatabaseEngine(Enum):
     ATOMIC = "Atomic"
     REPLICATED = "Replicated"
 
-    @staticmethod
-    def from_str(engine_str: str) -> "DatabaseEngine":
-        for engine in DatabaseEngine:
-            if engine.value == engine_str:
-                return engine
-        raise RuntimeError(f"Engine {engine_str} doesn't exist in DatabaseEngine.")
-
     def is_replicated(self) -> bool:
         return self == DatabaseEngine.REPLICATED
 
@@ -27,11 +20,11 @@ class DatabaseMetadata:
     database_name: str
     database_uuid: str
     database_engine: DatabaseEngine
-    replica_path: Optional[str]
-    shard: Optional[str]
-    replica_name: Optional[str]
+    replica_path: Optional[str] = None
+    shard: Optional[str] = None
+    replica_name: Optional[str] = None
 
-    def set_engine_from(self, db_metadata):
+    def set_engine_from(self, db_metadata: "DatabaseMetadata") -> None:
         self.database_engine = db_metadata.database_engine
         self.replica_path = db_metadata.replica_path
         self.shard = db_metadata.shard
@@ -105,7 +98,7 @@ def _parse_engine(line: str) -> DatabaseEngine:
     if not match:
         raise RuntimeError(f"Failed parse {metadata.ENGINE_TOKEN} from metadata.")
 
-    return DatabaseEngine.from_str(match.group(1))
+    return DatabaseEngine(match.group(1))
 
 
 def _parse_database_replica_params(line: str) -> Tuple[str, str, str]:

@@ -150,6 +150,12 @@ def _update_zk_for_migrate(
     metadata_non_repl_db: DatabaseMetadata,
     mapping_table_to_metadata: dict,
 ) -> None:
+    """
+    Changing the database information in Zookeeper's nodes from the temporary database to the original database.
+    After this update, the original database will be able to use these nodes.
+    We will remove the temporary database later.
+    """
+
     zk_db_path = f"/clickhouse/{metadata_non_repl_db.database_name}"
     first_replica_database_name = zk_db_path + "/first_replica_database_name"
     node_data = get_zk_node(ctx, first_replica_database_name)

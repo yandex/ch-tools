@@ -1,6 +1,4 @@
-import grp
 import os
-import pwd
 import sys
 from typing import Dict
 
@@ -18,11 +16,12 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
 from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
 from ch_tools.chadmin.internal.table_metadata import (
     check_replica_path_contains_macros,
+    get_table_shared_id,
+    move_table_local_store,
     parse_table_metadata,
     update_uuid_table_metadata_file,
 )
 from ch_tools.chadmin.internal.utils import execute_query, remove_from_disk
-from ch_tools.chadmin.internal.zookeeper import get_zk_node
 from ch_tools.chadmin.internal.zookeeper_clean import clean_zk_metadata_for_hosts
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
@@ -497,20 +496,6 @@ def get_table_uuids_from_cluster(ctx: Context, database: str, table: str) -> lis
     return list(set(row["uuid"] for row in rows))
 
 
-def get_table_store_path(table_uuid: str) -> str:
-    return f"{CLICKHOUSE_PATH}/store/{table_uuid[:3]}/{table_uuid}"
-
-
-# @todo move to table_zk ?
-def get_table_shared_id(ctx: Context, zookeeper_path: str) -> str:
-    table_shared_id_node_path = zookeeper_path + "/table_shared_id"
-
-    table_uuid = get_zk_node(ctx, table_shared_id_node_path)
-    logging.info("zk_path={} contains table_shared_id={}", zookeeper_path, table_uuid)
-
-    return table_uuid
-
-
 def _verify_possible_change_uuid(
     ctx: Context, table_local_metadata_path: str, dst_uuid: str
 ) -> None:
@@ -542,35 +527,6 @@ def _verify_possible_change_uuid(
         sys.exit(1)
 
 
-def _move_table_local_store(old_table_uuid: str, new_uuid: str) -> None:
-    old_table_store_path = get_table_store_path(old_table_uuid)
-    logging.info("old_table_store_path={}", old_table_store_path)
-
-    assert os.path.exists(old_table_store_path)
-
-    target = f"{CLICKHOUSE_PATH}/store/{new_uuid[:3]}"
-
-    if not os.path.exists(target):
-        logging.info("need create path={}", target)
-        os.mkdir(target)
-        os.chmod(target, 0o750)
-        uid = pwd.getpwnam("clickhouse").pw_uid
-        gid = grp.getgrnam("clickhouse").gr_gid
-
-        os.chown(target, uid, gid)
-    else:
-        logging.info("path exists: {}", target)
-
-    new_table_store_path = get_table_store_path(new_uuid)
-    logging.info("new_table_store_path={}", new_table_store_path)
-
-    os.rename(old_table_store_path, new_table_store_path)
-
-    uid = pwd.getpwnam("clickhouse").pw_uid
-    gid = grp.getgrnam("clickhouse").gr_gid
-    os.chown(new_table_store_path, uid, gid)
-
-
 def change_table_uuid(
     ctx: Context,
     database: str,
@@ -589,7 +545,7 @@ def change_table_uuid(
     update_uuid_table_metadata_file(table_local_metadata_path, new_uuid)
 
     try:
-        _move_table_local_store(old_table_uuid, new_uuid)
+        move_table_local_store(old_table_uuid, new_uuid)
     except Exception as ex:
         logging.error(
             "Failed move_table_local_store. old uuid={}, new_uuid={}. Need restore uuid in metadata for table={}. error={}",
