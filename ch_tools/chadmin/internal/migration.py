@@ -117,7 +117,7 @@ def _create_tables_from_migrating_database(
         )
 
         # If we want to create ReplicatedMergeTree table in Replicated database
-        # we cann't use params (zookeeper path and replica name)
+        # we can't use params (zookeeper path and replica name)
         create_table_query = remove_replciated_params(create_table_query)
 
         logging.info(
