@@ -407,6 +407,10 @@ Feature: chadmin database migrate command
     """
     INSERT INTO non_repl_db.foo VALUES (43, 'value2')
     """
+    When we execute query on clickhouse02
+    """
+    SYSTEM REPLICA SYNC non_repl_db.foo
+    """
     When we execute query on clickhouse01
     """
     SELECT * FROM non_repl_db.foo ORDER BY a FORMAT Values
