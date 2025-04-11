@@ -23,6 +23,7 @@ class MergeTreeFamilyEngines(Enum):
     COLLAPSING_MERGE_TREE = "CollapsingMergeTree"
     VERSIONED_MERGE_TREE = "VersionedCollapsingMergeTree"
     GRAPHITE_MERGE_TREE = "GraphiteMergeTree"
+    DISTRIBUTED = "Distributed"
     REPLICATED_MERGE_TREE = "ReplicatedMergeTree"
     REPLICATED_SUMMING_MERGE_TREE = "ReplicatedSummingMergeTree"
     REPLICATED_REPLACING_MERGE_TREE = "ReplicatedReplacingMergeTree"

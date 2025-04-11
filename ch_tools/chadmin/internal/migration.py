@@ -111,7 +111,7 @@ def _create_tables_from_migrating_database(
             create_table_query,
         )
 
-        create_table_query = create_table_query.replace(migrating_database, temp_db)
+        create_table_query = create_table_query.replace(migrating_database, temp_db, 1)
         logging.info(
             "after replacing database create_table_query=[{}]", create_table_query
         )
@@ -299,6 +299,10 @@ def _change_tables_uuid(ctx: Context, tables: dict, database_name: str) -> None:
             old_table_uuid,
             zk_table_uuid,
         )
+
+        if zk_table_uuid == old_table_uuid:
+            logging.info("Equal uuid. Don't need to change uuid.")
+            continue
 
         change_table_uuid(
             ctx,
