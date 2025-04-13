@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import click
 
 from ch_tools.chadmin.cli.object_storage_group import STATE_LOCAL_PATH
@@ -7,6 +9,7 @@ from ch_tools.chadmin.internal.object_storage.orphaned_objects_state import (
 from ch_tools.chadmin.internal.zookeeper import get_zk_node
 from ch_tools.common.clickhouse.config.clickhouse import ClickhouseConfig
 from ch_tools.common.result import CRIT, OK, WARNING, Result
+from ch_tools.monrun_checks.utils import get_uptime
 
 
 @click.command("orphaned-objects")
@@ -47,6 +50,9 @@ def orphaned_objects_command(
 ) -> Result:
     if not ClickhouseConfig.load().storage_configuration.has_disk("object_storage"):
         return Result(OK, "Disabled")
+
+    if get_uptime(ctx) == timedelta():
+        return Result(WARNING, "suppressed by ClickHouse unavailability")
 
     _check_mutually_exclusive(state_local, state_zk_path)
 

@@ -15,8 +15,8 @@ from dateutil.parser import parse as dateutil_parse
 from ch_tools.common import logging
 from ch_tools.common.backup import get_backups
 from ch_tools.common.cli.parameters import TimeSpanParamType
-from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 from ch_tools.common.result import CRIT, OK, WARNING, Result
+from ch_tools.monrun_checks.utils import get_uptime
 
 LOAD_MONITOR_FLAG_PATH = "/tmp/load-monitor-userfault.flag"
 RESTORE_CONTEXT_PATH = "/tmp/ch_backup_restore_state.json"
@@ -247,21 +247,13 @@ def _suppress_if_required(
         result.code = WARNING
         result.message += " (suppressed by load monitor flag file)"
 
-    if _get_uptime(ctx) < min_uptime:
+    if get_uptime(ctx) < min_uptime:
         result.code = WARNING
         result.message += " (suppressed by low ClickHouse uptime)"
 
     if _is_backup_failed_by_user_fault_error(ctx, backups):
         result.code = WARNING
         result.message += " (suppressed due to user fault errors)"
-
-
-def _get_uptime(ctx: Context) -> timedelta:
-    try:
-        return clickhouse_client(ctx).get_uptime()
-    except Exception:
-        logging.warning("Failed to get ClickHouse uptime", exc_info=True)
-        return timedelta()
 
 
 def _get_backup_age(backup):
