@@ -20,6 +20,7 @@ It provides monitoring for:
 - Read-only replicas
 - System metrics
 - TLS certificate validity
+- Size of S3 orphaned objects
 
 Each monitoring check outputs in following format:
 ```
