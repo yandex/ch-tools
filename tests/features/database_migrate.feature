@@ -480,6 +480,10 @@ Feature: chadmin database migrate command
     """
     (42,'value'),(43,'value2')
     """
+    When we execute query on clickhouse01
+    """
+    DROP DATABASE non_repl_db ON CLUSTER '{cluster}';
+    """
   Examples:
       | table_engine                                                 | zookeeper_path          |
       | ReplicatedMergeTree('/clickhouse/foo/{shard}', '{replica}')  | /clickhouse/foo/shard1  |
@@ -622,6 +626,10 @@ Feature: chadmin database migrate command
     Then we get response
     """
     (42,'value'),(43,'value2')
+    """
+    When we execute query on clickhouse01
+    """
+    DROP DATABASE non_repl_db ON CLUSTER '{cluster}';
     """
   Examples:
       | table_engine                                                 | zookeeper_path          |
