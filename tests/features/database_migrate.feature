@@ -462,7 +462,7 @@ Feature: chadmin database migrate command
     """
     When we execute query on clickhouse02
     """
-    SYSTEM REPLICA SYNC non_repl_db.foo
+    SYSTEM SYNC REPLICA non_repl_db.foo
     """
     When we execute query on clickhouse01
     """
@@ -605,7 +605,7 @@ Feature: chadmin database migrate command
     """
     When we execute query on clickhouse02
     """
-    SYSTEM REPLICA SYNC non_repl_db.foo
+    SYSTEM SYNC REPLICA non_repl_db.foo
     """
     When we execute query on clickhouse01
     """
