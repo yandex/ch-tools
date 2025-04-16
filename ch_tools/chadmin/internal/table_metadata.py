@@ -168,7 +168,7 @@ def get_table_shared_id(ctx: Context, zookeeper_path: str) -> str:
     return table_uuid
 
 
-def remove_replciated_params(create_table_query: str) -> str:
+def remove_replicated_params(create_table_query: str) -> str:
     return re.sub(
         REPLICATED_MERGE_TREE_PATTERN, "ReplicatedMergeTree", create_table_query
     )
