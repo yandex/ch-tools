@@ -231,7 +231,6 @@ def _update_zk_tables_metadata(
 
 
 def _remove_temp_db(ctx: Context, metadata_temp_db: DatabaseMetadata) -> None:
-    metadata_temp_db.update_metadata_file()
     query = f"""
         ATTACH DATABASE {metadata_temp_db.database_name}
     """

@@ -153,7 +153,7 @@ Feature: chadmin database migrate command
     | MergeTree                                                    |
     | ReplicatedMergeTree('/clickhouse/foo', '{replica}')          |
 
- @require_version_24.8
+  @require_version_24.8
   Scenario: Migrate empty database in cluster
     When we execute query on clickhouse01
     """
@@ -488,6 +488,7 @@ Feature: chadmin database migrate command
       | table_engine                                                 | zookeeper_path          |
       | ReplicatedMergeTree('/clickhouse/foo/{shard}', '{replica}')  | /clickhouse/foo/shard1  |
       | ReplicatedMergeTree('/clickhouse/foo', '{replica}')          | /clickhouse/foo         |
+
 
   @require_version_24.8
   Scenario Outline: Migrate database with ReplicatedMergeTree table created on cluster
@@ -829,4 +830,157 @@ Feature: chadmin database migrate command
     Then we get response
     """
     (42)
+    """
+
+  @require_version_24.8
+  Scenario: Migrate database with MATERIALIZED VIEW by host
+    When we execute query on clickhouse01
+    """
+    CREATE DATABASE non_repl_db ON CLUSTER '{cluster}';
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE non_repl_db.foo
+    (
+        `a` Int
+    )
+    ENGINE = MergeTree
+    ORDER BY a
+    """
+    And we execute query on clickhouse01
+    """
+    INSERT INTO non_repl_db.foo VALUES (42)
+    """
+    And we execute query on clickhouse01
+    """
+    CREATE MATERIALIZED VIEW non_repl_db.foo_mw TO non_repl_db.foo AS SELECT * FROM non_repl_db.foo
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db 
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT name FROM system.databases ORDER BY name FORMAT Values
+    """
+    Then we get response
+    """
+    ('INFORMATION_SCHEMA'),('default'),('information_schema'),('non_repl_db'),('system')
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT engine FROM system.databases WHERE database='non_repl_db'
+    """
+    Then we get response
+    """
+    Replicated
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM non_repl_db.foo_mw FORMAT Values
+    """
+    Then we get response
+    """
+    (42)
+    """
+
+  @require_version_24.8
+  Scenario: Migrate database with MATERIALIZED VIEW by cluster
+    When we execute query on clickhouse01
+    """
+    CREATE DATABASE non_repl_db ON CLUSTER '{cluster}';
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE non_repl_db.foo
+    ON CLUSTER '{cluster}'
+    (
+        `a` Int
+    )
+    ENGINE = MergeTree
+    ORDER BY a
+    """
+    And we execute query on clickhouse01
+    """
+    INSERT INTO non_repl_db.foo VALUES (42)
+    """
+    And we execute query on clickhouse02
+    """
+    INSERT INTO non_repl_db.foo VALUES (43)
+    """
+    And we execute query on clickhouse01
+    """
+    CREATE MATERIALIZED VIEW non_repl_db.foo_mw
+    ON CLUSTER '{cluster}'
+    TO non_repl_db.foo AS SELECT * FROM non_repl_db.foo
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db 
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT name FROM system.databases ORDER BY name FORMAT Values
+    """
+    Then we get response
+    """
+    ('INFORMATION_SCHEMA'),('default'),('information_schema'),('non_repl_db'),('system')
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT engine FROM system.databases WHERE database='non_repl_db'
+    """
+    Then we get response
+    """
+    Replicated
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM non_repl_db.foo_mw FORMAT Values
+    """
+    Then we get response
+    """
+    (42)
+    """
+    When we execute command on clickhouse02
+    """
+    chadmin database migrate -d non_repl_db 
+    """
+    When we execute command on clickhouse02
+    """
+    supervisorctl restart clickhouse-server
+    """
+    When we sleep for 10 seconds
+
+    When we execute query on clickhouse02
+    """
+    SELECT name FROM system.databases ORDER BY name FORMAT Values
+    """
+    Then we get response
+    """
+    ('INFORMATION_SCHEMA'),('default'),('information_schema'),('non_repl_db'),('system')
+    """
+    When we execute query on clickhouse02
+    """
+    SELECT engine FROM system.databases WHERE database='non_repl_db'
+    """
+    Then we get response
+    """
+    Replicated
+    """
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM non_repl_db.foo FORMAT Values
+    """
+    Then we get response
+    """
+    (43)
+    """
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM non_repl_db.foo_mw FORMAT Values
+    """
+    Then we get response
+    """
+    (43)
     """
