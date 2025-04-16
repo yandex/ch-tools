@@ -8,6 +8,7 @@ from ch_tools.chadmin.cli.database_metadata import (
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
 from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
 from ch_tools.chadmin.internal.table import change_table_uuid, detach_table
+from ch_tools.chadmin.internal.table_metadata import remove_replicated_params
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import (
     get_zk_node,
@@ -110,8 +111,19 @@ def _create_tables_from_migrating_database(
             create_table_query,
         )
 
-        create_table_query = create_table_query.replace(migrating_database, temp_db)
-        logging.info("after replacing create_table_query=[{}]", create_table_query)
+        create_table_query = create_table_query.replace(migrating_database, temp_db, 1)
+        logging.info(
+            "after replacing database create_table_query=[{}]", create_table_query
+        )
+
+        # If we want to create ReplicatedMergeTree table in Replicated database
+        # we can't use params (zookeeper path and replica name)
+        create_table_query = remove_replicated_params(create_table_query)
+
+        logging.info(
+            "after replacing replicated params create_table_query=[{}]",
+            create_table_query,
+        )
 
         execute_query(
             ctx,
@@ -219,7 +231,6 @@ def _update_zk_tables_metadata(
 
 
 def _remove_temp_db(ctx: Context, metadata_temp_db: DatabaseMetadata) -> None:
-    metadata_temp_db.update_metadata_file()
     query = f"""
         ATTACH DATABASE {metadata_temp_db.database_name}
     """
@@ -287,6 +298,10 @@ def _change_tables_uuid(ctx: Context, tables: dict, database_name: str) -> None:
             old_table_uuid,
             zk_table_uuid,
         )
+
+        if zk_table_uuid == old_table_uuid:
+            logging.info("Equal uuid. Don't need to change uuid.")
+            continue
 
         change_table_uuid(
             ctx,
