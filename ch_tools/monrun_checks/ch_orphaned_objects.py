@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import click
 
 from ch_tools.chadmin.cli.object_storage_group import STATE_LOCAL_PATH
@@ -5,8 +7,10 @@ from ch_tools.chadmin.internal.object_storage.orphaned_objects_state import (
     OrphanedObjectsState,
 )
 from ch_tools.chadmin.internal.zookeeper import get_zk_node
+from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config.clickhouse import ClickhouseConfig
 from ch_tools.common.result import CRIT, OK, WARNING, Result
+from ch_tools.monrun_checks.utils import get_uptime
 
 
 @click.command("orphaned-objects")
@@ -20,6 +24,13 @@ from ch_tools.common.result import CRIT, OK, WARNING, Result
     "--state-zk-path",
     "state_zk_path",
     help="Zookeeper node path from which the total size of orphaned objects will be taken.",
+)
+@click.option(
+    "--min-uptime",
+    "min_uptime",
+    default="2d",
+    type=TimeSpanParamType(),
+    help="Minimal ClickHouse uptime enough for orphaned objects search.",
 )
 @click.option(
     "-c",
@@ -42,11 +53,15 @@ def orphaned_objects_command(
     ctx: click.Context,
     state_local: bool,
     state_zk_path: str,
+    min_uptime: timedelta,
     crit: int,
     warn: int,
 ) -> Result:
     if not ClickhouseConfig.load().storage_configuration.has_disk("object_storage"):
         return Result(OK, "Disabled")
+
+    if get_uptime(ctx) < min_uptime:
+        return Result(WARNING, "suppressed by low ClickHouse uptime")
 
     _check_mutually_exclusive(state_local, state_zk_path)
 
