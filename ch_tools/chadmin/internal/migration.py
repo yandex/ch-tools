@@ -200,13 +200,17 @@ def _update_zk_for_migrate(
     _update_zk_tables_metadata(ctx, zk_db_path, mapping_table_to_metadata)
 
     for replica_path in list_zk_nodes(ctx, zk_db_path + "/replicas"):
-        logging.info("Update replica: {}", replica_path)
         replica_data = get_zk_node(ctx, replica_path)
 
         prefix = replica_data.split(":")
         new_data = f"{prefix[0]}:{prefix[1]}:{metadata_non_repl_db.database_uuid}"
 
+        logging.info(
+            "Update replica: {}, from {} to {}", replica_path, replica_data, new_data
+        )
         update_zk_nodes(ctx, [replica_path], new_data)
+
+        logging.info("Updating was finished")
 
 
 def _update_zk_tables_metadata(

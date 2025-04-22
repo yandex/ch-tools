@@ -190,7 +190,14 @@ def migrate_engine_command(ctx, database):
         try:
             migrate_as_first_replica(ctx, database, temp_db)
         except ClickhouseError as ex:
-            if "REPLICA_ALREADY_EXISTS" not in str(ex):
+            non_first_replica_errors = [
+                "REPLICA_ALREADY_EXISTS",
+                "DATABASE_ALREADY_EXISTS",
+            ]
+            if not any(
+                suitable_error in str(ex) for suitable_error in non_first_replica_errors
+            ):
+                logging.info("migrate_as_first_replica failed with ex={}", ex)
                 raise
             logging.info(
                 "Exception contains REPLICA_ALREADY_EXISTS, migrate as non first replica"
