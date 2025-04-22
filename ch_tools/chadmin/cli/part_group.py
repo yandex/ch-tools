@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from typing import List
 
 from cloup import Choice, group, option, option_group, pass_context
 from cloup.constraints import If, IsSet, RequireAtLeast, RequireExactly
@@ -20,6 +21,7 @@ from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import format_bytes, print_response
 from ch_tools.common.cli.parameters import BytesParamType
+from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
 
 FIELD_FORMATTERS = {
     "bytes_on_disk": format_bytes,
@@ -198,10 +200,29 @@ def list_parts_command(
     default=False,
     help="Enable dry run mode and do not perform any modifying actions.",
 )
+@option("-w", "--workers", default=4, help="Number of workers.")
 @pass_context
-def attach_parts_command(ctx, _all, keep_going, dry_run, **kwargs):
+def attach_parts_command(ctx, _all, keep_going, dry_run, workers, **kwargs):
     """Attach one or several parts."""
     parts = list_detached_parts(ctx, reason="", **kwargs)
+
+    tasks: List[WorkerTask] = []
+    for part in parts:
+        tasks.append(
+            WorkerTask(
+                f'{part["database"]}.{part["table"]}_{part["name"]}',
+                attach_part,
+                {
+                    "ctx": ctx,
+                    "database": part["database"],
+                    "table": part["table"],
+                    "part_name": part["name"],
+                    "dry_run": dry_run,
+                },
+            )
+        )
+    execute_tasks_in_parallel(tasks, max_workers=workers, keep_going=keep_going)
+
     for part in parts:
         try:
             attach_part(
