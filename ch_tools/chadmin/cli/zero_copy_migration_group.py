@@ -92,7 +92,14 @@ def update_status_file(status_file_path, tables_stats):
     default=True,
     help="Get merges from all hosts in the cluster.",
 )
-def migrate(ctx, status_file_path, dry_run):
+@option(
+    "--do-restore",
+    "do_restore",
+    is_flag=True,
+    default=False,
+    help="Restore.",
+)
+def migrate(ctx, status_file_path, dry_run, do_restore):
     print(Path(status_file_path).exists())
     if not Path(status_file_path).exists():
         generate_status_file(ctx, status_file_path)
@@ -100,18 +107,19 @@ def migrate(ctx, status_file_path, dry_run):
     tables_stat = load_statuses(ctx, status_file_path)
     print(tables_stat)
 
-    detach_tables(ctx, tables_stat, status_file_path, dry_run)
-    tables_stat = load_statuses(ctx, status_file_path)
-    print(tables_stat)
+    if not do_restore:
+        detach_tables(ctx, tables_stat, status_file_path, dry_run)
+        tables_stat = load_statuses(ctx, status_file_path)
+        print(tables_stat)
 
-    remove_zk_nodes(ctx, tables_stat, status_file_path, dry_run)
-    tables_stat = load_statuses(ctx, status_file_path)
-    print(tables_stat)
-    restart_clickhouse_server(ctx, tables_stat, dry_run)
-
-    restore_replica_step(ctx, tables_stat, status_file_path, dry_run)
-    tables_stat = load_statuses(ctx, status_file_path)
-    print(tables_stat)
+        remove_zk_nodes(ctx, tables_stat, status_file_path, dry_run)
+        tables_stat = load_statuses(ctx, status_file_path)
+        print(tables_stat)
+        restart_clickhouse_server(ctx, tables_stat, dry_run)
+    else:
+        restore_replica_step(ctx, tables_stat, status_file_path, dry_run)
+        tables_stat = load_statuses(ctx, status_file_path)
+        print(tables_stat)
 
 
 def generate_status_file(ctx, status_file_path):
@@ -191,6 +199,7 @@ def detach_tables(ctx, tables_stat, status_file_path, dry_run=True):
             execute_query_with_retry(
                 ctx,
                 query=f"DETACH TABLE `{tables_stat[index].db}`.`{tables_stat[index].table}`",
+                dry_run=dry_run,
             )
             tables_stat[index].status = STATUS.DETACHED
             update_status_file(status_file_path, tables_stat)
@@ -231,16 +240,26 @@ def restart_clickhouse_server(ctx, tables_stat, dry_run=True):
 
 
 def restore_replica_step(ctx, tables_stat, status_file_path, dry_run=True):
-    logging.info("Remove from zk step")
+    logging.info("Restore replica")
 
+    def callback_update_status_file(index):
+        index = int(index)
+        tables_stat[index].status = STATUS.RESTORED
+        update_status_file(status_file_path, tables_stat)
+
+    tasks: List[WorkerTask] = []
     for index in range(len(tables_stat)):
-        if tables_stat[index].status == STATUS.ZK_CLEANED:
-            restore_replica(
-                ctx,
-                tables_stat[index].db,
-                tables_stat[index].table,
-                cluster=None,
-                dry_run=dry_run,
+        tasks.append(
+            WorkerTask(
+                f"{index}",
+                restore_replica,
+                {
+                    "ctx": ctx,
+                    "database":  tables_stat[index].db,
+                    "table":  tables_stat[index].table,
+                    "cluster": False,
+                    "dry_run": dry_run,
+                },
             )
-            tables_stat[index].status = STATUS.RESTORED
-            update_status_file(status_file_path, tables_stat)
+        )
+    execute_tasks_in_parallel(tasks, max_workers=4, keep_going=True, callback=callback_update_status_file)
