@@ -1,4 +1,4 @@
-from click import Context
+from click import ClickException, Context
 
 from ch_tools.chadmin.cli import metadata
 from ch_tools.chadmin.cli.database_metadata import (
@@ -19,10 +19,7 @@ from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 
 
-def migrate_as_first_replica(
-    ctx: Context, migrating_database: str, temp_db: str
-) -> None:
-    # @todo specify the replica_path in chadmin command
+def create_temp_db(ctx: Context, migrating_database: str, temp_db: str) -> None:
     query = """
         CREATE DATABASE {temp_db} ON CLUSTER '{{cluster}}' ENGINE = Replicated('/clickhouse/{database}', '{{shard}}', '{{replica}}')
     """.format(
@@ -30,12 +27,17 @@ def migrate_as_first_replica(
         database=migrating_database,
     )
 
-    # @todo if we could not create db on every host - would that be aacceptable behavior?
-    execute_query(
-        ctx,
-        query,
-        echo=True,
-    )
+    response = execute_query(ctx, query, echo=True, format_="JSON")
+
+    ex_text = response.get("exception")
+    logging.info("create_temp_db: got ex={}", ex_text)
+    if ex_text is not None:
+        raise ClickException(ex_text)
+
+
+def migrate_as_first_replica(
+    ctx: Context, migrating_database: str, temp_db: str
+) -> None:
 
     mapping_table_to_metadata = _create_tables_from_migrating_database(
         ctx, migrating_database, temp_db

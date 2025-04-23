@@ -387,6 +387,15 @@ Feature: chadmin database migrate command
 
     When we execute query on clickhouse02
     """
+    SELECT engine FROM system.databases WHERE database='non_repl_db'
+    """
+    Then we get response
+    """
+    Replicated
+    """
+
+    When we execute query on clickhouse02
+    """
     SELECT * FROM non_repl_db.foo FORMAT Values
     """
     Then we get response
