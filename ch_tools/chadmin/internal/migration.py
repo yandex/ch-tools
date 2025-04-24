@@ -1,4 +1,4 @@
-from click import Context
+from click import ClickException, Context
 
 from ch_tools.chadmin.cli import metadata
 from ch_tools.chadmin.cli.database_metadata import (
@@ -19,10 +19,7 @@ from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 
 
-def migrate_as_first_replica(
-    ctx: Context, migrating_database: str, temp_db: str
-) -> None:
-    # @todo specify the replica_path in chadmin command
+def create_temp_db(ctx: Context, migrating_database: str, temp_db: str) -> None:
     query = """
         CREATE DATABASE {temp_db} ON CLUSTER '{{cluster}}' ENGINE = Replicated('/clickhouse/{database}', '{{shard}}', '{{replica}}')
     """.format(
@@ -30,12 +27,17 @@ def migrate_as_first_replica(
         database=migrating_database,
     )
 
-    # @todo if we could not create db on every host - would that be aacceptable behavior?
-    execute_query(
-        ctx,
-        query,
-        echo=True,
-    )
+    response = execute_query(ctx, query, echo=True, format_="JSON")
+
+    ex_text = response.get("exception")
+    logging.info("create_temp_db: got ex={}", ex_text)
+    if ex_text is not None:
+        raise ClickException(ex_text)
+
+
+def migrate_as_first_replica(
+    ctx: Context, migrating_database: str, temp_db: str
+) -> None:
 
     mapping_table_to_metadata = _create_tables_from_migrating_database(
         ctx, migrating_database, temp_db
@@ -200,13 +202,17 @@ def _update_zk_for_migrate(
     _update_zk_tables_metadata(ctx, zk_db_path, mapping_table_to_metadata)
 
     for replica_path in list_zk_nodes(ctx, zk_db_path + "/replicas"):
-        logging.info("Update replica: {}", replica_path)
         replica_data = get_zk_node(ctx, replica_path)
 
         prefix = replica_data.split(":")
         new_data = f"{prefix[0]}:{prefix[1]}:{metadata_non_repl_db.database_uuid}"
 
+        logging.info(
+            "Update replica: {}, from {} to {}", replica_path, replica_data, new_data
+        )
         update_zk_nodes(ctx, [replica_path], new_data)
+
+        logging.info("Updating was finished")
 
 
 def _update_zk_tables_metadata(

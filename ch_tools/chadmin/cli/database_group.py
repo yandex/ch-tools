@@ -5,13 +5,13 @@ from cloup.constraints import RequireAtLeast
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.migration import (
+    create_temp_db,
     is_database_exists,
     migrate_as_first_replica,
     migrate_as_non_first_replica,
 )
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
-from ch_tools.common.clickhouse.client.error import ClickhouseError
 from ch_tools.common.clickhouse.config import get_cluster_name
 
 
@@ -187,14 +187,28 @@ def migrate_engine_command(ctx, database):
             logging.error("Database {} does not exists, skip migrating", database)
             sys.exit(1)
 
+        first_replica = True
         try:
-            migrate_as_first_replica(ctx, database, temp_db)
-        except ClickhouseError as ex:
-            if "REPLICA_ALREADY_EXISTS" not in str(ex):
+            create_temp_db(ctx, database, temp_db)
+        except Exception as ex:
+            logging.info("create_temp_db failed with ex={}", ex)
+
+            non_first_replica_errors = [
+                "REPLICA_ALREADY_EXISTS",
+                "DATABASE_ALREADY_EXISTS",
+            ]
+            if not any(
+                suitable_error in str(ex) for suitable_error in non_first_replica_errors
+            ):
                 raise
-            logging.info(
-                "Exception contains REPLICA_ALREADY_EXISTS, migrate as non first replica"
-            )
+
+            first_replica = False
+
+        if first_replica:
+            logging.info("migrate as first replica")
+            migrate_as_first_replica(ctx, database, temp_db)
+        else:
+            logging.info("migrate as non first replica")
             migrate_as_non_first_replica(ctx, database, temp_db)
 
     except Exception as ex:

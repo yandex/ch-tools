@@ -335,6 +335,75 @@ Feature: chadmin database migrate command
     """
 
   @require_version_24.8
+  Scenario: Migrate database with ReplicatedMergeTree table with stopped first replica
+    When we execute query on clickhouse01
+    """
+    CREATE DATABASE non_repl_db ON CLUSTER '{cluster}';
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE non_repl_db.foo
+    (
+        `a` Int
+    )
+    ENGINE = ReplicatedMergeTree('/clickhouse/foo', '{replica}')
+    ORDER BY a
+    """
+    And we execute query on clickhouse02
+    """
+    CREATE TABLE non_repl_db.foo
+    (
+        `a` Int
+    )
+    ENGINE = ReplicatedMergeTree('/clickhouse/foo', '{replica}')
+    ORDER BY a
+    """
+    And we execute query on clickhouse01
+    """
+    INSERT INTO non_repl_db.foo VALUES (42)
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db 
+    """
+    Then it completes successfully
+
+    When we execute command on clickhouse01
+    """
+    supervisorctl stop clickhouse-server
+    """
+
+    When we execute command on clickhouse02
+    """
+    chadmin database migrate -d non_repl_db 
+    """
+    Then it completes successfully
+
+    When we execute command on clickhouse02
+    """
+    supervisorctl restart clickhouse-server
+    """
+    When we sleep for 10 seconds
+
+    When we execute query on clickhouse02
+    """
+    SELECT engine FROM system.databases WHERE database='non_repl_db'
+    """
+    Then we get response
+    """
+    Replicated
+    """
+
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM non_repl_db.foo FORMAT Values
+    """
+    Then we get response
+    """
+    (42)
+    """
+
+  @require_version_24.8
   Scenario Outline: Migrate database with ReplicatedMergeTree table createed by hosts
     When we execute query on clickhouse01
     """
@@ -983,4 +1052,59 @@ Feature: chadmin database migrate command
     Then we get response
     """
     (43)
+    """
+
+  @require_version_24.8
+  Scenario: Migrate database with ReplicatedMergeTree before update schema in another replica
+    When we execute query on clickhouse01
+    """
+    CREATE DATABASE non_repl_db ON CLUSTER '{cluster}';
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE non_repl_db.foo
+    ON CLUSTER '{cluster}'
+    (
+        `a` Int
+    )
+    ENGINE = ReplicatedMergeTree('/clickhouse/foo', '{replica}')
+    ORDER BY a
+    """
+    And we execute query on clickhouse01
+    """
+    INSERT INTO non_repl_db.foo VALUES (42)
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db 
+    """
+    When we execute query on clickhouse02
+    """
+    ALTER TABLE non_repl_db.foo ADD COLUMN b String DEFAULT 'value'
+    """
+
+    When we execute command on clickhouse02
+    """
+    chadmin database migrate -d non_repl_db 
+    """
+    When we execute command on clickhouse02
+    """
+    supervisorctl restart clickhouse-server
+    """
+    When we sleep for 10 seconds
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM non_repl_db.foo FORMAT Values
+    """
+    Then we get response
+    """
+    (42,'value')
+    """
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM non_repl_db.foo FORMAT Values
+    """
+    Then we get response
+    """
+    (42,'value')
     """
