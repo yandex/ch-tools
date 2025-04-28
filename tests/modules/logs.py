@@ -5,16 +5,16 @@ Logs management.
 import json
 import os
 
+from behave.runner import Context
 from docker.models.containers import Container
 
 from ch_tools.common import logging
 
 from .docker import copy_container_dir, get_containers
 from .minio import export_s3_data
-from .typing import ContextT
 
 
-def save_logs(context: ContextT) -> None:
+def save_logs(context: Context) -> None:
     """
     Save logs and support materials.
     """

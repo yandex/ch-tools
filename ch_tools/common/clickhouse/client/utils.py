@@ -1,4 +1,4 @@
-def _format_str_match(value):
+def _format_str_match(value: str) -> str:
     if value is None:
         return None
 
@@ -10,7 +10,7 @@ def _format_str_match(value):
     )
 
 
-def _format_str_imatch(value):
+def _format_str_imatch(value: str) -> str:
     if value is None:
         return None
 

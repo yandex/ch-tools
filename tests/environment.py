@@ -4,8 +4,10 @@ Behave entry point.
 
 import re
 import sys
+from typing import Optional
 
 import env_control
+from behave.runner import Context, Feature, Scenario, Step
 from modules.logs import save_logs
 from modules.utils import version_ge, version_lt
 
@@ -18,7 +20,7 @@ except ImportError:
     import pdb  # type: ignore
 
 
-def before_all(context):
+def before_all(context: Context) -> None:
     """
     Prepare environment for tests.
     """
@@ -33,7 +35,7 @@ def before_all(context):
         env_control.create(context)
 
 
-def before_feature(context, _feature):
+def before_feature(context: Context, _feature: Feature) -> None:
     """
     Cleanup function executing per feature.
     """
@@ -41,7 +43,7 @@ def before_feature(context, _feature):
         env_control.restart(context)
 
 
-def before_scenario(context, scenario):
+def before_scenario(context: Context, scenario: Scenario) -> None:
     """
     Cleanup function executing per scenario.
     """
@@ -51,7 +53,7 @@ def before_scenario(context, scenario):
         env_control.restart(context)
 
 
-def after_step(context, step):
+def after_step(context: Context, step: Step) -> None:
     """
     Save logs after failed step.
     """
@@ -61,7 +63,7 @@ def after_step(context, step):
             pdb.post_mortem(step.exc_traceback)
 
 
-def after_all(context):
+def after_all(context: Context) -> None:
     """
     Clean up.
     """
@@ -73,7 +75,7 @@ def after_all(context):
     env_control.stop(context)
 
 
-def _check_tags(context, scenario):
+def _check_tags(context: Context, scenario: Scenario) -> bool:
     ch_version = context.conf["ch_version"]
 
     require_version = _parse_version_tag(scenario.tags, "require_version")
@@ -98,7 +100,7 @@ def _check_tags(context, scenario):
     return True
 
 
-def _parse_version_tag(tags, prefix):
+def _parse_version_tag(tags: list, prefix: str) -> Optional[str]:
     tag_pattern = prefix + r"_(?P<version>[\d\.]+)"
     for tag in tags:
         match = re.fullmatch(tag_pattern, tag)
