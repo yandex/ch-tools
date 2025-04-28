@@ -2,14 +2,15 @@
 Steps for interacting with S3.
 """
 
-from behave import Context, given, then, when
+from behave import given, then, when
 from hamcrest import assert_that, equal_to, greater_than
 from modules import minio, s3
 from modules.steps import get_step_data
+from modules.typing import ContextT
 
 
 @given("a working S3")
-def step_wait_for_s3_alive(context: Context) -> None:
+def step_wait_for_s3_alive(context: ContextT) -> None:
     """
     Ensure that S3 is ready to accept incoming requests.
     """
@@ -17,7 +18,7 @@ def step_wait_for_s3_alive(context: Context) -> None:
 
 
 @then("S3 contains {count:d} objects")
-def step_s3_contains_files(context: Context, count: int) -> None:
+def step_s3_contains_files(context: ContextT, count: int) -> None:
     s3_client = s3.S3Client(context)
     objects = s3_client.list_objects("")
     assert_that(
@@ -28,7 +29,7 @@ def step_s3_contains_files(context: Context, count: int) -> None:
 
 
 @then("S3 contains greater than {count:d} objects")
-def step_s3_contains_greater_than_files(context: Context, count: int) -> None:
+def step_s3_contains_greater_than_files(context: ContextT, count: int) -> None:
     s3_client = s3.S3Client(context)
     objects = s3_client.list_objects("")
     assert_that(
@@ -40,7 +41,7 @@ def step_s3_contains_greater_than_files(context: Context, count: int) -> None:
 
 @then("S3 bucket {bucket} contains {count:d} objects")
 def step_cloud_storage_bucket_contains_files(
-    context: Context, bucket: str, count: int
+    context: ContextT, bucket: str, count: int
 ) -> None:
     s3_client = s3.S3Client(context, bucket)
     objects = s3_client.list_objects("")
@@ -52,7 +53,7 @@ def step_cloud_storage_bucket_contains_files(
 
 
 @when("we put object in S3")
-def step_put_file_in_s3(context: Context) -> None:
+def step_put_file_in_s3(context: ContextT) -> None:
     conf = get_step_data(context)
     s3_client = s3.S3Client(context, conf["bucket"])
     s3_client.upload_data(conf["data"], conf["path"])
@@ -60,7 +61,7 @@ def step_put_file_in_s3(context: Context) -> None:
 
 
 @when("we put {count:d} objects in S3")
-def step_put_file_count_in_s3(context: Context, count: int) -> None:
+def step_put_file_count_in_s3(context: ContextT, count: int) -> None:
     conf = get_step_data(context)
     s3_client = s3.S3Client(context, conf["bucket"])
     for i in range(count):
@@ -70,7 +71,7 @@ def step_put_file_count_in_s3(context: Context, count: int) -> None:
 
 
 @when("we delete object in S3")
-def stop_delete_file_in_S3(context: Context) -> None:
+def stop_delete_file_in_S3(context: ContextT) -> None:
     conf = get_step_data(context)
     s3_client = s3.S3Client(context, conf["bucket"])
     s3_client.delete_data(conf["path"])
@@ -78,7 +79,7 @@ def stop_delete_file_in_S3(context: Context) -> None:
 
 
 @then("Path does not exist in S3")
-def step_create_file_in_s3(context: Context) -> None:
+def step_create_file_in_s3(context: ContextT) -> None:
     conf = get_step_data(context)
     s3_client = s3.S3Client(context, conf["bucket"])
     assert not s3_client.path_exists(conf["path"])
