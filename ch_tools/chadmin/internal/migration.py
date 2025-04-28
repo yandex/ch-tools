@@ -312,7 +312,7 @@ def _get_tables_info_and_detach(ctx: Context, database_name: str) -> dict:
 
 
 def is_table_schema_equal(
-    ctx, database_name: str, table_name: str, table_local_metadata_path: str
+    ctx: Context, database_name: str, table_name: str, table_local_metadata_path: str
 ) -> bool:
     zk_metadata_path = f"/clickhouse/{database_name}/metadata/{table_name}"
     zk_table_metadata = get_zk_node(ctx, zk_metadata_path)
