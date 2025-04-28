@@ -7,8 +7,9 @@ import sys
 from typing import Optional
 
 import env_control
-from behave.runner import Context, Feature, Scenario, Step
+from behave.runner import Feature, Scenario, Step
 from modules.logs import save_logs
+from modules.typing import ContextT
 from modules.utils import version_ge, version_lt
 
 from ch_tools.common import logging
@@ -20,7 +21,7 @@ except ImportError:
     import pdb  # type: ignore
 
 
-def before_all(context: Context) -> None:
+def before_all(context: ContextT) -> None:
     """
     Prepare environment for tests.
     """
@@ -35,7 +36,7 @@ def before_all(context: Context) -> None:
         env_control.create(context)
 
 
-def before_feature(context: Context, _feature: Feature) -> None:
+def before_feature(context: ContextT, _feature: Feature) -> None:
     """
     Cleanup function executing per feature.
     """
@@ -43,7 +44,7 @@ def before_feature(context: Context, _feature: Feature) -> None:
         env_control.restart(context)
 
 
-def before_scenario(context: Context, scenario: Scenario) -> None:
+def before_scenario(context: ContextT, scenario: Scenario) -> None:
     """
     Cleanup function executing per scenario.
     """
@@ -53,7 +54,7 @@ def before_scenario(context: Context, scenario: Scenario) -> None:
         env_control.restart(context)
 
 
-def after_step(context: Context, step: Step) -> None:
+def after_step(context: ContextT, step: Step) -> None:
     """
     Save logs after failed step.
     """
@@ -63,7 +64,7 @@ def after_step(context: Context, step: Step) -> None:
             pdb.post_mortem(step.exc_traceback)
 
 
-def after_all(context: Context) -> None:
+def after_all(context: ContextT) -> None:
     """
     Clean up.
     """
@@ -75,7 +76,7 @@ def after_all(context: Context) -> None:
     env_control.stop(context)
 
 
-def _check_tags(context: Context, scenario: Scenario) -> bool:
+def _check_tags(context: ContextT, scenario: Scenario) -> bool:
     ch_version = context.conf["ch_version"]
 
     require_version = _parse_version_tag(scenario.tags, "require_version")

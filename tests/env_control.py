@@ -8,7 +8,7 @@ import pickle
 from types import SimpleNamespace
 
 import configuration
-from behave import Context
+from modules.typing import ContextT
 from modules import compose, docker, minio, templates
 
 from ch_tools.common import logging
@@ -37,7 +37,7 @@ STAGES = {
 }
 
 
-def create(context: Context) -> None:
+def create(context: ContextT) -> None:
     """
     Create test environment.
     """
@@ -47,28 +47,28 @@ def create(context: Context) -> None:
         pickle.dump(context.conf, session_conf)
 
 
-def start(context: Context) -> None:
+def start(context: ContextT) -> None:
     """
     Start test environment runtime.
     """
     _run_stage("start", context)
 
 
-def restart(context: Context) -> None:
+def restart(context: ContextT) -> None:
     """
     Restart test environment runtime.
     """
     _run_stage("restart", context)
 
 
-def stop(context: Context) -> None:
+def stop(context: ContextT) -> None:
     """
     Stop test environment runtime.
     """
     _run_stage("stop", context)
 
 
-def _run_stage(stage: str, context: Context) -> None:
+def _run_stage(stage: str, context: ContextT) -> None:
     """
     Run stage steps.
     """
@@ -80,7 +80,7 @@ def _run_stage(stage: str, context: Context) -> None:
         step(context)
 
 
-def _init_context(context: Context) -> None:
+def _init_context(context: ContextT) -> None:
     """
     Initialize context.
     """
