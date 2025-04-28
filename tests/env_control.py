@@ -68,7 +68,7 @@ def stop(context: Context) -> None:
     _run_stage("stop", context)
 
 
-def _run_stage(stage, context: Context) -> None:
+def _run_stage(stage: str, context: Context) -> None:
     """
     Run stage steps.
     """

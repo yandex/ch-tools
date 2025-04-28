@@ -1,4 +1,5 @@
 import re
+from typing import List
 
 from click import Context
 
@@ -19,8 +20,8 @@ class Status:
 
     def __init__(self) -> None:
         self.code = 0
-        self.text: list[str] = []
-        self.verbose: list[str] = []
+        self.text: List[str] = []
+        self.verbose: List[str] = []
 
     @property
     def message(self):
