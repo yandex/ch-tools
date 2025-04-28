@@ -7,7 +7,7 @@ import sys
 from typing import Optional
 
 import env_control
-from behave.runner import Feature, Scenario, Step
+from behave import model
 from modules.logs import save_logs
 from modules.typing import ContextT
 from modules.utils import version_ge, version_lt
@@ -36,7 +36,7 @@ def before_all(context: ContextT) -> None:
         env_control.create(context)
 
 
-def before_feature(context: ContextT, _feature: Feature) -> None:
+def before_feature(context: ContextT, _feature: model.Feature) -> None:
     """
     Cleanup function executing per feature.
     """
@@ -44,7 +44,7 @@ def before_feature(context: ContextT, _feature: Feature) -> None:
         env_control.restart(context)
 
 
-def before_scenario(context: ContextT, scenario: Scenario) -> None:
+def before_scenario(context: ContextT, scenario: model.Scenario) -> None:
     """
     Cleanup function executing per scenario.
     """
@@ -54,7 +54,7 @@ def before_scenario(context: ContextT, scenario: Scenario) -> None:
         env_control.restart(context)
 
 
-def after_step(context: ContextT, step: Step) -> None:
+def after_step(context: ContextT, step: model.Step) -> None:
     """
     Save logs after failed step.
     """
@@ -76,7 +76,7 @@ def after_all(context: ContextT) -> None:
     env_control.stop(context)
 
 
-def _check_tags(context: ContextT, scenario: Scenario) -> bool:
+def _check_tags(context: ContextT, scenario: model.Scenario) -> bool:
     ch_version = context.conf["ch_version"]
 
     require_version = _parse_version_tag(scenario.tags, "require_version")
