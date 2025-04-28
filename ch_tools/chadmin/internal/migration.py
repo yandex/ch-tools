@@ -7,7 +7,11 @@ from ch_tools.chadmin.cli.database_metadata import (
 )
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
 from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
-from ch_tools.chadmin.internal.table import change_table_uuid, detach_table
+from ch_tools.chadmin.internal.table import (
+    change_table_uuid,
+    detach_table,
+    read_local_table_metadata,
+)
 from ch_tools.chadmin.internal.table_metadata import remove_replicated_params
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import (
@@ -77,6 +81,28 @@ def migrate_as_non_first_replica(ctx, database_name, temp_db):
     metadata_temp_db = parse_database_from_metadata(temp_db)
     original_engine = metadata_non_repl_db.database_engine
     tables_info = _get_tables_info_and_detach(ctx, database_name)
+
+    # Unfortunately, it is not atomic.
+    # The schema could be changed before detach databases.
+    # However, it is sufficient for now, and we will stabilize
+    # this logic after we stop creating temporary tables.
+    for row in tables_info:
+        if "Replicated" in row["engine"]:
+            logging.info("Table engine {} can have different schema", row["engine"])
+            continue
+
+        table_name = row["name"]
+        table_local_metadata_path = row["metadata_path"]
+
+        if not is_table_schema_equal(
+            ctx,
+            database_name=database_name,
+            table_name=table_name,
+            table_local_metadata_path=table_local_metadata_path,
+        ):
+            raise RuntimeError(
+                f"Local table metadata for table {table_name} is different from zk metadata"
+            )
 
     _detach_dbs(ctx, dbs=[database_name, temp_db])
 
@@ -258,7 +284,7 @@ def _remove_temp_db(ctx: Context, metadata_temp_db: DatabaseMetadata) -> None:
 
 def _get_tables_info_and_detach(ctx: Context, database_name: str) -> dict:
     query = f"""
-        SELECT database, name, uuid, create_table_query, metadata_path FROM system.tables WHERE database='{database_name}'
+        SELECT database, name, uuid, create_table_query, metadata_path, engine FROM system.tables WHERE database='{database_name}'
     """
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
 
@@ -283,6 +309,35 @@ def _get_tables_info_and_detach(ctx: Context, database_name: str) -> dict:
 
     logging.info("Database {} contains tables: {}", database_name, tables)
     return tables
+
+
+def is_table_schema_equal(
+    ctx, database_name: str, table_name: str, table_local_metadata_path: str
+) -> bool:
+    zk_metadata_path = f"/clickhouse/{database_name}/metadata/{table_name}"
+    zk_table_metadata = get_zk_node(ctx, zk_metadata_path)
+
+    local_table_metadata = read_local_table_metadata(ctx, table_local_metadata_path)
+
+    zk_table_metadata = zk_table_metadata.rstrip()
+    local_table_metadata = local_table_metadata.rstrip()
+
+    # Do not need use regex because we have stable table metadata format
+    start_pos_uuid = 21
+    finish_pos_uuid = 57
+
+    local_table_metadata = (
+        local_table_metadata[:start_pos_uuid] + local_table_metadata[finish_pos_uuid:]
+    )
+    zk_table_metadata = (
+        zk_table_metadata[:start_pos_uuid] + zk_table_metadata[finish_pos_uuid:]
+    )
+
+    logging.info(
+        "Compare metadata: local={}, zk={}", local_table_metadata, zk_table_metadata
+    )
+
+    return local_table_metadata == zk_table_metadata
 
 
 def _change_tables_uuid(ctx: Context, tables: dict, database_name: str) -> None:
