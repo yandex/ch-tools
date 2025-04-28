@@ -19,8 +19,8 @@ class Status:
 
     def __init__(self) -> None:
         self.code = 0
-        self.text = list[str]
-        self.verbose = list[str]
+        self.text: list[str] = []
+        self.verbose: list[str] = []
 
     @property
     def message(self):
