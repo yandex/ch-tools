@@ -8,8 +8,8 @@ import pickle
 from types import SimpleNamespace
 
 import configuration
-from modules.typing import ContextT
 from modules import compose, docker, minio, templates
+from modules.typing import ContextT
 
 from ch_tools.common import logging
 
