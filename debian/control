@@ -16,7 +16,7 @@ Standards-Version: 4.1.4
 Homepage: https://github.com/yandex/ch-tools
 Vcs-Browser: https://github.com/yandex/ch-tools.git
 Vcs-Git: git://github.com:yandex/ch-tools.git
-X-Python3-Version: >= 3.6
+X-Python3-Version: >= 3.9
 
 Package: clickhouse-tools
 Architecture: any
