@@ -1,6 +1,6 @@
 import os
 import sys
-from typing import Dict
+from typing import Dict, Optional
 
 from click import ClickException, Context
 
@@ -30,7 +30,12 @@ DISK_LOCAL_KEY = "local"
 DISK_OBJECT_STORAGE_KEY = "object_storage"
 
 
-def get_table(ctx, database_name, table_name, active_parts=None):
+def get_table(
+    ctx: Context,
+    database_name: str,
+    table_name: str,
+    active_parts: Optional[str] = None,
+) -> dict:
     tables = list_tables(
         ctx,
         database_name=database_name,
@@ -45,21 +50,21 @@ def get_table(ctx, database_name, table_name, active_parts=None):
 
 
 def list_tables(
-    ctx,
+    ctx: Context,
     *,
-    database_name=None,
-    database_pattern=None,
-    exclude_database_pattern=None,
-    table_name=None,
-    table_pattern=None,
-    exclude_table_pattern=None,
-    engine_pattern=None,
-    exclude_engine_pattern=None,
-    is_readonly=None,
-    active_parts=None,
-    order_by=None,
-    limit=None,
-):
+    database_name: Optional[str] = None,
+    database_pattern: Optional[str] = None,
+    exclude_database_pattern: Optional[str] = None,
+    table_name: Optional[str] = None,
+    table_pattern: Optional[str] = None,
+    exclude_table_pattern: Optional[str] = None,
+    engine_pattern: Optional[str] = None,
+    exclude_engine_pattern: Optional[str] = None,
+    is_readonly: Optional[bool] = None,
+    active_parts: Optional[str] = None,
+    order_by: Optional[str] = None,
+    limit: Optional[int] = None,
+) -> list:
     order_by = {
         "size": "disk_size DESC",
         "parts": "parts DESC",
@@ -163,7 +168,7 @@ def list_tables(
     )["data"]
 
 
-def list_table_columns(ctx, database_name, table_name):
+def list_table_columns(ctx: Context, database_name: str, table_name: str) -> dict:
     query = """
         SELECT
             name,
@@ -187,15 +192,15 @@ def list_table_columns(ctx, database_name, table_name):
 
 
 def detach_table(
-    ctx,
-    database_name,
-    table_name,
-    permanently=True,
+    ctx: Context,
+    database_name: str,
+    table_name: str,
+    permanently: Optional[bool] = True,
     *,
-    cluster=None,
-    echo=False,
-    dry_run=False,
-):
+    cluster: Optional[bool] = None,
+    echo: Optional[bool] = False,
+    dry_run: Optional[bool] = False,
+) -> None:
     """
     Perform "DETACH TABLE" for the specified table.
     """
@@ -226,14 +231,14 @@ def detach_table(
 
 
 def attach_table(
-    ctx,
-    database_name,
-    table_name,
+    ctx: Context,
+    database_name: str,
+    table_name: str,
     *,
-    cluster=None,
-    echo=False,
-    dry_run=False,
-):
+    cluster: Optional[bool] = None,
+    echo: Optional[bool] = False,
+    dry_run: Optional[bool] = False,
+) -> None:
     """
     Perform "ATTACH TABLE" for the specified table.
     """
@@ -259,15 +264,15 @@ def attach_table(
 
 
 def delete_table(
-    ctx,
-    database_name,
-    table_name,
+    ctx: Context,
+    database_name: str,
+    table_name: str,
     *,
-    cluster=None,
-    echo=False,
-    sync_mode=True,
-    dry_run=False,
-):
+    cluster: Optional[bool] = None,
+    echo: Optional[bool] = False,
+    sync_mode: Optional[bool] = True,
+    dry_run: Optional[bool] = False,
+) -> None:
     """
     Perform "DROP TABLE" for the specified table.
     """
@@ -296,7 +301,7 @@ def delete_table(
     )
 
 
-def check_table_dettached(ctx, database_name, table_name):
+def check_table_dettached(ctx: Context, database_name: str, table_name: str) -> None:
     query = """
         SELECT
             1
@@ -402,7 +407,7 @@ def _remove_table_data_from_disk(
         )
 
 
-def delete_detached_table(ctx, database_name, table_name):
+def delete_detached_table(ctx: Context, database_name: str, table_name: str) -> None:
     logging.info("Call delete_detached_table: {}.{}", database_name, table_name)
 
     escaped_database_name = database_name.encode("unicode_escape").decode("utf-8")
@@ -470,7 +475,13 @@ def delete_detached_table(ctx, database_name, table_name):
     )
 
 
-def materialize_ttl(ctx, database_name, table_name, echo=False, dry_run=False):
+def materialize_ttl(
+    ctx: Context,
+    database_name: str,
+    table_name: str,
+    echo: bool = False,
+    dry_run: bool = False,
+) -> None:
     """
     Materialize TTL for the specified table.
     """
@@ -479,7 +490,7 @@ def materialize_ttl(ctx, database_name, table_name, echo=False, dry_run=False):
     execute_query(ctx, query, timeout=timeout, echo=echo, dry_run=dry_run, format_=None)
 
 
-def get_info_from_system_tables(ctx, database, table):
+def get_info_from_system_tables(ctx: Context, database: str, table: str) -> dict:
     query = f"""
         SELECT uuid, metadata_path FROM system.tables WHERE database='{database}' AND table='{table}'
     """
