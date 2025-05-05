@@ -1,7 +1,8 @@
 import re
 import sys
+from typing import Any
 
-from click import argument, group, option, pass_context
+from click import Context, argument, group, option, pass_context
 from kazoo.security import make_digest_acl
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -61,17 +62,17 @@ from ch_tools.common.config import load_config
 )
 @pass_context
 def zookeeper_group(
-    ctx,
-    host,
-    secure,
-    verify_ssl_certs,
-    port,
-    timeout,
-    zkcli_identity,
-    no_chroot,
-    no_ch_config,
-    zk_root_path,
-):
+    ctx: Context,
+    host: str,
+    secure: bool,
+    verify_ssl_certs: bool,
+    port: int,
+    timeout: int,
+    zkcli_identity: str,
+    no_chroot: bool,
+    no_ch_config: bool,
+    zk_root_path: str,
+) -> None:
     """ZooKeeper management commands.
 
     ZooKeeper command runs client which connects to Zookeeper node.
@@ -96,7 +97,7 @@ def zookeeper_group(
 @argument("path")
 @option("-b", "--binary", is_flag=True)
 @pass_context
-def get_command(ctx, path, binary):
+def get_command(ctx: Context, path: str, binary: bool) -> None:
     """Get ZooKeeper node.
 
     Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
@@ -107,7 +108,7 @@ def get_command(ctx, path, binary):
 @zookeeper_group.command("exists")
 @argument("path")
 @pass_context
-def exists_command(ctx, path):
+def exists_command(ctx: Context, path: str) -> None:
     """Check ZooKeeper node exists or not.
 
     Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
@@ -122,7 +123,7 @@ def exists_command(ctx, path):
 @zookeeper_group.command("get-acl")
 @argument("path")
 @pass_context
-def get_acl_command(ctx, path):
+def get_acl_command(ctx: Context, path: str) -> None:
     """Show node's ACL by path.
 
     Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
@@ -134,7 +135,7 @@ def get_acl_command(ctx, path):
 @argument("path")
 @option("-v", "--verbose", is_flag=True, help="Verbose mode.")
 @pass_context
-def list_command(ctx, path, verbose):
+def list_command(ctx: Context, path: str, verbose: bool) -> None:
     """List ZooKeeper nodes.
 
     Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
@@ -149,7 +150,7 @@ def list_command(ctx, path, verbose):
 @zookeeper_group.command("stat")
 @argument("path")
 @pass_context
-def stat_command(ctx, path):
+def stat_command(ctx: Context, path: str) -> None:
     """Show statistics for ZooKeeper node.
 
     Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
@@ -167,7 +168,7 @@ def stat_command(ctx, path):
     default=False,
 )
 @pass_context
-def create_command(ctx, paths, value, make_parents):
+def create_command(ctx: Context, paths: list, value: str, make_parents: bool) -> None:
     """Create one or several ZooKeeper nodes.
 
     Node path can be specified with ClickHouse macros (e.g. "/test_table/{shard}/replicas/{replica}").
@@ -180,7 +181,7 @@ def create_command(ctx, paths, value, make_parents):
 @argument("paths", type=ListParamType())
 @argument("value", type=StringParamType())
 @pass_context
-def update_command(ctx, paths, value):
+def update_command(ctx: Context, paths: list, value: str) -> None:
     """Update one or several ZooKeeper nodes.
 
     Node path can be specified with ClickHouse macros (e.g. "/test_table/{shard}/replicas/{replica}").
@@ -192,7 +193,7 @@ def update_command(ctx, paths, value):
 @zookeeper_group.command("delete")
 @argument("paths", type=ListParamType())
 @pass_context
-def delete_command(ctx, paths):
+def delete_command(ctx: Context, paths: list) -> None:
     """Delete one or several ZooKeeper nodes.
 
     Node path can be specified with ClickHouse macros (e.g. "/test_table/{shard}/replicas/{replica}").
@@ -205,7 +206,9 @@ def delete_command(ctx, paths):
 @argument("database_name", metavar="DATABASE")
 @argument("table_name", metavar="TABLE")
 @pass_context
-def get_table_metadata_command(ctx, database_name, table_name):
+def get_table_metadata_command(
+    ctx: Context, database_name: str, table_name: str
+) -> None:
     """Get table metadata stored in ZooKeeper."""
     table_replica = get_table_replica(ctx, database_name, table_name)
     path = table_replica["zookeeper_path"] + "/metadata"
@@ -217,7 +220,9 @@ def get_table_metadata_command(ctx, database_name, table_name):
 @argument("table_name", metavar="TABLE")
 @argument("value", type=StringParamType())
 @pass_context
-def update_table_metadata_command(ctx, database_name, table_name, value):
+def update_table_metadata_command(
+    ctx: Context, database_name: str, table_name: str, value: str
+) -> None:
     """Update table metadata stored in ZooKeeper."""
     table_replica = get_table_replica(ctx, database_name, table_name)
     table_path = table_replica["zookeeper_path"]
@@ -232,13 +237,13 @@ def update_table_metadata_command(ctx, database_name, table_name, value):
 @argument("path")
 @argument("acls", type=ListParamType())
 @pass_context
-def update_acls_command(ctx, path, acls):
+def update_acls_command(ctx: Context, path: str, acls: list) -> None:
     """Update node's ACLs on specified path by acls in format: bob:q1w2e3:cdrwa,rob:a9s8d7:all.
 
     Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
     """
 
-    def _parse_acl(acl):
+    def _parse_acl(acl: str) -> Any:
         acl_tuple = acl.split(":")
         if len(acl_tuple) != 3:
             ctx.fail("Invalid --acls parameter format. See --help for valid format.")
@@ -272,7 +277,7 @@ def update_acls_command(ctx, path, acls):
 @argument("database")
 @argument("table")
 @pass_context
-def get_table_replica_metadata_command(ctx, database, table):
+def get_table_replica_metadata_command(ctx: Context, database: str, table: str) -> None:
     """Get table replica metadata stored in ZooKeeper."""
     table_replica = get_table_replica(ctx, database, table)
     path = table_replica["replica_path"] + "/metadata"
@@ -282,7 +287,7 @@ def get_table_replica_metadata_command(ctx, database, table):
 @zookeeper_group.command("get-ddl-task")
 @argument("task")
 @pass_context
-def get_ddl_task_command(ctx, task):
+def get_ddl_task_command(ctx: Context, task: str) -> None:
     """Get DDL queue task metadata stored in ZooKeeper."""
     path = f"/clickhouse/task_queue/ddl/{task}"
     logging.info(get_zk_node(ctx, path))
@@ -291,7 +296,7 @@ def get_ddl_task_command(ctx, task):
 @zookeeper_group.command("delete-ddl-task")
 @argument("tasks", type=ListParamType())
 @pass_context
-def delete_ddl_task_command(ctx, tasks):
+def delete_ddl_task_command(ctx: Context, tasks: list) -> None:
     """Delete one or several DDL queue task from ZooKeeper.
 
     Multiple values can be specified through a comma.
@@ -320,7 +325,9 @@ def delete_ddl_task_command(ctx, tasks):
 )
 @argument("fqdn", type=ListParamType())
 @pass_context
-def clickhouse_hosts_command(ctx, fqdn, clean_ddl_queue, dry_run):
+def clickhouse_hosts_command(
+    ctx: Context, fqdn: list, clean_ddl_queue: bool, dry_run: bool
+) -> None:
     # We can't get the ddl queue path from clickhouse config,
     # because in some cases we are changing this path while performing cluster resetup.
     config = load_config()
@@ -347,7 +354,9 @@ def clickhouse_hosts_command(ctx, fqdn, clean_ddl_queue, dry_run):
 @argument("zookeeper-table-path")
 @argument("fqdn", type=ListParamType())
 @pass_context
-def remove_hosts_from_table(ctx, zookeeper_table_path, fqdn, dry_run):
+def remove_hosts_from_table(
+    ctx: Context, zookeeper_table_path: str, fqdn: list, dry_run: bool
+) -> None:
     clean_zk_metadata_for_hosts(
         ctx,
         fqdn,
