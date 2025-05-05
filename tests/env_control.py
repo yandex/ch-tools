@@ -6,6 +6,7 @@ Manage test environment.
 import argparse
 import pickle
 from types import SimpleNamespace
+from typing import Any
 
 import configuration
 from modules import compose, docker, minio, templates
@@ -115,7 +116,7 @@ def cli_main() -> None:
     commands[args.command](context)
 
 
-def _parse_args(commands):
+def _parse_args(commands: dict) -> Any:
     """
     Parse command-line arguments.
     """

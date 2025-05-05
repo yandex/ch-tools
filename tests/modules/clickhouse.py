@@ -157,14 +157,16 @@ def execute_query(
     return response
 
 
-def _get_table_uuid(context, table):
+def _get_table_uuid(context: ContextT, table: str) -> str:
     table_uuid = context.uuid_to_table.get(table, None)
     assert_that(table_uuid is not None, f"not found saved uuid for table {table}")
     assert_that(len(table_uuid) > 0, f"found empty uuid for table {table}")
     return table_uuid
 
 
-def check_table_exists_in_uuid_dir(context, table, disk, node):
+def check_table_exists_in_uuid_dir(
+    context: ContextT, table: str, disk: str, node: str
+) -> bool:
     table_uuid = _get_table_uuid(context, table)
 
     if disk in OBJECT_STORAGE_DISK_TYPES:

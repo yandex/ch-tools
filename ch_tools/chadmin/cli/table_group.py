@@ -39,7 +39,7 @@ FIELD_FORMATTERS = {
 
 
 @group("table", cls=Chadmin)
-def table_group():
+def table_group() -> None:
     """Commands to manage tables."""
     pass
 
@@ -143,7 +143,7 @@ def list_command(ctx: Context, **kwargs: Any) -> None:
     List tables.
     """
 
-    def _table_formatter(item):
+    def _table_formatter(item: dict) -> OrderedDict:
         return OrderedDict(
             (
                 ("database", item["database"]),
