@@ -1,4 +1,7 @@
 import re
+from typing import List
+
+from click import Context
 
 OK = 0
 WARNING = 1
@@ -6,7 +9,7 @@ CRIT = 2
 
 
 class Result:
-    def __init__(self, code=OK, message="OK", verbose=""):
+    def __init__(self, code: int = OK, message: str = "OK", verbose: str = "") -> None:
         self.code = code
         self.message = message
         self.verbose = verbose
@@ -15,10 +18,10 @@ class Result:
 class Status:
     """Class for holding Juggler status."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.code = 0
-        self.text = []
-        self.verbose = []
+        self.text: List[str] = []
+        self.verbose: List[str] = []
 
     @property
     def message(self):
@@ -30,20 +33,20 @@ class Status:
 
         return message
 
-    def set_code(self, new_code):
+    def set_code(self, new_code: int) -> None:
         """Set the code if it is greater than the current."""
         if new_code > self.code:
             self.code = new_code
 
-    def append(self, new_text):
+    def append(self, new_text: str) -> None:
         """Accumulate the status text."""
         self.text.append(new_text)
 
-    def add_verbose(self, new_text):
+    def add_verbose(self, new_text: str) -> None:
         """Add detail info."""
         self.verbose.append(new_text)
 
-    def report(self, ctx):
+    def report(self, ctx: Context) -> None:
         """Output formatted status message."""
         message = self.message
         for rule in ctx.obj["config"]["monitoring"]["output"]["escaping_rules"]:

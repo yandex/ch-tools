@@ -4,9 +4,12 @@ Behave entry point.
 
 import re
 import sys
+from typing import Optional
 
 import env_control
+from behave import model
 from modules.logs import save_logs
+from modules.typing import ContextT
 from modules.utils import version_ge, version_lt
 
 from ch_tools.common import logging
@@ -18,7 +21,7 @@ except ImportError:
     import pdb  # type: ignore
 
 
-def before_all(context):
+def before_all(context: ContextT) -> None:
     """
     Prepare environment for tests.
     """
@@ -33,7 +36,7 @@ def before_all(context):
         env_control.create(context)
 
 
-def before_feature(context, _feature):
+def before_feature(context: ContextT, _feature: model.Feature) -> None:
     """
     Cleanup function executing per feature.
     """
@@ -41,7 +44,7 @@ def before_feature(context, _feature):
         env_control.restart(context)
 
 
-def before_scenario(context, scenario):
+def before_scenario(context: ContextT, scenario: model.Scenario) -> None:
     """
     Cleanup function executing per scenario.
     """
@@ -51,7 +54,7 @@ def before_scenario(context, scenario):
         env_control.restart(context)
 
 
-def after_step(context, step):
+def after_step(context: ContextT, step: model.Step) -> None:
     """
     Save logs after failed step.
     """
@@ -61,7 +64,7 @@ def after_step(context, step):
             pdb.post_mortem(step.exc_traceback)
 
 
-def after_all(context):
+def after_all(context: ContextT) -> None:
     """
     Clean up.
     """
@@ -73,7 +76,7 @@ def after_all(context):
     env_control.stop(context)
 
 
-def _check_tags(context, scenario):
+def _check_tags(context: ContextT, scenario: model.Scenario) -> bool:
     ch_version = context.conf["ch_version"]
 
     require_version = _parse_version_tag(scenario.tags, "require_version")
@@ -98,7 +101,7 @@ def _check_tags(context, scenario):
     return True
 
 
-def _parse_version_tag(tags, prefix):
+def _parse_version_tag(tags: list, prefix: str) -> Optional[str]:
     tag_pattern = prefix + r"_(?P<version>[\d\.]+)"
     for tag in tags:
         match = re.fullmatch(tag_pattern, tag)
