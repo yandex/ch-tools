@@ -51,8 +51,9 @@ jobs:
           - "22.8.21.38"
           - "23.3.22.3"
           - "23.8.16.40"
-          - "24.3.11.7"
-          - "24.8.4.13"
+          - "24.3.18.7"
+          - "24.8.14.39"
+          - "25.3.3.42"
           - "latest"
     steps:
       - uses: actions/checkout@v4
@@ -85,7 +86,7 @@ jobs:
   push_to_dockerhub:
     runs-on: ubuntu-latest
     env:
-      CLICKHOUSE_VERSIONS: "22.8.21.38, 23.3.22.3, 23.8.16.40, 24.3.11.7, 24.8.4.13, latest"
+      CLICKHOUSE_VERSIONS: "22.8.21.38, 23.3.22.3, 23.8.16.40, 24.3.18.7, 24.8.14.39, 25.3.3.42, latest"
     if: ${{ github.event_name == 'push' }}
     steps:
     - uses: actions/checkout@v4
