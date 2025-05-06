@@ -87,10 +87,6 @@ def migrate_as_non_first_replica(ctx, database_name, temp_db):
     # However, it is sufficient for now, and we will stabilize
     # this logic after we stop creating temporary tables.
     for row in tables_info:
-        if "Replicated" in row["engine"]:
-            logging.info("Table engine {} can have different schema", row["engine"])
-            continue
-
         table_name = row["name"]
         table_local_metadata_path = row["metadata_path"]
 
@@ -100,6 +96,12 @@ def migrate_as_non_first_replica(ctx, database_name, temp_db):
             table_name=table_name,
             table_local_metadata_path=table_local_metadata_path,
         ):
+            if "Replicated" in row["engine"]:
+                logging.warning(
+                    "Replicated table engine {} can have different schema. Continue.",
+                    row["engine"],
+                )
+                continue
             raise RuntimeError(
                 f"Local table metadata for table {table_name} is different from zk metadata"
             )
