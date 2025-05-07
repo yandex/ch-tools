@@ -136,6 +136,7 @@ install-poetry:
 	# while 'poetry publish' for version poetry 1.1.15 due to incompatibility with urllib3 >= 2.0.0
 	# https://urllib3.readthedocs.io/en/stable/v2-migration-guide.html#importerror-cannot-import-name-gaecontrib-from-requests-toolbelt-compat
 	$(POETRY_HOME)/venv/bin/python -m pip install "urllib3<2.0.0"
+	$(POETRY_HOME)/venv/bin/python -m pip install "virtualenv>=20.30.0,<20.31.0"
 
 
 .PHONY: uninstall-poetry
