@@ -555,3 +555,11 @@ def change_table_uuid(
             ex,
         )
         sys.exit(1)
+
+
+def read_local_table_metadata(ctx: Context, table_local_metadata_path: str) -> str:
+    if match_str_ch_version(get_version(ctx), "25.1"):
+        table_local_metadata_path = CLICKHOUSE_PATH + "/" + table_local_metadata_path
+
+    with open(table_local_metadata_path, "r", encoding="utf-8") as f:
+        return f.read()
