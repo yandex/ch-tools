@@ -5,6 +5,8 @@ from cloup.constraints import RequireAtLeast
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.migration import (
+    create_database_nodes,
+    create_database_replica,
     create_temp_db,
     is_database_exists,
     migrate_as_first_replica,
@@ -189,10 +191,12 @@ def migrate_engine_command(ctx, database):
 
         first_replica = True
         try:
-            create_temp_db(ctx, database, temp_db)
+            # create_temp_db(ctx, database, temp_db)
+            create_database_nodes(ctx, database)
         except Exception as ex:
-            logging.info("create_temp_db failed with ex={}", ex)
+            logging.info("create_database_nodes failed with ex={}", ex)
 
+            # exception Node exists
             non_first_replica_errors = [
                 "REPLICA_ALREADY_EXISTS",
                 "DATABASE_ALREADY_EXISTS",
@@ -204,9 +208,12 @@ def migrate_engine_command(ctx, database):
 
             first_replica = False
 
+        # create replica
+        create_database_replica(ctx, database)
+
         if first_replica:
             logging.info("migrate as first replica")
-            migrate_as_first_replica(ctx, database, temp_db)
+            migrate_as_first_replica(ctx, database)
         else:
             logging.info("migrate as non first replica")
             migrate_as_non_first_replica(ctx, database, temp_db)

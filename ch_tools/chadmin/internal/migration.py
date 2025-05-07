@@ -2,6 +2,7 @@ from click import ClickException, Context
 
 from ch_tools.chadmin.cli import metadata
 from ch_tools.chadmin.cli.database_metadata import (
+    DatabaseEngine,
     DatabaseMetadata,
     parse_database_from_metadata,
 )
@@ -13,14 +14,19 @@ from ch_tools.chadmin.internal.table import (
     read_local_table_metadata,
 )
 from ch_tools.chadmin.internal.table_metadata import remove_replicated_params
-from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.chadmin.internal.utils import execute_query, replace_macros
 from ch_tools.chadmin.internal.zookeeper import (
+    create_zk_nodes,
     get_zk_node,
     list_zk_nodes,
     update_zk_nodes,
 )
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
+
+from urllib.parse import quote
+
+from ch_tools.common.clickhouse.config import get_macros
 
 
 def create_temp_db(ctx: Context, migrating_database: str, temp_db: str) -> None:
@@ -40,24 +46,23 @@ def create_temp_db(ctx: Context, migrating_database: str, temp_db: str) -> None:
 
 
 def migrate_as_first_replica(
-    ctx: Context, migrating_database: str, temp_db: str
+    ctx: Context, migrating_database: str
 ) -> None:
 
-    mapping_table_to_metadata = _create_tables_from_migrating_database(
-        ctx, migrating_database, temp_db
+    _create_database_metadata_nodes(
+        ctx, migrating_database
     )
 
+    _detach_dbs(ctx, dbs=[migrating_database])
+
     metadata_non_repl_db = parse_database_from_metadata(migrating_database)
-    metadata_temp_db = parse_database_from_metadata(temp_db)
 
-    original_engine = metadata_non_repl_db.database_engine
+    metadata_non_repl_db.database_engine = DatabaseEngine.REPLICATED
+    metadata_non_repl_db.replica_path = f"/clickhouse/{metadata_non_repl_db.database_name}"
+    metadata_non_repl_db.shard = "{shard}"
+    metadata_non_repl_db.replica_name = "{replica}"
 
-    _detach_dbs(ctx, dbs=[migrating_database, temp_db])
-
-    metadata_non_repl_db.set_engine_from(metadata_temp_db)
     metadata_non_repl_db.update_metadata_file()
-
-    _update_zk_for_migrate(ctx, metadata_non_repl_db, mapping_table_to_metadata)
 
     query = f"""
         ATTACH DATABASE {migrating_database}
@@ -69,11 +74,6 @@ def migrate_as_first_replica(
         query,
         echo=True,
     )
-
-    metadata_temp_db.database_engine = original_engine
-    metadata_temp_db.update_metadata_file()
-
-    _remove_temp_db(ctx, metadata_temp_db)
 
 
 def migrate_as_non_first_replica(ctx, database_name, temp_db):
@@ -111,7 +111,23 @@ def migrate_as_non_first_replica(ctx, database_name, temp_db):
     metadata_non_repl_db.set_engine_from(metadata_temp_db)
     metadata_non_repl_db.update_metadata_file()
 
-    _change_tables_uuid(ctx, tables_info, database_name)
+    was_changed = _change_tables_uuid(ctx, tables_info, database_name)
+
+    if was_changed:
+        logging.info(
+            f"Table UUID was chaged. Database {database_name} was detached. Need restart Clickhouse"
+        )
+    else:
+        query = f"""
+            ATTACH DATABASE {database_name}
+        """
+
+        # @todo discuss timeout and process error after attach
+        execute_query(
+            ctx,
+            query,
+            echo=True,
+        )
 
     metadata_temp_db.database_engine = original_engine
     metadata_temp_db.update_metadata_file()
@@ -119,60 +135,180 @@ def migrate_as_non_first_replica(ctx, database_name, temp_db):
     _remove_temp_db(ctx, metadata_temp_db)
 
 
-def _create_tables_from_migrating_database(
-    ctx: Context, migrating_database: str, temp_db: str
-) -> dict:
+def _escape_hostname(hostname: str) -> str:
+    return quote(hostname, safe='')
+
+
+def _get_host_id(ctx: Context, migrating_database: str) -> str:
+    query = f"""
+        SELECT host_name FROM system.clusters WHERE is_local
+    """
+    rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
+
+    logging.info("_get_host_id: rows={}", rows)
+
+    host_name = rows["data"][0]["host_name"]
+
+    logging.info("host_name={}", host_name)
+
+    query = f"""
+        SELECT uuid FROM system.databases WHERE database='{migrating_database}'
+    """
+    rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
+    database_uuid = rows["data"][0]["uuid"]
+
+    # port
+    result = f"{_escape_hostname(host_name)}:9000:{database_uuid}" 
+    logging.info("_get_host_id={}", result)
+
+    return result
+
+
+def create_database_nodes(ctx: Context, migrating_database: str) -> None:
+    """
+        Example:
+            /clickhouse/non_repl_db/counter
+            /clickhouse/non_repl_db/first_replica_database_name
+            /clickhouse/non_repl_db/log
+            /clickhouse/non_repl_db/logs_to_keep
+            /clickhouse/non_repl_db/max_log_ptr
+            /clickhouse/non_repl_db/metadata
+            /clickhouse/non_repl_db/replicas
+    """
+    # use tx
+    # check exception
+    # merge creating nodes to one request
+    
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}"],
+        value="DatabaseReplicated",
+    )
+
+    # logic with cnt -1
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/counter"],
+    )
+
+    data_first_replica_database_name = migrating_database
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/first_replica_database_name"],
+        value=data_first_replica_database_name,
+    )
+
+    # issue: /clickhouse/non_repl_db/log/query-0000000003
+    # /clickhouse/temp_db_1/log/query-0000000001
+    # /clickhouse/temp_db_1/log/query-0000000002
+    # When this node will be flushed?
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/log"],
+    )
+
+    data_logs_to_keep = 1000
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/logs_to_keep"],
+        value=data_logs_to_keep,
+    )
+
+    # @todo check value
+    data_logs_to_keep = 1
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/max_log_ptr"],
+        value=data_logs_to_keep,
+    )
+
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/metadata"],
+    )
+
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/replicas"],
+    )
+
+
+def create_database_replica(ctx: Context, migrating_database: str) -> None:
+    replica_node = f"/clickhouse/{migrating_database}/replicas/{{shard}}|{{host}}"
+    logging.info("create_database_replica: {}", replica_node)
+    create_zk_nodes(
+        ctx,
+        [replica_node],
+        value=_get_host_id(ctx, migrating_database)
+    )
+
+    query = f"""
+        SELECT serverUUID() as id
+    """
+    rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
+    server_uuid = rows["data"][0]["id"]
+    logging.info("rows={}, server_uuid={}", rows, server_uuid)
+
+    create_zk_nodes(
+        ctx,
+        [replica_node + "/active"],
+        value=server_uuid,
+    )
+
+    create_zk_nodes(
+        ctx,
+        [replica_node + "/digest"],
+        # issue
+    )
+
+    create_zk_nodes(
+        ctx,
+        [replica_node + "/log_ptr"],
+        # value
+    )
+
+    create_zk_nodes(
+        ctx,
+        [replica_node + "/max_log_ptr_at_creation"],
+        value="1"
+    )
+
+    create_zk_nodes(
+        ctx,
+        [replica_node + "/replica_group"],
+    )
+
+
+def _create_database_metadata_nodes(
+    ctx: Context, migrating_database: str
+) -> None:
     query = f"""
         SELECT name, create_table_query, metadata_path FROM system.tables WHERE database='{migrating_database}'
     """
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
 
-    mapping_table_to_metadata = {}
-
     for row in rows["data"]:
         table_name = row["name"]
-        metadata_path = row["metadata_path"]
-        create_table_query = row["create_table_query"]
-
-        logging.info(
-            "table_name={}, metadata_path={}, create_table_query=[{}]",
-            table_name,
-            metadata_path,
-            create_table_query,
-        )
-
-        create_table_query = create_table_query.replace(migrating_database, temp_db, 1)
-        logging.info(
-            "after replacing database create_table_query=[{}]", create_table_query
-        )
-
-        # If we want to create ReplicatedMergeTree table in Replicated database
-        # we can't use params (zookeeper path and replica name)
-        create_table_query = remove_replicated_params(create_table_query)
-
-        logging.info(
-            "after replacing replicated params create_table_query=[{}]",
-            create_table_query,
-        )
-
-        execute_query(
-            ctx,
-            create_table_query,
-            echo=True,
-        )
+        metadata_path = row["metadata_path"]     
 
         if match_str_ch_version(get_version(ctx), "25.1"):
             metadata_path = CLICKHOUSE_PATH + "/" + metadata_path
 
         with open(metadata_path, "r", encoding="utf-8") as metadata_file:
-            mapping_table_to_metadata[table_name] = metadata_file.read()
-            logging.info(
-                "add from file with metadata to tables: {}",
-                mapping_table_to_metadata[table_name],
+            local_table_metadata= metadata_file.read()
+
+            # use tx ?
+            # check exception
+            create_zk_nodes(
+                ctx,
+                [f"/clickhouse/{migrating_database}/metadata/{table_name}"],
+                value=local_table_metadata,
             )
 
-    logging.info("total mapping_table_to_metadata: {}", mapping_table_to_metadata)
-    return mapping_table_to_metadata
+            logging.info(
+                "add from file with metadata to tables: {}",
+                local_table_metadata,
+            )
 
 
 def _detach_dbs(ctx: Context, dbs: list) -> None:
@@ -190,7 +326,6 @@ def _detach_dbs(ctx: Context, dbs: list) -> None:
 def _update_zk_for_migrate(
     ctx: Context,
     metadata_non_repl_db: DatabaseMetadata,
-    mapping_table_to_metadata: dict,
 ) -> None:
     """
     Changing the database information in Zookeeper's nodes from the temporary database to the original database.
@@ -227,7 +362,7 @@ def _update_zk_for_migrate(
         ctx, [first_replica_database_name], metadata_non_repl_db.database_name
     )
 
-    _update_zk_tables_metadata(ctx, zk_db_path, mapping_table_to_metadata)
+    # _update_zk_tables_metadata(ctx, zk_db_path, mapping_table_to_metadata)
 
     for replica_path in list_zk_nodes(ctx, zk_db_path + "/replicas"):
         replica_data = get_zk_node(ctx, replica_path)
@@ -243,6 +378,7 @@ def _update_zk_for_migrate(
         logging.info("Updating was finished")
 
 
+# useles?
 def _update_zk_tables_metadata(
     ctx: Context, zk_db_path: str, mapping_table_to_metadata: dict
 ) -> None:
@@ -305,6 +441,7 @@ def _get_tables_info_and_detach(ctx: Context, database_name: str) -> dict:
             create_table_query,
         )
 
+        # is it neccassary?
         detach_table(
             ctx, database_name=database_name, table_name=table_name, permanently=False
         )
@@ -342,7 +479,8 @@ def is_table_schema_equal(
     return local_table_metadata == zk_table_metadata
 
 
-def _change_tables_uuid(ctx: Context, tables: dict, database_name: str) -> None:
+def _change_tables_uuid(ctx: Context, tables: dict, database_name: str) -> bool:
+    was_changed = False
     for row in tables:
         table_local_metadata_path = row["metadata_path"]
 
@@ -366,6 +504,8 @@ def _change_tables_uuid(ctx: Context, tables: dict, database_name: str) -> None:
             logging.info("Equal uuid. Don't need to change uuid.")
             continue
 
+        was_changed = True
+
         change_table_uuid(
             ctx,
             database=database_name,
@@ -375,6 +515,8 @@ def _change_tables_uuid(ctx: Context, tables: dict, database_name: str) -> None:
             table_local_metadata_path=table_local_metadata_path,
             attached=False,
         )
+
+    return was_changed
 
 
 def is_database_exists(ctx: Context, database_name: str) -> bool:
