@@ -195,6 +195,7 @@ def migrate_engine_command(ctx, database):
             create_database_nodes(ctx, database)
         except Exception as ex:
             logging.info("create_database_nodes failed with ex={}", ex)
+            logging.info(f"create_database_nodes failed with ex={ex}")
 
             # exception Node exists
             non_first_replica_errors = [

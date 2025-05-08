@@ -25,6 +25,12 @@ Feature: chadmin database migrate command
     """
     Replicated
     """
+    When we execute command on clickhouse02
+    """
+    supervisorctl restart clickhouse-server
+    """
+    When we sleep for 10 seconds
+
     When we execute query on clickhouse01
     """
     CREATE TABLE non_repl_db.bar2

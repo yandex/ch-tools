@@ -135,19 +135,40 @@ def migrate_as_non_first_replica(ctx, database_name, temp_db):
     _remove_temp_db(ctx, metadata_temp_db)
 
 
-def _escape_hostname(hostname: str) -> str:
-    return quote(hostname, safe='')
+# escapeForFileName
+def _escape_hostname(s: str) -> str:
+    def is_word_char_ascii(c):
+        return c.isalnum() or c == '_'
+
+    def hex_digit_uppercase(num):
+        return format(num, 'X')
+
+    res = []
+    pos = 0
+    end = len(s)
+
+    while pos != end:
+        c = s[pos]
+
+        if is_word_char_ascii(c):
+            res.append(c)
+        else:
+            res.append('%')
+            res.append(hex_digit_uppercase(ord(c) // 16))
+            res.append(hex_digit_uppercase(ord(c) % 16))
+
+        pos += 1
+
+    return ''.join(res)
 
 
-def _get_host_id(ctx: Context, migrating_database: str) -> str:
-    query = f"""
-        SELECT host_name FROM system.clusters WHERE is_local
-    """
-    rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
+# def _escape_hostname(hostname: str) -> str:
+#     return quote(hostname, safe='')
 
-    logging.info("_get_host_id: rows={}", rows)
 
-    host_name = rows["data"][0]["host_name"]
+def _get_host_id(ctx: Context, migrating_database: str, replica: str) -> str:
+    # check with CH
+    host_name = replica
 
     logging.info("host_name={}", host_name)
 
@@ -200,26 +221,59 @@ def create_database_nodes(ctx: Context, migrating_database: str) -> None:
 
     # issue: /clickhouse/non_repl_db/log/query-0000000003
     # /clickhouse/temp_db_1/log/query-0000000001
-    # /clickhouse/temp_db_1/log/query-0000000002
     # When this node will be flushed?
     create_zk_nodes(
         ctx,
         [f"/clickhouse/{migrating_database}/log"],
     )
 
-    data_logs_to_keep = 1000
+    data_log_queue="version: 1\nquery: \nhosts: []\ninitiator:"
+
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/log/query-0000000001"],
+        value=data_log_queue,
+    )
+
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/log/query-0000000001/active"],
+    )
+
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/log/query-0000000001/committed"],
+    )
+
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/log/query-0000000001/finished"],
+    )
+
+
+    ### set finished
+
+    shard = replace_macros("{shard}", get_macros(ctx))
+    replica = replace_macros("{replica}", get_macros(ctx))
+
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/log/query-0000000001/finished/{shard}|{replica}"],
+        value="0",
+    )
+
+    data_logs_to_keep = "1000"
     create_zk_nodes(
         ctx,
         [f"/clickhouse/{migrating_database}/logs_to_keep"],
         value=data_logs_to_keep,
     )
 
-    # @todo check value
-    data_logs_to_keep = 1
+    max_log_ptr = "1"
     create_zk_nodes(
         ctx,
         [f"/clickhouse/{migrating_database}/max_log_ptr"],
-        value=data_logs_to_keep,
+        value=max_log_ptr,
     )
 
     create_zk_nodes(
@@ -234,12 +288,15 @@ def create_database_nodes(ctx: Context, migrating_database: str) -> None:
 
 
 def create_database_replica(ctx: Context, migrating_database: str) -> None:
-    replica_node = f"/clickhouse/{migrating_database}/replicas/{{shard}}|{{host}}"
+    shard = replace_macros("{shard}", get_macros(ctx))
+    replica = replace_macros("{replica}", get_macros(ctx))
+
+    replica_node = f"/clickhouse/{migrating_database}/replicas/{shard}|{replica}"
     logging.info("create_database_replica: {}", replica_node)
     create_zk_nodes(
         ctx,
         [replica_node],
-        value=_get_host_id(ctx, migrating_database)
+        value=_get_host_id(ctx, migrating_database, replica)
     )
 
     query = f"""
@@ -258,13 +315,13 @@ def create_database_replica(ctx: Context, migrating_database: str) -> None:
     create_zk_nodes(
         ctx,
         [replica_node + "/digest"],
-        # issue
+        value="0",
     )
 
     create_zk_nodes(
         ctx,
         [replica_node + "/log_ptr"],
-        # value
+        value="1",
     )
 
     create_zk_nodes(
@@ -273,6 +330,7 @@ def create_database_replica(ctx: Context, migrating_database: str) -> None:
         value="1"
     )
 
+    # specific logic
     create_zk_nodes(
         ctx,
         [replica_node + "/replica_group"],
