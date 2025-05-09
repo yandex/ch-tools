@@ -13,19 +13,16 @@ from ch_tools.chadmin.internal.table import (
     detach_table,
     read_local_table_metadata,
 )
-from ch_tools.chadmin.internal.table_metadata import remove_replicated_params
 from ch_tools.chadmin.internal.utils import execute_query, replace_macros
 from ch_tools.chadmin.internal.zookeeper import (
     create_zk_nodes,
+    delete_zk_node,
     get_zk_node,
     list_zk_nodes,
     update_zk_nodes,
 )
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
-
-from urllib.parse import quote
-
 from ch_tools.common.clickhouse.config import get_macros
 
 
@@ -45,20 +42,18 @@ def create_temp_db(ctx: Context, migrating_database: str, temp_db: str) -> None:
         raise ClickException(ex_text)
 
 
-def migrate_as_first_replica(
-    ctx: Context, migrating_database: str
-) -> None:
+def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
 
-    _create_database_metadata_nodes(
-        ctx, migrating_database
-    )
+    _create_database_metadata_nodes(ctx, migrating_database)
 
     _detach_dbs(ctx, dbs=[migrating_database])
 
     metadata_non_repl_db = parse_database_from_metadata(migrating_database)
 
     metadata_non_repl_db.database_engine = DatabaseEngine.REPLICATED
-    metadata_non_repl_db.replica_path = f"/clickhouse/{metadata_non_repl_db.database_name}"
+    metadata_non_repl_db.replica_path = (
+        f"/clickhouse/{metadata_non_repl_db.database_name}"
+    )
     metadata_non_repl_db.shard = "{shard}"
     metadata_non_repl_db.replica_name = "{replica}"
 
@@ -115,7 +110,7 @@ def migrate_as_non_first_replica(ctx, database_name, temp_db):
 
     if was_changed:
         logging.info(
-            f"Table UUID was chaged. Database {database_name} was detached. Need restart Clickhouse"
+            f"Table UUID was changed. Database {database_name} was detached. Need restart Clickhouse"
         )
     else:
         query = f"""
@@ -138,10 +133,10 @@ def migrate_as_non_first_replica(ctx, database_name, temp_db):
 # escapeForFileName
 def _escape_hostname(s: str) -> str:
     def is_word_char_ascii(c):
-        return c.isalnum() or c == '_'
+        return c.isalnum() or c == "_"
 
     def hex_digit_uppercase(num):
-        return format(num, 'X')
+        return format(num, "X")
 
     res = []
     pos = 0
@@ -153,13 +148,13 @@ def _escape_hostname(s: str) -> str:
         if is_word_char_ascii(c):
             res.append(c)
         else:
-            res.append('%')
+            res.append("%")
             res.append(hex_digit_uppercase(ord(c) // 16))
             res.append(hex_digit_uppercase(ord(c) % 16))
 
         pos += 1
 
-    return ''.join(res)
+    return "".join(res)
 
 
 # def _escape_hostname(hostname: str) -> str:
@@ -179,44 +174,44 @@ def _get_host_id(ctx: Context, migrating_database: str, replica: str) -> str:
     database_uuid = rows["data"][0]["uuid"]
 
     # port
-    result = f"{_escape_hostname(host_name)}:9000:{database_uuid}" 
+    result = f"{_escape_hostname(host_name)}:9000:{database_uuid}"
     logging.info("_get_host_id={}", result)
 
     return result
 
 
 def create_database_nodes(ctx: Context, migrating_database: str) -> None:
-    """
-        Example:
-            /clickhouse/non_repl_db/counter
-            /clickhouse/non_repl_db/first_replica_database_name
-            /clickhouse/non_repl_db/log
-            /clickhouse/non_repl_db/logs_to_keep
-            /clickhouse/non_repl_db/max_log_ptr
-            /clickhouse/non_repl_db/metadata
-            /clickhouse/non_repl_db/replicas
-    """
     # use tx
     # check exception
     # merge creating nodes to one request
-    
+
     create_zk_nodes(
         ctx,
         [f"/clickhouse/{migrating_database}"],
         value="DatabaseReplicated",
     )
 
-    # logic with cnt -1
+    # logic with cnt
     create_zk_nodes(
         ctx,
         [f"/clickhouse/{migrating_database}/counter"],
     )
 
-    data_first_replica_database_name = migrating_database
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/counter/cnt-"],
+    )
+
+    delete_zk_node(
+        ctx,
+        f"/clickhouse/{migrating_database}/counter/cnt-",
+    )
+
+    data_first_replica = migrating_database
     create_zk_nodes(
         ctx,
         [f"/clickhouse/{migrating_database}/first_replica_database_name"],
-        value=data_first_replica_database_name,
+        value=data_first_replica,
     )
 
     # issue: /clickhouse/non_repl_db/log/query-0000000003
@@ -227,40 +222,43 @@ def create_database_nodes(ctx: Context, migrating_database: str) -> None:
         [f"/clickhouse/{migrating_database}/log"],
     )
 
-    data_log_queue="version: 1\nquery: \nhosts: []\ninitiator:"
+    # data_log_queue="version: 1\nquery: \nhosts: []\ninitiator:"
 
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}/log/query-0000000001"],
-        value=data_log_queue,
-    )
+    # create_zk_nodes(
+    #     ctx,
+    #     [f"/clickhouse/{migrating_database}/log/query-0000000001"],
+    #     value=data_log_queue,
+    # )
 
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}/log/query-0000000001/active"],
-    )
+    # create_zk_nodes(
+    #     ctx,
+    #     [f"/clickhouse/{migrating_database}/log/query-0000000001/active"],
+    # )
 
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}/log/query-0000000001/committed"],
-    )
+    # shard = replace_macros("{shard}", get_macros(ctx))
+    # replica = replace_macros("{replica}", get_macros(ctx))
 
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}/log/query-0000000001/finished"],
-    )
+    # create_zk_nodes(
+    #     ctx,
+    #     [f"/clickhouse/{migrating_database}/log/query-0000000001/committed"],
+    #     value=f"{shard}|{replica}"
+    # )
 
+    # create_zk_nodes(
+    #     ctx,
+    #     [f"/clickhouse/{migrating_database}/log/query-0000000001/finished"],
+    # )
 
-    ### set finished
+    # create_zk_nodes(
+    #     ctx,
+    #     [f"/clickhouse/{migrating_database}/log/query-0000000001/finished/{shard}|{replica}"],
+    #     value="0",
+    # )
 
-    shard = replace_macros("{shard}", get_macros(ctx))
-    replica = replace_macros("{replica}", get_macros(ctx))
-
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}/log/query-0000000001/finished/{shard}|{replica}"],
-        value="0",
-    )
+    # create_zk_nodes(
+    #     ctx,
+    #     [f"/clickhouse/{migrating_database}/log/query-0000000001/synced"],
+    # )
 
     data_logs_to_keep = "1000"
     create_zk_nodes(
@@ -294,12 +292,10 @@ def create_database_replica(ctx: Context, migrating_database: str) -> None:
     replica_node = f"/clickhouse/{migrating_database}/replicas/{shard}|{replica}"
     logging.info("create_database_replica: {}", replica_node)
     create_zk_nodes(
-        ctx,
-        [replica_node],
-        value=_get_host_id(ctx, migrating_database, replica)
+        ctx, [replica_node], value=_get_host_id(ctx, migrating_database, replica)
     )
 
-    query = f"""
+    query = """
         SELECT serverUUID() as id
     """
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
@@ -321,14 +317,10 @@ def create_database_replica(ctx: Context, migrating_database: str) -> None:
     create_zk_nodes(
         ctx,
         [replica_node + "/log_ptr"],
-        value="1",
+        value="0",
     )
 
-    create_zk_nodes(
-        ctx,
-        [replica_node + "/max_log_ptr_at_creation"],
-        value="1"
-    )
+    create_zk_nodes(ctx, [replica_node + "/max_log_ptr_at_creation"], value="1")
 
     # specific logic
     create_zk_nodes(
@@ -337,9 +329,7 @@ def create_database_replica(ctx: Context, migrating_database: str) -> None:
     )
 
 
-def _create_database_metadata_nodes(
-    ctx: Context, migrating_database: str
-) -> None:
+def _create_database_metadata_nodes(ctx: Context, migrating_database: str) -> None:
     query = f"""
         SELECT name, create_table_query, metadata_path FROM system.tables WHERE database='{migrating_database}'
     """
@@ -347,13 +337,13 @@ def _create_database_metadata_nodes(
 
     for row in rows["data"]:
         table_name = row["name"]
-        metadata_path = row["metadata_path"]     
+        metadata_path = row["metadata_path"]
 
         if match_str_ch_version(get_version(ctx), "25.1"):
             metadata_path = CLICKHOUSE_PATH + "/" + metadata_path
 
         with open(metadata_path, "r", encoding="utf-8") as metadata_file:
-            local_table_metadata= metadata_file.read()
+            local_table_metadata = metadata_file.read()
 
             # use tx ?
             # check exception

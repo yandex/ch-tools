@@ -25,11 +25,15 @@ Feature: chadmin database migrate command
     """
     Replicated
     """
-    When we execute command on clickhouse02
-    """
-    supervisorctl restart clickhouse-server
-    """
-    When we sleep for 10 seconds
+
+    # When we execute command on clickhouse01
+    # """
+    # chadmin zookeeper list /clickhouse/non_repl_db/log 
+    # """
+    # Then we get response contains
+    # """
+    # /clickhouse/non_repl_db/log/query-0000000001
+    # """
 
     When we execute query on clickhouse01
     """

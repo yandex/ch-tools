@@ -7,7 +7,6 @@ from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.migration import (
     create_database_nodes,
     create_database_replica,
-    create_temp_db,
     is_database_exists,
     migrate_as_first_replica,
     migrate_as_non_first_replica,
