@@ -39,7 +39,7 @@ FIELD_FORMATTERS = {
 
 
 @group("table", cls=Chadmin)
-def table_group():
+def table_group() -> None:
     """Commands to manage tables."""
     pass
 
@@ -55,7 +55,12 @@ def table_group():
     help="Account only active data parts.",
 )
 @pass_context
-def get_command(ctx, database_name, table_name, active_parts):
+def get_command(
+    ctx: Context,
+    database_name: str,
+    table_name: str,
+    active_parts: str,
+) -> None:
     """
     Get table.
     """
@@ -133,12 +138,12 @@ def get_command(ctx, database_name, table_name, active_parts):
     help="Limit the max number of objects in the output.",
 )
 @pass_context
-def list_command(ctx, **kwargs):
+def list_command(ctx: Context, **kwargs: Any) -> None:
     """
     List tables.
     """
 
-    def _table_formatter(item):
+    def _table_formatter(item: dict) -> OrderedDict:
         return OrderedDict(
             (
                 ("database", item["database"]),
@@ -166,7 +171,7 @@ def list_command(ctx, **kwargs):
 @argument("database_name", metavar="DATABASE")
 @argument("table_name", metavar="TABLE")
 @pass_context
-def columns_command(ctx, database_name, table_name):
+def columns_command(ctx: Context, database_name: str, table_name: str) -> None:
     """
     Describe columns for table.
     """
@@ -273,16 +278,16 @@ def columns_command(ctx, database_name, table_name):
 @constraint(If("detached", then=accept_none), ["on_cluster", "dry_run"])
 @pass_context
 def delete_command(
-    ctx,
-    _all,
-    on_cluster,
-    sync_mode,
-    dry_run,
-    detached,
-    database_name,
-    table_name,
-    **kwargs,
-):
+    ctx: Context,
+    _all: bool,
+    on_cluster: bool,
+    sync_mode: bool,
+    dry_run: bool,
+    detached: bool,
+    database_name: str,
+    table_name: str,
+    **kwargs: Any,
+) -> None:
     """
     Delete one or several tables.
     """
@@ -384,7 +389,14 @@ def delete_command(
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 @pass_context
-def recreate_command(ctx, _all, database_name, table_name, dry_run, **kwargs):
+def recreate_command(
+    ctx: Context,
+    _all: bool,
+    database_name: str,
+    table_name: str,
+    dry_run: bool,
+    **kwargs: Any,
+) -> None:
     """
     Recreate one or several tables.
     """
@@ -489,14 +501,14 @@ def recreate_command(ctx, _all, database_name, table_name, dry_run, **kwargs):
 )
 @pass_context
 def detach_command(
-    ctx,
-    _all,
-    database_name,
-    table_name,
-    on_cluster,
-    dry_run,
-    **kwargs,
-):
+    ctx: Context,
+    _all: bool,
+    database_name: str,
+    table_name: str,
+    on_cluster: bool,
+    dry_run: bool,
+    **kwargs: Any,
+) -> None:
     """
     Detach one or several tables.
     """
@@ -597,14 +609,14 @@ def detach_command(
 )
 @pass_context
 def reattach_command(
-    ctx,
-    _all,
-    database_name,
-    table_name,
-    on_cluster,
-    dry_run,
-    **kwargs,
-):
+    ctx: Context,
+    _all: bool,
+    database_name: str,
+    table_name: str,
+    on_cluster: bool,
+    dry_run: bool,
+    **kwargs: Any,
+) -> None:
     """
     Reattach one or several tables.
     """
@@ -652,7 +664,13 @@ def reattach_command(
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 @pass_context
-def attach_command(ctx, database_name, table_name, on_cluster, dry_run):
+def attach_command(
+    ctx: Context,
+    database_name: str,
+    table_name: str,
+    on_cluster: bool,
+    dry_run: bool,
+) -> None:
     """
     Attach table.
     """
@@ -731,7 +749,14 @@ def attach_command(ctx, database_name, table_name, on_cluster, dry_run):
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 @pass_context
-def materialize_ttl_command(ctx, _all, database_name, table_name, dry_run, **kwargs):
+def materialize_ttl_command(
+    ctx: Context,
+    _all: bool,
+    database_name: str,
+    table_name: str,
+    dry_run: bool,
+    **kwargs: Any,
+) -> None:
     """
     Materialize TTL for one or several tables.
     """
@@ -844,7 +869,7 @@ def set_flag_command(
 @option("-t", "--table", required=True)
 @option("-uuid", "--uuid", required=True)
 @pass_context
-def change_uuid_command(ctx, database, table, uuid):
+def change_uuid_command(ctx: Context, database: str, table: str, uuid: str) -> None:
     table_info = get_info_from_system_tables(ctx, database, table)
 
     old_table_uuid = table_info["uuid"]
@@ -865,7 +890,7 @@ def change_uuid_command(ctx, database, table, uuid):
 @option("-d", "--database", required=True)
 @option("-t", "--table", required=True)
 @pass_context
-def check_uuid_equal(ctx, database, table):
+def check_uuid_equal(ctx: Context, database: str, table: str) -> None:
     # @todo refactoring
     uuids = get_table_uuids_from_cluster(ctx, database, table)
     logging.info("Table {} has uuid: {}", table, uuids)

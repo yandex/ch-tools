@@ -72,7 +72,9 @@ def migrate_as_first_replica(
     _remove_temp_db(ctx, metadata_temp_db)
 
 
-def migrate_as_non_first_replica(ctx, database_name, temp_db):
+def migrate_as_non_first_replica(
+    ctx: Context, database_name: str, temp_db: str
+) -> None:
     metadata_non_repl_db = parse_database_from_metadata(database_name)
     metadata_temp_db = parse_database_from_metadata(temp_db)
     original_engine = metadata_non_repl_db.database_engine

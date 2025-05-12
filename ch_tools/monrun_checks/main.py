@@ -3,7 +3,7 @@ import pwd
 import sys
 import warnings
 from functools import wraps
-from typing import Optional
+from typing import Any, Optional
 
 import click
 import cloup
@@ -69,7 +69,7 @@ class MonrunChecks(cloup.Group):
 
         @wraps(cmd_callback)
         @pass_context
-        def callback_wrapper(ctx, *args, **kwargs):
+        def callback_wrapper(ctx: Any, *args: Any, **kwargs: Any) -> Any:
             logging.configure(
                 ctx.obj["config"]["loguru"],
                 "ch-monitoring",
@@ -138,7 +138,7 @@ class MonrunChecks(cloup.Group):
 )
 @version_option(__version__)
 @pass_context
-def cli(ctx, settings, ensure_monitoring_user):
+def cli(ctx: click.Context, settings: dict, ensure_monitoring_user: bool) -> None:
     config = load_config()
 
     for setting_path, value in settings:
@@ -179,7 +179,7 @@ for command in CLI_COMMANDS:
     cli.add_command(command)
 
 
-def main():
+def main() -> None:
     """
     Program entry point.
     """
@@ -187,7 +187,7 @@ def main():
     cli.main()
 
 
-def _ensure_monitoring_user():
+def _ensure_monitoring_user() -> None:
     euid = os.geteuid()
     user = pwd.getpwuid(euid).pw_name
 

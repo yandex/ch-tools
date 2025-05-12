@@ -8,7 +8,7 @@ query_2 = Query("SELECT * FROM users WHERE name = {name}", {})
 query_3 = Query("SELECT * FROM users WHERE password = {password}", {"password": "123"})
 
 
-def test_for_execute():
+def test_for_execute() -> None:
     assert (
         query_1.for_execute()
         == "SELECT * FROM users WHERE name = {name} AND password = 123"
@@ -17,7 +17,7 @@ def test_for_execute():
     assert query_3.for_execute() == "SELECT * FROM users WHERE password = 123"
 
 
-def test_str():
+def test_str() -> None:
     assert (
         str(query_1) == "SELECT * FROM users WHERE name = {name} AND password = *****"
     )
@@ -25,7 +25,7 @@ def test_str():
     assert str(query_3) == "SELECT * FROM users WHERE password = *****"
 
 
-def test_repr():
+def test_repr() -> None:
     assert (
         repr(query_1)
         == "Query(value='SELECT * FROM users WHERE name = {name} AND password = *****', sensitive_args={'password': '*****'})"
@@ -40,13 +40,13 @@ def test_repr():
     )
 
 
-def test_eq_and_hash():
+def test_eq_and_hash() -> None:
     query_2 = Query(query_1.value, query_1.sensitive_args)
     assert query_1 == query_2
     assert hash(query_1) == hash(query_2)
 
 
-def test_add():
+def test_add() -> None:
     added_query = query_1 + " LIMIT 10"
     assert (
         str(added_query)
