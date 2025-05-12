@@ -14,6 +14,9 @@ from ch_tools.chadmin.internal.migration import (
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_cluster_name
+from kazoo.exceptions import (
+    NodeExistsError,
+)
 
 
 @group("database", cls=Chadmin)
@@ -181,8 +184,6 @@ def get_databases(
 @option("-d", "--database", required=True)
 @pass_context
 def migrate_engine_command(ctx, database):
-    temp_db = f"temp_migrate_{database}"
-
     try:
         if not is_database_exists(ctx, database):
             logging.error("Database {} does not exists, skip migrating", database)
@@ -190,21 +191,9 @@ def migrate_engine_command(ctx, database):
 
         first_replica = True
         try:
-            # create_temp_db(ctx, database, temp_db)
             create_database_nodes(ctx, database)
-        except Exception as ex:
-            logging.info("create_database_nodes failed with ex={}", ex)
-            logging.info(f"create_database_nodes failed with ex={ex}")
-
-            # exception Node exists
-            non_first_replica_errors = [
-                "REPLICA_ALREADY_EXISTS",
-                "DATABASE_ALREADY_EXISTS",
-            ]
-            if not any(
-                suitable_error in str(ex) for suitable_error in non_first_replica_errors
-            ):
-                raise
+        except NodeExistsError as ex:
+            logging.info("create_database_nodes failed with ex={}, type={}. Migrate as second replica", ex, type(ex))
 
             first_replica = False
 
@@ -216,7 +205,7 @@ def migrate_engine_command(ctx, database):
             migrate_as_first_replica(ctx, database)
         else:
             logging.info("migrate as non first replica")
-            migrate_as_non_first_replica(ctx, database, temp_db)
+            migrate_as_non_first_replica(ctx, database)
 
     except Exception as ex:
         logging.error("Got exception: {}", ex)

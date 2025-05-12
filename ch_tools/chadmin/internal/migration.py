@@ -43,7 +43,6 @@ def create_temp_db(ctx: Context, migrating_database: str, temp_db: str) -> None:
 
 
 def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
-
     _create_database_metadata_nodes(ctx, migrating_database)
 
     _detach_dbs(ctx, dbs=[migrating_database])
@@ -71,10 +70,8 @@ def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
     )
 
 
-def migrate_as_non_first_replica(ctx, database_name, temp_db):
+def migrate_as_non_first_replica(ctx, database_name):
     metadata_non_repl_db = parse_database_from_metadata(database_name)
-    metadata_temp_db = parse_database_from_metadata(temp_db)
-    original_engine = metadata_non_repl_db.database_engine
     tables_info = _get_tables_info_and_detach(ctx, database_name)
 
     # Unfortunately, it is not atomic.
@@ -101,9 +98,14 @@ def migrate_as_non_first_replica(ctx, database_name, temp_db):
                 f"Local table metadata for table {table_name} is different from zk metadata"
             )
 
-    _detach_dbs(ctx, dbs=[database_name, temp_db])
+    _detach_dbs(ctx, dbs=[database_name])
 
-    metadata_non_repl_db.set_engine_from(metadata_temp_db)
+    metadata_non_repl_db.database_engine = DatabaseEngine.REPLICATED
+    metadata_non_repl_db.replica_path = (
+        f"/clickhouse/{metadata_non_repl_db.database_name}"
+    )
+    metadata_non_repl_db.shard = "{shard}"
+    metadata_non_repl_db.replica_name = "{replica}"
     metadata_non_repl_db.update_metadata_file()
 
     was_changed = _change_tables_uuid(ctx, tables_info, database_name)
@@ -123,11 +125,6 @@ def migrate_as_non_first_replica(ctx, database_name, temp_db):
             query,
             echo=True,
         )
-
-    metadata_temp_db.database_engine = original_engine
-    metadata_temp_db.update_metadata_file()
-
-    _remove_temp_db(ctx, metadata_temp_db)
 
 
 # escapeForFileName
