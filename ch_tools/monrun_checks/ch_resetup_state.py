@@ -85,7 +85,7 @@ def request(ctx, host, port, ssl, ca_bundle, query=None):
 
         user, password = clickhouse_credentials(ctx)
         r = requests.get(
-            "{0}://{1}:{2}".format(protocol, host, port),
+            f"{protocol}://{host}:{port}",
             params=params,
             headers={
                 "X-ClickHouse-User": user,

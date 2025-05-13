@@ -11,21 +11,13 @@ def user_warning(exc: UserWarning, status: Status) -> Status:
 
 
 def unknown_exception(exc: Exception, status: Status) -> Status:
-    status.append(
-        "Unknown error: {type}".format(
-            type=str(exc),
-        )
-    )
+    status.append(f"Unknown error: {exc}")
     status.set_code(1)
     return status
 
 
 def requests_error(exc: RequestException, status: Status) -> Status:
-    status.append(
-        "ClickHouse connection error: {type}".format(
-            type=exc.__class__.__name__,
-        )
-    )
+    status.append(f"ClickHouse connection error: {exc.__class__.__name__}")
     status.set_code(1)
     return status
 
