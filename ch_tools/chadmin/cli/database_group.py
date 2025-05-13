@@ -202,6 +202,8 @@ def migrate_engine_command(ctx, database):
         # create replica
         create_database_replica(ctx, database)
 
+        logging.info("replica was created")
+
         if first_replica:
             logging.info("migrate as first replica")
             migrate_as_first_replica(ctx, database)
@@ -210,5 +212,5 @@ def migrate_engine_command(ctx, database):
             migrate_as_non_first_replica(ctx, database)
 
     except Exception as ex:
-        logging.error("Got exception: {}", ex)
+        logging.error("Got exception: {}", type(ex))
         sys.exit(1)

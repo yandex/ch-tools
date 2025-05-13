@@ -60,7 +60,7 @@ def list_zk_nodes(ctx, path, verbose=False):
         return [_stat_node(zk, node) for node in nodes] if verbose else nodes
 
 
-def create_zk_nodes(ctx, paths, value=None, make_parents=False):
+def create_zk_nodes(ctx, paths, value=None, make_parents=False, ephemeral=False, sequence=False):
     if isinstance(value, str):
         value = value.encode()
     else:
@@ -68,7 +68,7 @@ def create_zk_nodes(ctx, paths, value=None, make_parents=False):
 
     with zk_client(ctx) as zk:
         for path in paths:
-            zk.create(format_path(ctx, path), value, makepath=make_parents)
+            zk.create(format_path(ctx, path), value, makepath=make_parents, ephemeral=ephemeral, sequence=sequence)
 
 
 def update_zk_nodes(ctx, paths, value):

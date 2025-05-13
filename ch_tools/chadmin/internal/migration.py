@@ -17,13 +17,18 @@ from ch_tools.chadmin.internal.utils import execute_query, replace_macros
 from ch_tools.chadmin.internal.zookeeper import (
     create_zk_nodes,
     delete_zk_node,
+    format_path,
     get_zk_node,
     list_zk_nodes,
     update_zk_nodes,
+    zk_client,
 )
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 from ch_tools.common.clickhouse.config import get_macros
+from kazoo.exceptions import (
+    NodeExistsError,
+)
 
 
 def create_temp_db(ctx: Context, migrating_database: str, temp_db: str) -> None:
@@ -43,6 +48,15 @@ def create_temp_db(ctx: Context, migrating_database: str, temp_db: str) -> None:
 
 
 def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
+    shard = replace_macros("{shard}", get_macros(ctx))
+    replica = replace_macros("{replica}", get_macros(ctx))
+
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/log/query-0000000001/committed"],
+        value=f"{shard}|{replica}"
+    )
+
     _create_database_metadata_nodes(ctx, migrating_database)
 
     _detach_dbs(ctx, dbs=[migrating_database])
@@ -71,6 +85,14 @@ def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
 
 
 def migrate_as_non_first_replica(ctx, database_name):
+    shard = replace_macros("{shard}", get_macros(ctx))
+    replica = replace_macros("{replica}", get_macros(ctx))
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{database_name}/log/query-0000000002/committed"],
+        value=f"{shard}|{replica}"
+    )
+
     metadata_non_repl_db = parse_database_from_metadata(database_name)
     tables_info = _get_tables_info_and_detach(ctx, database_name)
 
@@ -178,31 +200,41 @@ def _get_host_id(ctx: Context, migrating_database: str, replica: str) -> str:
 
 
 def create_database_nodes(ctx: Context, migrating_database: str) -> None:
-    # use tx
-    # check exception
-    # merge creating nodes to one request
+    with zk_client(ctx) as zk:
+        if not zk.exists(format_path(ctx, "/clickhouse")):
+            zk.create(format_path(ctx, "/clickhouse"), makepath=True)
 
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}"],
-        value="DatabaseReplicated",
-    )
+        txn = zk.transaction()
 
-    # logic with cnt
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}/counter"],
-    )
+        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}"), value="DatabaseReplicated".encode())
 
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}/counter/cnt-"],
-    )
+        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/log"))
+        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/replicas"))
 
-    delete_zk_node(
-        ctx,
-        f"/clickhouse/{migrating_database}/counter/cnt-",
-    )
+        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/counter"))
+
+        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-"))
+        txn.delete(path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-"))
+
+        # dirty hack
+        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-"))
+        txn.delete(path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-"))
+
+        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-"))
+        txn.delete(path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-"))
+
+        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/metadata"))
+
+        max_log_ptr = "1"
+        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/max_log_ptr"), value=max_log_ptr.encode())
+
+        data_logs_to_keep = "1000"
+        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/logs_to_keep"), value=data_logs_to_keep.encode())
+
+        result = txn.commit()
+        logging.info("Txn finished: {}", result)
+        if "NodeExistsError" in result:
+            raise NodeExistsError()
 
     data_first_replica = migrating_database
     create_zk_nodes(
@@ -211,80 +243,66 @@ def create_database_nodes(ctx: Context, migrating_database: str) -> None:
         value=data_first_replica,
     )
 
-    # issue: /clickhouse/non_repl_db/log/query-0000000003
-    # /clickhouse/temp_db_1/log/query-0000000001
-    # When this node will be flushed?
+    data_log_queue="""version: 1
+query: 
+hosts: []
+initiator: 
+"""
+
     create_zk_nodes(
         ctx,
-        [f"/clickhouse/{migrating_database}/log"],
-    )
-
-    # data_log_queue="version: 1\nquery: \nhosts: []\ninitiator:"
-
-    # create_zk_nodes(
-    #     ctx,
-    #     [f"/clickhouse/{migrating_database}/log/query-0000000001"],
-    #     value=data_log_queue,
-    # )
-
-    # create_zk_nodes(
-    #     ctx,
-    #     [f"/clickhouse/{migrating_database}/log/query-0000000001/active"],
-    # )
-
-    # shard = replace_macros("{shard}", get_macros(ctx))
-    # replica = replace_macros("{replica}", get_macros(ctx))
-
-    # create_zk_nodes(
-    #     ctx,
-    #     [f"/clickhouse/{migrating_database}/log/query-0000000001/committed"],
-    #     value=f"{shard}|{replica}"
-    # )
-
-    # create_zk_nodes(
-    #     ctx,
-    #     [f"/clickhouse/{migrating_database}/log/query-0000000001/finished"],
-    # )
-
-    # create_zk_nodes(
-    #     ctx,
-    #     [f"/clickhouse/{migrating_database}/log/query-0000000001/finished/{shard}|{replica}"],
-    #     value="0",
-    # )
-
-    # create_zk_nodes(
-    #     ctx,
-    #     [f"/clickhouse/{migrating_database}/log/query-0000000001/synced"],
-    # )
-
-    data_logs_to_keep = "1000"
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}/logs_to_keep"],
-        value=data_logs_to_keep,
-    )
-
-    max_log_ptr = "1"
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}/max_log_ptr"],
-        value=max_log_ptr,
+        [f"/clickhouse/{migrating_database}/log/query-0000000001"],
+        value=data_log_queue,
     )
 
     create_zk_nodes(
         ctx,
-        [f"/clickhouse/{migrating_database}/metadata"],
+        [f"/clickhouse/{migrating_database}/log/query-0000000001/active"],
+        # ephemeral=True,
     )
 
     create_zk_nodes(
         ctx,
-        [f"/clickhouse/{migrating_database}/replicas"],
+        [f"/clickhouse/{migrating_database}/log/query-0000000001/finished"],
+    )
+
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/log/query-0000000001/synced"],
+    )
+
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/log/query-0000000002"],
+        value=data_log_queue,
+    )
+
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/log/query-0000000002/active"],
+        # ephemeral=True,
+    )
+
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/log/query-0000000002/finished"],
+    )
+
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/log/query-0000000002/synced"],
     )
 
 
 def create_database_replica(ctx: Context, migrating_database: str) -> None:
     shard = replace_macros("{shard}", get_macros(ctx))
     replica = replace_macros("{replica}", get_macros(ctx))
+
+    create_zk_nodes(
+        ctx,
+        [f"/clickhouse/{migrating_database}/log/query-0000000001/finished/{shard}|{replica}"],
+        value="0",
+    )
 
     replica_node = f"/clickhouse/{migrating_database}/replicas/{shard}|{replica}"
     logging.info("create_database_replica: {}", replica_node)
@@ -314,7 +332,7 @@ def create_database_replica(ctx: Context, migrating_database: str) -> None:
     create_zk_nodes(
         ctx,
         [replica_node + "/log_ptr"],
-        value="0",
+        value="1",
     )
 
     create_zk_nodes(ctx, [replica_node + "/max_log_ptr_at_creation"], value="1")
