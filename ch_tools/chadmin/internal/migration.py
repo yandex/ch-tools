@@ -320,10 +320,10 @@ def create_database_replica(ctx: Context, migrating_database: str) -> None:
     create_zk_nodes(ctx, [replica_node + "/max_log_ptr_at_creation"], value="1")
 
     # specific logic
-    create_zk_nodes(
-        ctx,
-        [replica_node + "/replica_group"],
-    )
+    # create_zk_nodes(
+    #     ctx,
+    #     [replica_node + "/replica_group"],
+    # )
 
 
 def _create_database_metadata_nodes(ctx: Context, migrating_database: str) -> None:

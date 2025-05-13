@@ -193,9 +193,11 @@ def migrate_engine_command(ctx, database):
         try:
             create_database_nodes(ctx, database)
         except NodeExistsError as ex:
-            logging.info("create_database_nodes failed with ex={}, type={}. Migrate as second replica", ex, type(ex))
+            logging.info("create_database_nodes failed with NodeExistsError. {}, type={}. Migrate as second replica", ex, type(ex))
 
             first_replica = False
+        except Exception as ex:
+            logging.info("create_database_nodes failed with ex={}", type(ex))
 
         # create replica
         create_database_replica(ctx, database)
