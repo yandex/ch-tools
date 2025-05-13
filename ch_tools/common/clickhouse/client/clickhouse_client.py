@@ -152,9 +152,7 @@ class ClickhouseClient:
         stdout, stderr = proc.communicate(input=query.for_execute().encode())
 
         if proc.returncode:
-            raise RuntimeError(
-                '"{0}" failed with: {1}'.format(masked_cmd, stderr.decode())
-            )
+            raise RuntimeError(f'"{masked_cmd}" failed with: {stderr.decode()}')
 
         response = stdout.decode().strip()
 

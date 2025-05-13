@@ -28,8 +28,6 @@ jobs:
         with:
           files: tests/bake.hcl
           push: false
-      - uses: ./.github/actions/setup_dependencies
-        with:
-          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v5
       - name: run integration tests
         run:  make test-integration

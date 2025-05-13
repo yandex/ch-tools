@@ -20,12 +20,9 @@ from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 
 
 def create_temp_db(ctx: Context, migrating_database: str, temp_db: str) -> None:
-    query = """
-        CREATE DATABASE {temp_db} ON CLUSTER '{{cluster}}' ENGINE = Replicated('/clickhouse/{database}', '{{shard}}', '{{replica}}')
-    """.format(
-        temp_db=temp_db,
-        database=migrating_database,
-    )
+    query = f"""
+        CREATE DATABASE {temp_db} ON CLUSTER '{{cluster}}' ENGINE = Replicated('/clickhouse/{migrating_database}', '{{shard}}', '{{replica}}')
+    """
 
     response = execute_query(ctx, query, echo=True, format_="JSON")
 

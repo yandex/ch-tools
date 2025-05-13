@@ -253,7 +253,7 @@ def format_bytes(value):
         return humanfriendly.format_size(value, binary=True)
 
     if value < 0:
-        return "-{0}".format(humanfriendly.format_size(-value, binary=True))
+        return f"-{humanfriendly.format_size(-value, binary=True)}"
 
     return "0"
 

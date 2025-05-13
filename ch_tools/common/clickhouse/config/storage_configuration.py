@@ -79,8 +79,8 @@ def _parse_endpoint(endpoint: str, bucket_name_prefix: str) -> tuple:
                 f"Unexpected bucket name `{bucket_name}`. Parser expects `{bucket_name_prefix}` prefix"
             )
 
-    endpoint_url = "{}://{}{}".format(
-        url.scheme, host, f":{url.port}" if url.port else ""
-    )
+    endpoint_url = f"{url.scheme}://{host}"
+    if url.port:
+        endpoint_url += f":{url.port}"
 
     return host, bucket_name, prefix, endpoint_url

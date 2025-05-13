@@ -106,7 +106,5 @@ def _parse_database_replica_params(line: str) -> Tuple[str, str, str]:
     matches = re.findall(pattern, line)
 
     if len(matches) != 3:
-        raise ValueError(
-            "Failed parse metadata for replicated engine: {}".format(len(matches))
-        )
+        raise ValueError(f"Failed parse metadata for replicated engine: {len(matches)}")
     return matches[0], matches[1], matches[2]

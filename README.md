@@ -19,12 +19,9 @@ All of these tools must be run on the same host as ClickHouse server is running.
 
 Requirements: 
 * GNU Make version > 3.81
+* [uv](https://docs.astral.sh/uv)
 
 ```sh
-sudo make install-poetry
-# or to install in user's home directory
-make POETRY_HOME=~/opt/poetry install-poetry
-
 # lint
 make lint
 
