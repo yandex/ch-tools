@@ -151,6 +151,13 @@ def diagnose(ctx: Context, output_format: str, normalize_queries: bool) -> None:
             ),
             add_query(
                 diagnostics,
+                "Moves in progress",
+                client=client,
+                query=query.SELECT_MOVES,
+                format_=OutputFormat.Vertical,
+            ),
+            add_query(
+                diagnostics,
                 "Recent data parts (modification time within last 3 minutes)",
                 client=client,
                 query=query.SELECT_RECENT_DATA_PARTS,
@@ -178,6 +185,13 @@ def diagnose(ctx: Context, output_format: str, normalize_queries: bool) -> None:
                 query=query.SELECT_PROCESSES,
                 format_=OutputFormat.Vertical,
                 section="Queries",
+            ),
+            add_query(
+                diagnostics,
+                "system.errors",
+                client=client,
+                query=query.SELECT_SYSTEM_ERRORS,
+                format_=OutputFormat.Vertical,
             ),
         ]
     )
