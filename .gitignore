@@ -5,7 +5,6 @@
 .pytype/
 .ruff_cache/
 .session_conf.sav
-.venv
 __pycache__
 build/
 cython_debug/
@@ -13,5 +12,5 @@ dist/
 out/
 tests/reports/
 tests/staging/
-venv/
+.venv/
 ch_tools/version.txt
