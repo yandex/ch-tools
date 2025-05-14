@@ -2,6 +2,7 @@ import sys
 
 from cloup import argument, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
+from kazoo.exceptions import NodeExistsError
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.migration import (
@@ -14,9 +15,6 @@ from ch_tools.chadmin.internal.migration import (
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_cluster_name
-from kazoo.exceptions import (
-    NodeExistsError,
-)
 
 
 @group("database", cls=Chadmin)
@@ -193,7 +191,11 @@ def migrate_engine_command(ctx, database):
         try:
             create_database_nodes(ctx, database)
         except NodeExistsError as ex:
-            logging.info("create_database_nodes failed with NodeExistsError. {}, type={}. Migrate as second replica", ex, type(ex))
+            logging.info(
+                "create_database_nodes failed with NodeExistsError. {}, type={}. Migrate as second replica",
+                ex,
+                type(ex),
+            )
 
             first_replica = False
         except Exception as ex:

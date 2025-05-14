@@ -1,4 +1,5 @@
 from click import ClickException, Context
+from kazoo.exceptions import NodeExistsError
 
 from ch_tools.chadmin.cli import metadata
 from ch_tools.chadmin.cli.database_metadata import (
@@ -16,7 +17,6 @@ from ch_tools.chadmin.internal.table import (
 from ch_tools.chadmin.internal.utils import execute_query, replace_macros
 from ch_tools.chadmin.internal.zookeeper import (
     create_zk_nodes,
-    delete_zk_node,
     format_path,
     get_zk_node,
     list_zk_nodes,
@@ -26,9 +26,6 @@ from ch_tools.chadmin.internal.zookeeper import (
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 from ch_tools.common.clickhouse.config import get_macros
-from kazoo.exceptions import (
-    NodeExistsError,
-)
 
 
 def create_temp_db(ctx: Context, migrating_database: str, temp_db: str) -> None:
@@ -54,7 +51,7 @@ def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
     create_zk_nodes(
         ctx,
         [f"/clickhouse/{migrating_database}/log/query-0000000001/committed"],
-        value=f"{shard}|{replica}"
+        value=f"{shard}|{replica}",
     )
 
     _create_database_metadata_nodes(ctx, migrating_database)
@@ -90,7 +87,7 @@ def migrate_as_non_first_replica(ctx, database_name):
     create_zk_nodes(
         ctx,
         [f"/clickhouse/{database_name}/log/query-0000000002/committed"],
-        value=f"{shard}|{replica}"
+        value=f"{shard}|{replica}",
     )
 
     metadata_non_repl_db = parse_database_from_metadata(database_name)
@@ -206,30 +203,51 @@ def create_database_nodes(ctx: Context, migrating_database: str) -> None:
 
         txn = zk.transaction()
 
-        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}"), value="DatabaseReplicated".encode())
+        txn.create(
+            path=format_path(ctx, f"/clickhouse/{migrating_database}"),
+            value="DatabaseReplicated".encode(),
+        )
 
         txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/log"))
         txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/replicas"))
 
         txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/counter"))
 
-        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-"))
-        txn.delete(path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-"))
+        txn.create(
+            path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
+        )
+        txn.delete(
+            path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
+        )
 
         # dirty hack
-        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-"))
-        txn.delete(path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-"))
+        txn.create(
+            path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
+        )
+        txn.delete(
+            path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
+        )
 
-        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-"))
-        txn.delete(path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-"))
+        txn.create(
+            path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
+        )
+        txn.delete(
+            path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
+        )
 
         txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/metadata"))
 
         max_log_ptr = "1"
-        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/max_log_ptr"), value=max_log_ptr.encode())
+        txn.create(
+            path=format_path(ctx, f"/clickhouse/{migrating_database}/max_log_ptr"),
+            value=max_log_ptr.encode(),
+        )
 
         data_logs_to_keep = "1000"
-        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/logs_to_keep"), value=data_logs_to_keep.encode())
+        txn.create(
+            path=format_path(ctx, f"/clickhouse/{migrating_database}/logs_to_keep"),
+            value=data_logs_to_keep.encode(),
+        )
 
         result = txn.commit()
         logging.info("Txn finished: {}", result)
@@ -243,11 +261,11 @@ def create_database_nodes(ctx: Context, migrating_database: str) -> None:
         value=data_first_replica,
     )
 
-    data_log_queue="""version: 1
+    data_log_queue = """version: 1
 query: 
 hosts: []
 initiator: 
-"""
+"""  # noqa: W291
 
     create_zk_nodes(
         ctx,
@@ -300,7 +318,9 @@ def create_database_replica(ctx: Context, migrating_database: str) -> None:
 
     create_zk_nodes(
         ctx,
-        [f"/clickhouse/{migrating_database}/log/query-0000000001/finished/{shard}|{replica}"],
+        [
+            f"/clickhouse/{migrating_database}/log/query-0000000001/finished/{shard}|{replica}"
+        ],
         value="0",
     )
 
