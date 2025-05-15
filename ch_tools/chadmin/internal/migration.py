@@ -251,15 +251,24 @@ def create_database_nodes(ctx: Context, migrating_database: str) -> None:
 
         result = txn.commit()
         logging.info("Txn finished: {}", result)
-        if "NodeExistsError" in result:
+        if any(isinstance(e, NodeExistsError) for e in result):
+            logging.info("result contains NodeExistsError.")
             raise NodeExistsError()
 
-    data_first_replica = migrating_database
+        logging.info("result does not contain NodeExistsError.")
+
+
+def create_first_replica_database_name(ctx: Context, migrating_database: str) -> None:
+    logging.info("call create_first_replica_database_name.")
     create_zk_nodes(
         ctx,
         [f"/clickhouse/{migrating_database}/first_replica_database_name"],
-        value=data_first_replica,
+        value=migrating_database,
     )
+
+
+def create_log_nodes(ctx: Context, migrating_database: str) -> None:
+    logging.info("call create_log_nodes.")
 
     data_log_queue = """version: 1
 query: 
@@ -313,6 +322,8 @@ initiator:
 
 
 def create_database_replica(ctx: Context, migrating_database: str) -> None:
+    logging.info("call create_database_replica")
+    # should move from here
     shard = replace_macros("{shard}", get_macros(ctx))
     replica = replace_macros("{replica}", get_macros(ctx))
 

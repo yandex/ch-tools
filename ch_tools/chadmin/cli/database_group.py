@@ -8,6 +8,8 @@ from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.migration import (
     create_database_nodes,
     create_database_replica,
+    create_first_replica_database_name,
+    create_log_nodes,
     is_database_exists,
     migrate_as_first_replica,
     migrate_as_non_first_replica,
@@ -200,19 +202,24 @@ def migrate_engine_command(ctx, database):
             first_replica = False
         except Exception as ex:
             logging.info("create_database_nodes failed with ex={}", type(ex))
+            raise ex
 
-        # create replica
+        if first_replica:
+            create_first_replica_database_name(ctx, database)
+            create_log_nodes(ctx, database)
+
         create_database_replica(ctx, database)
 
         logging.info("replica was created")
 
         if first_replica:
             logging.info("migrate as first replica")
+
             migrate_as_first_replica(ctx, database)
         else:
             logging.info("migrate as non first replica")
             migrate_as_non_first_replica(ctx, database)
 
     except Exception as ex:
-        logging.error("Got exception: {}", type(ex))
+        logging.error("Got exception: type={}, ex={}", type(ex), ex)
         sys.exit(1)
