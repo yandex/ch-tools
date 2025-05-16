@@ -101,37 +101,49 @@ def migrate_as_non_first_replica(ctx, database_name):
             value=f"{shard}|{replica}".encode(),
         )
 
-        result = txn.commit()
-        logging.info("Txn was committed. Result {}", result)
+        metadata_non_repl_db = parse_database_from_metadata(database_name)
+        tables_info = _get_tables_info_and_detach(ctx, database_name)
 
-    metadata_non_repl_db = parse_database_from_metadata(database_name)
-    tables_info = _get_tables_info_and_detach(ctx, database_name)
+        _detach_dbs(ctx, dbs=[database_name])
 
-    # Unfortunately, it is not atomic.
-    # The schema could be changed before detach databases.
-    # However, it is sufficient for now, and we will stabilize
-    # this logic after we stop creating temporary tables.
-    for row in tables_info:
-        table_name = row["name"]
-        table_local_metadata_path = row["metadata_path"]
+        for row in tables_info:
+            table_name = row["name"]
+            table_local_metadata_path = row["metadata_path"]
 
-        if not is_table_schema_equal(
-            ctx,
-            database_name=database_name,
-            table_name=table_name,
-            table_local_metadata_path=table_local_metadata_path,
-        ):
-            if "Replicated" in row["engine"]:
-                logging.warning(
-                    "Replicated table engine {} can have different schema. Continue.",
+            if not is_table_schema_equal(
+                ctx,
+                database_name=database_name,
+                table_name=table_name,
+                table_local_metadata_path=table_local_metadata_path,
+            ):
+                if "Replicated" in row["engine"]:
+                    logging.warning(
+                        "Replicated table engine {} can have different schema. Continue.",
+                        row["engine"],
+                    )
+                    continue
+
+                logging.error(
+                    "Table {} with engine {} has different schema.",
+                    table_name,
                     row["engine"],
                 )
-                continue
-            raise RuntimeError(
-                f"Local table metadata for table {table_name} is different from zk metadata"
-            )
+                query = f"""
+                    ATTACH DATABASE {database_name}
+                """
 
-    _detach_dbs(ctx, dbs=[database_name])
+                # @todo discuss timeout and process error after attach
+                execute_query(
+                    ctx,
+                    query,
+                    echo=True,
+                )
+                raise RuntimeError(
+                    f"Local table metadata for table {table_name} is different from zk metadata"
+                )
+
+        result = txn.commit()
+        logging.info("Txn was committed. Result {}", result)
 
     metadata_non_repl_db.database_engine = DatabaseEngine.REPLICATED
     metadata_non_repl_db.replica_path = (
