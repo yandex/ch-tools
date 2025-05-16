@@ -1,10 +1,10 @@
 from click import ClickException, Context
+from kazoo.client import TransactionRequest
 from kazoo.exceptions import NodeExistsError
 
 from ch_tools.chadmin.cli import metadata
 from ch_tools.chadmin.cli.database_metadata import (
     DatabaseEngine,
-    DatabaseMetadata,
     parse_database_from_metadata,
 )
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
@@ -15,14 +15,7 @@ from ch_tools.chadmin.internal.table import (
     read_local_table_metadata,
 )
 from ch_tools.chadmin.internal.utils import execute_query, replace_macros
-from ch_tools.chadmin.internal.zookeeper import (
-    create_zk_nodes,
-    format_path,
-    get_zk_node,
-    list_zk_nodes,
-    update_zk_nodes,
-    zk_client,
-)
+from ch_tools.chadmin.internal.zookeeper import format_path, get_zk_node, zk_client
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 from ch_tools.common.clickhouse.config import get_macros
@@ -45,16 +38,27 @@ def create_temp_db(ctx: Context, migrating_database: str, temp_db: str) -> None:
 
 
 def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
-    shard = replace_macros("{shard}", get_macros(ctx))
-    replica = replace_macros("{replica}", get_macros(ctx))
+    with zk_client(ctx) as zk:
+        txn = zk.transaction()
 
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}/log/query-0000000001/committed"],
-        value=f"{shard}|{replica}",
-    )
+        _create_first_replica_database_name(ctx, txn, migrating_database)
+        _create_log_nodes(ctx, txn, migrating_database)
+        _create_database_replica(ctx, txn, migrating_database)
 
-    _create_database_metadata_nodes(ctx, migrating_database)
+        shard = replace_macros("{shard}", get_macros(ctx))
+        replica = replace_macros("{replica}", get_macros(ctx))
+
+        txn.create(
+            path=format_path(
+                ctx, f"/clickhouse/{migrating_database}/log/query-0000000001/committed"
+            ),
+            value=f"{shard}|{replica}".encode(),
+        )
+
+        _create_database_metadata_nodes(ctx, txn, migrating_database)
+
+        result = txn.commit()
+        logging.info("Txn was committed. Result {}", result)
 
     _detach_dbs(ctx, dbs=[migrating_database])
 
@@ -82,13 +86,23 @@ def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
 
 
 def migrate_as_non_first_replica(ctx, database_name):
-    shard = replace_macros("{shard}", get_macros(ctx))
-    replica = replace_macros("{replica}", get_macros(ctx))
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{database_name}/log/query-0000000002/committed"],
-        value=f"{shard}|{replica}",
-    )
+    with zk_client(ctx) as zk:
+        txn = zk.transaction()
+
+        _create_database_replica(ctx, txn, database_name)
+
+        shard = replace_macros("{shard}", get_macros(ctx))
+        replica = replace_macros("{replica}", get_macros(ctx))
+
+        txn.create(
+            path=format_path(
+                ctx, f"/clickhouse/{database_name}/log/query-0000000002/committed"
+            ),
+            value=f"{shard}|{replica}".encode(),
+        )
+
+        result = txn.commit()
+        logging.info("Txn was committed. Result {}", result)
 
     metadata_non_repl_db = parse_database_from_metadata(database_name)
     tables_info = _get_tables_info_and_detach(ctx, database_name)
@@ -213,27 +227,28 @@ def create_database_nodes(ctx: Context, migrating_database: str) -> None:
 
         txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/counter"))
 
-        txn.create(
-            path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
-        )
-        txn.delete(
-            path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
-        )
+        for _ in range(0, 3):
+            txn.create(
+                path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
+            )
+            txn.delete(
+                path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
+            )
 
         # dirty hack
-        txn.create(
-            path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
-        )
-        txn.delete(
-            path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
-        )
+        # txn.create(
+        #     path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
+        # )
+        # txn.delete(
+        #     path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
+        # )
 
-        txn.create(
-            path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
-        )
-        txn.delete(
-            path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
-        )
+        # txn.create(
+        #     path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
+        # )
+        # txn.delete(
+        #     path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
+        # )
 
         txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/metadata"))
 
@@ -258,16 +273,22 @@ def create_database_nodes(ctx: Context, migrating_database: str) -> None:
         logging.info("result does not contain NodeExistsError.")
 
 
-def create_first_replica_database_name(ctx: Context, migrating_database: str) -> None:
+def _create_first_replica_database_name(
+    ctx: Context, txn: TransactionRequest, migrating_database: str
+) -> None:
     logging.info("call create_first_replica_database_name.")
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}/first_replica_database_name"],
-        value=migrating_database,
+
+    txn.create(
+        path=format_path(
+            ctx, f"/clickhouse/{migrating_database}/first_replica_database_name"
+        ),
+        value=migrating_database.encode(),
     )
 
 
-def create_log_nodes(ctx: Context, migrating_database: str) -> None:
+def _create_log_nodes(
+    ctx: Context, txn: TransactionRequest, migrating_database: str
+) -> None:
     logging.info("call create_log_nodes.")
 
     data_log_queue = """version: 1
@@ -276,69 +297,76 @@ hosts: []
 initiator: 
 """  # noqa: W291
 
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}/log/query-0000000001"],
-        value=data_log_queue,
+    # @todo move to list
+
+    txn.create(
+        path=format_path(ctx, f"/clickhouse/{migrating_database}/log/query-0000000001"),
+        value=data_log_queue.encode(),
     )
 
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}/log/query-0000000001/active"],
-        # ephemeral=True,
+    txn.create(
+        path=format_path(
+            ctx, f"/clickhouse/{migrating_database}/log/query-0000000001/active"
+        ),
     )
 
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}/log/query-0000000001/finished"],
+    txn.create(
+        path=format_path(
+            ctx, f"/clickhouse/{migrating_database}/log/query-0000000001/finished"
+        ),
     )
 
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}/log/query-0000000001/synced"],
+    txn.create(
+        path=format_path(
+            ctx, f"/clickhouse/{migrating_database}/log/query-0000000001/synced"
+        ),
     )
 
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}/log/query-0000000002"],
-        value=data_log_queue,
+    txn.create(
+        path=format_path(ctx, f"/clickhouse/{migrating_database}/log/query-0000000002"),
+        value=data_log_queue.encode(),
     )
 
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}/log/query-0000000002/active"],
-        # ephemeral=True,
+    txn.create(
+        path=format_path(
+            ctx, f"/clickhouse/{migrating_database}/log/query-0000000002/active"
+        ),
     )
 
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}/log/query-0000000002/finished"],
+    txn.create(
+        path=format_path(
+            ctx, f"/clickhouse/{migrating_database}/log/query-0000000002/finished"
+        ),
     )
 
-    create_zk_nodes(
-        ctx,
-        [f"/clickhouse/{migrating_database}/log/query-0000000002/synced"],
+    txn.create(
+        path=format_path(
+            ctx, f"/clickhouse/{migrating_database}/log/query-0000000002/synced"
+        ),
     )
 
 
-def create_database_replica(ctx: Context, migrating_database: str) -> None:
+def _create_database_replica(
+    ctx: Context, txn: TransactionRequest, migrating_database: str
+) -> None:
     logging.info("call create_database_replica")
     # should move from here
     shard = replace_macros("{shard}", get_macros(ctx))
     replica = replace_macros("{replica}", get_macros(ctx))
 
-    create_zk_nodes(
-        ctx,
-        [
-            f"/clickhouse/{migrating_database}/log/query-0000000001/finished/{shard}|{replica}"
-        ],
-        value="0",
+    txn.create(
+        path=format_path(
+            ctx,
+            f"/clickhouse/{migrating_database}/log/query-0000000001/finished/{shard}|{replica}",
+        ),
+        value="0".encode(),
     )
 
     replica_node = f"/clickhouse/{migrating_database}/replicas/{shard}|{replica}"
-    logging.info("create_database_replica: {}", replica_node)
-    create_zk_nodes(
-        ctx, [replica_node], value=_get_host_id(ctx, migrating_database, replica)
+
+    txn.create(
+        path=format_path(ctx, replica_node),
+        value=_get_host_id(ctx, migrating_database, replica).encode(),
     )
 
     query = """
@@ -348,34 +376,30 @@ def create_database_replica(ctx: Context, migrating_database: str) -> None:
     server_uuid = rows["data"][0]["id"]
     logging.info("rows={}, server_uuid={}", rows, server_uuid)
 
-    create_zk_nodes(
-        ctx,
-        [replica_node + "/active"],
-        value=server_uuid,
+    txn.create(
+        path=format_path(ctx, replica_node + "/active"),
+        value=server_uuid.encode(),
     )
 
-    create_zk_nodes(
-        ctx,
-        [replica_node + "/digest"],
-        value="0",
+    txn.create(
+        path=format_path(ctx, replica_node + "/digest"),
+        value="0".encode(),
     )
 
-    create_zk_nodes(
-        ctx,
-        [replica_node + "/log_ptr"],
-        value="1",
+    txn.create(
+        path=format_path(ctx, replica_node + "/log_ptr"),
+        value="1".encode(),
     )
 
-    create_zk_nodes(ctx, [replica_node + "/max_log_ptr_at_creation"], value="1")
-
-    # specific logic
-    # create_zk_nodes(
-    #     ctx,
-    #     [replica_node + "/replica_group"],
-    # )
+    txn.create(
+        path=format_path(ctx, replica_node + "/max_log_ptr_at_creation"),
+        value="1".encode(),
+    )
 
 
-def _create_database_metadata_nodes(ctx: Context, migrating_database: str) -> None:
+def _create_database_metadata_nodes(
+    ctx: Context, txn: TransactionRequest, migrating_database: str
+) -> None:
     query = f"""
         SELECT name, create_table_query, metadata_path FROM system.tables WHERE database='{migrating_database}'
     """
@@ -391,16 +415,15 @@ def _create_database_metadata_nodes(ctx: Context, migrating_database: str) -> No
         with open(metadata_path, "r", encoding="utf-8") as metadata_file:
             local_table_metadata = metadata_file.read()
 
-            # use tx ?
-            # check exception
-            create_zk_nodes(
-                ctx,
-                [f"/clickhouse/{migrating_database}/metadata/{table_name}"],
-                value=local_table_metadata,
+            txn.create(
+                path=format_path(
+                    ctx, f"/clickhouse/{migrating_database}/metadata/{table_name}"
+                ),
+                value=local_table_metadata.encode(),
             )
 
             logging.info(
-                "add from file with metadata to tables: {}",
+                "add table metadata to txn: {}",
                 local_table_metadata,
             )
 
@@ -415,103 +438,6 @@ def _detach_dbs(ctx: Context, dbs: list) -> None:
             query,
             echo=True,
         )
-
-
-def _update_zk_for_migrate(
-    ctx: Context,
-    metadata_non_repl_db: DatabaseMetadata,
-) -> None:
-    """
-    Changing the database information in Zookeeper's nodes from the temporary database to the original database.
-    After this update, the original database will be able to use these nodes.
-    We will remove the temporary database later.
-    """
-
-    zk_db_path = f"/clickhouse/{metadata_non_repl_db.database_name}"
-    first_replica_database_name = zk_db_path + "/first_replica_database_name"
-    node_data = get_zk_node(ctx, first_replica_database_name)
-
-    logging.info(
-        "first_replica_database_name={} contains: {}",
-        first_replica_database_name,
-        node_data,
-    )
-
-    if node_data == metadata_non_repl_db.database_name:
-        logging.info(
-            "first_replica_database_name was migrated early. Skip updating zookeeper."
-        )
-        return
-
-    logging.info(
-        "update first_replica_database_name, path {}", first_replica_database_name
-    )
-
-    # I assume that we need to use a transaction here
-    # because the second replica could perform the migration as well.
-    # Therefore, we do not have guarantees that nodes with metadata
-    # will be ready to work with the second node.
-    # However, if we work sequentially, it would be reliable.
-    update_zk_nodes(
-        ctx, [first_replica_database_name], metadata_non_repl_db.database_name
-    )
-
-    # _update_zk_tables_metadata(ctx, zk_db_path, mapping_table_to_metadata)
-
-    for replica_path in list_zk_nodes(ctx, zk_db_path + "/replicas"):
-        replica_data = get_zk_node(ctx, replica_path)
-
-        prefix = replica_data.split(":")
-        new_data = f"{prefix[0]}:{prefix[1]}:{metadata_non_repl_db.database_uuid}"
-
-        logging.info(
-            "Update replica: {}, from {} to {}", replica_path, replica_data, new_data
-        )
-        update_zk_nodes(ctx, [replica_path], new_data)
-
-        logging.info("Updating was finished")
-
-
-# useles?
-def _update_zk_tables_metadata(
-    ctx: Context, zk_db_path: str, mapping_table_to_metadata: dict
-) -> None:
-    for metadata_path in list_zk_nodes(ctx, zk_db_path + "/metadata"):
-        logging.info("update metadata path={}", metadata_path)
-
-        data = get_zk_node(ctx, metadata_path)
-
-        logging.info(
-            "Found node for table. path={}, contains data={}", metadata_path, data
-        )
-        table_name = metadata_path.split("/")[-1]
-        target_metadata = mapping_table_to_metadata[table_name]
-
-        logging.info(
-            "New metadata for node from mapping table:\n{}\n===", target_metadata
-        )
-
-        update_zk_nodes(ctx, [metadata_path], target_metadata)
-
-
-def _remove_temp_db(ctx: Context, metadata_temp_db: DatabaseMetadata) -> None:
-    query = f"""
-        ATTACH DATABASE {metadata_temp_db.database_name}
-    """
-    execute_query(
-        ctx,
-        query,
-        echo=True,
-    )
-
-    query = f"""
-        DROP DATABASE {metadata_temp_db.database_name} SYNC
-    """
-    execute_query(
-        ctx,
-        query,
-        echo=True,
-    )
 
 
 def _get_tables_info_and_detach(ctx: Context, database_name: str) -> dict:
