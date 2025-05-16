@@ -68,7 +68,11 @@ def create_zk_nodes(ctx, paths, value=None, make_parents=False):
 
     with zk_client(ctx) as zk:
         for path in paths:
-            zk.create(format_path(ctx, path), value, makepath=make_parents)
+            zk.create(
+                format_path(ctx, path),
+                value,
+                makepath=make_parents,
+            )
 
 
 def update_zk_nodes(ctx, paths, value):
