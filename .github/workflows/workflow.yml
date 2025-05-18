@@ -56,14 +56,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python }}
       - name: build base images
         uses: docker/bake-action@v5
         with:
           files: tests/bake.hcl
           push: false
 
-      - run: PYTHON_VERSION=${{ matrix.target.python }} make test-unit
-      - run: PYTHON_VERSION=${{ matrix.target.python }} make test-integration
+      - run: make test-unit
+      - run: make test-integration
 
       - uses: actions/upload-artifact@v4
         if: ${{ failure() }}

@@ -18,7 +18,11 @@ export LANG   = en_US.UTF-8
 export PROJECT_NAME ?= clickhouse-tools
 export PROJECT_NAME_UNDERSCORE ?= $(subst -,_,$(PROJECT_NAME))
 
-export PYTHON_VERSION ?= $(shell cat .python-version)
+ifdef UV_PYTHON
+	export PYTHON_VERSION := $(UV_PYTHON)
+else
+	export PYTHON_VERSION := $(shell cat .python-version)
+endif
 
 PREFIX ?= /opt/yandex/$(PROJECT_NAME)
 export BUILD_PYTHON_OUTPUT_DIR ?= dist
@@ -79,59 +83,59 @@ lint: isort black codespell ruff pylint mypy
 
 .PHONY: isort
 isort: setup
-	uv run --python $(PYTHON_VERSION) isort --check --diff $(SRC_DIR) $(TESTS_DIR)
+	uv run isort --check --diff $(SRC_DIR) $(TESTS_DIR)
 
 
 .PHONY: black
 black: setup
-	uv run --python $(PYTHON_VERSION) black --check --diff $(SRC_DIR) $(TESTS_DIR)
+	uv run black --check --diff $(SRC_DIR) $(TESTS_DIR)
 
 
 .PHONY: codespell
 codespell: setup
-	uv run --python $(PYTHON_VERSION) codespell $(SRC_DIR) $(TESTS_DIR)
+	uv run codespell $(SRC_DIR) $(TESTS_DIR)
 
 .PHONY: fix-codespell-errors
 fix-codespell-errors: setup
-	uv run --python $(PYTHON_VERSION) codespell -w $(SRC_DIR) $(TESTS_DIR)
+	uv run codespell -w $(SRC_DIR) $(TESTS_DIR)
 
 
 .PHONY: ruff
 ruff: setup
-	uv run --python $(PYTHON_VERSION) ruff check $(SRC_DIR) $(TESTS_DIR)
+	uv run ruff check $(SRC_DIR) $(TESTS_DIR)
 
 
 .PHONY: pylint
 pylint: setup
-	uv run --python $(PYTHON_VERSION) pylint $(SRC_DIR)
+	uv run pylint $(SRC_DIR)
 
 
 .PHONY: mypy
 mypy: setup
-	uv run --python $(PYTHON_VERSION) mypy $(SRC_DIR) $(TESTS_DIR)
+	uv run mypy $(SRC_DIR) $(TESTS_DIR)
 
 
 .PHONY: format
 format: setup
-	uv run --python $(PYTHON_VERSION) isort $(SRC_DIR) $(TESTS_DIR)
-	uv run --python $(PYTHON_VERSION) black $(SRC_DIR) $(TESTS_DIR)
+	uv run isort $(SRC_DIR) $(TESTS_DIR)
+	uv run black $(SRC_DIR) $(TESTS_DIR)
 
 
 .PHONY: test-unit
 test-unit: setup
-	uv run --python $(PYTHON_VERSION) py.test $(PYTEST_ARGS) $(TESTS_DIR)/unit
+	uv run py.test $(PYTEST_ARGS) $(TESTS_DIR)/unit
 
 
 .PHONY: test-integration
 test-integration: build-python-packages
 	cd $(TESTS_DIR)
 	export PYTHONPATH=$(CURDIR):$$PATH
-	uv run --python $(PYTHON_VERSION) behave --show-timings --stop --junit $(BEHAVE_ARGS)
+	uv run behave --show-timings --stop --junit $(BEHAVE_ARGS)
 
 
 .PHONY: publish
 publish:
-	uv publish --python $(PYTHON_VERSION)
+	uv publish
 
 
 .PHONY: install
@@ -166,7 +170,7 @@ install-python-package: build-python-packages
 .PHONY: build-python-packages
 build-python-packages: setup
 	echo 'Building python packages...'
-	uv build --python $(PYTHON_VERSION)
+	uv build
 
 
 .PHONY: clean-dist
@@ -245,9 +249,6 @@ check-environment:
 	@if ! command -v "uv" &>/dev/null; then \
 		echo 'Python project manager tool "uv" not found. Please follow installation instructions at https://docs.astral.sh/uv/getting-started/installation.' >&2; exit 1; \
 	fi
-	@if [ -z "${PYTHON_VERSION}" ]; then \
-		echo 'Failed to determine version of Python interpreter to use.' >&2; exit 1; \
-	fi
 
 
 $(VERSION_FILE):
@@ -307,7 +308,7 @@ help:
 	echo "  help                       Show this help message."
 	echo
 	echo "Environment Variables:"
-	echo "  PYTHON_VERSION             Python version to use (default: \"$(PYTHON_VERSION)\")."
+	echo "  UV_PYTHON                  Python version to use (default: \"$(PYTHON_VERSION)\")."
 	echo "  PYTEST_ARGS                Arguments to pass to pytest (unit tests)."
 	echo "  BEHAVE_ARGS                Arguments to pass to behave (integration tests)."
 	echo "  CLICKHOUSE_VERSION         ClickHouse version to use in integration tests (default: \"$(CLICKHOUSE_VERSION)\")."
