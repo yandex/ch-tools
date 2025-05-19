@@ -37,6 +37,60 @@ def create_temp_db(ctx: Context, migrating_database: str, temp_db: str) -> None:
         raise ClickException(ex_text)
 
 
+def _update_local_metadata_first_replica(ctx: Context, migrating_database: str) -> None:
+    _detach_dbs(ctx, dbs=[migrating_database])
+
+    try:
+        metadata_non_repl_db = parse_database_from_metadata(migrating_database)
+
+        metadata_non_repl_db.database_engine = DatabaseEngine.REPLICATED
+        metadata_non_repl_db.replica_path = (
+            f"/clickhouse/{metadata_non_repl_db.database_name}"
+        )
+        metadata_non_repl_db.shard = "{shard}"
+        metadata_non_repl_db.replica_name = "{replica}"
+
+        metadata_non_repl_db.update_metadata_file()
+    except Exception as ex:
+        logging.error("Failed _update_local_metadata_first_replica with ex={}", ex)
+        _attach_dbs(ctx, dbs=[migrating_database])
+        raise ex
+
+    _attach_dbs(ctx, dbs=[migrating_database])
+
+
+def _check_tables_consinstent(
+    ctx: Context, database_name: str, tables_info: dict
+) -> None:
+    for row in tables_info:
+        table_name = row["name"]
+        table_local_metadata_path = row["metadata_path"]
+
+        if not is_table_schema_equal(
+            ctx,
+            database_name=database_name,
+            table_name=table_name,
+            table_local_metadata_path=table_local_metadata_path,
+        ):
+            if "Replicated" in row["engine"]:
+                logging.warning(
+                    "Replicated table engine {} can have different schema. Continue.",
+                    row["engine"],
+                )
+                continue
+
+            logging.error(
+                "Table {} with engine {} has different schema.",
+                table_name,
+                row["engine"],
+            )
+            _attach_dbs(ctx, dbs=[database_name])
+
+            raise RuntimeError(
+                f"Local table metadata for table {table_name} is different from zk metadata"
+            )
+
+
 def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
     with zk_client(ctx) as zk:
         txn = zk.transaction()
@@ -60,29 +114,10 @@ def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
         result = txn.commit()
         logging.info("Txn was committed. Result {}", result)
 
-    _detach_dbs(ctx, dbs=[migrating_database])
-
-    metadata_non_repl_db = parse_database_from_metadata(migrating_database)
-
-    metadata_non_repl_db.database_engine = DatabaseEngine.REPLICATED
-    metadata_non_repl_db.replica_path = (
-        f"/clickhouse/{metadata_non_repl_db.database_name}"
-    )
-    metadata_non_repl_db.shard = "{shard}"
-    metadata_non_repl_db.replica_name = "{replica}"
-
-    metadata_non_repl_db.update_metadata_file()
-
-    query = f"""
-        ATTACH DATABASE {migrating_database}
-    """
-
-    # @todo discuss timeout and process error after attach
-    execute_query(
-        ctx,
-        query,
-        echo=True,
-    )
+    # There is an issue when at first time _update_local_metadata_first_replica was failed.
+    # Then next time we would have a failed txn.
+    # However, I assume that database has correct metadata.
+    _update_local_metadata_first_replica(ctx, migrating_database)
 
 
 def migrate_as_non_first_replica(ctx, database_name):
@@ -106,41 +141,7 @@ def migrate_as_non_first_replica(ctx, database_name):
 
         _detach_dbs(ctx, dbs=[database_name])
 
-        for row in tables_info:
-            table_name = row["name"]
-            table_local_metadata_path = row["metadata_path"]
-
-            if not is_table_schema_equal(
-                ctx,
-                database_name=database_name,
-                table_name=table_name,
-                table_local_metadata_path=table_local_metadata_path,
-            ):
-                if "Replicated" in row["engine"]:
-                    logging.warning(
-                        "Replicated table engine {} can have different schema. Continue.",
-                        row["engine"],
-                    )
-                    continue
-
-                logging.error(
-                    "Table {} with engine {} has different schema.",
-                    table_name,
-                    row["engine"],
-                )
-                query = f"""
-                    ATTACH DATABASE {database_name}
-                """
-
-                # @todo discuss timeout and process error after attach
-                execute_query(
-                    ctx,
-                    query,
-                    echo=True,
-                )
-                raise RuntimeError(
-                    f"Local table metadata for table {table_name} is different from zk metadata"
-                )
+        _check_tables_consinstent(ctx, database_name, tables_info)
 
         result = txn.commit()
         logging.info("Txn was committed. Result {}", result)
@@ -157,19 +158,10 @@ def migrate_as_non_first_replica(ctx, database_name):
 
     if was_changed:
         logging.info(
-            f"Table UUID was changed. Database {database_name} was detached. Need restart Clickhouse"
+            f"Table UUID was changed. Database {database_name} was detached. Need restart Clickhouse."
         )
     else:
-        query = f"""
-            ATTACH DATABASE {database_name}
-        """
-
-        # @todo discuss timeout and process error after attach
-        execute_query(
-            ctx,
-            query,
-            echo=True,
-        )
+        _attach_dbs(ctx, dbs=[database_name])
 
 
 # escapeForFileName
@@ -239,6 +231,8 @@ def create_database_nodes(ctx: Context, migrating_database: str) -> None:
 
         txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/counter"))
 
+        # I assume in depends on replicas.
+        # Need check.
         for _ in range(0, 3):
             txn.create(
                 path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
@@ -246,21 +240,6 @@ def create_database_nodes(ctx: Context, migrating_database: str) -> None:
             txn.delete(
                 path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
             )
-
-        # dirty hack
-        # txn.create(
-        #     path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
-        # )
-        # txn.delete(
-        #     path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
-        # )
-
-        # txn.create(
-        #     path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
-        # )
-        # txn.delete(
-        #     path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
-        # )
 
         txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/metadata"))
 
@@ -278,6 +257,7 @@ def create_database_nodes(ctx: Context, migrating_database: str) -> None:
 
         result = txn.commit()
         logging.info("Txn finished: {}", result)
+
         if any(isinstance(e, NodeExistsError) for e in result):
             logging.info("result contains NodeExistsError.")
             raise NodeExistsError()
@@ -444,6 +424,18 @@ def _detach_dbs(ctx: Context, dbs: list) -> None:
     for db in dbs:
         query = f"""
             DETACH DATABASE {db}
+        """
+        execute_query(
+            ctx,
+            query,
+            echo=True,
+        )
+
+
+def _attach_dbs(ctx: Context, dbs: list) -> None:
+    for db in dbs:
+        query = f"""
+            ATTACH DATABASE {db}
         """
         execute_query(
             ctx,

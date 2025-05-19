@@ -620,11 +620,6 @@ Feature: chadmin database migrate command
     """
     chadmin database migrate -d non_repl_db 
     """
-    # When we execute command on clickhouse02
-    # """
-    # supervisorctl restart clickhouse-server
-    # """
-    # When we sleep for 10 seconds
 
     When we execute query on clickhouse02
     """
