@@ -25,7 +25,6 @@ Feature: chadmin database migrate command
     """
     Replicated
     """
-
     When we execute query on clickhouse01
     """
     CREATE TABLE non_repl_db.bar2
@@ -1178,7 +1177,6 @@ Feature: chadmin database migrate command
     supervisorctl restart clickhouse-server
     """
     When we sleep for 10 seconds
-
     When we execute query on clickhouse01
     """
     SELECT * FROM non_repl_db.foo FORMAT Values

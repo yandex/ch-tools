@@ -164,7 +164,7 @@ def migrate_as_non_first_replica(ctx, database_name):
         _attach_dbs(ctx, dbs=[database_name])
 
 
-# escapeForFileName
+# Clickhouse function escapeForFileName
 def _escape_hostname(s: str) -> str:
     def is_word_char_ascii(c):
         return c.isalnum() or c == "_"
@@ -191,12 +191,7 @@ def _escape_hostname(s: str) -> str:
     return "".join(res)
 
 
-# def _escape_hostname(hostname: str) -> str:
-#     return quote(hostname, safe='')
-
-
 def _get_host_id(ctx: Context, migrating_database: str, replica: str) -> str:
-    # check with CH
     host_name = replica
 
     logging.info("host_name={}", host_name)
@@ -207,7 +202,6 @@ def _get_host_id(ctx: Context, migrating_database: str, replica: str) -> str:
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
     database_uuid = rows["data"][0]["uuid"]
 
-    # port
     result = f"{_escape_hostname(host_name)}:9000:{database_uuid}"
     logging.info("_get_host_id={}", result)
 
@@ -289,8 +283,6 @@ hosts: []
 initiator: 
 """  # noqa: W291
 
-    # @todo move to list
-
     txn.create(
         path=format_path(ctx, f"/clickhouse/{migrating_database}/log/query-0000000001"),
         value=data_log_queue.encode(),
@@ -342,7 +334,7 @@ def _create_database_replica(
     ctx: Context, txn: TransactionRequest, migrating_database: str
 ) -> None:
     logging.info("call create_database_replica")
-    # should move from here
+
     shard = replace_macros("{shard}", get_macros(ctx))
     replica = replace_macros("{replica}", get_macros(ctx))
 
@@ -465,7 +457,6 @@ def _get_tables_info_and_detach(ctx: Context, database_name: str) -> dict:
             create_table_query,
         )
 
-        # is it neccassary?
         detach_table(
             ctx, database_name=database_name, table_name=table_name, permanently=False
         )
