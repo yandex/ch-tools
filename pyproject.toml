@@ -73,7 +73,7 @@ dependencies = [
     "pygments",
     "pyopenssl < 25.0",
     "python-dateutil",
-    "pyyaml < 5.4",
+    "pyyaml < 6.1",
     "requests < 2.30",
     "tabulate",
     "tenacity",
