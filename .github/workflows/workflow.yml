@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: astral-sh/setup-uv@v5
+    - uses: astral-sh/setup-uv@v6
     - name: "lint: isort"
       run: make isort
     - name: "lint: black"
@@ -55,7 +55,7 @@ jobs:
           - "latest"
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python }}
       - name: build base images
@@ -112,7 +112,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - uses: astral-sh/setup-uv@v5
+    - uses: astral-sh/setup-uv@v6
 
     - name: build project
       run: make build-python-packages
