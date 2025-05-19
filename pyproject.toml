@@ -71,7 +71,7 @@ dependencies = [
     "lxml",
     "psutil",
     "pygments",
-    "pyopenssl < 25.0",
+    "pyopenssl < 26.0",
     "python-dateutil",
     "pyyaml < 5.4",
     "requests < 2.30",
