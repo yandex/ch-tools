@@ -239,7 +239,7 @@ uninstall-logrotate:
 
 
 .PHONY: prepare-changelog
-prepare-changelog:
+prepare-changelog: setup
 	echo 'Bumping version into Debian package changelog'
 	DEBFULLNAME="Yandex LLC" DEBEMAIL="ch-tools@yandex-team.ru" dch --force-bad-version --distribution stable -v $$(cat $(VERSION_FILE)) Autobuild
 
