@@ -28,6 +28,6 @@ jobs:
         with:
           files: tests/bake.hcl
           push: false
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v6
       - name: run integration tests
         run:  make test-integration
