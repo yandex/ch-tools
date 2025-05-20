@@ -62,7 +62,7 @@ dependencies = [
     "boto3 ~= 1.23.10",
     "click ~= 8.0.4",
     "cloup",
-    "deepdiff < 6.4.0",
+    "deepdiff < 8.6.0",
     "dnspython",
     "file_read_backwards",
     "humanfriendly",
