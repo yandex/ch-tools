@@ -1,12 +1,11 @@
+from typing import Tuple
+
 from click import ClickException, Context
 from kazoo.client import TransactionRequest
 from kazoo.exceptions import NodeExistsError
 
 from ch_tools.chadmin.cli import metadata
-from ch_tools.chadmin.cli.database_metadata import (
-    DatabaseEngine,
-    parse_database_from_metadata,
-)
+from ch_tools.chadmin.cli.database_metadata import parse_database_from_metadata
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
 from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
 from ch_tools.chadmin.internal.table import (
@@ -15,7 +14,12 @@ from ch_tools.chadmin.internal.table import (
     read_local_table_metadata,
 )
 from ch_tools.chadmin.internal.utils import execute_query, replace_macros
-from ch_tools.chadmin.internal.zookeeper import format_path, get_zk_node, zk_client
+from ch_tools.chadmin.internal.zookeeper import (
+    escape_for_zookeeper,
+    format_path,
+    get_zk_node,
+    zk_client,
+)
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 from ch_tools.common.clickhouse.config import get_macros
@@ -42,15 +46,7 @@ def _update_local_metadata_first_replica(ctx: Context, migrating_database: str) 
 
     try:
         metadata_non_repl_db = parse_database_from_metadata(migrating_database)
-
-        metadata_non_repl_db.database_engine = DatabaseEngine.REPLICATED
-        metadata_non_repl_db.replica_path = (
-            f"/clickhouse/{metadata_non_repl_db.database_name}"
-        )
-        metadata_non_repl_db.shard = "{shard}"
-        metadata_non_repl_db.replica_name = "{replica}"
-
-        metadata_non_repl_db.update_metadata_file()
+        metadata_non_repl_db.set_replicated()
     except Exception as ex:
         logging.error("Failed _update_local_metadata_first_replica with ex={}", ex)
         _attach_dbs(ctx, dbs=[migrating_database])
@@ -91,6 +87,19 @@ def _check_tables_consinstent(
             )
 
 
+def get_shard_and_replica_from_macros(ctx: Context) -> Tuple[str, str]:
+    macros = get_macros(ctx)
+
+    missing = [macro for macro in ["shard", "replica"] if macro not in macros]
+    if missing:
+        raise RuntimeError(f"Failed replace marcos. {missing}")
+
+    shard = replace_macros("{shard}", get_macros(ctx))
+    replica = replace_macros("{replica}", get_macros(ctx))
+
+    return shard, replica
+
+
 def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
     with zk_client(ctx) as zk:
         txn = zk.transaction()
@@ -99,8 +108,7 @@ def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
         _create_log_nodes(ctx, txn, migrating_database)
         _create_database_replica(ctx, txn, migrating_database)
 
-        shard = replace_macros("{shard}", get_macros(ctx))
-        replica = replace_macros("{replica}", get_macros(ctx))
+        shard, replica = get_shard_and_replica_from_macros(ctx)
 
         txn.create(
             path=format_path(
@@ -114,6 +122,10 @@ def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
         result = txn.commit()
         logging.info("Txn was committed. Result {}", result)
 
+        if any(isinstance(e, NodeExistsError) for e in result):
+            logging.info("result contains NodeExistsError.")
+            raise NodeExistsError()
+
     # There is an issue when at first time _update_local_metadata_first_replica was failed.
     # Then next time we would have a failed txn.
     # However, I assume that database has correct metadata.
@@ -126,8 +138,7 @@ def migrate_as_non_first_replica(ctx, database_name):
 
         _create_database_replica(ctx, txn, database_name)
 
-        shard = replace_macros("{shard}", get_macros(ctx))
-        replica = replace_macros("{replica}", get_macros(ctx))
+        shard, replica = get_shard_and_replica_from_macros(ctx)
 
         txn.create(
             path=format_path(
@@ -146,14 +157,11 @@ def migrate_as_non_first_replica(ctx, database_name):
         result = txn.commit()
         logging.info("Txn was committed. Result {}", result)
 
-    metadata_non_repl_db.database_engine = DatabaseEngine.REPLICATED
-    metadata_non_repl_db.replica_path = (
-        f"/clickhouse/{metadata_non_repl_db.database_name}"
-    )
-    metadata_non_repl_db.shard = "{shard}"
-    metadata_non_repl_db.replica_name = "{replica}"
-    metadata_non_repl_db.update_metadata_file()
+        if any(isinstance(e, NodeExistsError) for e in result):
+            logging.info("result contains NodeExistsError.")
+            raise NodeExistsError()
 
+    metadata_non_repl_db.set_replicated()
     was_changed = _change_tables_uuid(ctx, tables_info, database_name)
 
     if was_changed:
@@ -162,33 +170,6 @@ def migrate_as_non_first_replica(ctx, database_name):
         )
     else:
         _attach_dbs(ctx, dbs=[database_name])
-
-
-# Clickhouse function escapeForFileName
-def _escape_hostname(s: str) -> str:
-    def is_word_char_ascii(c):
-        return c.isalnum() or c == "_"
-
-    def hex_digit_uppercase(num):
-        return format(num, "X")
-
-    res = []
-    pos = 0
-    end = len(s)
-
-    while pos != end:
-        c = s[pos]
-
-        if is_word_char_ascii(c):
-            res.append(c)
-        else:
-            res.append("%")
-            res.append(hex_digit_uppercase(ord(c) // 16))
-            res.append(hex_digit_uppercase(ord(c) % 16))
-
-        pos += 1
-
-    return "".join(res)
 
 
 def _get_host_id(ctx: Context, migrating_database: str, replica: str) -> str:
@@ -202,7 +183,7 @@ def _get_host_id(ctx: Context, migrating_database: str, replica: str) -> str:
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
     database_uuid = rows["data"][0]["uuid"]
 
-    result = f"{_escape_hostname(host_name)}:9000:{database_uuid}"
+    result = f"{escape_for_zookeeper(host_name)}:9000:{database_uuid}"
     logging.info("_get_host_id={}", result)
 
     return result
@@ -250,7 +231,7 @@ def create_database_nodes(ctx: Context, migrating_database: str) -> None:
         )
 
         result = txn.commit()
-        logging.info("Txn finished: {}", result)
+        logging.info("Txn was committed. Result {}", result)
 
         if any(isinstance(e, NodeExistsError) for e in result):
             logging.info("result contains NodeExistsError.")
@@ -335,8 +316,7 @@ def _create_database_replica(
 ) -> None:
     logging.info("call create_database_replica")
 
-    shard = replace_macros("{shard}", get_macros(ctx))
-    replica = replace_macros("{replica}", get_macros(ctx))
+    shard, replica = get_shard_and_replica_from_macros(ctx)
 
     txn.create(
         path=format_path(
@@ -372,7 +352,7 @@ def _create_database_replica(
 
     txn.create(
         path=format_path(ctx, replica_node + "/log_ptr"),
-        value="1".encode(),
+        value="0".encode(),
     )
 
     txn.create(
@@ -476,9 +456,10 @@ def is_table_schema_equal(
     zk_table_metadata = zk_table_metadata.rstrip()
     local_table_metadata = local_table_metadata.rstrip()
 
-    # Do not need use regex because we have stable table metadata format
-    start_pos_uuid = 21
-    finish_pos_uuid = 57
+    metadata_prefix = "ATTACH TABLE _ UUID '"
+    start_pos_uuid = len(metadata_prefix)
+    uuid_length = 36
+    finish_pos_uuid = start_pos_uuid + uuid_length
 
     local_table_metadata = (
         local_table_metadata[:start_pos_uuid] + local_table_metadata[finish_pos_uuid:]
