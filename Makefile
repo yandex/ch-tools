@@ -24,6 +24,8 @@ else
 	export PYTHON_VERSION := $(shell cat .python-version)
 endif
 
+export CLICKHOUSE_VERSION ?= latest
+
 PREFIX ?= /opt/yandex/$(PROJECT_NAME)
 export BUILD_PYTHON_OUTPUT_DIR ?= dist
 export BUILD_DEB_OUTPUT_DIR ?= out
