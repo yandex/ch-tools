@@ -87,6 +87,31 @@ def _check_tables_consinstent(
             )
 
 
+def _generate_counter(ctx: Context, migrating_database: str) -> str:
+    with zk_client(ctx) as zk:
+        path_counter = zk.create(
+            format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-"),
+            sequence=True,
+            ephemeral=True,
+        )
+
+        counter = path_counter[path_counter.rfind("-") + 1 :]
+        assert len(counter) > 0
+
+        logging.info(
+            "path_counter={}, after parse counter={}",
+            path_counter,
+            counter,
+        )
+
+        path_counter = zk.create(
+            format_path(ctx, f"/clickhouse/{migrating_database}/counter/counter_lock"),
+            ephemeral=True,
+        )
+
+        return counter
+
+
 def get_shard_and_replica_from_macros(ctx: Context) -> Tuple[str, str]:
     macros = get_macros(ctx)
 
@@ -101,21 +126,15 @@ def get_shard_and_replica_from_macros(ctx: Context) -> Tuple[str, str]:
 
 
 def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
+    logging.info("call migrate_as_first_replica")
+    counter = _generate_counter(ctx, migrating_database)
+
     with zk_client(ctx) as zk:
         txn = zk.transaction()
 
         _create_first_replica_database_name(ctx, txn, migrating_database)
-        _create_log_nodes(ctx, txn, migrating_database)
+        _create_query_node(ctx, txn, migrating_database, counter)
         _create_database_replica(ctx, txn, migrating_database)
-
-        shard, replica = get_shard_and_replica_from_macros(ctx)
-
-        txn.create(
-            path=format_path(
-                ctx, f"/clickhouse/{migrating_database}/log/query-0000000001/committed"
-            ),
-            value=f"{shard}|{replica}".encode(),
-        )
 
         _create_database_metadata_nodes(ctx, txn, migrating_database)
 
@@ -132,27 +151,22 @@ def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
     _update_local_metadata_first_replica(ctx, migrating_database)
 
 
-def migrate_as_non_first_replica(ctx, database_name):
+def migrate_as_non_first_replica(ctx, migrating_database):
+    logging.info("call migrate_as_non_first_replica")
+    counter = _generate_counter(ctx, migrating_database)
+
     with zk_client(ctx) as zk:
         txn = zk.transaction()
 
-        _create_database_replica(ctx, txn, database_name)
+        _create_query_node(ctx, txn, migrating_database, counter)
+        _create_database_replica(ctx, txn, migrating_database)
 
-        shard, replica = get_shard_and_replica_from_macros(ctx)
+        metadata_non_repl_db = parse_database_from_metadata(migrating_database)
+        tables_info = _get_tables_info_and_detach(ctx, migrating_database)
 
-        txn.create(
-            path=format_path(
-                ctx, f"/clickhouse/{database_name}/log/query-0000000002/committed"
-            ),
-            value=f"{shard}|{replica}".encode(),
-        )
+        _detach_dbs(ctx, dbs=[migrating_database])
 
-        metadata_non_repl_db = parse_database_from_metadata(database_name)
-        tables_info = _get_tables_info_and_detach(ctx, database_name)
-
-        _detach_dbs(ctx, dbs=[database_name])
-
-        _check_tables_consinstent(ctx, database_name, tables_info)
+        _check_tables_consinstent(ctx, migrating_database, tables_info)
 
         result = txn.commit()
         logging.info("Txn was committed. Result {}", result)
@@ -162,14 +176,14 @@ def migrate_as_non_first_replica(ctx, database_name):
             raise NodeExistsError()
 
     metadata_non_repl_db.set_replicated()
-    was_changed = _change_tables_uuid(ctx, tables_info, database_name)
+    was_changed = _change_tables_uuid(ctx, tables_info, migrating_database)
 
     if was_changed:
         logging.info(
-            f"Table UUID was changed. Database {database_name} was detached. Need restart Clickhouse."
+            f"Table UUID was changed. Database {migrating_database} was detached. Need restart Clickhouse."
         )
     else:
-        _attach_dbs(ctx, dbs=[database_name])
+        _attach_dbs(ctx, dbs=[migrating_database])
 
 
 def _get_host_id(ctx: Context, migrating_database: str, replica: str) -> str:
@@ -206,15 +220,12 @@ def create_database_nodes(ctx: Context, migrating_database: str) -> None:
 
         txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/counter"))
 
-        # I assume in depends on replicas.
-        # Need check.
-        for _ in range(0, 3):
-            txn.create(
-                path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
-            )
-            txn.delete(
-                path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
-            )
+        txn.create(
+            path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
+        )
+        txn.delete(
+            path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
+        )
 
         txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/metadata"))
 
@@ -253,10 +264,10 @@ def _create_first_replica_database_name(
     )
 
 
-def _create_log_nodes(
-    ctx: Context, txn: TransactionRequest, migrating_database: str
+def _create_query_node(
+    ctx: Context, txn: TransactionRequest, migrating_database: str, counter: str
 ) -> None:
-    logging.info("call create_log_nodes.")
+    logging.info("call create_query_node with counter={}.", counter)
 
     data_log_queue = """version: 1
 query: 
@@ -265,49 +276,34 @@ initiator:
 """  # noqa: W291
 
     txn.create(
-        path=format_path(ctx, f"/clickhouse/{migrating_database}/log/query-0000000001"),
+        path=format_path(ctx, f"/clickhouse/{migrating_database}/log/query-{counter}"),
         value=data_log_queue.encode(),
     )
 
     txn.create(
         path=format_path(
-            ctx, f"/clickhouse/{migrating_database}/log/query-0000000001/active"
+            ctx, f"/clickhouse/{migrating_database}/log/query-{counter}/active"
         ),
     )
 
     txn.create(
         path=format_path(
-            ctx, f"/clickhouse/{migrating_database}/log/query-0000000001/finished"
+            ctx, f"/clickhouse/{migrating_database}/log/query-{counter}/finished"
         ),
     )
 
     txn.create(
         path=format_path(
-            ctx, f"/clickhouse/{migrating_database}/log/query-0000000001/synced"
+            ctx, f"/clickhouse/{migrating_database}/log/query-{counter}/synced"
         ),
     )
 
-    txn.create(
-        path=format_path(ctx, f"/clickhouse/{migrating_database}/log/query-0000000002"),
-        value=data_log_queue.encode(),
-    )
-
+    shard, replica = get_shard_and_replica_from_macros(ctx)
     txn.create(
         path=format_path(
-            ctx, f"/clickhouse/{migrating_database}/log/query-0000000002/active"
+            ctx, f"/clickhouse/{migrating_database}/log/query-{counter}/committed"
         ),
-    )
-
-    txn.create(
-        path=format_path(
-            ctx, f"/clickhouse/{migrating_database}/log/query-0000000002/finished"
-        ),
-    )
-
-    txn.create(
-        path=format_path(
-            ctx, f"/clickhouse/{migrating_database}/log/query-0000000002/synced"
-        ),
+        value=f"{shard}|{replica}".encode(),
     )
 
 

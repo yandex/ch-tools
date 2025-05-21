@@ -202,10 +202,8 @@ def migrate_engine_command(ctx, database):
             raise ex
 
         if first_replica:
-            logging.info("migrate as first replica")
             migrate_as_first_replica(ctx, database)
         else:
-            logging.info("migrate as non first replica")
             migrate_as_non_first_replica(ctx, database)
 
     except Exception as ex:
