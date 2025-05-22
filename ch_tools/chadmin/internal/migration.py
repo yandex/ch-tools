@@ -1,7 +1,7 @@
 from typing import Tuple
 
 from click import ClickException, Context
-from kazoo.client import TransactionRequest
+from kazoo.client import KazooClient, TransactionRequest
 from kazoo.exceptions import NodeExistsError
 
 from ch_tools.chadmin.cli import metadata
@@ -87,29 +87,23 @@ def _check_tables_consinstent(
             )
 
 
-def _generate_counter(ctx: Context, migrating_database: str) -> str:
-    with zk_client(ctx) as zk:
-        path_counter = zk.create(
-            format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-"),
-            sequence=True,
-            ephemeral=True,
-        )
+def _generate_counter(ctx: Context, zk: KazooClient, migrating_database: str) -> str:
+    path_counter = zk.create(
+        format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-"),
+        sequence=True,
+        ephemeral=True,
+    )
 
-        counter = path_counter[path_counter.rfind("-") + 1 :]
-        assert len(counter) > 0
+    counter = path_counter[path_counter.rfind("-") + 1 :]
+    assert len(counter) > 0
 
-        logging.info(
-            "path_counter={}, after parse counter={}",
-            path_counter,
-            counter,
-        )
+    logging.info(
+        "path_counter={}, after parse counter={}",
+        path_counter,
+        counter,
+    )
 
-        path_counter = zk.create(
-            format_path(ctx, f"/clickhouse/{migrating_database}/counter/counter_lock"),
-            ephemeral=True,
-        )
-
-        return counter
+    return counter
 
 
 def get_shard_and_replica_from_macros(ctx: Context) -> Tuple[str, str]:
@@ -127,9 +121,9 @@ def get_shard_and_replica_from_macros(ctx: Context) -> Tuple[str, str]:
 
 def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
     logging.info("call migrate_as_first_replica")
-    counter = _generate_counter(ctx, migrating_database)
 
     with zk_client(ctx) as zk:
+        counter = _generate_counter(ctx, zk, migrating_database)
         txn = zk.transaction()
 
         _create_first_replica_database_name(ctx, txn, migrating_database)
@@ -153,9 +147,10 @@ def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
 
 def migrate_as_non_first_replica(ctx, migrating_database):
     logging.info("call migrate_as_non_first_replica")
-    counter = _generate_counter(ctx, migrating_database)
 
     with zk_client(ctx) as zk:
+        counter = _generate_counter(ctx, zk, migrating_database)
+
         txn = zk.transaction()
 
         _create_query_node(ctx, txn, migrating_database, counter)
@@ -204,6 +199,10 @@ def _get_host_id(ctx: Context, migrating_database: str, replica: str) -> str:
 
 
 def create_database_nodes(ctx: Context, migrating_database: str) -> None:
+    """
+    Create common nodes for Replicated database.
+    https://github.com/ClickHouse/ClickHouse/blob/master/src/Databases/DatabaseReplicated.cpp#L581
+    """
     with zk_client(ctx) as zk:
         if not zk.exists(format_path(ctx, "/clickhouse")):
             zk.create(format_path(ctx, "/clickhouse"), makepath=True)
@@ -267,6 +266,10 @@ def _create_first_replica_database_name(
 def _create_query_node(
     ctx: Context, txn: TransactionRequest, migrating_database: str, counter: str
 ) -> None:
+    """
+    Create queue nodes for Replicated database.
+    https://github.com/ClickHouse/ClickHouse/blob/master/src/Databases/DatabaseReplicatedWorker.cpp#L254
+    """
     logging.info("call create_query_node with counter={}.", counter)
 
     data_log_queue = """version: 1
@@ -278,6 +281,14 @@ initiator:
     txn.create(
         path=format_path(ctx, f"/clickhouse/{migrating_database}/log/query-{counter}"),
         value=data_log_queue.encode(),
+    )
+
+    shard, replica = get_shard_and_replica_from_macros(ctx)
+    txn.create(
+        path=format_path(
+            ctx, f"/clickhouse/{migrating_database}/log/query-{counter}/committed"
+        ),
+        value=f"{shard}|{replica}".encode(),
     )
 
     txn.create(
@@ -298,18 +309,14 @@ initiator:
         ),
     )
 
-    shard, replica = get_shard_and_replica_from_macros(ctx)
-    txn.create(
-        path=format_path(
-            ctx, f"/clickhouse/{migrating_database}/log/query-{counter}/committed"
-        ),
-        value=f"{shard}|{replica}".encode(),
-    )
-
 
 def _create_database_replica(
     ctx: Context, txn: TransactionRequest, migrating_database: str
 ) -> None:
+    """
+    Create replica nodes for Replicated database.
+    https://github.com/ClickHouse/ClickHouse/blob/master/src/Databases/DatabaseReplicated.cpp#L714
+    """
     logging.info("call create_database_replica")
 
     shard, replica = get_shard_and_replica_from_macros(ctx)
