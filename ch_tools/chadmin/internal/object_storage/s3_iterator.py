@@ -13,7 +13,7 @@ def s3_object_storage_iterator(
     disk: S3DiskConfiguration,
     *,
     object_name_prefix: str = "",
-    skip_ignoring: bool = False
+    skip_ignoring: bool = False,
 ) -> Iterator[ObjectSummary]:
     s3 = boto3.resource(
         "s3",
