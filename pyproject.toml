@@ -60,7 +60,7 @@ maintainers = [
 ]
 dependencies = [
     "boto3 ~= 1.23.10",
-    "click ~= 8.0.4",
+    "click >= 8.0.4,< 8.2.0",
     "cloup",
     "deepdiff < 6.4.0",
     "dnspython",
