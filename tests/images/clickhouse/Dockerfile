@@ -21,7 +21,7 @@ ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
 
 # Install ClickHouse
-COPY images/clickhouse/config/clickhouse-keyring.gpg /usr/share/keyrings/clickhouse-keyring.gpg
+COPY tests/images/clickhouse/config/clickhouse-keyring.gpg /usr/share/keyrings/clickhouse-keyring.gpg
 RUN mkdir -p /etc/apt/sources.list.d && \
     echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg] https://packages.clickhouse.com/deb stable main" | tee /etc/apt/sources.list.d/clickhouse.list && \
     apt-get update -qq && \
@@ -39,9 +39,9 @@ RUN mkdir -p /etc/apt/sources.list.d && \
     rm -rf /var/lib/apt/lists/* /var/cache/debconf && \
     apt-get clean
 
-COPY images/clickhouse/config/monitor-ch-backup /etc/sudoers.d/monitor-ch-backup
-COPY images/clickhouse/config/regions_names_ru.txt /opt/geo/regions_names_ru.txt
-COPY images/clickhouse/config/regions_hierarchy.txt /opt/geo/regions_hierarchy.txt
+COPY tests/images/clickhouse/config/monitor-ch-backup /etc/sudoers.d/monitor-ch-backup
+COPY tests/images/clickhouse/config/regions_names_ru.txt /opt/geo/regions_names_ru.txt
+COPY tests/images/clickhouse/config/regions_hierarchy.txt /opt/geo/regions_hierarchy.txt
 
 RUN rm -rf /etc/supervisor && \
     ln -s /config/supervisor /etc/supervisor && \
