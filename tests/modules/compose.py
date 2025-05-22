@@ -113,7 +113,7 @@ def _validate_config(config_path: str) -> None:
     """
     Perform config validation by calling `docker-compose config`
     """
-    _call_compose_on_config(config_path, "__config_test", "config")
+    _call_compose_on_config(config_path, "config_test", "config")
 
 
 def _generate_compose_config(config: dict) -> dict:
