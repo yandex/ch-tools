@@ -20,14 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CLICKHOUSE_VERSION: ${{ inputs.clickhouse_version }}
-      CLICKHOUSE_VERSIONS: ${{ inputs.clickhouse_version }}
     steps:
       - uses: actions/checkout@v4
-      - name: build necessary images
-        uses: docker/bake-action@v6
-        with:
-          files: tests/bake.hcl
-          push: false
       - uses: astral-sh/setup-uv@v6
       - name: run integration tests
         run:  make test-integration
