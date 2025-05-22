@@ -59,7 +59,7 @@ maintainers = [
     { name = "Konstantin Morozov", email = "kst-morozov@yandex-team.ru" },
 ]
 dependencies = [
-    "boto3 ~= 1.23.10",
+    "boto3 >= 1.23.10,< 1.39.0",
     "click ~= 8.0.4",
     "cloup",
     "deepdiff < 6.4.0",
