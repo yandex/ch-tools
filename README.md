@@ -15,11 +15,12 @@
 
 All of these tools must be run on the same host as ClickHouse server is running.
 
-## Local development (using poetry)
+## Local development
 
 Requirements: 
 * GNU Make version > 3.81
 * [uv](https://docs.astral.sh/uv)
+* Docker
 
 ```sh
 # lint
@@ -39,19 +40,5 @@ CLICKHOUSE_VERSION="1.2.3.4" make test-integration
 # BEHAVE_ARGS="-D no_stop_on_fail"
 
 # For building deb packages
-make prepare-build-deb
 make build-deb-package
-```
-
-Please note: base images for tests are pulled from [chtools Dockerhub](https://hub.docker.com/u/chtools).
-If you want to build base images locally, run
-
-```sh
-docker buildx bake -f tests/bake.hcl
-```
-
-If you want to build base images for multiple versions of ClickHouse, run:
-
-```sh
-CLICKHOUSE_VERSIONS='1.2.3.4, 5.6.7.8, latest' docker buildx bake -f tests/bake.hcl
 ```
