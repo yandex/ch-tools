@@ -74,7 +74,7 @@ dependencies = [
     "pyopenssl < 25.0",
     "python-dateutil",
     "pyyaml >= 5.4",
-    "requests >= 2.20, < 2.30",
+    "requests >= 2.20, < 2.32",
     "tabulate",
     "tenacity",
     "termcolor",
