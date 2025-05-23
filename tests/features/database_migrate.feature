@@ -163,6 +163,7 @@ Feature: chadmin database migrate command
     """
     chadmin database migrate -d non_repl_db 
     """
+   
     When we execute query on clickhouse01
     """
     SELECT engine FROM system.databases WHERE database='non_repl_db'
@@ -175,6 +176,12 @@ Feature: chadmin database migrate command
     """
     chadmin database migrate -d non_repl_db 
     """
+
+    When we execute command on clickhouse01
+    """
+    supervisorctl restart clickhouse-server
+    """
+
     When we execute command on clickhouse02
     """
     supervisorctl restart clickhouse-server
@@ -612,11 +619,6 @@ Feature: chadmin database migrate command
     """
     chadmin database migrate -d non_repl_db 
     """
-    When we execute command on clickhouse02
-    """
-    supervisorctl restart clickhouse-server
-    """
-    When we sleep for 10 seconds
 
     When we execute query on clickhouse02
     """
@@ -870,11 +872,6 @@ Feature: chadmin database migrate command
     """
     chadmin database migrate -d non_repl_db 
     """
-    When we execute command on clickhouse02
-    """
-    supervisorctl restart clickhouse-server
-    """
-    When we sleep for 10 seconds
 
     When we execute query on clickhouse02
     """
@@ -1015,11 +1012,6 @@ Feature: chadmin database migrate command
     """
     chadmin database migrate -d non_repl_db 
     """
-    When we execute command on clickhouse02
-    """
-    supervisorctl restart clickhouse-server
-    """
-    When we sleep for 10 seconds
 
     When we execute query on clickhouse02
     """
@@ -1087,6 +1079,99 @@ Feature: chadmin database migrate command
     """
     chadmin database migrate -d non_repl_db 
     """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM non_repl_db.foo FORMAT Values
+    """
+    Then we get response
+    """
+    (42,'value')
+    """
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM non_repl_db.foo FORMAT Values
+    """
+    Then we get response
+    """
+    (42,'value')
+    """
+
+  @require_version_24.8
+  Scenario: Migrate database with MergeTree before update schema in another replica
+    When we execute query on clickhouse01
+    """
+    CREATE DATABASE non_repl_db ON CLUSTER '{cluster}';
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE non_repl_db.foo
+    ON CLUSTER '{cluster}'
+    (
+        `a` Int
+    )
+    ENGINE = MergeTree
+    ORDER BY a
+    """
+    And we execute query on clickhouse01
+    """
+    INSERT INTO non_repl_db.foo VALUES (42)
+    """
+    And we execute query on clickhouse02
+    """
+    INSERT INTO non_repl_db.foo VALUES (42)
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db 
+    """
+    When we execute query on clickhouse02
+    """
+    ALTER TABLE non_repl_db.foo ADD COLUMN b String DEFAULT 'value'
+    """
+
+    When we execute command on clickhouse02
+    """
+    chadmin zookeeper list /clickhouse/non_repl_db/replicas
+    """
+    Then we get response contains
+    """
+    /clickhouse/non_repl_db/replicas/shard1|clickhouse01.ch_tools_test
+    """
+
+    When we try to execute command on clickhouse02
+    """
+    chadmin database migrate -d non_repl_db 
+    """
+    Then it fails with response contains
+    """
+    Local table metadata for table foo is different from zk metadata
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM non_repl_db.foo FORMAT Values
+    """
+    Then we get response
+    """
+    (42)
+    """
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM non_repl_db.foo FORMAT Values
+    """
+    Then we get response
+    """
+    (42,'value')
+    """
+
+    When we execute query on clickhouse01
+    """
+    ALTER TABLE non_repl_db.foo ADD COLUMN b String DEFAULT 'value'
+    """
+    When we execute command on clickhouse02
+    """
+    chadmin database migrate -d non_repl_db 
+    """
+
     When we execute command on clickhouse02
     """
     supervisorctl restart clickhouse-server
