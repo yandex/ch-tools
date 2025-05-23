@@ -1,6 +1,7 @@
 """
 Steps for interacting with ClickHouse DBMS.
 """
+
 import os
 
 from behave import when

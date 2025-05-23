@@ -42,10 +42,10 @@ DEFAULT_CLUSTER_NAME = "{cluster}"
 def object_storage_group(ctx: Context, disk_name: str) -> None:
     """Commands to manage S3 objects and their metadata."""
     ch_config = get_clickhouse_config(ctx)
-    ctx.obj[
-        "disk_configuration"
-    ] = ch_config.storage_configuration.s3_disk_configuration(
-        disk_name, ctx.obj["config"]["object_storage"]["bucket_name_prefix"]
+    ctx.obj["disk_configuration"] = (
+        ch_config.storage_configuration.s3_disk_configuration(
+            disk_name, ctx.obj["config"]["object_storage"]["bucket_name_prefix"]
+        )
     )
 
 

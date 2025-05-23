@@ -1,6 +1,7 @@
 """
 Utility functions.
 """
+
 import re
 import subprocess
 from itertools import islice

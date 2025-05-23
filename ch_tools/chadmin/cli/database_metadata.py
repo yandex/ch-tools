@@ -45,6 +45,14 @@ class DatabaseMetadata:
         with open(file_path, "w", encoding="utf-8") as f:
             f.writelines(lines)
 
+    def set_replicated(self) -> None:
+        self.database_engine = DatabaseEngine.REPLICATED
+        self.replica_path = f"/clickhouse/{self.database_name}"
+        self.shard = "{shard}"
+        self.replica_name = "{replica}"
+
+        self.update_metadata_file()
+
 
 def db_metadata_path(database_name: str) -> str:
     return CLICKHOUSE_METADATA_PATH + f"/{database_name}.sql"
@@ -106,7 +114,5 @@ def _parse_database_replica_params(line: str) -> Tuple[str, str, str]:
     matches = re.findall(pattern, line)
 
     if len(matches) != 3:
-        raise ValueError(
-            "Failed parse metadata for replicated engine: {}".format(len(matches))
-        )
+        raise ValueError(f"Failed parse metadata for replicated engine: {len(matches)}")
     return matches[0], matches[1], matches[2]

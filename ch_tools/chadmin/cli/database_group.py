@@ -4,10 +4,11 @@ from typing import Any, Optional
 from click import Context
 from cloup import argument, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
+from kazoo.exceptions import NodeExistsError
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.migration import (
-    create_temp_db,
+    create_database_nodes,
     is_database_exists,
     migrate_as_first_replica,
     migrate_as_non_first_replica,
@@ -195,28 +196,24 @@ def migrate_engine_command(ctx: Context, database: str) -> None:
 
         first_replica = True
         try:
-            create_temp_db(ctx, database, temp_db)
-        except Exception as ex:
-            logging.info("create_temp_db failed with ex={}", ex)
-
-            non_first_replica_errors = [
-                "REPLICA_ALREADY_EXISTS",
-                "DATABASE_ALREADY_EXISTS",
-            ]
-            if not any(
-                suitable_error in str(ex) for suitable_error in non_first_replica_errors
-            ):
-                raise
+            create_database_nodes(ctx, database)
+        except NodeExistsError as ex:
+            logging.info(
+                "create_database_nodes failed with NodeExistsError. {}, type={}. Migrate as second replica",
+                ex,
+                type(ex),
+            )
 
             first_replica = False
+        except Exception as ex:
+            logging.info("create_database_nodes failed with ex={}", type(ex))
+            raise ex
 
         if first_replica:
-            logging.info("migrate as first replica")
-            migrate_as_first_replica(ctx, database, temp_db)
+            migrate_as_first_replica(ctx, database)
         else:
-            logging.info("migrate as non first replica")
-            migrate_as_non_first_replica(ctx, database, temp_db)
+            migrate_as_non_first_replica(ctx, database)
 
     except Exception as ex:
-        logging.error("Got exception: {}", ex)
+        logging.error("Got exception: type={}, ex={}", type(ex), ex)
         sys.exit(1)

@@ -19,9 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: ./.github/actions/setup_dependencies
-      with:
-        python-version: "3.10"
+    - uses: astral-sh/setup-uv@v6
     - name: "lint: isort"
       run: make isort
     - name: "lint: black"
@@ -40,7 +38,6 @@ jobs:
     runs-on: ubuntu-${{ matrix.target.ubuntu }}
     env:
       CLICKHOUSE_VERSION: ${{ matrix.clickhouse }}
-      CLICKHOUSE_VERSIONS: ${{ matrix.clickhouse }}
     strategy:
       fail-fast: false
       matrix:
@@ -51,19 +48,15 @@ jobs:
           - "22.8.21.38"
           - "23.3.22.3"
           - "23.8.16.40"
-          - "24.3.11.7"
-          - "24.8.4.13"
+          - "24.3.18.7"
+          - "24.8.14.39"
+          - "25.3.3.42"
           - "latest"
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup_dependencies
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: ${{ matrix.target.python }}
-      - name: build base images
-        uses: docker/bake-action@v5
-        with:
-          files: tests/bake.hcl
-          push: false
+          python-version: ${{ matrix.python }}
 
       - run: make test-unit
       - run: make test-integration
@@ -82,25 +75,6 @@ jobs:
           report_paths: 'tests/reports/*.xml'
 
 
-  push_to_dockerhub:
-    runs-on: ubuntu-latest
-    env:
-      CLICKHOUSE_VERSIONS: "22.8.21.38, 23.3.22.3, 23.8.16.40, 24.3.11.7, 24.8.4.13, latest"
-    if: ${{ github.event_name == 'push' }}
-    steps:
-    - uses: actions/checkout@v4
-    - name: login to dockerhub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-    - name: build and push base images
-      uses: docker/bake-action@v5
-      with:
-        files: tests/bake.hcl
-        push: true
-
-
   release:
     needs: tests
     strategy:
@@ -113,9 +87,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - uses: ./.github/actions/setup_dependencies
-      with:
-        python-version: ${{ matrix.target.python }}
+    - uses: astral-sh/setup-uv@v6
 
     - name: build project
       run: make build-python-packages
