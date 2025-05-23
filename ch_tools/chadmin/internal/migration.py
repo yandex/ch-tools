@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import List, Tuple
 
 from click import ClickException, Context
 from kazoo.client import KazooClient, TransactionRequest
@@ -55,7 +55,7 @@ def _update_local_metadata_first_replica(ctx: Context, migrating_database: str) 
     _attach_dbs(ctx, dbs=[migrating_database])
 
 
-def _check_tables_consinstent(
+def _check_tables_consistent(
     ctx: Context, database_name: str, tables_info: dict
 ) -> None:
     for row in tables_info:
@@ -106,6 +106,17 @@ def _generate_counter(ctx: Context, zk: KazooClient, migrating_database: str) ->
     return counter
 
 
+def _check_result_txn(results: List) -> None:
+    for result in results:
+        if isinstance(result, NodeExistsError):
+            logging.info("result contains NodeExistsError.")
+            raise NodeExistsError()
+        if isinstance(result, Exception):
+            logging.error("result contains ex={}, type=P{}.", result, type(result))
+            raise result
+        logging.info("check_result_txn: result={}, continue.", result)
+
+
 def get_shard_and_replica_from_macros(ctx: Context) -> Tuple[str, str]:
     macros = get_macros(ctx)
 
@@ -135,9 +146,7 @@ def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
         result = txn.commit()
         logging.info("Txn was committed. Result {}", result)
 
-        if any(isinstance(e, NodeExistsError) for e in result):
-            logging.info("result contains NodeExistsError.")
-            raise NodeExistsError()
+        _check_result_txn(result)
 
     # There is an issue when at first time _update_local_metadata_first_replica was failed.
     # Then next time we would have a failed txn.
@@ -145,7 +154,7 @@ def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
     _update_local_metadata_first_replica(ctx, migrating_database)
 
 
-def migrate_as_non_first_replica(ctx, migrating_database):
+def migrate_as_non_first_replica(ctx: Context, migrating_database: str) -> None:
     logging.info("call migrate_as_non_first_replica")
 
     with zk_client(ctx) as zk:
@@ -161,14 +170,12 @@ def migrate_as_non_first_replica(ctx, migrating_database):
 
         _detach_dbs(ctx, dbs=[migrating_database])
 
-        _check_tables_consinstent(ctx, migrating_database, tables_info)
+        _check_tables_consistent(ctx, migrating_database, tables_info)
 
         result = txn.commit()
         logging.info("Txn was committed. Result {}", result)
 
-        if any(isinstance(e, NodeExistsError) for e in result):
-            logging.info("result contains NodeExistsError.")
-            raise NodeExistsError()
+        _check_result_txn(result)
 
     metadata_non_repl_db.set_replicated()
     was_changed = _change_tables_uuid(ctx, tables_info, migrating_database)
@@ -243,9 +250,7 @@ def create_database_nodes(ctx: Context, migrating_database: str) -> None:
         result = txn.commit()
         logging.info("Txn was committed. Result {}", result)
 
-        if any(isinstance(e, NodeExistsError) for e in result):
-            logging.info("result contains NodeExistsError.")
-            raise NodeExistsError()
+        _check_result_txn(result)
 
         logging.info("result does not contain NodeExistsError.")
 

@@ -537,7 +537,7 @@ def change_table_uuid(
     attached: bool,
 ) -> None:
     if match_str_ch_version(get_version(ctx), "25.1"):
-        table_local_metadata_path = CLICKHOUSE_PATH + "/" + table_local_metadata_path
+        table_local_metadata_path = f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
 
     _verify_possible_change_uuid(ctx, table_local_metadata_path, new_uuid)
     if attached:
@@ -559,7 +559,7 @@ def change_table_uuid(
 
 def read_local_table_metadata(ctx: Context, table_local_metadata_path: str) -> str:
     if match_str_ch_version(get_version(ctx), "25.1"):
-        table_local_metadata_path = CLICKHOUSE_PATH + "/" + table_local_metadata_path
+        table_local_metadata_path = f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
 
     with open(table_local_metadata_path, "r", encoding="utf-8") as f:
         return f.read()
