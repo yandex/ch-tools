@@ -6,7 +6,7 @@ readme = "README.md"
 homepage = "https://github.com/yandex/ch-tools"
 repository = "https://github.com/yandex/ch-tools"
 dynamic = ["version"]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 keywords = [
     "clickhouse",
     "database",
@@ -60,9 +60,9 @@ maintainers = [
 ]
 dependencies = [
     "boto3 ~= 1.23.10",
-    "click ~= 8.0.4",
+    "click >= 8.1, < 8.2",
     "cloup",
-    "deepdiff < 6.4.0",
+    "deepdiff >= 8.0, < 9.0",
     "dnspython",
     "file_read_backwards",
     "humanfriendly",
@@ -73,31 +73,27 @@ dependencies = [
     "pygments",
     "pyopenssl < 25.0",
     "python-dateutil",
-    "pyyaml < 5.4",
-    "requests < 2.30",
+    "pyyaml >= 5.4",
+    "requests >= 2.20, < 2.30",
     "tabulate",
     "tenacity",
     "termcolor",
     "tqdm",
-    "typing-extensions ~= 4.1",
     "xmltodict",
     "loguru",
-    "cffi == 1.16.0 ; python_version >= '3.12'",
-    "setuptools ; python_version >= '3.12'",
+    "setuptools >= 71.1",  # for pkg_resources module
 ]
 
 [dependency-groups]
 dev = [
     "behave",
-    "docker < 8.0",
-    "docker-compose < 1.29 ; python_version < '3.13'",
+    "docker >= 4.0",
     "pyhamcrest",
     "pytest",
-    "pyfakefs ; python_version < '3.12'",
-    "pyfakefs == 5.5.0 ; python_version >= '3.12'",
-    "black ~= 22.0",
+    "pyfakefs",
+    "black >= 25.1",
     "ruff",
-    "isort >= 6.0; python_version >= '3.9'",
+    "isort >= 6.0",
     "mypy >= 1.5, < 1.6",
     "pylint >= 3.0, < 4.0",
     "types-pyOpenSSL",

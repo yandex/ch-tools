@@ -24,6 +24,8 @@ else
 	export PYTHON_VERSION := $(shell cat .python-version)
 endif
 
+export CLICKHOUSE_VERSION ?= latest
+
 PREFIX ?= /opt/yandex/$(PROJECT_NAME)
 export BUILD_PYTHON_OUTPUT_DIR ?= dist
 export BUILD_DEB_OUTPUT_DIR ?= out
@@ -70,7 +72,7 @@ build: setup build-python-packages
 
 
 .PHONY: setup
-setup: check-environment $(VERSION_FILE)
+setup: check-uv $(VERSION_FILE)
 
 
 .PHONY: all
@@ -127,7 +129,7 @@ test-unit: setup
 
 
 .PHONY: test-integration
-test-integration: build-python-packages
+test-integration: check-docker-compose build-python-packages
 	cd $(TESTS_DIR)
 	export PYTHONPATH=$(CURDIR):$$PATH
 	uv run behave --show-timings --stop --junit $(BEHAVE_ARGS)
@@ -244,13 +246,6 @@ prepare-changelog: setup
 	DEBFULLNAME="Yandex LLC" DEBEMAIL="ch-tools@yandex-team.ru" dch --force-bad-version --distribution stable -v $$(cat $(VERSION_FILE)) Autobuild
 
 
-.PHONY: check-environment
-check-environment:
-	@if ! command -v "uv" &>/dev/null; then \
-		echo 'Python project manager tool "uv" not found. Please follow installation instructions at https://docs.astral.sh/uv/getting-started/installation.' >&2; exit 1; \
-	fi
-
-
 $(VERSION_FILE):
 	echo "2.$$(git rev-list HEAD --count).$$(git rev-parse --short HEAD | xargs -I {} printf '%d' 0x{})" > $@
 
@@ -261,7 +256,7 @@ prepare-build-deb:
 
 
 .PHONY: build-deb-package
-build-deb-package: setup
+build-deb-package: check-docker setup
 	./build_deb_in_docker.sh
 
 
@@ -284,6 +279,27 @@ clean: clean_debuild
 	rm -rf $(BUILD_PYTHON_OUTPUT_DIR)
 	rm -rf $(VENV_DIR)
 	rm -rf .mypy_cache .ruff_cache tests/{.session_conf.sav,__pycache__,staging,reports}
+
+
+.PHONY: check-uv
+check-uv:
+	@if ! command -v "uv" &>/dev/null; then \
+		echo 'Python project manager tool "uv" not found. Please follow installation instructions at https://docs.astral.sh/uv/getting-started/installation.' >&2; exit 1; \
+	fi
+
+
+.PHONY: check-docker
+check-docker:
+	@if ! command -v "docker" &>/dev/null; then \
+		echo 'Docker not found. Please follow installation instructions at https://docs.docker.com/engine/install.' >&2; exit 1; \
+	fi
+
+
+.PHONY: check-docker-compose
+check-docker-compose: check-docker
+	@if ! (docker compose version || docker-compose version) &>/dev/null; then \
+		echo 'Docker Compose not found. Please follow installation instructions at https://docs.docker.com/compose/install.' >&2; exit 1; \
+	fi
 
 
 .PHONY: help

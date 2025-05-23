@@ -36,13 +36,12 @@ def diff_objects(value1, value2):
     """
     Calculate structural diff between 2 values.
     """
-    ignore_type_in_groups = [(dict, defaultdict)]
     return DeepDiff(
         value1,
         value2,
         verbose_level=2,
         view="tree",
-        ignore_type_in_groups=ignore_type_in_groups,
+        ignore_type_in_groups=[(dict, defaultdict)],
     )
 
 
