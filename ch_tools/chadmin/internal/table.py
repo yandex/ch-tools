@@ -1,6 +1,6 @@
 import os
 import sys
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from click import ClickException, Context
 
@@ -168,7 +168,9 @@ def list_tables(
     )["data"]
 
 
-def list_table_columns(ctx: Context, database_name: str, table_name: str) -> dict:
+def list_table_columns(
+    ctx: Context, database_name: str, table_name: str
+) -> list[Dict[str, Any]]:
     query = """
         SELECT
             name,

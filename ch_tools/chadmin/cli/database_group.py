@@ -187,8 +187,6 @@ def get_databases(
 @option("-d", "--database", required=True)
 @pass_context
 def migrate_engine_command(ctx: Context, database: str) -> None:
-    temp_db = f"temp_migrate_{database}"
-
     try:
         if not is_database_exists(ctx, database):
             logging.error("Database {} does not exists, skip migrating", database)
