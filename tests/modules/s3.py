@@ -40,7 +40,7 @@ class S3Client:
                 s3={
                     "addressing_style": boto_config["addressing_style"],
                     "region_name": boto_config["region_name"],
-                }
+                },
             ),
         )
 
