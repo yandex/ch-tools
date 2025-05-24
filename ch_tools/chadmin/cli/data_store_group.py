@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, NamedTuple, Optional, Set, Tuple
 
 import boto3
+import botocore.client
 from click import Context, group, option, pass_context
 from cloup.constraints import AcceptAtMost, constraint
 
@@ -184,7 +185,7 @@ def remove_data(path: str) -> None:
         errors = "\n".join(list(args))
         logging.error("ERROR: {}", errors)
 
-    shutil.rmtree(path=path, onerror=onerror)
+    shutil.rmtree(path=path, onerror=onerror)  # pylint: disable=deprecated-argument
 
 
 @data_store_group.command("cleanup-data-dir")
@@ -374,6 +375,12 @@ def detect_broken_partitions(ctx, root_path, reattach, detach):
         endpoint_url=disk_conf.endpoint_url,
         aws_access_key_id=disk_conf.access_key_id,
         aws_secret_access_key=disk_conf.secret_access_key,
+        config=botocore.client.Config(
+            s3={
+                # Enable payload signing for all requests for better compatibility with different S3 implementations
+                "payload_signing_enabled": True,
+            }
+        ),
     )
     repaired_partitions = set()
 

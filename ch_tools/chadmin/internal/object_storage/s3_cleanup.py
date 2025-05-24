@@ -19,7 +19,13 @@ def cleanup_s3_object_storage(
         endpoint_url=disk.endpoint_url,
         aws_access_key_id=disk.access_key_id,
         aws_secret_access_key=disk.secret_access_key,
-        config=Config(s3={"addressing_style": "auto"}),
+        config=Config(
+            s3={
+                "addressing_style": "auto",
+                # Enable payload signing for all requests for better compatibility with different S3 implementations
+                "payload_signing_enabled": True,
+            },
+        ),
     )
     bucket = s3.Bucket(disk.bucket_name)
     deleted = 0
