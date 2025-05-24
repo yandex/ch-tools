@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 import warnings
+from datetime import timedelta
 from typing import Any, List
 
 import cloup
+from click import Context
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.cli.move_group import move_group
@@ -82,7 +84,14 @@ from ch_tools.common.cli.parameters import TimeSpanParamType, YamlParamType
 @cloup.option("-d", "--debug", is_flag=True, help="Enable debug output.")
 @cloup.version_option(__version__)
 @cloup.pass_context
-def cli(ctx, format_, settings, timeout, port, debug):
+def cli(
+    ctx: Context,
+    format_: str,
+    settings: dict,
+    timeout: timedelta,
+    port: int,
+    debug: bool,
+) -> None:
     """ClickHouse administration tool."""
     config = load_config()
 
@@ -152,7 +161,7 @@ for group in groups:
     cli.add_group(group, section=section)
 
 
-def main():
+def main() -> None:
     """
     Program entry point.
     """

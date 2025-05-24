@@ -1,5 +1,7 @@
 import sys
+from typing import Any, Optional
 
+from click import Context
 from cloup import argument, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
 from kazoo.exceptions import NodeExistsError
@@ -17,7 +19,7 @@ from ch_tools.common.clickhouse.config import get_cluster_name
 
 
 @group("database", cls=Chadmin)
-def database_group():
+def database_group() -> None:
     """Commands to manage databases."""
     pass
 
@@ -32,7 +34,7 @@ def database_group():
     help="Account only active data parts.",
 )
 @pass_context
-def get_database_command(ctx, database, active_parts):
+def get_database_command(ctx: Context, database: str, active_parts: bool) -> None:
     logging.info(
         get_databases(
             ctx, database=database, active_parts=active_parts, format_="Vertical"
@@ -51,7 +53,7 @@ def get_database_command(ctx, database, active_parts):
     help="Account only active data parts.",
 )
 @pass_context
-def list_databases_command(ctx, **kwargs):
+def list_databases_command(ctx: Context, **kwargs: Any) -> None:
     logging.info(get_databases(ctx, **kwargs, format_="PrettyCompact"))
 
 
@@ -79,13 +81,13 @@ def list_databases_command(ctx, **kwargs):
 )
 @pass_context
 def delete_databases_command(
-    ctx,
-    _all,
-    database,
-    exclude_database,
-    on_cluster,
-    dry_run,
-):
+    ctx: Context,
+    _all: bool,
+    database: str,
+    exclude_database: str,
+    on_cluster: bool,
+    dry_run: bool,
+) -> None:
     cluster = get_cluster_name(ctx) if on_cluster else None
 
     for d in get_databases(
@@ -108,8 +110,12 @@ def delete_databases_command(
 
 
 def get_databases(
-    ctx, database=None, exclude_database=None, active_parts=None, format_=None
-):
+    ctx: Context,
+    database: Optional[str] = None,
+    exclude_database: Optional[str] = None,
+    active_parts: Optional[bool] = None,
+    format_: Optional[str] = None,
+) -> Any:
     query = """
         SELECT
             database,
@@ -180,7 +186,7 @@ def get_databases(
 @database_group.command("migrate")
 @option("-d", "--database", required=True)
 @pass_context
-def migrate_engine_command(ctx, database):
+def migrate_engine_command(ctx: Context, database: str) -> None:
     try:
         if not is_database_exists(ctx, database):
             logging.error("Database {} does not exists, skip migrating", database)

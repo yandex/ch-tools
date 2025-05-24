@@ -8,10 +8,11 @@ from behave import when
 from modules import s3
 from modules.clickhouse import execute_query
 from modules.steps import get_step_data
+from modules.typing import ContextT
 
 
 @when("we remove key from s3 for partitions database {database} on {node:w}")
-def step_check_number_ro_replicas(context, database, node):
+def step_check_number_ro_replicas(context: ContextT, database: str, node: str) -> None:
     data = get_step_data(context)
     keys_to_remove = []
 

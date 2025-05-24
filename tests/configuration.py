@@ -5,7 +5,7 @@ Variables that influence testing behavior are defined here.
 import os
 
 
-def create():
+def create() -> dict:
     """
     Create test configuration (non-idempotent function).
     """
@@ -79,7 +79,7 @@ def _dbaas_conf(services: dict, network_name: str) -> dict:
     Generate dbaas.conf contents.
     """
 
-    def _fqdn(instance_name):
+    def _fqdn(instance_name: str) -> str:
         return f"{instance_name}.{network_name}"
 
     return {
