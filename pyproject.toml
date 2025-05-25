@@ -87,14 +87,14 @@ dependencies = [
 [dependency-groups]
 dev = [
     "behave",
-    "docker >= 4.0",
+    "docker >= 7.1",
     "pyhamcrest",
     "pytest",
     "pyfakefs",
     "black >= 25.1",
     "ruff",
     "isort >= 6.0",
-    "mypy >= 1.5, < 1.6",
+    "mypy >= 1.10",
     "pylint >= 3.0, < 4.0",
     "types-kazoo",
     "types-python-dateutil",
