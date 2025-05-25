@@ -121,12 +121,10 @@ def _generate_compose_config(config: dict) -> dict:
     Create docker compose config.
     """
     compose_config: dict = {
-        "version": "2",
         "networks": {
             "test_net": {
-                "external": {
-                    "name": config["network_name"],
-                },
+                "name": config["network_name"],
+                "external": True,
             },
         },
         "services": {},
