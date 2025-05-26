@@ -22,7 +22,8 @@ from ch_tools.chadmin.internal.zookeeper import (
 )
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
-from ch_tools.common.clickhouse.config import get_macros
+from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
+from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 
 
 def create_temp_db(ctx: Context, migrating_database: str, temp_db: str) -> None:
@@ -196,7 +197,10 @@ def _get_host_id(ctx: Context, migrating_database: str, replica: str) -> str:
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
     database_uuid = rows["data"][0]["uuid"]
 
-    result = f"{escape_for_zookeeper(host_name)}:9000:{database_uuid}"
+    ch_server_config = get_clickhouse_config(ctx)
+    tcp_port = ch_server_config.ports[ClickhousePort.TCP]
+
+    result = f"{escape_for_zookeeper(host_name)}:{tcp_port}:{database_uuid}"
     logging.info("_get_host_id={}", result)
 
     return result
