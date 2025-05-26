@@ -496,7 +496,7 @@ def materialize_ttl(
 
 def get_info_from_system_tables(ctx: Context, database: str, table: str) -> dict:
     query = f"""
-        SELECT uuid, metadata_path FROM system.tables WHERE database='{database}' AND table='{table}'
+        SELECT uuid, metadata_path, engine FROM system.tables WHERE database='{database}' AND table='{table}'
     """
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)["data"]
 

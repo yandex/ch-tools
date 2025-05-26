@@ -879,6 +879,7 @@ def change_uuid_command(ctx: Context, database: str, table: str, uuid: str) -> N
         ctx,
         database,
         table,
+        engine=table_info["engine"],
         new_uuid=uuid,
         old_table_uuid=old_table_uuid,
         table_local_metadata_path=table_local_metadata_path,

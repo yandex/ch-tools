@@ -120,6 +120,6 @@ def _parse_database_replica_params(line: str) -> Tuple[str, str, str]:
     return matches[0], matches[1], matches[2]
 
 
-def remove_uuid_from_metadata(metadata: str) -> str:
-    result = re.sub(PATTERN_UUID_FROM_METADATA, r"\1\3", metadata)
+def remove_uuid_from_metadata(text_metadata: str) -> str:
+    result = re.sub(PATTERN_UUID_FROM_METADATA, r"\1\3", text_metadata)
     return result
