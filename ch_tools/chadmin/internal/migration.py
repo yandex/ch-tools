@@ -196,7 +196,11 @@ def _get_host_id(ctx: Context, migrating_database: str, replica: str) -> str:
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
     database_uuid = rows["data"][0]["uuid"]
 
-    result = f"{escape_for_zookeeper(host_name)}:9000:{database_uuid}"
+    query = "SELECT tcpPort() AS tcp_port"
+    rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
+    tcp_port = rows["data"][0]["tcp_port"]
+
+    result = f"{escape_for_zookeeper(host_name)}:{tcp_port}:{database_uuid}"
     logging.info("_get_host_id={}", result)
 
     return result
