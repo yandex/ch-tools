@@ -66,31 +66,20 @@ def estimate_replication_lag(ctx, xcrit, crit, warn, mwarn, mcrit, verbose=0):
                     or exceptions_ignored
                     or max_execution_part
                 ):
-                    msg_verbose_2 = msg_verbose_2 + key + ":\n"
+                    msg_verbose_2 += f"{key}:\n"
                 if exceptions_non_retrayable:
-                    msg_verbose_2 = (
-                        msg_verbose_2
-                        + "  Non-retrayable errors:\n"
-                        + exceptions_non_retrayable
+                    msg_verbose_2 += (
+                        f"  Non-retrayable errors:\n{exceptions_non_retrayable}"
                     )
                 if exceptions_retrayable:
-                    msg_verbose_2 = (
-                        msg_verbose_2 + "  Retrayable errors:\n" + exceptions_retrayable
-                    )
+                    msg_verbose_2 += f"  Retrayable errors:\n{exceptions_retrayable}"
                 if exceptions_ignored:
-                    msg_verbose_2 = (
-                        msg_verbose_2 + "  User fault errors:\n" + exceptions_ignored
-                    )
+                    msg_verbose_2 += f"  User fault errors:\n{exceptions_ignored}"
                 if max_execution_part:
-                    msg_verbose_2 = (
-                        msg_verbose_2
-                        + "  Result part of task with max execution time: "
-                        + max_execution_part
-                        + "\n"
-                    )
+                    msg_verbose_2 += f"  Result part of task with max execution time: {max_execution_part}\n"
         msg_verbose = tabulate(verbtab, headers=headers)
         if verbose >= 2:
-            msg_verbose = msg_verbose + msg_verbose_2
+            msg_verbose += msg_verbose_2
 
     max_merges_warn_threshold = 1
     max_merges_crit_threshold = 1
