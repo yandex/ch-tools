@@ -318,4 +318,4 @@ FROM non_repl_db.foo
     ],
 )
 def test_remove_uuid_from_metadata(metadata, result):
-    assert result == remove_uuid_from_metadata(metadata=metadata)
+    assert result == remove_uuid_from_metadata(metadata)
