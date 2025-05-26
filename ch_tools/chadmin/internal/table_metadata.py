@@ -78,10 +78,12 @@ def parse_table_metadata(table_metadata_path: str) -> TableMetadata:
                     replica_path, replica_name = _parse_replica_params(line)
 
     if table_uuid is None:
-        raise RuntimeError(f"Empty UUID from metadata: '{table_metadata_path}'")
+        raise RuntimeError(f"Empty UUID from table metadata: '{table_metadata_path}'")
 
     if table_engine is None:
-        raise RuntimeError(f"Empty table engine from metadata: '{table_metadata_path}'")
+        raise RuntimeError(
+            f"Empty table engine from table metadata: '{table_metadata_path}'"
+        )
 
     return TableMetadata(table_uuid, table_engine, replica_path, replica_name)
 
@@ -115,6 +117,7 @@ def check_replica_path_contains_macros(path: str, macros: str) -> bool:
 def update_uuid_table_metadata_file(
     table_local_metadata_path: str, new_uuid: str
 ) -> None:
+    logging.info("set uuid {} to metadata {}", new_uuid, table_local_metadata_path)
     with open(table_local_metadata_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
@@ -131,10 +134,12 @@ def get_table_store_path(table_uuid: str) -> str:
 
 
 def move_table_local_store(old_table_uuid: str, new_uuid: str) -> None:
+    logging.info("call move_table_local_store")
     old_table_store_path = get_table_store_path(old_table_uuid)
     logging.info("old_table_store_path={}", old_table_store_path)
 
-    assert os.path.exists(old_table_store_path)
+    if not os.path.exists(old_table_store_path):
+        raise RuntimeError(f"File {old_table_store_path} doesn't exist.")
 
     target = f"{CLICKHOUSE_PATH}/store/{new_uuid[:3]}"
 
@@ -172,3 +177,13 @@ def remove_replicated_params(create_table_query: str) -> str:
     return re.sub(
         REPLICATED_MERGE_TREE_PATTERN, "ReplicatedMergeTree", create_table_query
     )
+
+
+def is_table(engine: str) -> bool:
+    logging.info("check is table {}", engine)
+    return engine not in ["View", "MaterializedView"]
+
+
+def is_view(engine: str) -> bool:
+    logging.info("is_view {}", engine)
+    return engine == "View"

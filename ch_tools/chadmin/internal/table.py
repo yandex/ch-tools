@@ -17,6 +17,8 @@ from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
 from ch_tools.chadmin.internal.table_metadata import (
     check_replica_path_contains_macros,
     get_table_shared_id,
+    is_table,
+    is_view,
     move_table_local_store,
     parse_table_metadata,
     update_uuid_table_metadata_file,
@@ -512,11 +514,14 @@ def get_table_uuids_from_cluster(ctx: Context, database: str, table: str) -> lis
 def _verify_possible_change_uuid(
     ctx: Context, table_local_metadata_path: str, dst_uuid: str
 ) -> None:
+    logging.info(
+        "call _verify_possible_change_uuid with path={}", table_local_metadata_path
+    )
     metadata = parse_table_metadata(table_local_metadata_path)
 
     if metadata.table_engine.is_table_engine_replicated():
         logging.info(
-            "Metadata={} with Replicated table engine, replica_name={}, replica_path={}",
+            "Table metadata={} with Replicated table engine, replica_name={}, replica_path={}",
             table_local_metadata_path,
             metadata.replica_name,
             metadata.replica_path,
@@ -544,18 +549,32 @@ def change_table_uuid(
     ctx: Context,
     database: str,
     table: str,
+    engine: str,
     new_uuid: str,
     old_table_uuid: str,
     table_local_metadata_path: str,
     attached: bool,
 ) -> None:
+    logging.info("call change_table_uuid with table={}", table)
     if match_str_ch_version(get_version(ctx), "25.1"):
         table_local_metadata_path = f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
 
-    _verify_possible_change_uuid(ctx, table_local_metadata_path, new_uuid)
-    if attached:
+    if is_table(engine=engine):
+        logging.info("{} is a table.", table)
+        _verify_possible_change_uuid(ctx, table_local_metadata_path, new_uuid)
+    else:
+        logging.info("{} is not a table, skip checking.", table)
+
+    if attached and not is_view(engine=engine):
+        # we could not just detach view - problem with cleanupDetachedTables
         detach_table(ctx, database_name=database, table_name=table, permanently=False)
     update_uuid_table_metadata_file(table_local_metadata_path, new_uuid)
+
+    if not is_table(engine):
+        logging.info(
+            "Table={} has engine={}. Don't need move in local store.", table, engine
+        )
+        return
 
     try:
         move_table_local_store(old_table_uuid, new_uuid)
@@ -568,6 +587,10 @@ def change_table_uuid(
             ex,
         )
         sys.exit(1)
+
+    logging.info(
+        "Local table store {} was moved from {} to {}", table, old_table_uuid, new_uuid
+    )
 
 
 def read_local_table_metadata(ctx: Context, table_local_metadata_path: str) -> str:

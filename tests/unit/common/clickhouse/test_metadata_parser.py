@@ -1,8 +1,8 @@
 import pytest
 
+from ch_tools.chadmin.cli.database_metadata import remove_uuid_from_metadata
 from ch_tools.chadmin.internal.table_metadata import (
     MergeTreeFamilyEngines,
-    check_replica_path_contains_macros,
     parse_table_metadata,
 )
 
@@ -184,17 +184,17 @@ def test_parse_table_metadata_repl(file, expected):
         ),
         pytest.param(
             "metadata/broken_no_uuid_full.sql",
-            f"Empty UUID from metadata: '{PATH_TO_TESTS}metadata/broken_no_uuid_full.sql'",
+            f"Empty UUID from table metadata: '{PATH_TO_TESTS}metadata/broken_no_uuid_full.sql'",
             id="No UUID full",
         ),
         pytest.param(
             "metadata/broken_no_engine.sql",
-            f"Empty table engine from metadata: '{PATH_TO_TESTS}metadata/broken_no_engine.sql'",
+            f"Empty table engine from table metadata: '{PATH_TO_TESTS}metadata/broken_no_engine.sql'",
             id="No engine",
         ),
         pytest.param(
             "metadata/broken_no_engine_full.sql",
-            f"Empty table engine from metadata: '{PATH_TO_TESTS}metadata/broken_no_engine_full.sql'",
+            f"Empty table engine from table metadata: '{PATH_TO_TESTS}metadata/broken_no_engine_full.sql'",
             id="No engine full",
         ),
     ],
@@ -236,24 +236,86 @@ def test_last_merge_tree_family_engine():
 
 
 @pytest.mark.parametrize(
-    "path,result",
+    "metadata,result",
     [
         pytest.param(
-            "/clickhouse/foo/{uuid}",
-            True,
-            id="with uuid",
+            """
+ATTACH VIEW _ UUID '2452e5a2-a7f7-4c3d-aae4-2128904ab5b4'
+(
+    `timestamp` DateTime,
+    `ms` UInt16,
+    `cluster` LowCardinality(String),
+    `hostname` LowCardinality(String)
+)
+AS SELECT *
+FROM mdb.mongodb
+WHERE origin = 'mongocfg
+            """,
+            """
+ATTACH VIEW _ UUID ''
+(
+    `timestamp` DateTime,
+    `ms` UInt16,
+    `cluster` LowCardinality(String),
+    `hostname` LowCardinality(String)
+)
+AS SELECT *
+FROM mdb.mongodb
+WHERE origin = 'mongocfg
+            """,
+            id="view",
         ),
         pytest.param(
-            "/clickhouse/foo/uuid_something",
-            False,
-            id="with similar uuid",
+            """
+ATTACH TABLE _ UUID 'fb5fe8e6-2bc4-4120-bd3a-6289e8d44175'
+(
+    `_timestamp` DateTime,
+    `_partition` String,
+    `_offset` UInt64,
+    `_idx` UInt32,
+    `datetime` Nullable(DateTime),
+    `log_format` Nullable(String)
+)
+ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/mdb.mdb_porto_prod_postgresql_logs_cdc', '{replica}')
+ORDER BY (_timestamp, _partition, _offset, _idx)
+SETTINGS allow_nullable_key = 1, index_granularity = 8192
+            """,
+            """
+ATTACH TABLE _ UUID ''
+(
+    `_timestamp` DateTime,
+    `_partition` String,
+    `_offset` UInt64,
+    `_idx` UInt32,
+    `datetime` Nullable(DateTime),
+    `log_format` Nullable(String)
+)
+ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/mdb.mdb_porto_prod_postgresql_logs_cdc', '{replica}')
+ORDER BY (_timestamp, _partition, _offset, _idx)
+SETTINGS allow_nullable_key = 1, index_granularity = 8192
+            """,
+            id="table",
         ),
         pytest.param(
-            "/clickhouse/foo/something",
-            False,
-            id="wo uuid",
+            """
+ATTACH MATERIALIZED VIEW _ UUID 'e733b7d6-eca9-4a96-b73a-1c6b0dfa2002' TO non_repl_db.foo
+(
+    `a` Int32
+)
+AS SELECT *
+FROM non_repl_db.foo
+            """,
+            """
+ATTACH MATERIALIZED VIEW _ UUID '' TO non_repl_db.foo
+(
+    `a` Int32
+)
+AS SELECT *
+FROM non_repl_db.foo
+            """,
+            id="materialized view",
         ),
     ],
 )
-def test_replicated_path_contains_uuid_macros(path, result):
-    assert result == check_replica_path_contains_macros(path=path, macros="uuid")
+def test_remove_uuid_from_metadata(metadata, result):
+    assert result == remove_uuid_from_metadata(metadata=metadata)
