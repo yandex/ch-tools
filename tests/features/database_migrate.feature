@@ -1483,3 +1483,167 @@ Feature: chadmin database migrate command
     """
     (42,'value')
     """
+
+  @require_version_24.8
+  Scenario: Migrate database with different table_shared_id
+    When we execute query on clickhouse01
+    """
+    CREATE DATABASE non_repl_db;
+    """
+    When we execute query on clickhouse02
+    """
+    CREATE DATABASE non_repl_db;
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE non_repl_db.test_table1
+    (
+        `a` Int
+    )
+    ENGINE = ReplicatedMergeTree('/clickhouse/test_table1/{shard}', '{replica}')
+    ORDER BY a
+    """
+    When we execute query on clickhouse02
+    """
+    CREATE TABLE non_repl_db.test_table1
+    (
+        `a` Int
+    )
+    ENGINE = ReplicatedMergeTree('/clickhouse/test_table1/{shard}', '{replica}')
+    ORDER BY a
+    """
+    When we execute command on clickhouse02
+    """
+    chadmin zookeeper update /clickhouse/test_table1/{shard}/table_shared_id 864684af-db8a-4ba1-a7a9-0ffd30b3a623
+    """
+    Then it completes successfully
+
+    When we execute query on clickhouse02
+    """
+    CREATE TABLE non_repl_db.test_table2
+    (
+        `a` Int
+    )
+    ENGINE = ReplicatedMergeTree('/clickhouse/test_table2/{shard}', '{replica}')
+    ORDER BY a
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE non_repl_db.test_table2
+    (
+        `a` Int
+    )
+    ENGINE = ReplicatedMergeTree('/clickhouse/test_table2/{shard}', '{replica}')
+    ORDER BY a
+    """
+    When we execute command on clickhouse02
+    """
+    chadmin zookeeper update /clickhouse/test_table2/{shard}/table_shared_id a7434a27-e2e5-41d1-be33-6a1e19b33ab4
+    """
+    Then it completes successfully
+
+    When we execute query on clickhouse01
+    """
+    INSERT INTO non_repl_db.test_table1 VALUES (42)
+    """
+    And we execute query on clickhouse01
+    """
+    INSERT INTO non_repl_db.test_table2 VALUES (117)
+    """
+
+    When we execute command on clickhouse01
+    """
+    chadmin table change -d non_repl_db -t test_table1 --zk
+    """
+    Then it completes successfully
+    When we execute command on clickhouse02
+    """
+    chadmin table change -d non_repl_db -t test_table1 --zk
+    """
+    Then it completes successfully
+    When we execute command on clickhouse01
+    """
+    chadmin table change -d non_repl_db -t test_table2 --zk
+    """
+    Then it completes successfully
+    When we execute command on clickhouse02
+    """
+    chadmin table change -d non_repl_db -t test_table2 --zk
+    """
+    Then it completes successfully
+
+    When we execute command on clickhouse01
+    """
+    supervisorctl restart clickhouse-server
+    """
+    When we execute command on clickhouse02
+    """
+    supervisorctl restart clickhouse-server
+    """
+    When we sleep for 10 seconds
+
+    When we execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db 
+    """
+    Then it completes successfully
+    When we execute command on clickhouse02
+    """
+    chadmin database migrate -d non_repl_db 
+    """
+    Then it completes successfully
+
+    When we execute query on clickhouse01
+    """
+    ALTER TABLE non_repl_db.test_table1 ADD COLUMN b String DEFAULT 'value'
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM non_repl_db.test_table1 FORMAT Values
+    """
+    Then we get response
+    """
+    (42,'value')
+    """
+
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM non_repl_db.test_table1 FORMAT Values
+    """
+    Then we get response
+    """
+    (42,'value')
+    """
+
+    When we execute query on clickhouse01
+    """
+    ALTER TABLE non_repl_db.test_table2 ADD COLUMN b String DEFAULT 'value'
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM non_repl_db.test_table2 FORMAT Values
+    """
+    Then we get response
+    """
+    (117,'value')
+    """
+
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM non_repl_db.test_table2 FORMAT Values
+    """
+    Then we get response
+    """
+    (117,'value')
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin table check-uuid-equal -d non_repl_db -t test_table1
+    """
+    Then it completes successfully
+
+    When we execute command on clickhouse01
+    """
+    chadmin table check-uuid-equal -d non_repl_db -t test_table2
+    """
+    Then it completes successfully

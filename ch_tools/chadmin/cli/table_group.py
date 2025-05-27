@@ -5,6 +5,7 @@ from typing import Any
 
 from cloup import Choice, Context, argument, group, option, option_group, pass_context
 from cloup.constraints import (
+    AcceptAtMost,
     AnySet,
     If,
     RequireAtLeast,
@@ -14,6 +15,8 @@ from cloup.constraints import (
 )
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
+from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
+from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
 from ch_tools.chadmin.internal.table import (
     attach_table,
     change_table_uuid,
@@ -26,6 +29,10 @@ from ch_tools.chadmin.internal.table import (
     list_table_columns,
     list_tables,
     materialize_ttl,
+)
+from ch_tools.chadmin.internal.table_metadata import (
+    get_table_shared_id,
+    parse_table_metadata,
 )
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
@@ -867,24 +874,69 @@ def set_flag_command(
 @table_group.command("change")
 @option("-d", "--database", required=True)
 @option("-t", "--table", required=True)
-@option("-uuid", "--uuid", required=True)
+@option_group(
+    "Change table uuid options",
+    option("-uuid", "--uuid"),
+    option("-zk", "--zk", is_flag=True, help="Set uuid from table_shared_id node"),
+    constraint(If("uuid", then=accept_none), ["zk"]),
+    constraint(If("zk", then=accept_none), ["uuid"]),
+    constraint(AcceptAtMost(1), ["uuid", "zk"]),
+    constraint(RequireAtLeast(1), ["uuid", "zk"]),
+)
 @pass_context
-def change_uuid_command(ctx: Context, database: str, table: str, uuid: str) -> None:
-    table_info = get_info_from_system_tables(ctx, database, table)
+def change_uuid_command(
+    ctx: Context, database: str, table: str, uuid: str, zk: bool
+) -> None:
+    try:
+        table_info = get_info_from_system_tables(ctx, database, table)
 
-    old_table_uuid = table_info["uuid"]
-    table_local_metadata_path = table_info["metadata_path"]
+        logging.info("table_info={}", table_info)
 
-    change_table_uuid(
-        ctx,
-        database,
-        table,
-        engine=table_info["engine"],
-        new_uuid=uuid,
-        old_table_uuid=old_table_uuid,
-        table_local_metadata_path=table_local_metadata_path,
-        attached=True,
-    )
+        if zk:
+            table_local_metadata_path = table_info["metadata_path"]
+            if match_str_ch_version(get_version(ctx), "25.1"):
+                table_local_metadata_path = (
+                    f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
+                )
+
+            metadata = parse_table_metadata(table_local_metadata_path)
+            if not metadata.table_engine.is_table_engine_replicated():
+                raise RuntimeError(
+                    f"Table {table} is not replicated. Failed get uuid from table_shared_id node."
+                )
+
+            replica_path = metadata.replica_path
+
+            logging.debug(
+                "Table {} is being changed table_shared_id {} by path {}",
+                table,
+                uuid,
+                replica_path,
+            )
+            uuid = get_table_shared_id(ctx, replica_path)
+            logging.debug(
+                "Table {} contains table_shared_id {} by path {}",
+                table,
+                uuid,
+                replica_path,
+            )
+
+        old_table_uuid = table_info["uuid"]
+        table_local_metadata_path = table_info["metadata_path"]
+
+        change_table_uuid(
+            ctx,
+            database,
+            table,
+            engine=table_info["engine"],
+            new_uuid=uuid,
+            old_table_uuid=old_table_uuid,
+            table_local_metadata_path=table_local_metadata_path,
+            attached=True,
+        )
+    except Exception as ex:
+        logging.error("Failed: {}", ex)
+        sys.exit(1)
 
 
 @table_group.command("check-uuid-equal")
@@ -892,7 +944,6 @@ def change_uuid_command(ctx: Context, database: str, table: str, uuid: str) -> N
 @option("-t", "--table", required=True)
 @pass_context
 def check_uuid_equal(ctx: Context, database: str, table: str) -> None:
-    # @todo refactoring
     uuids = get_table_uuids_from_cluster(ctx, database, table)
     logging.info("Table {} has uuid: {}", table, uuids)
 

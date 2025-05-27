@@ -515,7 +515,9 @@ def _verify_possible_change_uuid(
     ctx: Context, table_local_metadata_path: str, dst_uuid: str
 ) -> None:
     logging.info(
-        "call _verify_possible_change_uuid with path={}", table_local_metadata_path
+        "call _verify_possible_change_uuid with path={}, new uuid={}",
+        table_local_metadata_path,
+        dst_uuid,
     )
     metadata = parse_table_metadata(table_local_metadata_path)
 
