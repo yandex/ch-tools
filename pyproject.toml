@@ -114,7 +114,10 @@ keeper-monitoring = "ch_tools.monrun_checks_keeper.main:main"
 
 
 [build-system]
-requires = ["hatchling"]
+requires = [
+    "hatchling",
+    "setuptools >= 71.1, < 81",
+]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
