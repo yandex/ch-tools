@@ -6,6 +6,8 @@ from typing import Optional, Tuple
 from ch_tools.chadmin.cli import metadata
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_METADATA_PATH
 
+PATTERN_UUID_FROM_METADATA = r"(ATTACH\s+\w+\s+(?:\w+\s+)*UUID\s+')([^']+)('.*)"
+
 
 class DatabaseEngine(Enum):
     ATOMIC = "Atomic"
@@ -116,3 +118,8 @@ def _parse_database_replica_params(line: str) -> Tuple[str, str, str]:
     if len(matches) != 3:
         raise ValueError(f"Failed parse metadata for replicated engine: {len(matches)}")
     return matches[0], matches[1], matches[2]
+
+
+def remove_uuid_from_metadata(text_metadata: str) -> str:
+    result = re.sub(PATTERN_UUID_FROM_METADATA, r"\1\3", text_metadata)
+    return result

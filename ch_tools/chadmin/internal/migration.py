@@ -5,7 +5,10 @@ from kazoo.client import KazooClient, TransactionRequest
 from kazoo.exceptions import NodeExistsError
 
 from ch_tools.chadmin.cli import metadata
-from ch_tools.chadmin.cli.database_metadata import parse_database_from_metadata
+from ch_tools.chadmin.cli.database_metadata import (
+    parse_database_from_metadata,
+    remove_uuid_from_metadata,
+)
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
 from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
 from ch_tools.chadmin.internal.table import (
@@ -465,17 +468,8 @@ def is_table_schema_equal(
     zk_table_metadata = zk_table_metadata.rstrip()
     local_table_metadata = local_table_metadata.rstrip()
 
-    metadata_prefix = "ATTACH TABLE _ UUID '"
-    start_pos_uuid = len(metadata_prefix)
-    uuid_length = 36
-    finish_pos_uuid = start_pos_uuid + uuid_length
-
-    local_table_metadata = (
-        local_table_metadata[:start_pos_uuid] + local_table_metadata[finish_pos_uuid:]
-    )
-    zk_table_metadata = (
-        zk_table_metadata[:start_pos_uuid] + zk_table_metadata[finish_pos_uuid:]
-    )
+    local_table_metadata = remove_uuid_from_metadata(local_table_metadata)
+    zk_table_metadata = remove_uuid_from_metadata(zk_table_metadata)
 
     logging.info(
         "Compare metadata: local={}, zk={}", local_table_metadata, zk_table_metadata
@@ -484,9 +478,9 @@ def is_table_schema_equal(
     return local_table_metadata == zk_table_metadata
 
 
-def _change_tables_uuid(ctx: Context, tables: dict, database_name: str) -> bool:
+def _change_tables_uuid(ctx: Context, tables_info: dict, database_name: str) -> bool:
     was_changed = False
-    for row in tables:
+    for row in tables_info:
         table_local_metadata_path = row["metadata_path"]
 
         table_name = row["name"]
@@ -515,6 +509,7 @@ def _change_tables_uuid(ctx: Context, tables: dict, database_name: str) -> bool:
             ctx,
             database=database_name,
             table=table_name,
+            engine=row["engine"],
             new_uuid=zk_table_uuid,
             old_table_uuid=old_table_uuid,
             table_local_metadata_path=table_local_metadata_path,

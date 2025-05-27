@@ -899,6 +899,191 @@ Feature: chadmin database migrate command
     """
 
   @require_version_24.8
+  Scenario: Migrate database with VIEW by host
+    When we execute query on clickhouse01
+    """
+    CREATE DATABASE non_repl_db;
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE non_repl_db.bar
+    (
+        `a` Int
+    )
+    ENGINE = MergeTree
+    ORDER BY a
+    """
+    And we execute query on clickhouse01
+    """
+    INSERT INTO non_repl_db.bar VALUES (42)
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE VIEW non_repl_db.foo
+    AS SELECT * FROM non_repl_db.bar
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM non_repl_db.foo
+    """
+    Then we get response
+    """
+    42
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT name FROM system.tables WHERE database='non_repl_db' ORDER BY name FORMAT Values
+    """
+    Then we get response
+    """
+    ('bar'),('foo')
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db 
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM non_repl_db.foo
+    """
+    Then we get response
+    """
+    42
+    """
+
+  @require_version_24.8
+  Scenario: Migrate database with VIEW by hosts
+    When we execute query on clickhouse01
+    """
+    CREATE DATABASE non_repl_db ON CLUSTER '{cluster}';
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE non_repl_db.bar
+    (
+        `a` Int
+    )
+    ENGINE = MergeTree
+    ORDER BY a
+    """
+    And we execute query on clickhouse01
+    """
+    INSERT INTO non_repl_db.bar VALUES (42)
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE VIEW non_repl_db.foo
+    AS SELECT * FROM non_repl_db.bar
+    """
+    When we execute query on clickhouse02
+    """
+    CREATE TABLE non_repl_db.bar
+    (
+        `a` Int
+    )
+    ENGINE = MergeTree
+    ORDER BY a
+    """
+    And we execute query on clickhouse02
+    """
+    INSERT INTO non_repl_db.bar VALUES (42)
+    """
+    When we execute query on clickhouse02
+    """
+    CREATE VIEW non_repl_db.foo
+    AS SELECT * FROM non_repl_db.bar
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db 
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM non_repl_db.foo
+    """
+    Then we get response
+    """
+    42
+    """
+    When we execute command on clickhouse02
+    """
+    chadmin database migrate -d non_repl_db 
+    """
+    When we execute command on clickhouse02
+    """
+    supervisorctl restart clickhouse-server
+    """
+    When we sleep for 10 seconds
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM non_repl_db.foo
+    """
+    Then we get response
+    """
+    42
+    """
+
+  @require_version_24.8
+  Scenario: Migrate database with VIEW by cluster
+    When we execute query on clickhouse01
+    """
+    CREATE DATABASE non_repl_db ON CLUSTER '{cluster}';
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE non_repl_db.bar
+    ON CLUSTER '{cluster}'
+    (
+        `a` Int
+    )
+    ENGINE = MergeTree
+    ORDER BY a
+    """
+    And we execute query on clickhouse01
+    """
+    INSERT INTO non_repl_db.bar VALUES (42)
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE VIEW non_repl_db.foo
+    ON CLUSTER '{cluster}'
+    AS SELECT * FROM non_repl_db.bar
+    """
+    And we execute query on clickhouse02
+    """
+    INSERT INTO non_repl_db.bar VALUES (42)
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db 
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM non_repl_db.foo
+    """
+    Then we get response
+    """
+    42
+    """
+    When we execute command on clickhouse02
+    """
+    chadmin database migrate -d non_repl_db 
+    """
+    When we execute command on clickhouse02
+    """
+    supervisorctl restart clickhouse-server
+    """
+    When we sleep for 10 seconds
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM non_repl_db.foo
+    """
+    Then we get response
+    """
+    42
+    """
+
+  @require_version_24.8
   Scenario: Migrate database with MATERIALIZED VIEW by host
     When we execute query on clickhouse01
     """
@@ -948,6 +1133,111 @@ Feature: chadmin database migrate command
     Then we get response
     """
     (42)
+    """
+
+  @require_version_24.8
+  Scenario: Migrate database with MATERIALIZED VIEW by hosts
+    When we execute query on clickhouse01
+    """
+    CREATE DATABASE non_repl_db ON CLUSTER '{cluster}';
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE non_repl_db.foo
+    ON CLUSTER '{cluster}'
+    (
+        `a` Int
+    )
+    ENGINE = MergeTree
+    ORDER BY a
+    """
+    And we execute query on clickhouse01
+    """
+    INSERT INTO non_repl_db.foo VALUES (42)
+    """
+    And we execute query on clickhouse02
+    """
+    INSERT INTO non_repl_db.foo VALUES (43)
+    """
+    And we execute query on clickhouse01
+    """
+    CREATE MATERIALIZED VIEW non_repl_db.foo_mw
+    TO non_repl_db.foo AS SELECT * FROM non_repl_db.foo
+    """
+    And we execute query on clickhouse02
+    """
+    CREATE MATERIALIZED VIEW non_repl_db.foo_mw
+    TO non_repl_db.foo AS SELECT * FROM non_repl_db.foo
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db 
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT name FROM system.databases ORDER BY name FORMAT Values
+    """
+    Then we get response
+    """
+    ('INFORMATION_SCHEMA'),('default'),('information_schema'),('non_repl_db'),('system')
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT engine FROM system.databases WHERE database='non_repl_db'
+    """
+    Then we get response
+    """
+    Replicated
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM non_repl_db.foo_mw FORMAT Values
+    """
+    Then we get response
+    """
+    (42)
+    """
+    When we execute command on clickhouse02
+    """
+    chadmin database migrate -d non_repl_db 
+    """
+    When we execute command on clickhouse02
+    """
+    supervisorctl restart clickhouse-server
+    """
+    When we sleep for 10 seconds
+
+    When we execute query on clickhouse02
+    """
+    SELECT name FROM system.databases ORDER BY name FORMAT Values
+    """
+    Then we get response
+    """
+    ('INFORMATION_SCHEMA'),('default'),('information_schema'),('non_repl_db'),('system')
+    """
+    When we execute query on clickhouse02
+    """
+    SELECT engine FROM system.databases WHERE database='non_repl_db'
+    """
+    Then we get response
+    """
+    Replicated
+    """
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM non_repl_db.foo FORMAT Values
+    """
+    Then we get response
+    """
+    (43)
+    """
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM non_repl_db.foo_mw FORMAT Values
+    """
+    Then we get response
+    """
+    (43)
     """
 
   @require_version_24.8
