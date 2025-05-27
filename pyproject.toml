@@ -82,7 +82,7 @@ dependencies = [
     "tqdm",
     "xmltodict",
     "loguru",
-    "setuptools >= 71.1",  # for pkg_resources module
+    "setuptools >= 71.1, < 81",  # for pkg_resources module
 ]
 
 [dependency-groups]

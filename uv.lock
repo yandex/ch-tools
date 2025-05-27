@@ -336,7 +336,7 @@ requires-dist = [
     { name = "python-dateutil" },
     { name = "pyyaml", specifier = ">=5.4" },
     { name = "requests", specifier = ">=2.20" },
-    { name = "setuptools", specifier = ">=71.1" },
+    { name = "setuptools", specifier = ">=71.1,<81" },
     { name = "tabulate" },
     { name = "tenacity" },
     { name = "termcolor" },
