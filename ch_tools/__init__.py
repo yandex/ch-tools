@@ -1,5 +1,5 @@
 """A set of tools for administration and diagnostics of ClickHouse DBMS."""
 
-from pkg_resources import resource_string
+from importlib.resources import files
 
-__version__ = resource_string(__name__, "version.txt").decode().strip()
+__version__ = files(__name__).joinpath("version.txt").read_text().strip()

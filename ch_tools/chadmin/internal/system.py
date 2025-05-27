@@ -2,7 +2,7 @@ import operator
 import re
 
 from click import Context
-from pkg_resources import parse_version
+from packaging.version import parse as parse_version
 
 from ch_tools.chadmin.internal.utils import clickhouse_client
 

@@ -70,6 +70,7 @@ dependencies = [
     "jinja2",
     "kazoo",
     "lxml",
+    "packaging",
     "psutil",
     "pygments",
     "pyopenssl >= 25.0",
@@ -82,7 +83,6 @@ dependencies = [
     "tqdm",
     "xmltodict",
     "loguru",
-    "setuptools >= 71.1",  # for pkg_resources module
 ]
 
 [dependency-groups]
@@ -101,7 +101,6 @@ dev = [
     "types-python-dateutil",
     "types-pyyaml",
     "types-requests",
-    "types-setuptools",
     "types-tabulate",
     "codespell",
     "tomli",

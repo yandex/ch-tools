@@ -8,7 +8,7 @@ from random import choice as random_choise
 from types import SimpleNamespace
 from typing import Mapping, MutableMapping
 
-from pkg_resources import parse_version
+from packaging.version import parse as parse_version
 
 from ch_tools.common import logging
 
