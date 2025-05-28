@@ -233,7 +233,7 @@ Feature: chadmin table change and check-uuid-equal
     """
 
   @require_version_24.8
-  Scenario: Failed change uuid for ReplicatedMergeTree on first host
+  Scenario: Сhange uuid for ReplicatedMergeTree on first host
     When we execute query on clickhouse01
     """
     CREATE DATABASE non_repl_db;
@@ -251,13 +251,13 @@ Feature: chadmin table change and check-uuid-equal
     """
     INSERT INTO non_repl_db.foo VALUES (42)
     """
-    When we try to execute command on clickhouse01
+    When we execute command on clickhouse01
     """
     chadmin table change -d non_repl_db -t foo --uuid "$(chadmin zookeeper get /clickhouse/foo/table_shared_id)"
     """
-    Then it fails with response contains
+    Then we get response contains
     """
-    Table has already had uuid
+    Don't need to update current table uuid
     """
 
   @require_version_24.8
@@ -281,22 +281,22 @@ Feature: chadmin table change and check-uuid-equal
     INSERT INTO non_repl_db.foo VALUES (42)
     """
     Then check uuid table foo equal to table_shared_id by path /clickhouse/foo/table_shared_id on clickhouse01
-    When we try to execute command on clickhouse01
+    When we execute command on clickhouse01
     """
     chadmin table change -d non_repl_db -t foo --uuid "$(chadmin zookeeper get /clickhouse/foo/table_shared_id)"
     """
-    Then it fails with response contains
+    Then we get response contains
     """
-    Table has already had uuid
+    Don't need to update current table uuid
     """
     Then check uuid table foo equal to table_shared_id by path /clickhouse/foo/table_shared_id on clickhouse02
-    When we try to execute command on clickhouse02
+    When we execute command on clickhouse02
     """
     chadmin table change -d non_repl_db -t foo --uuid "$(chadmin zookeeper get /clickhouse/foo/table_shared_id)"
     """
-    Then it fails with response contains
+    Then we get response contains
     """
-    Table has already had uuid
+    Don't need to update current table uuid
     """
 
   @require_version_24.8
@@ -328,13 +328,13 @@ Feature: chadmin table change and check-uuid-equal
     INSERT INTO non_repl_db.foo VALUES (42)
     """
     Then check uuid table foo equal to table_shared_id by path /clickhouse/foo/table_shared_id on clickhouse01
-    When we try to execute command on clickhouse01
+    When we execute command on clickhouse01
     """
     chadmin table change -d non_repl_db -t foo --uuid "$(chadmin zookeeper get /clickhouse/foo/table_shared_id)"
     """
-    Then it fails with response contains
+    Then we get response contains
     """
-    Table has already had uuid
+    Don't need to update current table uuid
     """
 
     When we execute command on clickhouse02
@@ -520,4 +520,119 @@ Feature: chadmin table change and check-uuid-equal
     Then we get response
     """
     (42,'b_one'),(43,'b_one'),(45,'b_one')
+    """
+
+  @require_version_24.8
+  Scenario: Change uuid for ReplicatedMergeTree with different table_shared_id
+    When we execute query on clickhouse01
+    """
+    CREATE DATABASE non_repl_db;
+    """
+    When we execute query on clickhouse02
+    """
+    CREATE DATABASE non_repl_db;
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE non_repl_db.test_table1
+    (
+        `a` Int
+    )
+    ENGINE = ReplicatedMergeTree('/clickhouse/test_table1/', '{replica}')
+    ORDER BY a
+    """
+    When we execute query on clickhouse02
+    """
+    CREATE TABLE non_repl_db.test_table1
+    (
+        `a` Int
+    )
+    ENGINE = ReplicatedMergeTree('/clickhouse/test_table1/', '{replica}')
+    ORDER BY a
+    """
+    And we execute query on clickhouse01
+    """
+    INSERT INTO non_repl_db.test_table1 VALUES (42)
+    """
+    When we execute command on clickhouse02
+    """
+    chadmin zookeeper update /clickhouse/test_table1/table_shared_id 864684af-db8a-4ba1-a7a9-0ffd30b3a623
+    """
+    Then it completes successfully
+
+    When we execute command on clickhouse01
+    """
+    chadmin table change -d non_repl_db -t test_table1 --zk
+    """
+    Then it completes successfully
+    When we execute command on clickhouse01
+    """
+    supervisorctl restart clickhouse-server
+    """
+    When we execute command on clickhouse02
+    """
+    chadmin table change -d non_repl_db -t test_table1 --zk
+    """
+    Then it completes successfully
+    When we execute command on clickhouse02
+    """
+    supervisorctl restart clickhouse-server
+    """
+    When we sleep for 10 seconds
+
+    When we execute query on clickhouse01
+    """
+    SELECT uuid FROM system.tables WHERE table='test_table1' FORMAT Values
+    """
+    Then we get response
+    """
+    ('864684af-db8a-4ba1-a7a9-0ffd30b3a623')
+    """
+
+    When we execute query on clickhouse02
+    """
+    SELECT uuid FROM system.tables WHERE table='test_table1' FORMAT Values
+    """
+    Then we get response
+    """
+    ('864684af-db8a-4ba1-a7a9-0ffd30b3a623')
+    """
+
+    When we execute query on clickhouse02
+    """
+    INSERT INTO non_repl_db.test_table1 VALUES (45)
+    """
+
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM non_repl_db.test_table1 ORDER BY a FORMAT Values
+    """
+    Then we get response
+    """
+    (42),(45)
+    """
+    When we sleep for 5 seconds
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM non_repl_db.test_table1 ORDER BY a FORMAT Values
+    """
+    Then we get response
+    """
+    (42),(45)
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin table change -d non_repl_db --all --zk
+    """
+    Then we get response contains
+    """
+    Don't need to update current table uuid
+    """
+    When we execute command on clickhouse02
+    """
+    chadmin table change -d non_repl_db -t test_table1 --zk
+    """
+    Then we get response contains
+    """
+    Don't need to update current table uuid
     """

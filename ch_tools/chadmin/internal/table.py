@@ -503,6 +503,15 @@ def get_info_from_system_tables(ctx: Context, database: str, table: str) -> dict
     return rows[0]
 
 
+def get_tables_names_from_system_tables(ctx: Context, database: str) -> list:
+    query = f"""
+        SELECT name FROM system.tables WHERE database='{database}'
+        AND engine not in ['View', 'MaterializedView']
+    """
+    rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)["data"]
+    return [row["name"] for row in rows]
+
+
 def get_table_uuids_from_cluster(ctx: Context, database: str, table: str) -> list:
     query = f"""
         SELECT uuid FROM clusterAllReplicas('{{cluster}}', system.tables) WHERE database='{database}' AND table='{table}'
@@ -513,9 +522,11 @@ def get_table_uuids_from_cluster(ctx: Context, database: str, table: str) -> lis
 
 def _verify_possible_change_uuid(
     ctx: Context, table_local_metadata_path: str, dst_uuid: str
-) -> None:
+) -> bool:
     logging.info(
-        "call _verify_possible_change_uuid with path={}", table_local_metadata_path
+        "call _verify_possible_change_uuid with path={}, new uuid={}",
+        table_local_metadata_path,
+        dst_uuid,
     )
     metadata = parse_table_metadata(table_local_metadata_path)
 
@@ -540,9 +551,7 @@ def _verify_possible_change_uuid(
             )
             sys.exit(1)
 
-    if metadata.table_uuid == dst_uuid:
-        logging.error("Table has already had uuid {}", metadata.table_uuid)
-        sys.exit(1)
+    return metadata.table_uuid != dst_uuid
 
 
 def change_table_uuid(
@@ -561,7 +570,24 @@ def change_table_uuid(
 
     if is_table(engine=engine):
         logging.info("{} is a table.", table)
-        _verify_possible_change_uuid(ctx, table_local_metadata_path, new_uuid)
+        need_update_uuid = _verify_possible_change_uuid(
+            ctx, table_local_metadata_path, new_uuid
+        )
+        if not need_update_uuid:
+            logging.info(
+                "Table {} has uuid {}. Don't need to update current table uuid {}. Finish changing",
+                table,
+                old_table_uuid,
+                new_uuid,
+            )
+            return
+
+        logging.error(
+            "Table's {} uuid {} will be updated to uuid {}",
+            table,
+            old_table_uuid,
+            new_uuid,
+        )
     else:
         logging.info("{} is not a table, skip checking.", table)
 
