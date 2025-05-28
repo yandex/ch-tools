@@ -620,3 +620,19 @@ Feature: chadmin table change and check-uuid-equal
     """
     (42),(45)
     """
+    When we execute command on clickhouse01
+    """
+    chadmin table change -d non_repl_db --all --zk
+    """
+    Then we get response contains
+    """
+    Don't need to update current table uuid
+    """
+    When we execute command on clickhouse02
+    """
+    chadmin table change -d non_repl_db -t test_table1 --zk
+    """
+    Then we get response contains
+    """
+    Don't need to update current table uuid
+    """

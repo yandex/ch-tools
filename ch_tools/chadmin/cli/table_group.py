@@ -5,13 +5,15 @@ from typing import Any
 
 from cloup import Choice, Context, argument, group, option, option_group, pass_context
 from cloup.constraints import (
-    AcceptAtMost,
     AnySet,
     If,
+    IsSet,
     RequireAtLeast,
+    RequireExactly,
     accept_none,
     constraint,
     require_all,
+    require_one,
 )
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -26,6 +28,7 @@ from ch_tools.chadmin.internal.table import (
     get_info_from_system_tables,
     get_table,
     get_table_uuids_from_cluster,
+    get_tables_names_from_system_tables,
     list_table_columns,
     list_tables,
     materialize_ttl,
@@ -873,67 +876,85 @@ def set_flag_command(
 
 @table_group.command("change")
 @option("-d", "--database", required=True)
-@option("-t", "--table", required=True)
+@option("-t", "--table", help="Change uuid for particular table.")
+@option(
+    "-all", "--all", "_all", is_flag=True, help="Change uuid for all tables in database"
+)
+@constraint(require_one, ["table", "all"])
 @option_group(
     "Change table uuid options",
     option("-uuid", "--uuid"),
     option("-zk", "--zk", is_flag=True, help="Set uuid from table_shared_id node"),
-    constraint(If("uuid", then=accept_none), ["zk"]),
-    constraint(If("zk", then=accept_none), ["uuid"]),
-    constraint(AcceptAtMost(1), ["uuid", "zk"]),
-    constraint(RequireAtLeast(1), ["uuid", "zk"]),
+    constraint(require_one, ["uuid", "zk"]),
+    constraint(
+        If(
+            IsSet(
+                "all",
+            ),
+            then=RequireExactly(1),
+        ),
+        ["zk"],
+    ),
 )
 @pass_context
 def change_uuid_command(
-    ctx: Context, database: str, table: str, uuid: str, zk: bool
+    ctx: Context, database: str, table: str, uuid: str, zk: bool, _all: bool
 ) -> None:
     try:
-        table_info = get_info_from_system_tables(ctx, database, table)
+        if _all:
+            tables = get_tables_names_from_system_tables(ctx, database)
+        else:
+            tables = [table]
 
-        logging.info("table_info={}", table_info)
+        logging.info("Tables for changing uuid: {}", tables)
 
-        if zk:
+        for table in tables:
+            table_info = get_info_from_system_tables(ctx, database, table)
+
+            logging.info("table_info={}", table_info)
+
+            if zk:
+                table_local_metadata_path = table_info["metadata_path"]
+                if match_str_ch_version(get_version(ctx), "25.1"):
+                    table_local_metadata_path = (
+                        f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
+                    )
+
+                metadata = parse_table_metadata(table_local_metadata_path)
+                if not metadata.table_engine.is_table_engine_replicated():
+                    raise RuntimeError(
+                        f"Table {table} is not replicated. Failed get uuid from table_shared_id node."
+                    )
+
+                replica_path = metadata.replica_path
+
+                logging.debug(
+                    "Table {} is being changed table_shared_id {} by path {}",
+                    table,
+                    uuid,
+                    replica_path,
+                )
+                uuid = get_table_shared_id(ctx, replica_path)
+                logging.debug(
+                    "Table {} contains table_shared_id {} by path {}",
+                    table,
+                    uuid,
+                    replica_path,
+                )
+
+            old_table_uuid = table_info["uuid"]
             table_local_metadata_path = table_info["metadata_path"]
-            if match_str_ch_version(get_version(ctx), "25.1"):
-                table_local_metadata_path = (
-                    f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
-                )
 
-            metadata = parse_table_metadata(table_local_metadata_path)
-            if not metadata.table_engine.is_table_engine_replicated():
-                raise RuntimeError(
-                    f"Table {table} is not replicated. Failed get uuid from table_shared_id node."
-                )
-
-            replica_path = metadata.replica_path
-
-            logging.debug(
-                "Table {} is being changed table_shared_id {} by path {}",
+            change_table_uuid(
+                ctx,
+                database,
                 table,
-                uuid,
-                replica_path,
+                engine=table_info["engine"],
+                new_uuid=uuid,
+                old_table_uuid=old_table_uuid,
+                table_local_metadata_path=table_local_metadata_path,
+                attached=True,
             )
-            uuid = get_table_shared_id(ctx, replica_path)
-            logging.debug(
-                "Table {} contains table_shared_id {} by path {}",
-                table,
-                uuid,
-                replica_path,
-            )
-
-        old_table_uuid = table_info["uuid"]
-        table_local_metadata_path = table_info["metadata_path"]
-
-        change_table_uuid(
-            ctx,
-            database,
-            table,
-            engine=table_info["engine"],
-            new_uuid=uuid,
-            old_table_uuid=old_table_uuid,
-            table_local_metadata_path=table_local_metadata_path,
-            attached=True,
-        )
     except Exception as ex:
         logging.error("Failed: {}", ex)
         sys.exit(1)

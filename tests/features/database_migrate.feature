@@ -1556,11 +1556,6 @@ Feature: chadmin database migrate command
     chadmin table change -d non_repl_db -t test_table1 --zk
     """
     Then it completes successfully
-    When we execute command on clickhouse02
-    """
-    chadmin table change -d non_repl_db -t test_table1 --zk
-    """
-    Then it completes successfully
     When we execute command on clickhouse01
     """
     chadmin table change -d non_repl_db -t test_table2 --zk
@@ -1568,10 +1563,9 @@ Feature: chadmin database migrate command
     Then it completes successfully
     When we execute command on clickhouse02
     """
-    chadmin table change -d non_repl_db -t test_table2 --zk
+    chadmin table change -d non_repl_db --all --zk
     """
     Then it completes successfully
-
     When we execute command on clickhouse01
     """
     supervisorctl restart clickhouse-server
