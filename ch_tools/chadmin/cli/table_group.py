@@ -880,7 +880,7 @@ def set_flag_command(
 @option(
     "-all", "--all", "_all", is_flag=True, help="Change uuid for all tables in database"
 )
-@constraint(require_one, ["table", "all"])
+@constraint(require_one, ["table", "_all"])
 @option_group(
     "Change table uuid options",
     option("-uuid", "--uuid", help="Set the table UUID explicitly"),
@@ -889,7 +889,7 @@ def set_flag_command(
     constraint(
         If(
             IsSet(
-                "all",
+                "_all",
             ),
             then=RequireExactly(1),
         ),
