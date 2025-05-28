@@ -233,7 +233,7 @@ Feature: chadmin table change and check-uuid-equal
     """
 
   @require_version_24.8
-  Scenario: Failed change uuid for ReplicatedMergeTree on first host
+  Scenario: Сhange uuid for ReplicatedMergeTree on first host
     When we execute query on clickhouse01
     """
     CREATE DATABASE non_repl_db;
@@ -251,13 +251,13 @@ Feature: chadmin table change and check-uuid-equal
     """
     INSERT INTO non_repl_db.foo VALUES (42)
     """
-    When we try to execute command on clickhouse01
+    When we execute command on clickhouse01
     """
     chadmin table change -d non_repl_db -t foo --uuid "$(chadmin zookeeper get /clickhouse/foo/table_shared_id)"
     """
-    Then it fails with response contains
+    Then we get response contains
     """
-    Table has already had uuid
+    Don't need to update current table uuid
     """
 
   @require_version_24.8
@@ -281,22 +281,22 @@ Feature: chadmin table change and check-uuid-equal
     INSERT INTO non_repl_db.foo VALUES (42)
     """
     Then check uuid table foo equal to table_shared_id by path /clickhouse/foo/table_shared_id on clickhouse01
-    When we try to execute command on clickhouse01
+    When we execute command on clickhouse01
     """
     chadmin table change -d non_repl_db -t foo --uuid "$(chadmin zookeeper get /clickhouse/foo/table_shared_id)"
     """
-    Then it fails with response contains
+    Then we get response contains
     """
-    Table has already had uuid
+    Don't need to update current table uuid
     """
     Then check uuid table foo equal to table_shared_id by path /clickhouse/foo/table_shared_id on clickhouse02
-    When we try to execute command on clickhouse02
+    When we execute command on clickhouse02
     """
     chadmin table change -d non_repl_db -t foo --uuid "$(chadmin zookeeper get /clickhouse/foo/table_shared_id)"
     """
-    Then it fails with response contains
+    Then we get response contains
     """
-    Table has already had uuid
+    Don't need to update current table uuid
     """
 
   @require_version_24.8
@@ -328,13 +328,13 @@ Feature: chadmin table change and check-uuid-equal
     INSERT INTO non_repl_db.foo VALUES (42)
     """
     Then check uuid table foo equal to table_shared_id by path /clickhouse/foo/table_shared_id on clickhouse01
-    When we try to execute command on clickhouse01
+    When we execute command on clickhouse01
     """
     chadmin table change -d non_repl_db -t foo --uuid "$(chadmin zookeeper get /clickhouse/foo/table_shared_id)"
     """
-    Then it fails with response contains
+    Then we get response contains
     """
-    Table has already had uuid
+    Don't need to update current table uuid
     """
 
     When we execute command on clickhouse02
