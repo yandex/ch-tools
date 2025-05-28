@@ -183,10 +183,15 @@ def _clean_object_storage(
             keys = (
                 ObjListItem.from_tab_separated(line.decode().strip()) for line in lines
             )
-            deleted, total_size = cleanup_s3_object_storage(disk_conf, keys, dry_run)
-            logging.info(
-                f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
+            chunk_deleted, chunk_size = cleanup_s3_object_storage(
+                disk_conf, keys, dry_run
             )
+            deleted += chunk_deleted
+            total_size += chunk_size
+
+    logging.info(
+        f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
+    )
 
     return deleted, total_size
 
