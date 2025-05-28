@@ -883,7 +883,7 @@ def set_flag_command(
 @constraint(require_one, ["table", "all"])
 @option_group(
     "Change table uuid options",
-    option("-uuid", "--uuid"),
+    option("-uuid", "--uuid", help="Set the table UUID explicitly"),
     option("-zk", "--zk", is_flag=True, help="Set uuid from table_shared_id node"),
     constraint(require_one, ["uuid", "zk"]),
     constraint(
@@ -908,8 +908,8 @@ def change_uuid_command(
 
         logging.info("Tables for changing uuid: {}", tables)
 
-        for table in tables:
-            table_info = get_info_from_system_tables(ctx, database, table)
+        for table_name in tables:
+            table_info = get_info_from_system_tables(ctx, database, table_name)
 
             logging.info("table_info={}", table_info)
 
@@ -923,21 +923,21 @@ def change_uuid_command(
                 metadata = parse_table_metadata(table_local_metadata_path)
                 if not metadata.table_engine.is_table_engine_replicated():
                     raise RuntimeError(
-                        f"Table {table} is not replicated. Failed get uuid from table_shared_id node."
+                        f"Table {table_name} is not replicated. Failed get uuid from table_shared_id node."
                     )
 
                 replica_path = metadata.replica_path
 
                 logging.debug(
                     "Table {} is being changed table_shared_id {} by path {}",
-                    table,
+                    table_name,
                     uuid,
                     replica_path,
                 )
                 uuid = get_table_shared_id(ctx, replica_path)
                 logging.debug(
                     "Table {} contains table_shared_id {} by path {}",
-                    table,
+                    table_name,
                     uuid,
                     replica_path,
                 )
@@ -948,7 +948,7 @@ def change_uuid_command(
             change_table_uuid(
                 ctx,
                 database,
-                table,
+                table_name,
                 engine=table_info["engine"],
                 new_uuid=uuid,
                 old_table_uuid=old_table_uuid,
