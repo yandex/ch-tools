@@ -278,6 +278,7 @@ clean: clean_debuild
 	rm -rf $(BUILD_DEB_OUTPUT_DIR)
 	rm -rf $(BUILD_PYTHON_OUTPUT_DIR)
 	rm -rf $(VENV_DIR)
+	rm -rf $(VERSION_FILE)
 	rm -rf .mypy_cache .ruff_cache tests/{.session_conf.sav,__pycache__,staging,reports}
 
 
