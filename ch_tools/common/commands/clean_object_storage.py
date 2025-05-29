@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -16,8 +17,19 @@ from ch_tools.chadmin.internal.object_storage.s3_iterator import (
 )
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.utils import chunked, execute_query
+from ch_tools.chadmin.internal.zookeeper import (
+    check_zk_node,
+    create_zk_nodes,
+    delete_zk_node,
+    get_zk_node,
+    has_zk,
+    update_zk_nodes,
+)
 from ch_tools.common import logging
-from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
+from ch_tools.common.clickhouse.client.clickhouse_client import (
+    ClickhouseClient,
+    clickhouse_client,
+)
 from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
@@ -32,6 +44,8 @@ INSERT_BATCH_SIZE = 500
 # These objects are not counted if their last modified time fall in the interval from the moment of starting analyzing.
 DEFAULT_GUARD_INTERVAL = "24h"
 KEYS_BATCH_SIZE = 100_000
+
+ZK_PATH_LISTING_TABLE_INFO = "object-storage-cleanup-state/listing-table-info"
 
 
 class CleanScope(str, Enum):
@@ -66,19 +80,53 @@ def clean(
 
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
     config = ctx.obj["config"]["object_storage"]["clean"]
-
     listing_table = f"{config['listing_table_database']}.{config['listing_table_prefix']}{disk_conf.name}"
+
+    ch_client = clickhouse_client(ctx)
+    user_name = ch_client.user or ""
+    user_password = ch_client.password or ""
+
+    # TODO: вынести в отдельный метод
+    if ch_client.check_port(ClickhousePort.TCP_SECURE):
+        remote_clause = "remoteSecure"
+    elif ch_client.check_port(ClickhousePort.TCP):
+        remote_clause = "remote"
+    else:
+        raise RuntimeError("For using remote() table function tcp port must be defined")
+
+    if has_zk(ctx):
+        if not check_zk_node(ctx, ZK_PATH_LISTING_TABLE_INFO):
+            create_zk_nodes(ctx, [ZK_PATH_LISTING_TABLE_INFO], make_parents=True)
+            data = {"replica_owner": ch_client.host}
+            update_zk_nodes(
+                ctx, [ZK_PATH_LISTING_TABLE_INFO], json.dumps(data).encode("utf-8")
+            )
+        else:
+            listing_table_info = get_zk_node(ctx, ZK_PATH_LISTING_TABLE_INFO)
+            data = json.loads(listing_table_info)
+            replica_owner = data["replica_owner"]
+            listing_table = f"{remote_clause}('{replica_owner}', {listing_table}, '{user_name}', '{{user_password}}')"
+
     # Create listing table for storing paths from object storage
     try:
         if not use_saved_list:
-            _drop_table(ctx, listing_table)
+            _drop_table(ctx, listing_table, user_password)
+            if has_zk(ctx) and check_zk_node(ctx, ZK_PATH_LISTING_TABLE_INFO):
+                delete_zk_node(ctx, ZK_PATH_LISTING_TABLE_INFO)
 
+        query = Query(
+            f"CREATE TABLE IF NOT EXISTS {listing_table} (obj_path String, obj_size UInt64) ENGINE MergeTree ORDER BY obj_path SETTINGS storage_policy = '{config['storage_policy']}'",
+            sensitive_args={"user_password": user_password},
+        )
         execute_query(
             ctx,
-            f"CREATE TABLE IF NOT EXISTS {listing_table} (obj_path String, obj_size UInt64) ENGINE MergeTree ORDER BY obj_path SETTINGS storage_policy = '{config['storage_policy']}'",
+            query,
         )
         deleted, total_size = _clean_object_storage(
             ctx,
+            ch_client,
+            user_name,
+            user_password,
             object_name_prefix,
             from_time,
             to_time,
@@ -90,13 +138,18 @@ def clean(
         )
     finally:
         if not keep_paths:
-            _drop_table(ctx, listing_table)
+            _drop_table(ctx, listing_table, user_password)
+            if has_zk(ctx) and check_zk_node(ctx, ZK_PATH_LISTING_TABLE_INFO):
+                delete_zk_node(ctx, ZK_PATH_LISTING_TABLE_INFO)
 
     return deleted, total_size
 
 
 def _clean_object_storage(
     ctx: Context,
+    ch_client: ClickhouseClient,
+    user_name: str,
+    user_password: str,
     object_name_prefix: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
@@ -119,11 +172,9 @@ def _clean_object_storage(
         logging.info(
             f"Collecting objects... (Disk: '{disk_conf.name}', Endpoint '{disk_conf.endpoint_url}', Bucket: '{disk_conf.bucket_name}', Prefix: '{prefix}')",
         )
-        _traverse_object_storage(ctx, listing_table, from_time, to_time, prefix)
-
-    ch_client = clickhouse_client(ctx)
-    user_name = ch_client.user or ""
-    user_password = ch_client.password or ""
+        _traverse_object_storage(
+            ctx, listing_table, user_password, from_time, to_time, prefix
+        )
 
     remote_data_paths_table = "system.remote_data_paths"
 
@@ -199,6 +250,7 @@ def _clean_object_storage(
 def _traverse_object_storage(
     ctx: Context,
     listing_table: str,
+    user_password: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
     prefix: str,
@@ -221,32 +273,43 @@ def _traverse_object_storage(
         obj_paths_batch.append(ObjListItem(obj.key, obj.size))
         counter += 1
         if len(obj_paths_batch) >= INSERT_BATCH_SIZE:
-            _insert_listing_batch(ctx, obj_paths_batch, listing_table)
+            _insert_listing_batch(ctx, obj_paths_batch, listing_table, user_password)
             obj_paths_batch.clear()
 
     # Insert the last batch (might be shorter)
     if obj_paths_batch:
-        _insert_listing_batch(ctx, obj_paths_batch, listing_table)
+        _insert_listing_batch(ctx, obj_paths_batch, listing_table, user_password)
 
     logging.info("Collected {} objects", counter)
 
 
 def _insert_listing_batch(
-    ctx: Context, obj_paths_batch: List[ObjListItem], listing_table: str
+    ctx: Context,
+    obj_paths_batch: List[ObjListItem],
+    listing_table: str,
+    user_password: str,
 ) -> None:
     """
     Insert batch of object names to the listing table.
     """
     batch_values = ",".join(f"('{item.path}',{item.size})" for item in obj_paths_batch)
+    query = Query(
+        f"INSERT INTO {listing_table} (obj_path, obj_size) VALUES {batch_values}",
+        sensitive_args={"user_password": user_password},
+    )
     execute_query(
         ctx,
-        f"INSERT INTO {listing_table} (obj_path, obj_size) VALUES {batch_values}",
+        query,
         format_=None,
     )
 
 
-def _drop_table(ctx: Context, table_name: str) -> None:
-    execute_query(ctx, f"DROP TABLE IF EXISTS {table_name} SYNC", format_=None)
+def _drop_table(ctx: Context, table_name: str, user_password: str) -> None:
+    query = Query(
+        f"DROP TABLE IF EXISTS {table_name} SYNC",
+        sensitive_args={"user_password": user_password},
+    )
+    execute_query(ctx, query, format_=None)
 
 
 def _get_default_object_name_prefix(
