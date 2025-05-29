@@ -88,34 +88,38 @@ def clean(
     user_name = ch_client.user or ""
     user_password = ch_client.password or ""
 
-    # In the monitoring implementation, the cleanup should only be performed on one shard host.
-    # We store the table owner information so that a rerun on another host works with the current table.
-    if has_zk(ctx):
-        if not check_zk_node(ctx, LISTING_TABLE_INFO_ZK_PATH):
-            create_zk_nodes(ctx, [LISTING_TABLE_INFO_ZK_PATH], make_parents=True)
-            info = {LISTING_TABLE_REPLICA_OWNER_FIELD: ch_client.host}
-            update_zk_nodes(
-                ctx, [LISTING_TABLE_INFO_ZK_PATH], json.dumps(info).encode("utf-8")
-            )
-        else:
-            listing_table_info = get_zk_node(ctx, LISTING_TABLE_INFO_ZK_PATH)
-            info = json.loads(listing_table_info)
-            replica_owner = info[LISTING_TABLE_REPLICA_OWNER_FIELD]
-            listing_table = f"{_get_remote_clause(ctx)}('{replica_owner}', {listing_table}, '{user_name}', '{{user_password}}')"
-
     # Create listing table for storing paths from object storage
     try:
         if not use_saved_list:
             _drop_listing_table(ctx, listing_table, user_password)
 
+        # In the monitoring implementation, the cleanup should only be performed on one shard host.
+        # We store the table owner information so that a rerun on another host works with the current table.
+        if has_zk(ctx):
+            if not check_zk_node(ctx, LISTING_TABLE_INFO_ZK_PATH):
+                create_zk_nodes(ctx, [LISTING_TABLE_INFO_ZK_PATH], make_parents=True)
+                info = {LISTING_TABLE_REPLICA_OWNER_FIELD: ch_client.host}
+                update_zk_nodes(
+                    ctx,
+                    [LISTING_TABLE_INFO_ZK_PATH],
+                    json.dumps(info, indent=4).encode("utf-8"),
+                )
+            else:
+                listing_table_info = get_zk_node(ctx, LISTING_TABLE_INFO_ZK_PATH)
+                info = json.loads(listing_table_info)
+                replica_owner = info[LISTING_TABLE_REPLICA_OWNER_FIELD]
+                listing_table = f"{_get_remote_clause(ctx)}('{replica_owner}', {listing_table}, '{user_name}', '{{user_password}}')"
+
         query = Query(
             f"CREATE TABLE IF NOT EXISTS {listing_table} (obj_path String, obj_size UInt64) ENGINE MergeTree ORDER BY obj_path SETTINGS storage_policy = '{config['storage_policy']}'",
             sensitive_args={"user_password": user_password},
         )
+
         execute_query(
             ctx,
             query,
         )
+
         deleted, total_size = _clean_object_storage(
             ctx,
             ch_client,
