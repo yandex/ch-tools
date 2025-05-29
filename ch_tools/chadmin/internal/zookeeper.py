@@ -19,6 +19,13 @@ def get_zk_node(ctx, path, binary=False):
         return value if binary else value.decode().strip()
 
 
+def get_zk_node_with_version(ctx, path, binary=False):
+    with zk_client(ctx) as zk:
+        path = format_path(ctx, path)
+        value, version = zk.get(path)
+        return value if binary else value.decode().strip(), version
+
+
 def check_zk_node(ctx, path):
     with zk_client(ctx) as zk:
         path = format_path(ctx, path)

@@ -922,9 +922,8 @@ def change_uuid_command(
 
                 metadata = parse_table_metadata(table_local_metadata_path)
                 if not metadata.table_engine.is_table_engine_replicated():
-                    raise RuntimeError(
-                        f"Table {table_name} is not replicated. Failed get uuid from table_shared_id node."
-                    )
+                    logging.info(f"Table {table_name} is not replicated.")
+                    continue
 
                 replica_path = metadata.replica_path
 
