@@ -185,6 +185,12 @@ Feature: chadmin object-storage commands
         "error_msg": ""
     }
     """
+    Then we get zookeeper node with "/object-storage-cleanup-state/listing-table-info" path
+    """
+    {
+        "replica_owner": "clickhouse01.ch_tools_test"
+    }
+    """
 
   Scenario: Clean with store-state-local works
     When we execute command on clickhouse01

@@ -10,6 +10,11 @@ from kazoo.exceptions import NoNodeError, NotEmptyError
 from ch_tools.chadmin.internal.utils import chunked, replace_macros
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
+from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
+
+
+def has_zk(ctx):
+    return len(ClickhouseInfo.get_replicas(ctx)) > 1
 
 
 def get_zk_node(ctx, path, binary=False):
