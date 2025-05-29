@@ -44,8 +44,10 @@ INSERT_BATCH_SIZE = 500
 # These objects are not counted if their last modified time fall in the interval from the moment of starting analyzing.
 DEFAULT_GUARD_INTERVAL = "24h"
 KEYS_BATCH_SIZE = 100_000
-
-ZK_PATH_LISTING_TABLE_INFO = "object-storage-cleanup-state/listing-table-info"
+# The ZK node along this path contains information about listing table.
+LISTING_TABLE_INFO_ZK_PATH = "/object-storage-cleanup-state/listing-table-info"
+# Field of the replica on which the listing table is located.
+LISTING_TABLE_REPLICA_OWNER_FIELD = "replica_owner"
 
 
 class CleanScope(str, Enum):
@@ -86,33 +88,25 @@ def clean(
     user_name = ch_client.user or ""
     user_password = ch_client.password or ""
 
-    # TODO: вынести в отдельный метод
-    if ch_client.check_port(ClickhousePort.TCP_SECURE):
-        remote_clause = "remoteSecure"
-    elif ch_client.check_port(ClickhousePort.TCP):
-        remote_clause = "remote"
-    else:
-        raise RuntimeError("For using remote() table function tcp port must be defined")
-
+    # In the monitoring implementation, the cleanup should only be performed on one shard host.
+    # We store the table owner information so that a rerun on another host works with the current table.
     if has_zk(ctx):
-        if not check_zk_node(ctx, ZK_PATH_LISTING_TABLE_INFO):
-            create_zk_nodes(ctx, [ZK_PATH_LISTING_TABLE_INFO], make_parents=True)
-            data = {"replica_owner": ch_client.host}
+        if not check_zk_node(ctx, LISTING_TABLE_INFO_ZK_PATH):
+            create_zk_nodes(ctx, [LISTING_TABLE_INFO_ZK_PATH], make_parents=True)
+            info = {LISTING_TABLE_REPLICA_OWNER_FIELD: ch_client.host}
             update_zk_nodes(
-                ctx, [ZK_PATH_LISTING_TABLE_INFO], json.dumps(data).encode("utf-8")
+                ctx, [LISTING_TABLE_INFO_ZK_PATH], json.dumps(info).encode("utf-8")
             )
         else:
-            listing_table_info = get_zk_node(ctx, ZK_PATH_LISTING_TABLE_INFO)
-            data = json.loads(listing_table_info)
-            replica_owner = data["replica_owner"]
-            listing_table = f"{remote_clause}('{replica_owner}', {listing_table}, '{user_name}', '{{user_password}}')"
+            listing_table_info = get_zk_node(ctx, LISTING_TABLE_INFO_ZK_PATH)
+            info = json.loads(listing_table_info)
+            replica_owner = info[LISTING_TABLE_REPLICA_OWNER_FIELD]
+            listing_table = f"{_get_remote_clause(ctx)}('{replica_owner}', {listing_table}, '{user_name}', '{{user_password}}')"
 
     # Create listing table for storing paths from object storage
     try:
         if not use_saved_list:
-            _drop_table(ctx, listing_table, user_password)
-            if has_zk(ctx) and check_zk_node(ctx, ZK_PATH_LISTING_TABLE_INFO):
-                delete_zk_node(ctx, ZK_PATH_LISTING_TABLE_INFO)
+            _drop_listing_table(ctx, listing_table, user_password)
 
         query = Query(
             f"CREATE TABLE IF NOT EXISTS {listing_table} (obj_path String, obj_size UInt64) ENGINE MergeTree ORDER BY obj_path SETTINGS storage_policy = '{config['storage_policy']}'",
@@ -138,9 +132,7 @@ def clean(
         )
     finally:
         if not keep_paths:
-            _drop_table(ctx, listing_table, user_password)
-            if has_zk(ctx) and check_zk_node(ctx, ZK_PATH_LISTING_TABLE_INFO):
-                delete_zk_node(ctx, ZK_PATH_LISTING_TABLE_INFO)
+            _drop_listing_table(ctx, listing_table, user_password)
 
     return deleted, total_size
 
@@ -184,15 +176,7 @@ def _clean_object_storage(
         )
     elif clean_scope == CleanScope.SHARD:
         #  It is believed that all hosts in shard have the same port set, so check current for tcp port
-        if ch_client.check_port(ClickhousePort.TCP_SECURE):
-            remote_clause = "remoteSecure"
-        elif ch_client.check_port(ClickhousePort.TCP):
-            remote_clause = "remote"
-        else:
-            raise RuntimeError(
-                "For using remote() table function tcp port must be defined"
-            )
-
+        remote_clause = _get_remote_clause(ctx)
         replicas = ",".join(ClickhouseInfo.get_replicas(ctx))
         remote_data_paths_table = f"{remote_clause}('{replicas}', {remote_data_paths_table}, '{user_name}', '{{user_password}}')"
 
@@ -328,3 +312,20 @@ def _get_default_object_name_prefix(
         return cluster_path + ("/" if cluster_path else "")
 
     return disk_conf.prefix
+
+
+def _get_remote_clause(ctx: Context) -> str:
+    ch_client = clickhouse_client(ctx)
+
+    if ch_client.check_port(ClickhousePort.TCP_SECURE):
+        return "remoteSecure"
+    elif ch_client.check_port(ClickhousePort.TCP):
+        return "remote"
+    else:
+        raise RuntimeError("For using remote() table function tcp port must be defined")
+
+
+def _drop_listing_table(ctx: Context, listing_table: str, user_password: str) -> None:
+    _drop_table(ctx, listing_table, user_password)
+    if has_zk(ctx) and check_zk_node(ctx, LISTING_TABLE_INFO_ZK_PATH):
+        delete_zk_node(ctx, LISTING_TABLE_INFO_ZK_PATH)
