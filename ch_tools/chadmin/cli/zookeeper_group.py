@@ -379,9 +379,24 @@ def _get_table_name_from_path(path: str) -> str:
     return path.rsplit("/", 1)[-1]
 
 
-@zookeeper_group.command("sync-tables-nodes")
-@option("-src", "--src", type=StringParamType(), required=True)
-@option("-dst", "--dst", type=ListParamType(), required=True)
+@zookeeper_group.command(
+    "sync-tables-nodes",
+    help="Sync table_shared_id node for Replicated tables with replica on different shards",
+)
+@option(
+    "-src",
+    "--src",
+    type=StringParamType(),
+    required=True,
+    help="Path to shard that will be source of table_shared_id",
+)
+@option(
+    "-dst",
+    "--dst",
+    type=ListParamType(),
+    required=True,
+    help="Path to the shard or shards in which the table nodes must be updated according to the source table_shared_id node",
+)
 @pass_context
 def sync_tables_nodes(ctx: Context, src: str, dst: list) -> None:
     try:
