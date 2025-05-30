@@ -398,7 +398,7 @@ def _get_table_name_from_path(path: str) -> str:
     help="Path to the shard or shards in which the table nodes must be updated according to the source table_shared_id node",
 )
 @pass_context
-def sync_tables_nodes(ctx: Context, src: str, dst: list) -> None:
+def sync_tables_nodes(ctx: Context, src: str, dst: list[str]) -> None:
     try:
         with zk_client(ctx) as zk:
             txn = zk.transaction()
@@ -424,11 +424,10 @@ def sync_tables_nodes(ctx: Context, src: str, dst: list) -> None:
                     txn.set_data(
                         path=dst_shared_table_id_path, value=table_shared_id.encode()
                     )
-                    txn.check(path=src_shared_table_id_path, version=stat.version)
-
                     logging.info(
                         f"Try set uuid={table_shared_id} to path={dst_shared_table_id_path}"
                     )
+                txn.check(path=src_shared_table_id_path, version=stat.version)
 
             txn.commit()
     except Exception as ex:

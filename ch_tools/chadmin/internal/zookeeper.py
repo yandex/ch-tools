@@ -3,9 +3,12 @@ import re
 from collections import deque
 from contextlib import contextmanager
 from math import sqrt
+from typing import Tuple
 
+from click import Context
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError, NotEmptyError
+from kazoo.protocol.states import ZnodeStat
 
 from ch_tools.chadmin.internal.utils import chunked, replace_macros
 from ch_tools.common import logging
@@ -19,7 +22,9 @@ def get_zk_node(ctx, path, binary=False):
         return value if binary else value.decode().strip()
 
 
-def get_zk_node_with_version(ctx, path, binary=False):
+def get_zk_node_with_version(
+    ctx: Context, path: str, binary: bool = False
+) -> Tuple[str, ZnodeStat]:
     with zk_client(ctx) as zk:
         path = format_path(ctx, path)
         value, version = zk.get(path)

@@ -922,7 +922,7 @@ def change_uuid_command(
 
                 metadata = parse_table_metadata(table_local_metadata_path)
                 if not metadata.table_engine.is_table_engine_replicated():
-                    logging.info(f"Table {table_name} is not replicated.")
+                    logging.info(f"Table {table_name} is not replicated. Skip it.")
                     continue
 
                 replica_path = metadata.replica_path
