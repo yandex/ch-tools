@@ -34,7 +34,7 @@ def execute_query(
 
     if replica is not None:
         ch_client.host = replica
-    
+
     return clickhouse_client(ctx).query(
         query=query,
         query_args=kwargs,
@@ -56,7 +56,6 @@ def execute_query_on_shard(
     format_="default",
     stream=False,
     settings=None,
-    replica=None,
     **kwargs,
 ):
     replicas = ClickhouseInfo.get_replicas(ctx)
@@ -70,8 +69,8 @@ def execute_query_on_shard(
             format_=format_,
             stream=stream,
             settings=settings,
-            replica=replica
-            **kwargs
+            replica=replica,
+            **kwargs,
         )
 
 
