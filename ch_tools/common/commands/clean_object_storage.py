@@ -3,6 +3,8 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import List, Optional, Tuple
 
+from ch_tools.chadmin.internal.zookeeper import has_zk
+from ch_tools.common.clickhouse.config import get_cluster_name
 import click
 from click import Context
 from humanfriendly import format_size
@@ -68,15 +70,19 @@ def clean(
     config = ctx.obj["config"]["object_storage"]["clean"]
 
     listing_table = f"{config['listing_table_database']}.{config['listing_table_prefix']}{disk_conf.name}"
+    listing_table_zk_path_prefix = config["listing_table_zk_path_prefix"]
+    
     # Create listing table for storing paths from object storage
     try:
         if not use_saved_list:
-            _drop_table(ctx, listing_table)
+            _truncate_table(ctx, listing_table)
 
-        execute_query(
-            ctx,
-            f"CREATE TABLE IF NOT EXISTS {listing_table} (obj_path String, obj_size UInt64) ENGINE MergeTree ORDER BY obj_path SETTINGS storage_policy = '{config['storage_policy']}'",
-        )
+        if has_zk(ctx):
+            create_table_query = f"CREATE TABLE IF NOT EXISTS {listing_table} ON CLUSTER {get_cluster_name(ctx)} (obj_path String, obj_size UInt64) ENGINE ReplicatedMergeTree('{listing_table_zk_path_prefix}/{{shard}}/{listing_table}', '{{replica}}') ORDER BY obj_path SETTINGS storage_policy = '{config['storage_policy']}'"
+        else:
+            create_table_query = f"CREATE TABLE IF NOT EXISTS {listing_table} (obj_path String, obj_size UInt64) ENGINE MergeTree ORDER BY obj_path SETTINGS storage_policy = '{config['storage_policy']}'"
+
+        execute_query(ctx, create_table_query)
         deleted, total_size = _clean_object_storage(
             ctx,
             object_name_prefix,
@@ -90,7 +96,7 @@ def clean(
         )
     finally:
         if not keep_paths:
-            _drop_table(ctx, listing_table)
+            _truncate_table(ctx, listing_table)
 
     return deleted, total_size
 
@@ -245,8 +251,8 @@ def _insert_listing_batch(
     )
 
 
-def _drop_table(ctx: Context, table_name: str) -> None:
-    execute_query(ctx, f"DROP TABLE IF EXISTS {table_name} SYNC", format_=None)
+def _truncate_table(ctx: Context, table_name: str) -> None:
+    execute_query(ctx, f"TRUNCATE TABLE IF EXISTS {table_name} SYNC", format_=None)
 
 
 def _get_default_object_name_prefix(
