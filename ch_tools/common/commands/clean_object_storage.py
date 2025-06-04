@@ -3,8 +3,6 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import List, Optional, Tuple
 
-from ch_tools.chadmin.internal.zookeeper import has_zk
-from ch_tools.common.clickhouse.config import get_cluster_name
 import click
 from click import Context
 from humanfriendly import format_size
@@ -18,9 +16,11 @@ from ch_tools.chadmin.internal.object_storage.s3_iterator import (
 )
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.utils import chunked, execute_query
+from ch_tools.chadmin.internal.zookeeper import has_zk
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 from ch_tools.common.clickhouse.client.query import Query
+from ch_tools.common.clickhouse.config import get_cluster_name
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
@@ -71,7 +71,7 @@ def clean(
 
     listing_table = f"{config['listing_table_database']}.{config['listing_table_prefix']}{disk_conf.name}"
     listing_table_zk_path_prefix = config["listing_table_zk_path_prefix"]
-    
+
     # Create listing table for storing paths from object storage
     try:
         if not use_saved_list:
