@@ -272,3 +272,28 @@ Feature: chadmin zookeeper commands.
     """
     a7434a27-e2e5-41d1-be33-6a1e19b33ab3
     """
+
+@require_version_24.8
+  Scenario: Failed sync table_shared_id in zero copy 
+    When we execute query on clickhouse01
+    """
+    CREATE DATABASE non_repl_db ON CLUSTER 'cluster';
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE non_repl_db.test_table_1
+    (
+        `a` Int
+    )
+    ENGINE = ReplicatedMergeTree('/clickhouse/foo/shard1/test_table_1', '{replica}')
+    ORDER BY a
+    SETTINGS allow_remote_fs_zero_copy_replication=1;
+    """
+    When we try to execute command on clickhouse01
+    """
+    chadmin zookeeper sync-tables-nodes --src '/clickhouse/foo/shard1' --dst '/clickhouse/foo/shard2'
+    """
+    Then it fails with response contains
+    """
+    Changing zookeeper's nodes is not allowed in zero_copy cluster
+    """
