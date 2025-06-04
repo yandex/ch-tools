@@ -81,7 +81,7 @@ def clean(
         if not use_saved_list:
             _drop_table_on_shard(ctx, listing_table)
 
-        if has_zk(ctx):
+        if has_zk():
             create_table_query = f"CREATE TABLE IF NOT EXISTS {listing_table} ON CLUSTER {get_cluster_name(ctx)} (obj_path String, obj_size UInt64) ENGINE ReplicatedMergeTree('{listing_table_zk_path_prefix}/{{shard}}/{listing_table}', '{{replica}}') ORDER BY obj_path SETTINGS storage_policy = '{config['storage_policy']}'"
         else:
             create_table_query = f"CREATE TABLE IF NOT EXISTS {listing_table} (obj_path String, obj_size UInt64) ENGINE MergeTree ORDER BY obj_path SETTINGS storage_policy = '{config['storage_policy']}'"

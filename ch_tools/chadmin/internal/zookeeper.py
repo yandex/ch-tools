@@ -4,18 +4,17 @@ from collections import deque
 from contextlib import contextmanager
 from math import sqrt
 
-from click import Context
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError, NotEmptyError
 
 from ch_tools.chadmin.internal.utils import chunked, replace_macros
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
-from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
+from ch_tools.common.clickhouse.config.clickhouse import ClickhouseConfig
 
 
-def has_zk(ctx: Context) -> bool:
-    return len(ClickhouseInfo.get_replicas(ctx)) > 1
+def has_zk() -> bool:
+    return ClickhouseConfig.load().zookeeper
 
 
 def get_zk_node(ctx, path, binary=False):
