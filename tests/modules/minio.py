@@ -97,7 +97,7 @@ def _mc_execute(context: ContextT, command: str) -> dict:
     """
     Execute mc (Minio client) command.
     """
-    output = _container(context).exec_run(f"mcli --json {command}").output.decode()
+    output = _container(context).exec_run(f"mc --json {command}").output.decode()
     response = json.loads(output)
     if response["status"] == "success":
         return response
