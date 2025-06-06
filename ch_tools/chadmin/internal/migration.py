@@ -149,10 +149,7 @@ def restore_as_first_replica(
 ) -> None:
     logging.info("call restore_as_first_replica")
 
-    if db_replica_path:
-        prefix_db_zk_path = db_replica_path
-    else:
-        prefix_db_zk_path = _default_db_zk_path(database_name)
+    prefix_db_zk_path = db_replica_path or _default_db_zk_path(database_name)
 
     with zk_client(ctx) as zk:
         counter = _generate_counter(ctx, zk, prefix_db_zk_path)
@@ -252,7 +249,7 @@ def create_database_nodes(
 
     with zk_client(ctx) as zk:
         if db_replica_path:
-            prefix_db_zk_path: str = db_replica_path
+            prefix_db_zk_path = db_replica_path
         else:
             prefix_db_zk_path = _default_db_zk_path(database_name)
             if not zk.exists(format_path(ctx, "/clickhouse")):
@@ -559,23 +556,3 @@ def is_database_exists(ctx: Context, database_name: str) -> bool:
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
 
     return 1 == len(rows["data"])
-
-
-# def is_database_replicated(ctx: Context, database_name: str) -> bool:
-#     query = f"""
-#         SELECT engine FROM system.databases WHERE database='{database_name}'
-#     """
-#     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
-
-#     logging.info("result={}", rows["data"][0]["engine"])
-
-#     return "Replicated" == rows["data"][0]["engine"]
-
-
-# def is_database_replica_exists(ctx: Context, database_name: str) -> bool:
-#     query = f"""
-#         SELECT engine_full FROM system.databases WHERE database='{database_name}'
-#     """
-#     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
-
-#     logging.info("result={}", rows["data"][0]["engine_full"])

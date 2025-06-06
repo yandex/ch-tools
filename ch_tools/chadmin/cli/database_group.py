@@ -243,8 +243,6 @@ def restore_replica_command(ctx: Context, database: str) -> None:
             )
             sys.exit(1)
 
-        first_replica = True
-
         try:
             create_database_nodes(
                 ctx,
@@ -257,13 +255,11 @@ def restore_replica_command(ctx: Context, database: str) -> None:
                 ex,
                 type(ex),
             )
-            first_replica = False
         except Exception as ex:
             logging.info("create_database_nodes failed with ex={}", type(ex))
             raise ex
 
-        if first_replica:
-            restore_as_first_replica(ctx, database, db_metadata.replica_path)
+        restore_as_first_replica(ctx, database, db_metadata.replica_path)
     except Exception as ex:
         logging.error("Got exception: type={}, ex={}", type(ex), ex)
         sys.exit(1)
