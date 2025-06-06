@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from click import ClickException, Context
 from kazoo.client import KazooClient, TransactionRequest
@@ -88,9 +88,9 @@ def _check_tables_consistent(
             )
 
 
-def _generate_counter(ctx: Context, zk: KazooClient, migrating_database: str) -> str:
+def _generate_counter(ctx: Context, zk: KazooClient, prefix_db_zk_path: str) -> str:
     path_counter = zk.create(
-        format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-"),
+        format_path(ctx, f"{prefix_db_zk_path}/counter/cnt-"),
         sequence=True,
         ephemeral=True,
     )
@@ -134,20 +134,7 @@ def get_shard_and_replica_from_macros(ctx: Context) -> Tuple[str, str]:
 def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
     logging.info("call migrate_as_first_replica")
 
-    with zk_client(ctx) as zk:
-        counter = _generate_counter(ctx, zk, migrating_database)
-        txn = zk.transaction()
-
-        _create_first_replica_database_name(ctx, txn, migrating_database)
-        _create_query_node(ctx, txn, migrating_database, counter)
-        _create_database_replica(ctx, txn, migrating_database)
-
-        _create_database_metadata_nodes(ctx, txn, migrating_database)
-
-        result = txn.commit()
-        logging.info("Txn was committed. Result {}", result)
-
-        _check_result_txn(result)
+    restore_as_first_replica(ctx, migrating_database)
 
     # There is an issue when at first time _update_local_metadata_first_replica was failed.
     # Then next time we would have a failed txn.
@@ -155,16 +142,56 @@ def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
     _update_local_metadata_first_replica(ctx, migrating_database)
 
 
+def restore_as_first_replica(
+    ctx: Context,
+    database_name: str,
+    db_replica_path: Optional[str] = None,
+) -> None:
+    logging.info("call restore_as_first_replica")
+
+    if db_replica_path:
+        prefix_db_zk_path = db_replica_path
+    else:
+        prefix_db_zk_path = _default_db_zk_path(database_name)
+
+    with zk_client(ctx) as zk:
+        counter = _generate_counter(ctx, zk, prefix_db_zk_path)
+        txn = zk.transaction()
+
+        _create_first_replica_database_name(
+            ctx,
+            txn,
+            prefix_db_zk_path=prefix_db_zk_path,
+            migrating_database=database_name,
+        )
+        _create_query_node(ctx, txn, prefix_db_zk_path, counter)
+        _create_database_replica(ctx, txn, database_name, prefix_db_zk_path)
+
+        _create_database_metadata_nodes(ctx, txn, database_name, prefix_db_zk_path)
+
+        result = txn.commit()
+        logging.info("Txn was committed. Result {}", result)
+
+        _check_result_txn(result)
+
+
 def migrate_as_non_first_replica(ctx: Context, migrating_database: str) -> None:
     logging.info("call migrate_as_non_first_replica")
 
+    prefix_db_zk_path = _default_db_zk_path(migrating_database)
+
     with zk_client(ctx) as zk:
-        counter = _generate_counter(ctx, zk, migrating_database)
+        counter = _generate_counter(ctx, zk, prefix_db_zk_path)
 
         txn = zk.transaction()
 
-        _create_query_node(ctx, txn, migrating_database, counter)
-        _create_database_replica(ctx, txn, migrating_database)
+        _create_query_node(ctx, txn, prefix_db_zk_path, counter)
+        _create_database_replica(
+            ctx,
+            txn,
+            migrating_database,
+            prefix_db_zk_path=prefix_db_zk_path,
+        )
 
         metadata_non_repl_db = parse_database_from_metadata(migrating_database)
         tables_info = _get_tables_info_and_detach(ctx, migrating_database)
@@ -209,45 +236,54 @@ def _get_host_id(ctx: Context, migrating_database: str, replica: str) -> str:
     return result
 
 
-def create_database_nodes(ctx: Context, migrating_database: str) -> None:
+def _default_db_zk_path(database_name: str) -> str:
+    return f"/clickhouse/{database_name}"
+
+
+def create_database_nodes(
+    ctx: Context,
+    database_name: str,
+    db_replica_path: Optional[str] = None,
+) -> None:
     """
     Create common nodes for Replicated database.
     https://github.com/ClickHouse/ClickHouse/blob/master/src/Databases/DatabaseReplicated.cpp#L581
     """
+
     with zk_client(ctx) as zk:
-        if not zk.exists(format_path(ctx, "/clickhouse")):
-            zk.create(format_path(ctx, "/clickhouse"), makepath=True)
+        if db_replica_path:
+            prefix_db_zk_path: str = db_replica_path
+        else:
+            prefix_db_zk_path = _default_db_zk_path(database_name)
+            if not zk.exists(format_path(ctx, "/clickhouse")):
+                zk.create(format_path(ctx, "/clickhouse"), makepath=True)
 
         txn = zk.transaction()
 
         txn.create(
-            path=format_path(ctx, f"/clickhouse/{migrating_database}"),
+            path=format_path(ctx, prefix_db_zk_path),
             value="DatabaseReplicated".encode(),
         )
 
-        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/log"))
-        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/replicas"))
+        txn.create(path=format_path(ctx, f"{prefix_db_zk_path}/log"))
+        txn.create(path=format_path(ctx, f"{prefix_db_zk_path}/replicas"))
 
-        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/counter"))
+        txn.create(path=format_path(ctx, f"{prefix_db_zk_path}/counter"))
 
-        txn.create(
-            path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
-        )
-        txn.delete(
-            path=format_path(ctx, f"/clickhouse/{migrating_database}/counter/cnt-")
-        )
+        txn.create(path=format_path(ctx, f"{prefix_db_zk_path}/counter/cnt-"))
+        txn.delete(path=format_path(ctx, f"{prefix_db_zk_path}/counter/cnt-"))
 
-        txn.create(path=format_path(ctx, f"/clickhouse/{migrating_database}/metadata"))
+        txn.create(path=format_path(ctx, f"{prefix_db_zk_path}/metadata"))
 
         max_log_ptr = "1"
         txn.create(
-            path=format_path(ctx, f"/clickhouse/{migrating_database}/max_log_ptr"),
+            path=format_path(ctx, f"{prefix_db_zk_path}/max_log_ptr"),
             value=max_log_ptr.encode(),
         )
 
         data_logs_to_keep = "1000"
         txn.create(
-            path=format_path(ctx, f"/clickhouse/{migrating_database}/logs_to_keep"),
+            path=format_path(ctx, f"{prefix_db_zk_path}/logs_to_keep"),
             value=data_logs_to_keep.encode(),
         )
 
@@ -260,20 +296,21 @@ def create_database_nodes(ctx: Context, migrating_database: str) -> None:
 
 
 def _create_first_replica_database_name(
-    ctx: Context, txn: TransactionRequest, migrating_database: str
+    ctx: Context,
+    txn: TransactionRequest,
+    prefix_db_zk_path: str,
+    migrating_database: str,
 ) -> None:
     logging.info("call create_first_replica_database_name.")
 
     txn.create(
-        path=format_path(
-            ctx, f"/clickhouse/{migrating_database}/first_replica_database_name"
-        ),
+        path=format_path(ctx, f"{prefix_db_zk_path}/first_replica_database_name"),
         value=migrating_database.encode(),
     )
 
 
 def _create_query_node(
-    ctx: Context, txn: TransactionRequest, migrating_database: str, counter: str
+    ctx: Context, txn: TransactionRequest, prefix_db_zk_path: str, counter: str
 ) -> None:
     """
     Create queue nodes for Replicated database.
@@ -288,39 +325,34 @@ initiator:
 """  # noqa: W291
 
     txn.create(
-        path=format_path(ctx, f"/clickhouse/{migrating_database}/log/query-{counter}"),
+        path=format_path(ctx, f"{prefix_db_zk_path}/log/query-{counter}"),
         value=data_log_queue.encode(),
     )
 
     shard, replica = get_shard_and_replica_from_macros(ctx)
     txn.create(
-        path=format_path(
-            ctx, f"/clickhouse/{migrating_database}/log/query-{counter}/committed"
-        ),
+        path=format_path(ctx, f"{prefix_db_zk_path}/log/query-{counter}/committed"),
         value=f"{shard}|{replica}".encode(),
     )
 
     txn.create(
-        path=format_path(
-            ctx, f"/clickhouse/{migrating_database}/log/query-{counter}/active"
-        ),
+        path=format_path(ctx, f"{prefix_db_zk_path}/log/query-{counter}/active"),
     )
 
     txn.create(
-        path=format_path(
-            ctx, f"/clickhouse/{migrating_database}/log/query-{counter}/finished"
-        ),
+        path=format_path(ctx, f"{prefix_db_zk_path}/log/query-{counter}/finished"),
     )
 
     txn.create(
-        path=format_path(
-            ctx, f"/clickhouse/{migrating_database}/log/query-{counter}/synced"
-        ),
+        path=format_path(ctx, f"{prefix_db_zk_path}/log/query-{counter}/synced"),
     )
 
 
 def _create_database_replica(
-    ctx: Context, txn: TransactionRequest, migrating_database: str
+    ctx: Context,
+    txn: TransactionRequest,
+    migrating_database: str,
+    prefix_db_zk_path: str,
 ) -> None:
     """
     Create replica nodes for Replicated database.
@@ -333,12 +365,12 @@ def _create_database_replica(
     txn.create(
         path=format_path(
             ctx,
-            f"/clickhouse/{migrating_database}/log/query-0000000001/finished/{shard}|{replica}",
+            f"{prefix_db_zk_path}/log/query-0000000001/finished/{shard}|{replica}",
         ),
         value="0".encode(),
     )
 
-    replica_node = f"/clickhouse/{migrating_database}/replicas/{shard}|{replica}"
+    replica_node = f"{prefix_db_zk_path}/replicas/{shard}|{replica}"
 
     txn.create(
         path=format_path(ctx, replica_node),
@@ -374,7 +406,10 @@ def _create_database_replica(
 
 
 def _create_database_metadata_nodes(
-    ctx: Context, txn: TransactionRequest, migrating_database: str
+    ctx: Context,
+    txn: TransactionRequest,
+    migrating_database: str,
+    prefix_db_zk_path: str,
 ) -> None:
     query = f"""
         SELECT name, create_table_query, metadata_path FROM system.tables WHERE database='{migrating_database}'
@@ -392,9 +427,7 @@ def _create_database_metadata_nodes(
             local_table_metadata = metadata_file.read()
 
             txn.create(
-                path=format_path(
-                    ctx, f"/clickhouse/{migrating_database}/metadata/{table_name}"
-                ),
+                path=format_path(ctx, f"{prefix_db_zk_path}/metadata/{table_name}"),
                 value=local_table_metadata.encode(),
             )
 
@@ -526,3 +559,23 @@ def is_database_exists(ctx: Context, database_name: str) -> bool:
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
 
     return 1 == len(rows["data"])
+
+
+# def is_database_replicated(ctx: Context, database_name: str) -> bool:
+#     query = f"""
+#         SELECT engine FROM system.databases WHERE database='{database_name}'
+#     """
+#     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
+
+#     logging.info("result={}", rows["data"][0]["engine"])
+
+#     return "Replicated" == rows["data"][0]["engine"]
+
+
+# def is_database_replica_exists(ctx: Context, database_name: str) -> bool:
+#     query = f"""
+#         SELECT engine_full FROM system.databases WHERE database='{database_name}'
+#     """
+#     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
+
+#     logging.info("result={}", rows["data"][0]["engine_full"])
