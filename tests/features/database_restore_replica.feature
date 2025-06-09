@@ -49,6 +49,10 @@ Feature: chadmin database restore-replica command
     ATTACH DATABASE repl_db
     """
 
+    When we execute command on clickhouse02
+    """
+    chadmin database restore-replica -d repl_db
+    """
     When we execute query on clickhouse02
     """
     DETACH DATABASE repl_db
