@@ -134,7 +134,7 @@ def get_shard_and_replica_from_macros(ctx: Context) -> Tuple[str, str]:
 def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
     logging.info("call migrate_as_first_replica")
 
-    restore_as_first_replica(ctx, migrating_database)
+    restore_replica(ctx, migrating_database, first_replica=True)
 
     # There is an issue when at first time _update_local_metadata_first_replica was failed.
     # Then next time we would have a failed txn.
@@ -142,12 +142,13 @@ def migrate_as_first_replica(ctx: Context, migrating_database: str) -> None:
     _update_local_metadata_first_replica(ctx, migrating_database)
 
 
-def restore_as_first_replica(
+def restore_replica(
     ctx: Context,
     database_name: str,
+    first_replica: bool,
     db_replica_path: Optional[str] = None,
 ) -> None:
-    logging.info("call restore_as_first_replica")
+    logging.info("call restore_replica: as first {}", first_replica)
 
     prefix_db_zk_path = db_replica_path or _default_db_zk_path(database_name)
 
@@ -155,16 +156,23 @@ def restore_as_first_replica(
         counter = _generate_counter(ctx, zk, prefix_db_zk_path)
         txn = zk.transaction()
 
-        _create_first_replica_database_name(
-            ctx,
-            txn,
-            prefix_db_zk_path=prefix_db_zk_path,
-            migrating_database=database_name,
-        )
+        if first_replica:
+            _create_first_replica_database_name(
+                ctx,
+                txn,
+                prefix_db_zk_path=prefix_db_zk_path,
+                migrating_database=database_name,
+            )
         _create_query_node(ctx, txn, prefix_db_zk_path, counter)
         _create_database_replica(ctx, txn, database_name, prefix_db_zk_path)
 
-        _create_database_metadata_nodes(ctx, txn, database_name, prefix_db_zk_path)
+        if first_replica:
+            _create_database_metadata_nodes(
+                ctx,
+                txn,
+                database_name,
+                prefix_db_zk_path,
+            )
 
         result = txn.commit()
         logging.info("Txn was committed. Result {}", result)

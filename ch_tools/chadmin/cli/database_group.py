@@ -13,10 +13,9 @@ from ch_tools.chadmin.internal.migration import (
     is_database_exists,
     migrate_as_first_replica,
     migrate_as_non_first_replica,
-    restore_as_first_replica,
+    restore_replica,
 )
 from ch_tools.chadmin.internal.utils import execute_query
-from ch_tools.chadmin.internal.zookeeper import check_zk_node
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_cluster_name
 
@@ -235,14 +234,7 @@ def restore_replica_command(ctx: Context, database: str) -> None:
             logging.error("Database {} is not Replicated, stop restore", database)
             sys.exit(1)
 
-        if check_zk_node(ctx, db_metadata.replica_path):
-            logging.error(
-                "Database {} already has replica {} in zookeeper. Failed restore.",
-                database,
-                db_metadata.replica_path,
-            )
-            sys.exit(1)
-
+        first_replica = True
         try:
             create_database_nodes(
                 ctx,
@@ -255,11 +247,17 @@ def restore_replica_command(ctx: Context, database: str) -> None:
                 ex,
                 type(ex),
             )
+            first_replica = False
         except Exception as ex:
             logging.info("create_database_nodes failed with ex={}", type(ex))
             raise ex
 
-        restore_as_first_replica(ctx, database, db_metadata.replica_path)
+        restore_replica(
+            ctx,
+            database,
+            first_replica=first_replica,
+            db_replica_path=db_metadata.replica_path,
+        )
     except Exception as ex:
         logging.error("Got exception: type={}, ex={}", type(ex), ex)
         sys.exit(1)

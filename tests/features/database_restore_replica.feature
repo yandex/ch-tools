@@ -2,7 +2,6 @@ Feature: chadmin database restore-replica command
 
   Background:
     Given default configuration
-    And a working s3
     And a working zookeeper
     And a working clickhouse on clickhouse01
     And a working clickhouse on clickhouse02
@@ -97,6 +96,27 @@ Feature: chadmin database restore-replica command
     """
     (43)
     """
+
+    When we execute query on clickhouse02
+    """
+    SYSTEM SYNC REPLICA repl_db.bar
+    """
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM repl_db.foo FORMAT Values
+    """
+    Then we get response
+    """
+    (42)
+    """
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM repl_db.bar FORMAT Values
+    """
+    Then we get response
+    """
+    (43)
+    """
   Examples:
     | replica_path                                                 |
     | '/clickhouse/repl_db'                                        |
@@ -130,6 +150,11 @@ Feature: chadmin database restore-replica command
     ATTACH DATABASE repl_db
     """
 
+    When we execute command on clickhouse02
+    """
+    chadmin database restore-replica -d repl_db
+    """
+    Then it completes successfully
     When we execute query on clickhouse02
     """
     DETACH DATABASE repl_db
@@ -172,22 +197,6 @@ Feature: chadmin database restore-replica command
     Then we get response
     """
     (43)
-    """
-
-  @require_version_24.8
-  Scenario: Failed restore database replica zk path exists
-    When we execute query on clickhouse01
-    """
-    CREATE DATABASE repl_db ON CLUSTER '{cluster}' 
-    ENGINE=Replicated('/clickhouse/repl_db', '{shard}', '{replica}');
-    """
-    When we try to execute command on clickhouse01
-    """
-    chadmin database restore-replica -d repl_db
-    """
-    Then it fails with response contains
-    """
-    Database repl_db already has replica /clickhouse/repl_db in zookeeper. Failed restore.
     """
 
   @require_version_24.8
