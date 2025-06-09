@@ -88,9 +88,9 @@ def _check_tables_consistent(
             )
 
 
-def _generate_counter(ctx: Context, zk: KazooClient, prefix_db_zk_path: str) -> str:
+def _generate_counter(ctx: Context, zk: KazooClient, db_zk_path: str) -> str:
     path_counter = zk.create(
-        format_path(ctx, f"{prefix_db_zk_path}/counter/cnt-"),
+        format_path(ctx, f"{db_zk_path}/counter/cnt-"),
         sequence=True,
         ephemeral=True,
     )
