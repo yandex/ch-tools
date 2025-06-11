@@ -142,8 +142,9 @@ def wait_replication_sync_command(
     except ClickhouseError as e:
         if "TIMEOUT_EXCEEDED" in str(e):
             logging.error("Timeout while running query.")
-            sys.exit(1)
-        raise
+        else:
+            logging.error(f"Clickhouse error while running query: {e}")
+        sys.exit(1)
 
     if lightweight:
         sys.exit(0)
