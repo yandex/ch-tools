@@ -104,6 +104,10 @@ Feature: chadmin database restore-replica command
 
     When we execute query on clickhouse02
     """
+    SYSTEM SYNC DATABASE REPLICA repl_db
+    """
+    When we execute query on clickhouse02
+    """
     SYSTEM SYNC REPLICA repl_db.bar
     """
     When we execute query on clickhouse02
@@ -177,6 +181,10 @@ Feature: chadmin database restore-replica command
     )
     ENGINE = ReplicatedMergeTree
     ORDER BY a
+    """
+    When we execute query on clickhouse02
+    """
+    SYSTEM SYNC DATABASE REPLICA repl_db
     """
     And we execute query on clickhouse01
     """
