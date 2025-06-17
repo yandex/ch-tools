@@ -48,6 +48,8 @@ DEFAULT_CONFIG = {
             "listing_table_zk_path_prefix": "/_system/tables",
             "storage_policy": "default",
             "antijoin_timeout": 10 * 60,
+            "perform_sanity_check_size": True,
+            "perform_sanity_check_pathes": True,
         },
     },
     "zookeeper": {
@@ -79,6 +81,7 @@ DEFAULT_CONFIG = {
                 "max_retries": 25,
             },
         },
+        "tmp_path": "/var/lib/clickhouse/_mdb_tmp/chadmin",
     },
     "flamegraph": {
         "clickhouse_settings_per_sample_type": {
