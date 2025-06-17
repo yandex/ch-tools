@@ -128,3 +128,40 @@ def test_config(fs, files, result):
 
     config = ClickhouseConfig.load(try_preprocessed=True)
     assert config.dump() == result
+
+
+@pytest.mark.parametrize(
+    "files,result",
+    [
+        pytest.param(
+            {
+                CLICKHOUSE_SERVER_CONFIG_PATH: """
+                    <clickhouse>
+                        <zookeeper>
+                            <node></node>
+                            <root></root>
+                        </zookeeper>
+                    </clickhouse>
+                    """,
+            },
+            False,
+            id="with ZK config",
+        ),
+        pytest.param(
+            {
+                CLICKHOUSE_SERVER_CONFIG_PATH: """
+                    <clickhouse>
+                        <path>/var/lib/clickhouse/</path>
+                    </clickhouse>
+                    """,
+            },
+            True,
+            id="without ZK config",
+        ),
+    ],
+)
+def test_config_zookeeper(fs, files, result):
+    for file_path, contents in files.items():
+        fs.create_file(file_path, contents=contents)
+
+    assert ClickhouseConfig.load().zookeeper.is_empty() == result

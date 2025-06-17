@@ -9,6 +9,9 @@ class ClickhouseZookeeperConfig:
     def __init__(self, config: dict) -> None:
         self._config = config
 
+    def is_empty(self) -> bool:
+        return not bool(self._config)
+
     @property
     def nodes(self) -> list:
         value = self._config["node"]
