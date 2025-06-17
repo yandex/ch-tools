@@ -8,8 +8,11 @@ from click import Context
 from humanfriendly import format_size
 
 from ch_tools.chadmin.internal.object_storage import (
-    ObjListItem,
     cleanup_s3_object_storage,
+)
+from ch_tools.chadmin.internal.object_storage.obj_list_item import (
+    ObjListItem,
+    ObjListIterator,
 )
 from ch_tools.chadmin.internal.object_storage.s3_iterator import (
     s3_object_storage_iterator,
@@ -22,7 +25,11 @@ from ch_tools.chadmin.internal.utils import (
 )
 from ch_tools.chadmin.internal.zookeeper import has_zk
 from ch_tools.common import logging
-from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
+from ch_tools.common.clickhouse.client import OutputFormat
+from ch_tools.common.clickhouse.client.clickhouse_client import (
+    ClickhouseClient,
+    clickhouse_client,
+)
 from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.config import get_cluster_name
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
@@ -105,6 +112,89 @@ def clean(
     return deleted, total_size
 
 
+def _sanity_check_before_cleanup(
+    object_list_iterator: ObjListIterator,
+    ch_client: ClickhouseClient,
+    listing_table: str,
+    clean_scope: CleanScope,
+    check_size: bool,
+    check_paths: bool,
+) -> None:
+    if check_paths:
+        ### Paths in the bucket looks like:
+        ### cloud_storage/<bucket_path>/<shard_id>/hhs/asxganhthiylymnrswfqzfcvglwvp
+        ### To prevent silly mistakes raise exception if the paths are completely different
+        path_from_ch_list = str(
+            ch_client.query(
+                "SELECT remote_path FROM system.remote_data_paths LIMIT 1",
+                format_=OutputFormat.JSONCompact,
+            )["data"][0][0]
+        ).split("/")
+
+        if clean_scope == CleanScope.SHARD or clean_scope == CleanScope.HOST:
+            expected_equal_path = 3
+        elif clean_scope == CleanScope.CLUSTER:
+            expected_equal_path = 2
+        else:
+            raise NotImplementedError("Unknown clean scope.")
+
+        for orphaned_object in object_list_iterator:
+            object_path_splitted = orphaned_object.path.split("/")
+            if (
+                len(object_path_splitted) < expected_equal_path
+                or object_path_splitted[:expected_equal_path]
+                != path_from_ch_list[:expected_equal_path]
+            ):
+                raise RuntimeError(
+                    "Sanity check not passed, because remote_path({}) and object to delete({}) are completely different.".format(
+                        os.path.join("/", *path_from_ch_list), orphaned_object.path
+                    )
+                )
+
+    if check_size:
+        ### Total size of objects after cleanup in the s3 must be >= sum(bytes) FROM system.remote_data_paths
+        real_size_in_bucket = int(
+            ch_client.query(
+                f"SELECT sum(obj_size) FROM {listing_table}",
+                format_=OutputFormat.JSONCompact,
+            )["data"][0][0]
+        )
+
+        ch_size_in_bucket = int(
+            ch_client.query(
+                "SELECT sum(size) FROM system.remote_data_paths",
+                format_=OutputFormat.JSONCompact,
+            )["data"][0][0]
+        )
+
+        size_to_delete = 0
+        for orphaned_object in object_list_iterator:
+            size_to_delete += orphaned_object.size
+
+        if real_size_in_bucket - size_to_delete < ch_size_in_bucket:
+            raise RuntimeError(
+                "Sanity check not passed, because after delete size in the bucket will be less than total size of objects known by the clickhouse. Size in CH {} , Total size in bucket {}, would delete {}".format(
+                    ch_size_in_bucket, real_size_in_bucket, size_to_delete
+                )
+            )
+
+
+def _clean_objects(
+    orphaned_list_iterator: ObjListIterator,
+    disk_conf: S3DiskConfiguration,
+    dry_run: bool,
+) -> Tuple[int, int]:
+    deleted, total_size = 0, 0
+    for objects_batch in chunked(iter(orphaned_list_iterator), KEYS_BATCH_SIZE):
+        chunk_deleted, chunk_size = cleanup_s3_object_storage(
+            disk_conf, iter(objects_batch), dry_run
+        )
+        deleted += chunk_deleted
+        total_size += chunk_size
+
+    return deleted, total_size
+
+
 def _clean_object_storage(
     ctx: Context,
     object_name_prefix: str,
@@ -179,25 +269,25 @@ def _clean_object_storage(
     deleted = 0
     total_size = 0
     timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
-    with ch_client.query(
+    tmp_dir = ctx.obj["config"]["chadmin"]["tmp_path"]
+    object_iterator = ObjListIterator(
+        ch_client,
         antijoin_query,
-        timeout=timeout,
-        settings={"receive_timeout": timeout, "max_execution_time": 0},
-        stream=True,
-        format_="TabSeparated",
-    ) as resp:
-        # Setting chunk_size to 10MB, but usually incoming chunks are not larger than 1MB
-        for lines in chunked(
-            resp.iter_lines(chunk_size=10 * 1024 * 1024), KEYS_BATCH_SIZE
-        ):
-            keys = (
-                ObjListItem.from_tab_separated(line.decode().strip()) for line in lines
-            )
-            chunk_deleted, chunk_size = cleanup_s3_object_storage(
-                disk_conf, keys, dry_run
-            )
-            deleted += chunk_deleted
-            total_size += chunk_size
+        timeout,
+        {"receive_timeout": timeout, "max_execution_time": 0},
+        True,
+        tmp_dir,
+    )
+
+    _sanity_check_before_cleanup(
+        object_iterator,
+        ch_client,
+        listing_table,
+        clean_scope,
+        ctx.obj["config"]["object_storage"]["clean"]["perform_sanity_check_size"],
+        ctx.obj["config"]["object_storage"]["clean"]["perform_sanity_check_pathes"],
+    )
+    deleted, total_size = _clean_objects(object_iterator, disk_conf, dry_run)
 
     logging.info(
         f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
