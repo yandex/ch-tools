@@ -113,10 +113,12 @@ def clean(
 
 
 def _sanity_check_before_cleanup(
+    ctx: Context,
     object_list_iterator: ObjListIterator,
     ch_client: ClickhouseClient,
     listing_table: str,
     clean_scope: CleanScope,
+    remote_data_paths_table: str,
     check_size: bool,
     check_paths: bool,
 ) -> None:
@@ -129,7 +131,15 @@ def _sanity_check_before_cleanup(
 
         ch_objects_cnt = int(
             ch_client.query(
-                "SELECT count() FROM system.remote_data_paths",
+                Query(
+                    f"SELECT count() FROM {remote_data_paths_table}",
+                    sensitive_args={"user_password": ch_client.password or ""},
+                ),
+                settings=(
+                    {"traverse_shadow_remote_data_paths": 1}
+                    if match_ch_version(ctx, min_version="24.3")
+                    else {}
+                ),
                 format_=OutputFormat.JSONCompact,
             )["data"][0][0]
         )
@@ -139,7 +149,15 @@ def _sanity_check_before_cleanup(
 
         path_from_ch_list = str(
             ch_client.query(
-                "SELECT remote_path FROM system.remote_data_paths LIMIT 1",
+                Query(
+                    f"SELECT remote_path FROM {remote_data_paths_table} LIMIT 1",
+                    sensitive_args={"user_password": ch_client.password or ""},
+                ),
+                settings=(
+                    {"traverse_shadow_remote_data_paths": 1}
+                    if match_ch_version(ctx, min_version="24.3")
+                    else {}
+                ),
                 format_=OutputFormat.JSONCompact,
             )["data"][0][0]
         ).split("/")
@@ -175,7 +193,15 @@ def _sanity_check_before_cleanup(
 
         ch_size_in_bucket = int(
             ch_client.query(
-                "SELECT sum(size) FROM system.remote_data_paths",
+                Query(
+                    f"SELECT sum(size) FROM (SELECT DISTINCT remote_path, size FROM {remote_data_paths_table})",
+                    sensitive_args={"user_password": ch_client.password or ""},
+                ),
+                settings=(
+                    {"traverse_shadow_remote_data_paths": 1}
+                    if match_ch_version(ctx, min_version="24.3")
+                    else {}
+                ),
                 format_=OutputFormat.JSONCompact,
             )["data"][0][0]
         )
@@ -193,7 +219,9 @@ def _sanity_check_before_cleanup(
 
     if check_paths:
         perform_check_paths()
-    if check_size:
+
+    ## In ver < 23.3 no column size in the system.remote_data_paths
+    if check_size and match_ch_version(ctx, min_version="23.3"):
         perform_check_size()
 
 
@@ -298,10 +326,12 @@ def _clean_object_storage(
     )
 
     _sanity_check_before_cleanup(
+        ctx,
         object_iterator,
         ch_client,
         listing_table,
         clean_scope,
+        remote_data_paths_table,
         ctx.obj["config"]["object_storage"]["clean"]["perform_sanity_check_size"],
         ctx.obj["config"]["object_storage"]["clean"]["perform_sanity_check_pathes"],
     )
