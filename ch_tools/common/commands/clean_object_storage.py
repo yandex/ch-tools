@@ -120,10 +120,23 @@ def _sanity_check_before_cleanup(
     check_size: bool,
     check_paths: bool,
 ) -> None:
-    if check_paths:
+    def perform_check_paths():
+        ### NOTE: Ya.Cloud specific code. If you want to use it outside, better to disable this check.
+        ###
         ### Paths in the bucket looks like:
         ### cloud_storage/<bucket_path>/<shard_id>/hhs/asxganhthiylymnrswfqzfcvglwvp
         ### To prevent silly mistakes raise exception if the paths are completely different
+
+        ch_objects_cnt = int(
+            ch_client.query(
+                "SELECT count() FROM system.remote_data_paths",
+                format_=OutputFormat.JSONCompact,
+            )["data"][0][0]
+        )
+        ## Nothing to check
+        if ch_objects_cnt == 0:
+            return
+
         path_from_ch_list = str(
             ch_client.query(
                 "SELECT remote_path FROM system.remote_data_paths LIMIT 1",
@@ -151,7 +164,7 @@ def _sanity_check_before_cleanup(
                     )
                 )
 
-    if check_size:
+    def perform_check_size():
         ### Total size of objects after cleanup in the s3 must be >= sum(bytes) FROM system.remote_data_paths
         real_size_in_bucket = int(
             ch_client.query(
@@ -177,6 +190,11 @@ def _sanity_check_before_cleanup(
                     ch_size_in_bucket, real_size_in_bucket, size_to_delete
                 )
             )
+
+    if check_paths:
+        perform_check_paths()
+    if check_size:
+        perform_check_size()
 
 
 def _clean_objects(
