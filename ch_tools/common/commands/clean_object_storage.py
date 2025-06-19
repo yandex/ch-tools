@@ -333,7 +333,7 @@ def _clean_object_storage(
         clean_scope,
         remote_data_paths_table,
         ctx.obj["config"]["object_storage"]["clean"]["perform_sanity_check_size"],
-        ctx.obj["config"]["object_storage"]["clean"]["perform_sanity_check_pathes"],
+        ctx.obj["config"]["object_storage"]["clean"]["perform_sanity_check_paths"],
     )
     deleted, total_size = _clean_objects(object_iterator, disk_conf, dry_run)
 

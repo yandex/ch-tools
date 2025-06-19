@@ -116,7 +116,7 @@ Feature: chadmin object-storage commands
     object_storage:
       clean:
         perform_sanity_check_size: False
-        perform_sanity_check_pathes: False
+        perform_sanity_check_paths: False
     """
     When we put object in S3
     """
