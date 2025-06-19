@@ -17,7 +17,7 @@ from ch_tools.common.clickhouse.config.clickhouse import ClickhouseConfig
 
 
 def has_zk() -> bool:
-    return ClickhouseConfig.load().zookeeper
+    return not ClickhouseConfig.load().zookeeper.is_empty()
 
 
 def get_zk_node(ctx, path, binary=False):
