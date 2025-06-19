@@ -23,7 +23,7 @@ class ObjListIterator:
     def __init__(self, ch_client, query, timeout, settings, use_stream, tmp_dir_path):
         os.makedirs(tmp_dir_path, exist_ok=True)
 
-        self.file_path = os.path.join(tmp_dir_path, "object_list_" + str(uuid.uuid4()))
+        self.file_path = os.path.join(tmp_dir_path, f"object_list_{str(uuid.uuid4())}")
         with open(self.file_path, "w", encoding="utf-8") as file:
             with ch_client.query(
                 query,
@@ -42,4 +42,3 @@ class ObjListIterator:
 
     def __del__(self):
         os.remove(self.file_path)
-        pass

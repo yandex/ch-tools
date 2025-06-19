@@ -49,7 +49,7 @@ DEFAULT_CONFIG = {
             "storage_policy": "default",
             "antijoin_timeout": 10 * 60,
             "perform_sanity_check_size": True,
-            "perform_sanity_check_pathes": True,
+            "perform_sanity_check_paths": True,
         },
     },
     "zookeeper": {
