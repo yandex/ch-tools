@@ -11,14 +11,11 @@ from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
     create_zk_nodes,
     delete_zk_nodes,
-    get_children,
     get_zk_node,
     get_zk_node_acls,
-    get_zk_node_with_version,
     list_zk_nodes,
     update_acls_zk_node,
     update_zk_nodes,
-    zk_client,
 )
 from ch_tools.chadmin.internal.zookeeper_clean import clean_zk_metadata_for_hosts
 from ch_tools.common import logging
@@ -368,68 +365,3 @@ def remove_hosts_from_table(
         cleanup_ddl_queue=False,
         dry_run=dry_run,
     )
-
-
-def _get_table_name_from_path(path: str) -> str:
-    """
-    Path's examples in zookeeper:
-        /clickhouse/tables/shard3/some.something
-        /clickhouse/tables/shard3/something_something_something
-    """
-    return path.rsplit("/", 1)[-1]
-
-
-@zookeeper_group.command(
-    "sync-tables-nodes",
-    help="Sync table_shared_id node for Replicated tables with replica on different shards",
-)
-@option(
-    "-src",
-    "--src",
-    type=StringParamType(),
-    required=True,
-    help="Path to shard that will be source of table_shared_id",
-)
-@option(
-    "-dst",
-    "--dst",
-    type=ListParamType(),
-    required=True,
-    help="Path to the shard or shards in which the table nodes must be updated according to the source table_shared_id node",
-)
-@pass_context
-def sync_tables_nodes(ctx: Context, src: str, dst: list[str]) -> None:
-    try:
-        with zk_client(ctx) as zk:
-            txn = zk.transaction()
-
-            for table_path in get_children(zk, src):
-                src_table_name = _get_table_name_from_path(table_path)
-
-                src_shared_table_id_path = f"{src}/{table_path}/table_shared_id"
-                logging.info("src path={}", src_shared_table_id_path)
-
-                table_shared_id, stat = get_zk_node_with_version(
-                    ctx, path=src_shared_table_id_path
-                )
-
-                logging.info(
-                    f"Found table {src_table_name} in {src} with table_shared_id={table_shared_id}, version={stat.version}"
-                )
-
-                for zk_shard_path in dst:
-                    dst_shared_table_id_path = (
-                        f"{zk_shard_path}/{src_table_name}/table_shared_id"
-                    )
-                    txn.set_data(
-                        path=dst_shared_table_id_path, value=table_shared_id.encode()
-                    )
-                    logging.info(
-                        f"Try set uuid={table_shared_id} to path={dst_shared_table_id_path}"
-                    )
-                txn.check(path=src_shared_table_id_path, version=stat.version)
-
-            txn.commit()
-    except Exception as ex:
-        logging.error("Failed: {}, {}", type(ex), ex)
-        sys.exit(1)
