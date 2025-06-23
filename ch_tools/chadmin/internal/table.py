@@ -544,8 +544,16 @@ def _verify_possible_change_uuid(
             sys.exit(1)
 
         table_shared_id = get_table_shared_id(ctx, metadata.replica_path)
+        zero_copy_enabled = _is_zero_copy_enabled(ctx)
 
-        if dst_uuid != table_shared_id:
+        logging.debug(
+            "Check that dst_uuid {} is equal with table_shared_id {} node. zero copy enabled: {}",
+            dst_uuid,
+            table_shared_id,
+            zero_copy_enabled,
+        )
+
+        if dst_uuid != table_shared_id and not zero_copy_enabled:
             logging.error(
                 f"Changing uuid for ReplicatedMergeTree that different from table_shared_id path was not allowed. replica_path={metadata.replica_path}, dst_uuid={dst_uuid}, table_shared_id={table_shared_id}"
             )
@@ -627,7 +635,7 @@ def read_local_table_metadata(ctx: Context, table_local_metadata_path: str) -> s
         return f.read()
 
 
-def is_zero_copy_enabled(ctx: Context) -> bool:
+def _is_zero_copy_enabled(ctx: Context) -> bool:
     query = """
     SELECT value FROM system.merge_tree_settings WHERE name='allow_remote_fs_zero_copy_replication'
     """

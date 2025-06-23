@@ -6,7 +6,6 @@ from click import Context, argument, group, option, pass_context
 from kazoo.security import make_digest_acl
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
-from ch_tools.chadmin.internal.table import is_zero_copy_enabled
 from ch_tools.chadmin.internal.table_replica import get_table_replica
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
@@ -400,10 +399,6 @@ def _get_table_name_from_path(path: str) -> str:
 )
 @pass_context
 def sync_tables_nodes(ctx: Context, src: str, dst: list[str]) -> None:
-    if is_zero_copy_enabled(ctx):
-        logging.error("Changing zookeeper's nodes is not allowed in zero_copy cluster.")
-        sys.exit(1)
-
     try:
         with zk_client(ctx) as zk:
             txn = zk.transaction()
