@@ -906,12 +906,12 @@ def change_uuid_command(
         else:
             tables = [table]
 
-        logging.info("Tables for changing uuid: {}", tables)
+        logging.debug("Tables for changing uuid: {}", tables)
 
         for table_name in tables:
             table_info = get_info_from_system_tables(ctx, database, table_name)
 
-            logging.info("table_info={}", table_info)
+            logging.debug("table_info={}", table_info)
 
             if zk:
                 table_local_metadata_path = table_info["metadata_path"]

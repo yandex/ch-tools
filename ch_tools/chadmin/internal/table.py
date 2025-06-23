@@ -553,11 +553,16 @@ def _verify_possible_change_uuid(
             zero_copy_enabled,
         )
 
-        if dst_uuid != table_shared_id and not zero_copy_enabled:
-            logging.error(
-                f"Changing uuid for ReplicatedMergeTree that different from table_shared_id path was not allowed. replica_path={metadata.replica_path}, dst_uuid={dst_uuid}, table_shared_id={table_shared_id}"
-            )
-            sys.exit(1)
+        if dst_uuid != table_shared_id:
+            if not zero_copy_enabled:
+                logging.error(
+                    f"Changing uuid for ReplicatedMergeTree that different from table_shared_id path was not allowed. replica_path={metadata.replica_path}, dst_uuid={dst_uuid}, table_shared_id={table_shared_id}"
+                )
+                sys.exit(1)
+            else:
+                logging.info(
+                    f"Changing uuid for ReplicatedMergeTree that different from table_shared_id path is allowed only for zero copy clusters. replica_path={metadata.replica_path}, dst_uuid={dst_uuid}, table_shared_id={table_shared_id}"
+                )
 
     return metadata.table_uuid != dst_uuid
 

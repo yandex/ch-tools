@@ -205,7 +205,7 @@ Feature: chadmin table change and check-uuid-equal
     """
 
   @require_version_24.8
-  Scenario: Failed change uuid for ReplicatedMergeTree that different from table_shared_id
+  Scenario: Change uuid for ReplicatedMergeTree that different from table_shared_id with zero copy
     When we execute query on clickhouse01
     """
     CREATE DATABASE non_repl_db;
@@ -223,13 +223,13 @@ Feature: chadmin table change and check-uuid-equal
     """
     INSERT INTO non_repl_db.foo VALUES (42)
     """
-    When we try to execute command on clickhouse01
+    When we execute command on clickhouse01
     """
     chadmin table change -d non_repl_db -t foo --uuid '123e4567-e89b-12d3-a456-426614174000'
     """
-    Then it fails with response contains
+    Then we get response contains
     """
-    Changing uuid for ReplicatedMergeTree that different from table_shared_id path was not allowed
+    Changing uuid for ReplicatedMergeTree that different from table_shared_id path is allowed only for zero copy clusters
     """
 
   @require_version_24.8
