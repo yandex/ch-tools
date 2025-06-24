@@ -16,6 +16,17 @@ class DatabaseEngine(Enum):
     def is_replicated(self) -> bool:
         return self == DatabaseEngine.REPLICATED
 
+    @classmethod
+    def from_str(cls, engine_str: str) -> "DatabaseEngine":
+        engine = engine_str.strip().lower()
+        for supported_engine in cls:
+            if supported_engine.value.lower() == engine:
+                return supported_engine
+        raise ValueError(f"Unknown DatabaseEngine: {engine_str}")
+
+    def __str__(self) -> str:
+        return self.value
+
 
 @dataclass
 class DatabaseMetadata:
@@ -52,6 +63,14 @@ class DatabaseMetadata:
         self.replica_path = f"/clickhouse/{self.database_name}"
         self.shard = "{shard}"
         self.replica_name = "{replica}"
+
+        self.update_metadata_file()
+
+    def set_atomic(self) -> None:
+        self.database_engine = DatabaseEngine.ATOMIC
+        self.replica_path = None
+        self.shard = None
+        self.replica_name = None
 
         self.update_metadata_file()
 

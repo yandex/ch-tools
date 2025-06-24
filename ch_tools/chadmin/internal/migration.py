@@ -293,11 +293,11 @@ def create_database_nodes(
         )
 
         result = txn.commit()
-        logging.info("Txn was committed. Result {}", result)
+        logging.debug("Txn was committed. Result {}", result)
 
         _check_result_txn(result)
 
-        logging.info("result does not contain NodeExistsError.")
+        logging.debug("result does not contain NodeExistsError.")
 
 
 def _create_first_replica_database_name(
@@ -306,7 +306,7 @@ def _create_first_replica_database_name(
     prefix_db_zk_path: str,
     migrating_database: str,
 ) -> None:
-    logging.info("call create_first_replica_database_name.")
+    logging.debug("call create_first_replica_database_name.")
 
     txn.create(
         path=format_path(ctx, f"{prefix_db_zk_path}/first_replica_database_name"),
@@ -321,7 +321,7 @@ def _create_query_node(
     Create queue nodes for Replicated database.
     https://github.com/ClickHouse/ClickHouse/blob/master/src/Databases/DatabaseReplicatedWorker.cpp#L254
     """
-    logging.info("call create_query_node with counter={}.", counter)
+    logging.debug("call create_query_node with counter={}.", counter)
 
     data_log_queue = """version: 1
 query: 
@@ -564,3 +564,39 @@ def is_database_exists(ctx: Context, database_name: str) -> bool:
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
 
     return 1 == len(rows["data"])
+
+
+def migrate_database_to_replicated(ctx: Context, database: str) -> None:
+    first_replica = True
+    try:
+        create_database_nodes(ctx, database)
+    except NodeExistsError as ex:
+        logging.debug(
+            "create_database_nodes failed with NodeExistsError. {}, type={}. Migrate as second replica",
+            ex,
+            type(ex),
+        )
+
+        first_replica = False
+    except Exception as ex:
+        logging.error("create_database_nodes failed with ex={}", type(ex))
+        raise ex
+
+    if first_replica:
+        migrate_as_first_replica(ctx, database)
+    else:
+        migrate_as_non_first_replica(ctx, database)
+
+
+def migrate_database_to_atomic(ctx: Context, database: str) -> None:
+    metadata_repl_db = parse_database_from_metadata(database)
+    _detach_dbs(ctx, dbs=[database])
+    try:
+        metadata_repl_db.set_atomic()
+    except Exception as ex:
+        logging.error("Failed set atomic in metadata: {}", ex)
+        _attach_dbs(ctx, dbs=[database])
+        raise ex
+
+    logging.info("Metadata {} was updated to Atomic", database)
+    _attach_dbs(ctx, dbs=[database])

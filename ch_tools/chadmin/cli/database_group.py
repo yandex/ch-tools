@@ -7,12 +7,15 @@ from cloup.constraints import RequireAtLeast
 from kazoo.exceptions import NodeExistsError
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
-from ch_tools.chadmin.cli.database_metadata import parse_database_from_metadata
+from ch_tools.chadmin.cli.database_metadata import (
+    DatabaseEngine,
+    parse_database_from_metadata,
+)
 from ch_tools.chadmin.internal.migration import (
     create_database_nodes,
     is_database_exists,
-    migrate_as_first_replica,
-    migrate_as_non_first_replica,
+    migrate_database_to_atomic,
+    migrate_database_to_replicated,
     restore_replica,
 )
 from ch_tools.chadmin.internal.utils import execute_query
@@ -187,32 +190,23 @@ def get_databases(
 
 @database_group.command("migrate")
 @option("-d", "--database", required=True)
+@option(
+    "-e",
+    "--engine",
+    required=True,
+    help="Database engine: Atomic or Replicated. After migration to Atomic need manually delete zookeeper nodes.",
+)
 @pass_context
-def migrate_engine_command(ctx: Context, database: str) -> None:
+def migrate_engine_command(ctx: Context, database: str, engine: str) -> None:
     try:
         if not is_database_exists(ctx, database):
             logging.error("Database {} does not exists, skip migrating", database)
             sys.exit(1)
 
-        first_replica = True
-        try:
-            create_database_nodes(ctx, database)
-        except NodeExistsError as ex:
-            logging.info(
-                "create_database_nodes failed with NodeExistsError. {}, type={}. Migrate as second replica",
-                ex,
-                type(ex),
-            )
-
-            first_replica = False
-        except Exception as ex:
-            logging.info("create_database_nodes failed with ex={}", type(ex))
-            raise ex
-
-        if first_replica:
-            migrate_as_first_replica(ctx, database)
+        if DatabaseEngine.from_str(engine) == DatabaseEngine.REPLICATED:
+            migrate_database_to_replicated(ctx, database)
         else:
-            migrate_as_non_first_replica(ctx, database)
+            migrate_database_to_atomic(ctx, database)
 
     except Exception as ex:
         logging.error("Got exception: type={}, ex={}", type(ex), ex)
