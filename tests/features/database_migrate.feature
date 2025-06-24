@@ -15,7 +15,7 @@ Feature: chadmin database migrate command
     """
     And we execute command on clickhouse01
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db --engine Replicated
     """
     When we execute query on clickhouse01
     """
@@ -47,7 +47,7 @@ Feature: chadmin database migrate command
   Scenario: Migrate non exists database
     When we try to execute command on clickhouse01
     """
-    chadmin database migrate -d non_exists_db 
+    chadmin database migrate -d non_exists_db --engine Replicated
     """
     Then it fails with response contains
     """
@@ -76,7 +76,7 @@ Feature: chadmin database migrate command
 
     And we execute command on clickhouse01
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute query on clickhouse01
     """
@@ -126,7 +126,7 @@ Feature: chadmin database migrate command
 
     And we execute command on clickhouse01
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute query on clickhouse01
     """
@@ -161,7 +161,7 @@ Feature: chadmin database migrate command
     """
     And we execute command on clickhouse01
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
    
     When we execute query on clickhouse01
@@ -174,7 +174,7 @@ Feature: chadmin database migrate command
     """
     When we execute command on clickhouse02
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
 
     When we execute command on clickhouse01
@@ -257,7 +257,7 @@ Feature: chadmin database migrate command
     """
     And we execute command on clickhouse01
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute query on clickhouse01
     """
@@ -286,7 +286,7 @@ Feature: chadmin database migrate command
 
     When we execute command on clickhouse02
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute command on clickhouse02
     """
@@ -371,7 +371,7 @@ Feature: chadmin database migrate command
     """
     And we execute command on clickhouse01
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     Then it completes successfully
 
@@ -382,7 +382,7 @@ Feature: chadmin database migrate command
 
     When we execute command on clickhouse02
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     Then it completes successfully
 
@@ -440,7 +440,7 @@ Feature: chadmin database migrate command
     """
     And we execute command on clickhouse01
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute query on clickhouse01
     """
@@ -469,7 +469,7 @@ Feature: chadmin database migrate command
 
     When we execute command on clickhouse02
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute command on clickhouse02
     """
@@ -588,7 +588,7 @@ Feature: chadmin database migrate command
     """
     And we execute command on clickhouse01
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute query on clickhouse01
     """
@@ -617,7 +617,7 @@ Feature: chadmin database migrate command
 
     When we execute command on clickhouse02
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
 
     When we execute query on clickhouse02
@@ -750,7 +750,7 @@ Feature: chadmin database migrate command
     """
     And we execute command on clickhouse01
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute query on clickhouse01
     """
@@ -779,7 +779,7 @@ Feature: chadmin database migrate command
 
     When we execute command on clickhouse02
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute command on clickhouse02
     """
@@ -841,7 +841,7 @@ Feature: chadmin database migrate command
     """
     And we execute command on clickhouse01
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute query on clickhouse01
     """
@@ -870,7 +870,7 @@ Feature: chadmin database migrate command
 
     When we execute command on clickhouse02
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
 
     When we execute query on clickhouse02
@@ -940,7 +940,7 @@ Feature: chadmin database migrate command
     """
     When we execute command on clickhouse01
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute query on clickhouse01
     """
@@ -995,7 +995,7 @@ Feature: chadmin database migrate command
     """
     When we execute command on clickhouse01
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute query on clickhouse01
     """
@@ -1007,7 +1007,7 @@ Feature: chadmin database migrate command
     """
     When we execute command on clickhouse02
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute command on clickhouse02
     """
@@ -1055,7 +1055,7 @@ Feature: chadmin database migrate command
     """
     When we execute command on clickhouse01
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute query on clickhouse01
     """
@@ -1067,7 +1067,7 @@ Feature: chadmin database migrate command
     """
     When we execute command on clickhouse02
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute command on clickhouse02
     """
@@ -1108,7 +1108,7 @@ Feature: chadmin database migrate command
     """
     And we execute command on clickhouse01
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute query on clickhouse01
     """
@@ -1171,7 +1171,7 @@ Feature: chadmin database migrate command
     """
     When we execute command on clickhouse01
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute query on clickhouse01
     """
@@ -1199,7 +1199,7 @@ Feature: chadmin database migrate command
     """
     When we execute command on clickhouse02
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute command on clickhouse02
     """
@@ -1272,7 +1272,7 @@ Feature: chadmin database migrate command
     """
     When we execute command on clickhouse01
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute query on clickhouse01
     """
@@ -1300,7 +1300,7 @@ Feature: chadmin database migrate command
     """
     When we execute command on clickhouse02
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
 
     When we execute query on clickhouse02
@@ -1358,7 +1358,7 @@ Feature: chadmin database migrate command
     """
     And we execute command on clickhouse01
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute query on clickhouse02
     """
@@ -1367,7 +1367,7 @@ Feature: chadmin database migrate command
 
     When we execute command on clickhouse02
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute query on clickhouse01
     """
@@ -1412,7 +1412,7 @@ Feature: chadmin database migrate command
     """
     And we execute command on clickhouse01
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     When we execute query on clickhouse02
     """
@@ -1430,7 +1430,7 @@ Feature: chadmin database migrate command
 
     When we try to execute command on clickhouse02
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     Then it fails with response contains
     """
@@ -1459,7 +1459,7 @@ Feature: chadmin database migrate command
     """
     When we execute command on clickhouse02
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
 
     When we execute command on clickhouse02
@@ -1578,12 +1578,12 @@ Feature: chadmin database migrate command
 
     When we execute command on clickhouse01
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     Then it completes successfully
     When we execute command on clickhouse02
     """
-    chadmin database migrate -d non_repl_db 
+    chadmin database migrate -d non_repl_db -e Replicated
     """
     Then it completes successfully
 
@@ -1641,3 +1641,45 @@ Feature: chadmin database migrate command
     chadmin table check-uuid-equal -d non_repl_db -t test_table2
     """
     Then it completes successfully
+
+
+  @require_version_24.8
+  Scenario: Migrate from Replicated to Atomic
+    When we execute query on clickhouse01
+    """
+    CREATE DATABASE repl_db ENGINE=Replicated('/clickhouse/repl_db', '{shard}', '{replica}');
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE repl_db.test_table
+    (
+        `a` Int
+    )
+    ENGINE = ReplicatedMergeTree
+    ORDER BY a
+    """
+    And we execute query on clickhouse01
+    """
+    INSERT INTO repl_db.test_table VALUES (42)
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin database migrate -d repl_db -e Atomic
+    """
+    Then it completes successfully
+    When we execute query on clickhouse01
+    """
+    SELECT engine FROM system.databases WHERE database='repl_db'
+    """
+    Then we get response
+    """
+    Atomic
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM repl_db.test_table FORMAT Values
+    """
+    Then we get response
+    """
+    (42)
+    """
