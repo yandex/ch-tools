@@ -1649,6 +1649,10 @@ Feature: chadmin database migrate command
     """
     CREATE DATABASE repl_db ENGINE=Replicated('/clickhouse/repl_db', '{shard}', '{replica}');
     """
+    When we execute query on clickhouse02
+    """
+    CREATE DATABASE repl_db ENGINE=Replicated('/clickhouse/repl_db', '{shard}', '{replica}');
+    """
     When we execute query on clickhouse01
     """
     CREATE TABLE repl_db.test_table
@@ -1682,4 +1686,48 @@ Feature: chadmin database migrate command
     Then we get response
     """
     (42)
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper list /clickhouse/repl_db/
+    """
+    Then we get response
+    """
+    /clickhouse/repl_db/counter
+    /clickhouse/repl_db/first_replica_database_name
+    /clickhouse/repl_db/log
+    /clickhouse/repl_db/logs_to_keep
+    /clickhouse/repl_db/max_log_ptr
+    /clickhouse/repl_db/metadata
+    /clickhouse/repl_db/replicas
+    """
+    When we execute command on clickhouse02
+    """
+    chadmin database migrate -d repl_db -e Atomic --clean-zookeeper
+    """
+    Then it completes successfully
+    When we execute query on clickhouse02
+    """
+    SELECT engine FROM system.databases WHERE database='repl_db'
+    """
+    Then we get response
+    """
+    Atomic
+    """
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM repl_db.test_table FORMAT Values
+    """
+    Then we get response
+    """
+    (42)
+    """
+
+    When we execute command on clickhouse02
+    """
+    chadmin zookeeper list /clickhouse/repl_db
+    """
+    Then we get response contains
+    """
+    kazoo.exceptions.NoNodeError
     """
