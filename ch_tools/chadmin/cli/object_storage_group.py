@@ -1,4 +1,3 @@
-import sys
 from datetime import timedelta
 from typing import Optional
 
@@ -163,9 +162,6 @@ def clean_command(
             keep_paths,
             use_saved_list,
         )
-    except Exception as e:
-        error_msg = str(e)
-        raise
     finally:
         state = OrphanedObjectsState(total_size, error_msg)
 
@@ -174,9 +170,6 @@ def clean_command(
 
         if store_state_local:
             _store_state_local_save(ctx, state)
-
-        if error_msg:
-            sys.exit(1)
 
     _print_response(ctx, dry_run, deleted, total_size)
 
