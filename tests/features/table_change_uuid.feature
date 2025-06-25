@@ -205,7 +205,7 @@ Feature: chadmin table change and check-uuid-equal
     """
 
   @require_version_24.8
-  Scenario: Change uuid for ReplicatedMergeTree that different from table_shared_id with zero copy
+  Scenario: Change uuid for ReplicatedMergeTree that different from table_shared_id
     When we execute query on clickhouse01
     """
     CREATE DATABASE non_repl_db;
@@ -229,7 +229,7 @@ Feature: chadmin table change and check-uuid-equal
     """
     Then we get response contains
     """
-    Changing uuid for ReplicatedMergeTree that different from table_shared_id path is allowed only for zero copy clusters
+    dst_uuid=123e4567-e89b-12d3-a456-426614174000 is different from table_shared_id
     """
 
   @require_version_24.8
