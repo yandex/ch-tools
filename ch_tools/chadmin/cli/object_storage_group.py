@@ -1,3 +1,4 @@
+import sys
 from datetime import timedelta
 from typing import Optional
 
@@ -173,6 +174,9 @@ def clean_command(
 
         if store_state_local:
             _store_state_local_save(ctx, state)
+
+        if error_msg:
+            sys.exit(1)
 
     _print_response(ctx, dry_run, deleted, total_size)
 
