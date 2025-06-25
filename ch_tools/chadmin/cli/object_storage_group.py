@@ -131,7 +131,7 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     "verify_paths_regex",
     default=None,
     help=(
-        "Regex for verifing that paths for delete and in system.remote_data_paths are ."
+        "Regex for verifying that paths for delete and in system.remote_data_paths are ."
     ),
 )
 @pass_context
