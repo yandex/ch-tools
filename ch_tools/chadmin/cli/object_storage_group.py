@@ -131,8 +131,7 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     "verify_paths_regex",
     default=None,
     help=(
-        "Begin of inspecting interval in human-friendly format. "
-        "Objects with a modification time falling interval [now - from_time, now - to_time] are considered."
+        "Regex for verifing that paths for delete and in system.remote_data_paths are ."
     ),
 )
 @pass_context
