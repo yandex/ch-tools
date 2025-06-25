@@ -1,5 +1,4 @@
 import os
-import sys
 from typing import Any, Dict, Optional
 
 from click import ClickException, Context
@@ -543,15 +542,17 @@ def _verify_possible_change_uuid(
         logging.error(
             f"Changing uuid for ReplicatedMergeTree that contains macros uuid in replica path was not allowed. replica_path={metadata.replica_path}"
         )
-        sys.exit(1)
+        if check_replica_path_contains_macros(metadata.replica_path, "uuid"):
+            raise ClickException(
+                f"Changing uuid for ReplicatedMergeTree that contains macros uuid in replica path was not allowed. replica_path={metadata.replica_path}"
+            )
 
     table_shared_id = get_table_shared_id(ctx, metadata.replica_path)
 
-    logging.debug(
-        "Check that dst_uuid {} is equal with table_shared_id {} node.",
-        dst_uuid,
-        table_shared_id,
-    )
+        if dst_uuid != table_shared_id:
+            raise ClickException(
+                f"Changing uuid for ReplicatedMergeTree that different from table_shared_id path was not allowed. replica_path={metadata.replica_path}, dst_uuid={dst_uuid}, table_shared_id={table_shared_id}"
+            )
 
     if dst_uuid != table_shared_id:
         logging.warning(
@@ -611,16 +612,15 @@ def change_table_uuid(
         return
 
     try:
-        move_table_local_store(old_table_uuid, new_local_uuid)
-    except Exception as ex:
+        move_table_local_store(old_table_uuid, new_uuid)
+    except Exception:
         logging.error(
             "Failed move_table_local_store. old uuid={}, new_local_uuid={}. Need restore uuid in metadata for table={}. error={}",
             old_table_uuid,
             new_local_uuid,
             f"{database}.{table}",
-            ex,
         )
-        sys.exit(1)
+        raise
 
     logging.info(
         "Local table store {}.{} was moved from {} to {}",
