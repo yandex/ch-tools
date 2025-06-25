@@ -631,12 +631,3 @@ def read_local_table_metadata(ctx: Context, table_local_metadata_path: str) -> s
 
     with open(table_local_metadata_path, "r", encoding="utf-8") as f:
         return f.read()
-
-
-def _is_zero_copy_enabled(ctx: Context) -> bool:
-    query = """
-    SELECT value FROM system.merge_tree_settings WHERE name='allow_remote_fs_zero_copy_replication'
-    """
-
-    rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)["data"]
-    return rows[0]["value"]
