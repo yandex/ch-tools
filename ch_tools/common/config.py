@@ -52,7 +52,7 @@ DEFAULT_CONFIG = {
             "storage_policy": "default",
             "antijoin_timeout": 10 * 60,
             "verify": True,
-            "verify_paths_for_hosts_regex": r"^(\w+)/(\w+)/(\w+)/",
+            "verify_paths_for_host_regex": r"^(\w+)/(\w+)/(\w+)/",
             "verify_paths_for_shard_regex": r"^(\w+)/(\w+)/(\w+)/",
             "verify_paths_for_cluster_regex": r"^(\w+)/(\w+)/",
         },
