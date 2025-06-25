@@ -14,6 +14,7 @@ from ch_tools.chadmin.internal.zookeeper import (
     create_zk_nodes,
     update_zk_nodes,
 )
+from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config import get_clickhouse_config
@@ -174,6 +175,7 @@ def clean_command(
             verify_paths_regex,
         )
     except Exception as e:
+        logging.exception("Clean orphaned s3 objects have failed with: {!r}", e)
         error_msg = str(e)
         raise
     finally:

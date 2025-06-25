@@ -229,7 +229,7 @@ Feature: chadmin object-storage commands
       path: /unrelated_path/orpaned_object.tsv
       data: '100'
     """
-    When we execute command on clickhouse01
+    When we try to execute command on clickhouse01
     """
     chadmin --format yaml object-storage clean --dry-run --to-time 0h --prefix "unrelated_path"
     """
