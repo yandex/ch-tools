@@ -44,12 +44,17 @@ DEFAULT_CONFIG = {
         "bucket_name_prefix": "cloud-storage-",
         "clean": {
             "listing_table_prefix": "listing_objects_from_",
+            "orphaned_objects_table_prefix": "orphaned_objects_",
             "listing_table_database": "default",
+            "orphaned_objects_table_database": "default",
             "listing_table_zk_path_prefix": "/_system/tables",
+            "orphaned_objects_table_zk_path_prefix": "/_system/tables",
             "storage_policy": "default",
             "antijoin_timeout": 10 * 60,
-            "perform_sanity_check_size": True,
-            "perform_sanity_check_paths": True,
+            "verify": True,
+            "verify_paths_for_hosts_regex": r"^(\w+)/(\w+)/(\w+)/",
+            "verify_paths_for_shard_regex": r"^(\w+)/(\w+)/(\w+)/",
+            "verify_paths_for_cluster_regex": r"^(\w+)/(\w+)/",
         },
     },
     "zookeeper": {
@@ -81,7 +86,6 @@ DEFAULT_CONFIG = {
                 "max_retries": 25,
             },
         },
-        "tmp_path": "/var/lib/clickhouse/_mdb_tmp/chadmin",
     },
     "flamegraph": {
         "clickhouse_settings_per_sample_type": {
