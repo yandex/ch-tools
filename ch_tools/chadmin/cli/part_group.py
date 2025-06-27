@@ -223,21 +223,6 @@ def attach_parts_command(ctx, _all, keep_going, dry_run, workers, **kwargs):
         )
     execute_tasks_in_parallel(tasks, max_workers=workers, keep_going=keep_going)
 
-    for part in parts:
-        try:
-            attach_part(
-                ctx,
-                part["database"],
-                part["table"],
-                part["name"],
-                dry_run=dry_run,
-            )
-        except Exception as e:
-            if keep_going:
-                logging.warning("{!r}\n", e)
-            else:
-                raise
-
 
 @part_group.command("detach")
 @option_group(
