@@ -2,7 +2,7 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import Callable, Iterator, List, Optional, Tuple
 
 import click
 from click import Context
@@ -146,23 +146,41 @@ def clean(
     return deleted, total_size
 
 
+def _object_list_generator(
+    ch_client: ClickhouseClient, query: str, chunk_size: int
+) -> Callable:
+
+    def obj_list_iterator() -> Iterator[ObjListItem]:
+        with ch_client.query(
+            query,
+            format_="TabSeparated",
+            stream=True,
+        ) as resp:
+            for line in resp.iter_lines(chunk_size=chunk_size):
+                yield ObjListItem.from_tab_separated(line.decode().strip())
+
+    return obj_list_iterator
+
+
 def _sanity_check_before_cleanup(
     ctx: Context,
-    orphaned_objects_table: str,
+    orphaned_objects_iterator: Callable,
     ch_client: ClickhouseClient,
     listing_table: str,
     remote_data_paths_table: str,
     paths_regex: str,
     size_error_rate_threshold: int,
 ) -> None:
+
+    remote_data_paths_query_settings = (
+        {"traverse_shadow_remote_data_paths": 1}
+        if match_ch_version(ctx, min_version="24.3")
+        else {}
+    )
+
     def perform_check_paths():
         ### Compare path from system.remote_data_path and from list to delete. They must match the regex.
         ### Perform such check to prevent silly mistakes if the paths are completely different.
-        remote_data_paths_query_settings = (
-            {"traverse_shadow_remote_data_paths": 1}
-            if match_ch_version(ctx, min_version="24.3")
-            else {}
-        )
         ch_objects_cnt = int(
             ch_client.query(
                 Query(
@@ -184,23 +202,21 @@ def _sanity_check_before_cleanup(
             settings=remote_data_paths_query_settings,
             format_=OutputFormat.JSONCompact,
         )["data"][0][0]
-        path_from_ch_regex_matches = re.findall(paths_regex, path_form_ch)
 
-        with ch_client.query(
-            f"SELECT obj_path, obj_size FROM {orphaned_objects_table}",
-            format_="TabSeparated",
-            stream=True,
-        ) as resp:
-            for line in resp.iter_lines():
-                orphaned_object = ObjListItem.from_tab_separated(line.decode().strip())
-                if path_from_ch_regex_matches != re.findall(
-                    paths_regex, orphaned_object.path
-                ):
-                    raise RuntimeError(
-                        "Sanity check not passed, because remote_path({}) and object to delete({}) are completely different.".format(
-                            path_form_ch, orphaned_object.path
-                        )
+        if not re.match(paths_regex, path_form_ch):
+            raise RuntimeError(
+                "Sanity check not passed, because remote_path({}) doesn't matches the regex({}).".format(
+                    path_form_ch, paths_regex
+                )
+            )
+
+        for orphaned_object in orphaned_objects_iterator():
+            if not re.match(paths_regex, orphaned_object.path):
+                raise RuntimeError(
+                    "Sanity check not passed, because orphaned object({}) doesn't matches the regex({}).".format(
+                        orphaned_object.path, paths_regex
                     )
+                )
 
     def perform_check_size():
         ### Total size of objects after cleanup must be very close to sum(bytes) FROM system.remote_data_paths
@@ -217,24 +233,14 @@ def _sanity_check_before_cleanup(
                     f"SELECT sum(size) FROM (SELECT DISTINCT remote_path, size FROM {remote_data_paths_table})",
                     sensitive_args={"user_password": ch_client.password or ""},
                 ),
-                settings=(
-                    {"traverse_shadow_remote_data_paths": 1}
-                    if match_ch_version(ctx, min_version="24.3")
-                    else {}
-                ),
+                settings=remote_data_paths_query_settings,
                 format_=OutputFormat.JSONCompact,
             )["data"][0][0]
         )
 
         size_to_delete = 0
-        with ch_client.query(
-            f"SELECT obj_path, obj_size FROM {orphaned_objects_table}",
-            format_="TabSeparated",
-            stream=True,
-        ) as resp:
-            for line in resp.iter_lines():
-                orphaned_object = ObjListItem.from_tab_separated(line.decode().strip())
-                size_to_delete += orphaned_object.size
+        for orphaned_object in orphaned_objects_iterator():
+            size_to_delete += orphaned_object.size
 
         if (
             abs(real_size_in_bucket - size_to_delete - ch_size_in_bucket)
@@ -254,28 +260,18 @@ def _sanity_check_before_cleanup(
 
 
 def _clean_objects(
-    ch_client: ClickhouseClient,
-    orphaned_objects_table: str,
+    orphaned_objects_iterator: Callable,
     disk_conf: S3DiskConfiguration,
     dry_run: bool,
 ) -> Tuple[int, int]:
     deleted, total_size = 0, 0
-    with ch_client.query(
-        f"SELECT obj_path, obj_size FROM {orphaned_objects_table}",
-        format_="TabSeparated",
-        stream=True,
-    ) as resp:
-        for lines in chunked(
-            resp.iter_lines(chunk_size=10 * 1024 * 1024), KEYS_BATCH_SIZE
-        ):
-            keys = (
-                ObjListItem.from_tab_separated(line.decode().strip()) for line in lines
-            )
-            chunk_deleted, chunk_size = cleanup_s3_object_storage(
-                disk_conf, keys, dry_run
-            )
-            deleted += chunk_deleted
-            total_size += chunk_size
+
+    for objects in chunked(orphaned_objects_iterator(), KEYS_BATCH_SIZE):
+        chunk_deleted, chunk_size = cleanup_s3_object_storage(
+            disk_conf, iter(objects), dry_run
+        )
+        deleted += chunk_deleted
+        total_size += chunk_size
 
     return deleted, total_size
 
@@ -363,28 +359,22 @@ def _clean_object_storage(
         antijoin_query,
         settings={"receive_timeout": timeout, "max_execution_time": 0},
     )
-
+    orphaned_objects_iterator = _object_list_generator(
+        ch_client,
+        f"SELECT obj_path, obj_size FROM {orphaned_objects_table}",
+        10 * 1024 * 1024,
+    )
     if ctx.obj["config"]["object_storage"]["clean"]["verify"]:
         if verify_paths_regex:
             sanity_check_paths_regex = verify_paths_regex
-        elif clean_scope == CleanScope.CLUSTER:
-            sanity_check_paths_regex = ctx.obj["config"]["object_storage"]["clean"][
-                "verify_paths_regex"
-            ]["cluster"]
-        elif clean_scope == CleanScope.SHARD:
-            sanity_check_paths_regex = ctx.obj["config"]["object_storage"]["clean"][
-                "verify_paths_regex"
-            ]["shard"]
-        elif clean_scope == CleanScope.HOST:
-            sanity_check_paths_regex = ctx.obj["config"]["object_storage"]["clean"][
-                "verify_paths_regex"
-            ]["host"]
         else:
-            raise NotImplementedError("Unknown clean scope.")
+            sanity_check_paths_regex = ctx.obj["config"]["object_storage"]["clean"][
+                "verify_paths_regex"
+            ][clean_scope]
 
         _sanity_check_before_cleanup(
             ctx,
-            orphaned_objects_table,
+            orphaned_objects_iterator,
             ch_client,
             listing_table,
             remote_data_paths_table,
@@ -393,9 +383,7 @@ def _clean_object_storage(
                 "verify_size_error_rate_threshold_bytes"
             ],
         )
-    deleted, total_size = _clean_objects(
-        ch_client, orphaned_objects_table, disk_conf, dry_run
-    )
+    deleted, total_size = _clean_objects(orphaned_objects_iterator, disk_conf, dry_run)
 
     logging.info(
         f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
