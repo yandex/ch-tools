@@ -411,7 +411,7 @@ Feature: ch-monitoring tool
     When we put object in S3
     """
       bucket: cloud-storage-test
-      path: /data/orpaned_object.tsv
+      path: /data/cluster_id/shard_1/orpaned_object.tsv
       data: '1234567890'
     """
     When we execute command on clickhouse01
@@ -465,7 +465,7 @@ Feature: ch-monitoring tool
     When we put object in S3
     """
       bucket: cloud-storage-test
-      path: /data/orpaned_object.tsv
+      path: /data/cluster_id/shard_1/orpaned_object.tsv
       data: '1234567890'
     """
     When we execute command on clickhouse01

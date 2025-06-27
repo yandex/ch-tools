@@ -44,7 +44,7 @@ Feature: chadmin object-storage commands
     When we put object in S3
     """
       bucket: cloud-storage-test
-      path: /data/orpaned_object.tsv
+      path: /data/cluster_id/shard_1/orpaned_object.tsv
       data: '1'
     """
     When we execute command on clickhouse01
@@ -79,7 +79,7 @@ Feature: chadmin object-storage commands
     When we put 100 objects in S3
     """
       bucket: cloud-storage-test
-      path: /data/orpaned_object-{}
+      path: /data/cluster_id/shard_1/orpaned_object-{}
       data: '10'
     """
     When we execute command on clickhouse01
@@ -111,6 +111,12 @@ Feature: chadmin object-storage commands
     """
  
   Scenario: Clean orphaned objects with prefix
+    Given clickhouse-tools configuration on clickhouse01,clickhouse02
+    """
+    object_storage:
+      clean:
+        verify: False
+    """
     When we put object in S3
     """
       bucket: cloud-storage-test
@@ -201,7 +207,7 @@ Feature: chadmin object-storage commands
     When we put object in S3
     """
       bucket: cloud-storage-test
-      path: /data/orpaned_object.tsv
+      path: /data/cluster_id/shard_1/orpaned_object.tsv
       data: '1234567890'
     """
     When we execute command on clickhouse01
@@ -214,4 +220,20 @@ Feature: chadmin object-storage commands
         "orphaned_objects_size": 10,
         "error_msg": ""
     }
+    """
+
+  Scenario: Check incorrect file path
+    When we put object in S3
+    """
+      bucket: cloud-storage-test
+      path: /unrelated_path/orpaned_object.tsv
+      data: '100'
+    """
+    When we try to execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --prefix "unrelated_path"
+    """
+    Then we get response contains
+    """
+    Sanity check not passed
     """
