@@ -55,6 +55,7 @@ DEFAULT_CONFIG = {
             "verify_paths_for_host_regex": r"^(\w+)/(\w+)/(\w+)/",
             "verify_paths_for_shard_regex": r"^(\w+)/(\w+)/(\w+)/",
             "verify_paths_for_cluster_regex": r"^(\w+)/(\w+)/",
+            "verify_size_error_rate_threshold_bytes": 1024 * 1024 * 1024,  ## 1 GB
         },
     },
     "zookeeper": {

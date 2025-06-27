@@ -145,14 +145,11 @@ def _sanity_check_before_cleanup(
     listing_table: str,
     remote_data_paths_table: str,
     paths_regex: str,
+    size_error_rate_threshold: int,
 ) -> None:
     def perform_check_paths():
-        ### NOTE: Ya.Cloud specific code. If you want to use it outside, better to disable this check.
-        ###
-        ### Paths in the bucket looks like:
-        ### cloud_storage/<bucket_path>/<shard_id>/hhs/asxganhthiylymnrswfqzfcvglwvp
-        ### To prevent silly mistakes raise exception if the paths are completely different
-
+        ### Compare path from system.remote_data_path and from list to delete. They must match the regex.
+        ### Perform such check to prevent silly mistakes if the paths are completely different.
         ch_objects_cnt = int(
             ch_client.query(
                 Query(
@@ -234,8 +231,10 @@ def _sanity_check_before_cleanup(
                 orphaned_object = ObjListItem.from_tab_separated(line.decode().strip())
                 size_to_delete += orphaned_object.size
 
-        threshold = ch_size_in_bucket * 0.05
-        if abs(real_size_in_bucket - size_to_delete - ch_size_in_bucket) > threshold:
+        if (
+            abs(real_size_in_bucket - size_to_delete - ch_size_in_bucket)
+            > size_error_rate_threshold
+        ):
             raise RuntimeError(
                 "Sanity check not passed, because after delete size in the bucket will be less than total size of objects known by the clickhouse. Size in CH {} , Total size in bucket {}, would delete {}".format(
                     ch_size_in_bucket, real_size_in_bucket, size_to_delete
@@ -385,6 +384,9 @@ def _clean_object_storage(
             listing_table,
             remote_data_paths_table,
             sanity_check_paths_regex,
+            ctx.obj["config"]["object_storage"]["clean"][
+                "verify_size_error_rate_threshold_bytes"
+            ],
         )
     deleted, total_size = _clean_objects(
         ch_client, orphaned_objects_table, disk_conf, dry_run
