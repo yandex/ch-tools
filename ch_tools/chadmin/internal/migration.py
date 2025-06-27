@@ -548,7 +548,7 @@ def _change_tables_uuid(ctx: Context, tables_info: dict, database_name: str) -> 
             database=database_name,
             table=table_name,
             engine=row["engine"],
-            new_uuid=zk_table_uuid,
+            new_local_uuid=zk_table_uuid,
             old_table_uuid=old_table_uuid,
             table_local_metadata_path=table_local_metadata_path,
             attached=False,

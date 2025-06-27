@@ -522,7 +522,7 @@ def get_table_uuids_from_cluster(ctx: Context, database: str, table: str) -> lis
 
 def _verify_possible_change_uuid(
     ctx: Context, table_local_metadata_path: str, dst_uuid: str
-) -> bool:
+) -> None:
     logging.info(
         "call _verify_possible_change_uuid with path={}, new uuid={}",
         table_local_metadata_path,
@@ -530,28 +530,33 @@ def _verify_possible_change_uuid(
     )
     metadata = parse_table_metadata(table_local_metadata_path)
 
-    if metadata.table_engine.is_table_engine_replicated():
-        logging.info(
-            "Table metadata={} with Replicated table engine, replica_name={}, replica_path={}",
-            table_local_metadata_path,
-            metadata.replica_name,
-            metadata.replica_path,
+    if not metadata.table_engine.is_table_engine_replicated():
+        return
+
+    logging.info(
+        "Table metadata={} with Replicated table engine, replica_name={}, replica_path={}",
+        table_local_metadata_path,
+        metadata.replica_name,
+        metadata.replica_path,
+    )
+    if check_replica_path_contains_macros(metadata.replica_path, "uuid"):
+        logging.error(
+            f"Changing uuid for ReplicatedMergeTree that contains macros uuid in replica path was not allowed. replica_path={metadata.replica_path}"
         )
-        if check_replica_path_contains_macros(metadata.replica_path, "uuid"):
-            logging.error(
-                f"Changing uuid for ReplicatedMergeTree that contains macros uuid in replica path was not allowed. replica_path={metadata.replica_path}"
-            )
-            sys.exit(1)
+        sys.exit(1)
 
-        table_shared_id = get_table_shared_id(ctx, metadata.replica_path)
+    table_shared_id = get_table_shared_id(ctx, metadata.replica_path)
 
-        if dst_uuid != table_shared_id:
-            logging.error(
-                f"Changing uuid for ReplicatedMergeTree that different from table_shared_id path was not allowed. replica_path={metadata.replica_path}, dst_uuid={dst_uuid}, table_shared_id={table_shared_id}"
-            )
-            sys.exit(1)
+    logging.debug(
+        "Check that dst_uuid {} is equal with table_shared_id {} node.",
+        dst_uuid,
+        table_shared_id,
+    )
 
-    return metadata.table_uuid != dst_uuid
+    if dst_uuid != table_shared_id:
+        logging.warning(
+            f"dst_uuid={dst_uuid} is different from table_shared_id={table_shared_id}."
+        )
 
 
 def change_table_uuid(
@@ -559,34 +564,32 @@ def change_table_uuid(
     database: str,
     table: str,
     engine: str,
-    new_uuid: str,
+    new_local_uuid: str,
     old_table_uuid: str,
     table_local_metadata_path: str,
     attached: bool,
 ) -> None:
-    logging.info("call change_table_uuid with table={}", table)
+    logging.debug("call change_table_uuid with table={}", table)
     if match_str_ch_version(get_version(ctx), "25.1"):
         table_local_metadata_path = f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
 
     if is_table(engine=engine):
-        logging.info("{} is a table.", table)
-        need_update_uuid = _verify_possible_change_uuid(
-            ctx, table_local_metadata_path, new_uuid
-        )
-        if not need_update_uuid:
+        logging.debug("{} is a table.", table)
+        _verify_possible_change_uuid(ctx, table_local_metadata_path, new_local_uuid)
+        if old_table_uuid == new_local_uuid:
             logging.info(
                 "Table {} has uuid {}. Don't need to update current table uuid {}. Finish changing",
                 table,
                 old_table_uuid,
-                new_uuid,
+                new_local_uuid,
             )
             return
 
-        logging.error(
+        logging.debug(
             "Table's {} uuid {} will be updated to uuid {}",
             table,
             old_table_uuid,
-            new_uuid,
+            new_local_uuid,
         )
     else:
         logging.info("{} is not a table, skip checking.", table)
@@ -594,7 +597,7 @@ def change_table_uuid(
     if attached and not is_view(engine=engine):
         # we could not just detach view - problem with cleanupDetachedTables
         detach_table(ctx, database_name=database, table_name=table, permanently=False)
-    update_uuid_table_metadata_file(table_local_metadata_path, new_uuid)
+    update_uuid_table_metadata_file(table_local_metadata_path, new_local_uuid)
 
     if not is_table(engine):
         logging.info(
@@ -603,19 +606,22 @@ def change_table_uuid(
         return
 
     try:
-        move_table_local_store(old_table_uuid, new_uuid)
+        move_table_local_store(old_table_uuid, new_local_uuid)
     except Exception as ex:
         logging.error(
-            "Failed move_table_local_store. old uuid={}, new_uuid={}. Need restore uuid in metadata for table={}. error={}",
+            "Failed move_table_local_store. old uuid={}, new_local_uuid={}. Need restore uuid in metadata for table={}. error={}",
             old_table_uuid,
-            new_uuid,
+            new_local_uuid,
             f"{database}.{table}",
             ex,
         )
         sys.exit(1)
 
     logging.info(
-        "Local table store {} was moved from {} to {}", table, old_table_uuid, new_uuid
+        "Local table store {} was moved from {} to {}",
+        table,
+        old_table_uuid,
+        new_local_uuid,
     )
 
 
