@@ -196,8 +196,16 @@ def get_databases(
     required=True,
     help="Database engine: Atomic or Replicated. After migration to Atomic need manually delete zookeeper nodes.",
 )
+@option(
+    "--clean-zookeeper",
+    is_flag=True,
+    default=False,
+    help="Remove zookeeper nodes related with Replicated database.",
+)
 @pass_context
-def migrate_engine_command(ctx: Context, database: str, engine: str) -> None:
+def migrate_engine_command(
+    ctx: Context, database: str, engine: str, clean_zookeeper: bool
+) -> None:
     try:
         if not is_database_exists(ctx, database):
             logging.error("Database {} does not exists, skip migrating", database)
@@ -206,7 +214,7 @@ def migrate_engine_command(ctx: Context, database: str, engine: str) -> None:
         if DatabaseEngine.from_str(engine) == DatabaseEngine.REPLICATED:
             migrate_database_to_replicated(ctx, database)
         else:
-            migrate_database_to_atomic(ctx, database)
+            migrate_database_to_atomic(ctx, database, clean_zookeeper)
 
     except Exception as ex:
         logging.error("Got exception: type={}, ex={}", type(ex), ex)

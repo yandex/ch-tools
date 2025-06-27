@@ -18,6 +18,7 @@ from ch_tools.chadmin.internal.table import (
 )
 from ch_tools.chadmin.internal.utils import execute_query, replace_macros
 from ch_tools.chadmin.internal.zookeeper import (
+    delete_zk_node,
     escape_for_zookeeper,
     format_path,
     get_zk_node,
@@ -588,11 +589,22 @@ def migrate_database_to_replicated(ctx: Context, database: str) -> None:
         migrate_as_non_first_replica(ctx, database)
 
 
-def migrate_database_to_atomic(ctx: Context, database: str) -> None:
+def migrate_database_to_atomic(
+    ctx: Context, database: str, clean_zookeeper: bool
+) -> None:
     metadata_repl_db = parse_database_from_metadata(database)
     _detach_dbs(ctx, dbs=[database])
     try:
+        replica_path = metadata_repl_db.replica_path
         metadata_repl_db.set_atomic()
+
+        if clean_zookeeper:
+            logging.debug(
+                "Set clean_zookeeper - delete zookeeper nodes {}",
+                replica_path,
+            )
+            delete_zk_node(ctx, replica_path)
+
     except Exception as ex:
         logging.error("Failed set atomic in metadata: {}", ex)
         _attach_dbs(ctx, dbs=[database])
