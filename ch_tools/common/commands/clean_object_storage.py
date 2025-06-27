@@ -57,16 +57,20 @@ class CleanScope(str, Enum):
     CLUSTER = "cluster"
 
 
-def _create_auxiliary_table(
-    ctx, table_name, replica_zk_prefix, disk_name, use_saved_list
-):
-    if not use_saved_list:
+def _create_object_listing_table(
+    ctx: Context,
+    table_name: str,
+    replica_zk_prefix: str,
+    storage_policy: str,
+    recreate_table: bool,
+) -> None:
+    if not recreate_table:
         _drop_table_on_shard(ctx, table_name)
 
     if has_zk():
-        create_listing_table_query = f"CREATE TABLE IF NOT EXISTS {table_name} ON CLUSTER {get_cluster_name(ctx)} (obj_path String, obj_size UInt64) ENGINE ReplicatedMergeTree('{replica_zk_prefix}/{{shard}}/{table_name}', '{{replica}}') ORDER BY obj_path SETTINGS storage_policy = '{disk_name}'"
+        create_listing_table_query = f"CREATE TABLE {'IF NOT EXISTS' if recreate_table else ''} {table_name} ON CLUSTER {get_cluster_name(ctx)} (obj_path String, obj_size UInt64) ENGINE ReplicatedMergeTree('{replica_zk_prefix}/{{shard}}/{table_name}', '{{replica}}') ORDER BY obj_path SETTINGS storage_policy = '{storage_policy}'"
     else:
-        create_listing_table_query = f"CREATE TABLE IF NOT EXISTS {table_name} (obj_path String, obj_size UInt64) ENGINE MergeTree ORDER BY obj_path SETTINGS storage_policy = '{disk_name}'"
+        create_listing_table_query = f"CREATE TABLE {'IF NOT EXISTS' if recreate_table else ''} {table_name} (obj_path String, obj_size UInt64) ENGINE MergeTree ORDER BY obj_path SETTINGS storage_policy = '{storage_policy}'"
 
     execute_query(ctx, create_listing_table_query)
 
@@ -101,20 +105,24 @@ def clean(
     orphaned_objects_table_zk_path_prefix = config[
         "orphaned_objects_table_zk_path_prefix"
     ]
-    disk_name = config["storage_policy"]
+    storage_policy = config["storage_policy"]
 
     # Create listing table for storing paths from object storage.
     # Create orphaned objects for accumulating the result.
     try:
-        _create_auxiliary_table(
-            ctx, listing_table, listing_table_zk_path_prefix, disk_name, use_saved_list
+        _create_object_listing_table(
+            ctx,
+            listing_table,
+            listing_table_zk_path_prefix,
+            storage_policy,
+            use_saved_list,
         )
-        _create_auxiliary_table(
+        _create_object_listing_table(
             ctx,
             orphaned_objects_table,
             orphaned_objects_table_zk_path_prefix,
-            disk_name,
-            use_saved_list,
+            storage_policy,
+            False,
         )
 
         deleted, total_size = _clean_object_storage(
@@ -150,17 +158,18 @@ def _sanity_check_before_cleanup(
     def perform_check_paths():
         ### Compare path from system.remote_data_path and from list to delete. They must match the regex.
         ### Perform such check to prevent silly mistakes if the paths are completely different.
+        remote_data_paths_query_settings = (
+            {"traverse_shadow_remote_data_paths": 1}
+            if match_ch_version(ctx, min_version="24.3")
+            else {}
+        )
         ch_objects_cnt = int(
             ch_client.query(
                 Query(
                     f"SELECT count() FROM {remote_data_paths_table}",
                     sensitive_args={"user_password": ch_client.password or ""},
                 ),
-                settings=(
-                    {"traverse_shadow_remote_data_paths": 1}
-                    if match_ch_version(ctx, min_version="24.3")
-                    else {}
-                ),
+                settings=remote_data_paths_query_settings,
                 format_=OutputFormat.JSONCompact,
             )["data"][0][0]
         )
@@ -172,11 +181,7 @@ def _sanity_check_before_cleanup(
                 f"SELECT remote_path FROM {remote_data_paths_table} LIMIT 1",
                 sensitive_args={"user_password": ch_client.password or ""},
             ),
-            settings=(
-                {"traverse_shadow_remote_data_paths": 1}
-                if match_ch_version(ctx, min_version="24.3")
-                else {}
-            ),
+            settings=remote_data_paths_query_settings,
             format_=OutputFormat.JSONCompact,
         )["data"][0][0]
         path_from_ch_regex_matches = re.findall(paths_regex, path_form_ch)
@@ -198,7 +203,7 @@ def _sanity_check_before_cleanup(
                     )
 
     def perform_check_size():
-        ### Total size of objects after cleanup in the s3 must be >= sum(bytes) FROM system.remote_data_paths
+        ### Total size of objects after cleanup must be very close to sum(bytes) FROM system.remote_data_paths
         real_size_in_bucket = int(
             ch_client.query(
                 f"SELECT sum(obj_size) FROM {listing_table}",
@@ -364,16 +369,16 @@ def _clean_object_storage(
             sanity_check_paths_regex = verify_paths_regex
         elif clean_scope == CleanScope.CLUSTER:
             sanity_check_paths_regex = ctx.obj["config"]["object_storage"]["clean"][
-                "verify_paths_for_cluster_regex"
-            ]
+                "verify_paths_regex"
+            ]["cluster"]
         elif clean_scope == CleanScope.SHARD:
             sanity_check_paths_regex = ctx.obj["config"]["object_storage"]["clean"][
-                "verify_paths_for_shard_regex"
-            ]
+                "verify_paths_regex"
+            ]["shard"]
         elif clean_scope == CleanScope.HOST:
             sanity_check_paths_regex = ctx.obj["config"]["object_storage"]["clean"][
-                "verify_paths_for_host_regex"
-            ]
+                "verify_paths_regex"
+            ]["host"]
         else:
             raise NotImplementedError("Unknown clean scope.")
 
