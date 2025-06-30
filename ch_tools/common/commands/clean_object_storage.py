@@ -2,18 +2,14 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Callable, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 import click
 from click import Context
 from humanfriendly import format_size
 
-from ch_tools.chadmin.internal.object_storage import (
-    cleanup_s3_object_storage,
-)
-from ch_tools.chadmin.internal.object_storage.obj_list_item import (
-    ObjListItem,
-)
+from ch_tools.chadmin.internal.object_storage import cleanup_s3_object_storage
+from ch_tools.chadmin.internal.object_storage.obj_list_item import ObjListItem
 from ch_tools.chadmin.internal.object_storage.s3_iterator import (
     s3_object_storage_iterator,
 )
@@ -25,7 +21,6 @@ from ch_tools.chadmin.internal.utils import (
 )
 from ch_tools.chadmin.internal.zookeeper import has_zk
 from ch_tools.common import logging
-from ch_tools.common.clickhouse.client import OutputFormat
 from ch_tools.common.clickhouse.client.clickhouse_client import (
     ClickhouseClient,
     clickhouse_client,
@@ -147,13 +142,17 @@ def clean(
 
 
 def _object_list_generator(
-    ch_client: ClickhouseClient, query: str, chunk_size: int
+    ch_client: ClickhouseClient,
+    table_name: str,
+    query_settings: Dict[str, Any],
+    chunk_size: int,
 ) -> Callable:
 
     def obj_list_iterator() -> Iterator[ObjListItem]:
         with ch_client.query(
-            query,
+            f"SELECT obj_path, obj_size FROM {table_name}",
             format_="TabSeparated",
+            settings=query_settings,
             stream=True,
         ) as resp:
             for line in resp.iter_lines(chunk_size=chunk_size):
@@ -182,26 +181,26 @@ def _sanity_check_before_cleanup(
         ### Compare path from system.remote_data_path and from list to delete. They must match the regex.
         ### Perform such check to prevent silly mistakes if the paths are completely different.
         ch_objects_cnt = int(
-            ch_client.query(
-                Query(
+            ch_client.query_json_data_first_row(
+                query=Query(
                     f"SELECT count() FROM {remote_data_paths_table}",
                     sensitive_args={"user_password": ch_client.password or ""},
                 ),
                 settings=remote_data_paths_query_settings,
-                format_=OutputFormat.JSONCompact,
-            )["data"][0][0]
+                compact=True,
+            )[0]
         )
         ## Nothing to check
         if ch_objects_cnt == 0:
             return
-        path_form_ch = ch_client.query(
-            Query(
+        path_form_ch = ch_client.query_json_data_first_row(
+            query=Query(
                 f"SELECT remote_path FROM {remote_data_paths_table} LIMIT 1",
                 sensitive_args={"user_password": ch_client.password or ""},
             ),
             settings=remote_data_paths_query_settings,
-            format_=OutputFormat.JSONCompact,
-        )["data"][0][0]
+            compact=True,
+        )[0]
 
         if not re.match(paths_regex, path_form_ch):
             raise RuntimeError(
@@ -221,21 +220,21 @@ def _sanity_check_before_cleanup(
     def perform_check_size():
         ### Total size of objects after cleanup must be very close to sum(bytes) FROM system.remote_data_paths
         real_size_in_bucket = int(
-            ch_client.query(
-                f"SELECT sum(obj_size) FROM {listing_table}",
-                format_=OutputFormat.JSONCompact,
-            )["data"][0][0]
+            ch_client.query_json_data_first_row(
+                query=f"SELECT sum(obj_size) FROM {listing_table}",
+                compact=True,
+            )[0]
         )
 
         ch_size_in_bucket = int(
-            ch_client.query(
-                Query(
+            ch_client.query_json_data_first_row(
+                query=Query(
                     f"SELECT sum(size) FROM (SELECT DISTINCT remote_path, size FROM {remote_data_paths_table})",
                     sensitive_args={"user_password": ch_client.password or ""},
                 ),
                 settings=remote_data_paths_query_settings,
-                format_=OutputFormat.JSONCompact,
-            )["data"][0][0]
+                compact=True,
+            )[0]
         )
 
         size_to_delete = 0
@@ -248,7 +247,9 @@ def _sanity_check_before_cleanup(
         ):
             raise RuntimeError(
                 "Sanity check not passed, because after delete size in the bucket will be less than total size of objects known by the clickhouse. Size in CH {} , Total size in bucket {}, would delete {}".format(
-                    ch_size_in_bucket, real_size_in_bucket, size_to_delete
+                    format_size(ch_size_in_bucket),
+                    format_size(real_size_in_bucket),
+                    format_size(size_to_delete),
                 )
             )
 
@@ -257,23 +258,6 @@ def _sanity_check_before_cleanup(
     ## In ver < 23.3 no column size in the system.remote_data_paths
     if match_ch_version(ctx, min_version="23.3"):
         perform_check_size()
-
-
-def _clean_objects(
-    orphaned_objects_iterator: Callable,
-    disk_conf: S3DiskConfiguration,
-    dry_run: bool,
-) -> Tuple[int, int]:
-    deleted, total_size = 0, 0
-
-    for objects in chunked(orphaned_objects_iterator(), KEYS_BATCH_SIZE):
-        chunk_deleted, chunk_size = cleanup_s3_object_storage(
-            disk_conf, iter(objects), dry_run
-        )
-        deleted += chunk_deleted
-        total_size += chunk_size
-
-    return deleted, total_size
 
 
 def _clean_object_storage(
@@ -353,15 +337,16 @@ def _clean_object_storage(
     deleted = 0
     total_size = 0
     timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
-
+    query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
     execute_query(
         ctx,
         antijoin_query,
-        settings={"receive_timeout": timeout, "max_execution_time": 0},
+        settings=query_settings,
     )
     orphaned_objects_iterator = _object_list_generator(
         ch_client,
-        f"SELECT obj_path, obj_size FROM {orphaned_objects_table}",
+        orphaned_objects_table,
+        query_settings,
         10 * 1024 * 1024,
     )
     if ctx.obj["config"]["object_storage"]["clean"]["verify"]:
@@ -383,7 +368,14 @@ def _clean_object_storage(
                 "verify_size_error_rate_threshold_bytes"
             ],
         )
-    deleted, total_size = _clean_objects(orphaned_objects_iterator, disk_conf, dry_run)
+
+    deleted, total_size = 0, 0
+    for objects in chunked(orphaned_objects_iterator(), KEYS_BATCH_SIZE):
+        chunk_deleted, chunk_size = cleanup_s3_object_storage(
+            disk_conf, iter(objects), dry_run
+        )
+        deleted += chunk_deleted
+        total_size += chunk_size
 
     logging.info(
         f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
