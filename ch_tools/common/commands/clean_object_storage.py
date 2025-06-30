@@ -145,7 +145,7 @@ def _object_list_generator(
     ch_client: ClickhouseClient,
     table_name: str,
     query_settings: Dict[str, Any],
-    chunk_size: int,
+    chunk_size: int = 10 * 1024 * 1024,
 ) -> Callable:
 
     def obj_list_iterator() -> Iterator[ObjListItem]:
@@ -167,9 +167,19 @@ def _sanity_check_before_cleanup(
     ch_client: ClickhouseClient,
     listing_table: str,
     remote_data_paths_table: str,
-    paths_regex: str,
-    size_error_rate_threshold: int,
+    verify_paths_regex: Optional[str],
+    clean_scope: CleanScope,
 ) -> None:
+
+    size_error_rate_threshold = ctx.obj["config"]["object_storage"]["clean"][
+        "verify_size_error_rate_threshold_bytes"
+    ]
+    if verify_paths_regex:
+        paths_regex = verify_paths_regex
+    else:
+        paths_regex = ctx.obj["config"]["object_storage"]["clean"][
+            "verify_paths_regex"
+        ][clean_scope]
 
     remote_data_paths_query_settings = (
         {"traverse_shadow_remote_data_paths": 1}
@@ -347,26 +357,16 @@ def _clean_object_storage(
         ch_client,
         orphaned_objects_table,
         query_settings,
-        10 * 1024 * 1024,
     )
     if ctx.obj["config"]["object_storage"]["clean"]["verify"]:
-        if verify_paths_regex:
-            sanity_check_paths_regex = verify_paths_regex
-        else:
-            sanity_check_paths_regex = ctx.obj["config"]["object_storage"]["clean"][
-                "verify_paths_regex"
-            ][clean_scope]
-
         _sanity_check_before_cleanup(
             ctx,
             orphaned_objects_iterator,
             ch_client,
             listing_table,
             remote_data_paths_table,
-            sanity_check_paths_regex,
-            ctx.obj["config"]["object_storage"]["clean"][
-                "verify_size_error_rate_threshold_bytes"
-            ],
+            verify_paths_regex,
+            clean_scope,
         )
 
     deleted, total_size = 0, 0
