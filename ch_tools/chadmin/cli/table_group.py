@@ -948,7 +948,7 @@ def change_uuid_command(
             database,
             table_name,
             engine=table_info["engine"],
-            new_uuid=uuid,
+            new_local_uuid=uuid,
             old_table_uuid=old_table_uuid,
             table_local_metadata_path=table_local_metadata_path,
             attached=True,
