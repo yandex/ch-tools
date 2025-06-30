@@ -117,7 +117,7 @@ def check_replica_path_contains_macros(path: str, macros: str) -> bool:
 def update_uuid_table_metadata_file(
     table_local_metadata_path: str, new_uuid: str
 ) -> None:
-    logging.info("set uuid {} to metadata {}", new_uuid, table_local_metadata_path)
+    logging.debug("set uuid {} to metadata {}", new_uuid, table_local_metadata_path)
     with open(table_local_metadata_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
@@ -134,9 +134,9 @@ def get_table_store_path(table_uuid: str) -> str:
 
 
 def move_table_local_store(old_table_uuid: str, new_uuid: str) -> None:
-    logging.info("call move_table_local_store")
+    logging.debug("call move_table_local_store")
     old_table_store_path = get_table_store_path(old_table_uuid)
-    logging.info("old_table_store_path={}", old_table_store_path)
+    logging.debug("old_table_store_path={}", old_table_store_path)
 
     if not os.path.exists(old_table_store_path):
         raise RuntimeError(f"File {old_table_store_path} doesn't exist.")
@@ -144,7 +144,7 @@ def move_table_local_store(old_table_uuid: str, new_uuid: str) -> None:
     target = f"{CLICKHOUSE_PATH}/store/{new_uuid[:3]}"
 
     if not os.path.exists(target):
-        logging.info("need create path={}", target)
+        logging.debug("need create path={}", target)
         os.mkdir(target)
         os.chmod(target, 0o750)
         uid = pwd.getpwnam("clickhouse").pw_uid
@@ -152,10 +152,10 @@ def move_table_local_store(old_table_uuid: str, new_uuid: str) -> None:
 
         os.chown(target, uid, gid)
     else:
-        logging.info("path exists: {}", target)
+        logging.debug("path exists: {}", target)
 
     new_table_store_path = get_table_store_path(new_uuid)
-    logging.info("new_table_store_path={}", new_table_store_path)
+    logging.debug("new_table_store_path={}", new_table_store_path)
 
     os.rename(old_table_store_path, new_table_store_path)
 
@@ -168,7 +168,7 @@ def get_table_shared_id(ctx: Context, zookeeper_path: str) -> str:
     table_shared_id_node_path = zookeeper_path + "/table_shared_id"
 
     table_uuid = get_zk_node(ctx, table_shared_id_node_path)
-    logging.info("zk_path={} contains table_shared_id={}", zookeeper_path, table_uuid)
+    logging.debug("zk_path={} contains table_shared_id={}", zookeeper_path, table_uuid)
 
     return table_uuid
 
@@ -180,10 +180,10 @@ def remove_replicated_params(create_table_query: str) -> str:
 
 
 def is_table(engine: str) -> bool:
-    logging.info("check is table {}", engine)
+    logging.debug("check is table {}", engine)
     return engine not in ["View", "MaterializedView"]
 
 
 def is_view(engine: str) -> bool:
-    logging.info("is_view {}", engine)
+    logging.debug("is_view {}", engine)
     return engine == "View"

@@ -523,7 +523,7 @@ def get_table_uuids_from_cluster(ctx: Context, database: str, table: str) -> lis
 def _verify_possible_change_uuid(
     ctx: Context, table_local_metadata_path: str, dst_uuid: str
 ) -> None:
-    logging.info(
+    logging.debug(
         "call _verify_possible_change_uuid with path={}, new uuid={}",
         table_local_metadata_path,
         dst_uuid,
@@ -533,7 +533,7 @@ def _verify_possible_change_uuid(
     if not metadata.table_engine.is_table_engine_replicated():
         return
 
-    logging.info(
+    logging.debug(
         "Table metadata={} with Replicated table engine, replica_name={}, replica_path={}",
         table_local_metadata_path,
         metadata.replica_name,
@@ -574,25 +574,27 @@ def change_table_uuid(
         table_local_metadata_path = f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
 
     if is_table(engine=engine):
-        logging.debug("{} is a table.", table)
+        logging.debug("{}.{} is a table.", database, table)
         _verify_possible_change_uuid(ctx, table_local_metadata_path, new_local_uuid)
         if old_table_uuid == new_local_uuid:
             logging.info(
-                "Table {} has uuid {}. Don't need to update current table uuid {}. Finish changing",
+                "Table {}.{} has uuid {}. Don't need to update current table uuid {}. Finish changing",
+                database,
                 table,
                 old_table_uuid,
                 new_local_uuid,
             )
             return
 
-        logging.debug(
-            "Table's {} uuid {} will be updated to uuid {}",
+        logging.info(
+            "Table's {}.{} uuid {} will be updated to uuid {}",
+            database,
             table,
             old_table_uuid,
             new_local_uuid,
         )
     else:
-        logging.info("{} is not a table, skip checking.", table)
+        logging.info("{}.{} is not a table, skip checking.", database, table)
 
     if attached and not is_view(engine=engine):
         # we could not just detach view - problem with cleanupDetachedTables
@@ -601,7 +603,10 @@ def change_table_uuid(
 
     if not is_table(engine):
         logging.info(
-            "Table={} has engine={}. Don't need move in local store.", table, engine
+            "Table {}.{} has engine={}. Don't need move in local store.",
+            database,
+            table,
+            engine,
         )
         return
 
@@ -618,7 +623,8 @@ def change_table_uuid(
         sys.exit(1)
 
     logging.info(
-        "Local table store {} was moved from {} to {}",
+        "Local table store {}.{} was moved from {} to {}",
+        database,
         table,
         old_table_uuid,
         new_local_uuid,
