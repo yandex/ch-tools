@@ -127,6 +127,14 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     default="",
     help=("Zookeeper node path for storage total size of orphaned objects."),
 )
+@option(
+    "--verify-paths-regex",
+    "verify_paths_regex",
+    default=None,
+    help=(
+        "Regex for verifying that paths for delete and in system.remote_data_paths are ."
+    ),
+)
 @pass_context
 def clean_command(
     ctx: Context,
@@ -140,6 +148,7 @@ def clean_command(
     use_saved_list: bool,
     store_state_local: bool,
     store_state_zk_path: str,
+    verify_paths_regex: Optional[str],
 ) -> None:
     """
     Clean orphaned S3 objects.
@@ -163,8 +172,10 @@ def clean_command(
             dry_run,
             keep_paths,
             use_saved_list,
+            verify_paths_regex,
         )
     except Exception as e:
+        logging.exception("Clean orphaned s3 objects have failed with: {!r}", e)
         error_msg = str(e)
         raise
     finally:
