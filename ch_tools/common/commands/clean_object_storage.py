@@ -61,12 +61,7 @@ def _create_object_listing_table(
     if not recreate_table:
         _drop_table_on_shard(ctx, table_name)
 
-    if has_zk():
-        create_listing_table_query = f"CREATE TABLE {'IF NOT EXISTS' if recreate_table else ''} {table_name} ON CLUSTER {get_cluster_name(ctx)} (obj_path String, obj_size UInt64) ENGINE ReplicatedMergeTree('{replica_zk_prefix}/{{shard}}/{table_name}', '{{replica}}') ORDER BY obj_path SETTINGS storage_policy = '{storage_policy}'"
-    else:
-        create_listing_table_query = f"CREATE TABLE {'IF NOT EXISTS' if recreate_table else ''} {table_name} (obj_path String, obj_size UInt64) ENGINE MergeTree ORDER BY obj_path SETTINGS storage_policy = '{storage_policy}'"
-
-    execute_query(ctx, create_listing_table_query)
+    _create_table_on_shard(ctx, table_name, replica_zk_prefix, storage_policy)
 
 
 def clean(
@@ -101,7 +96,6 @@ def clean(
     ]
     storage_policy = config["storage_policy"]
 
-
     # Create listing table for storing paths from object storage.
     # Create orphaned objects for accumulating the result.
     try:
@@ -118,14 +112,6 @@ def clean(
             orphaned_objects_table_zk_path_prefix,
             storage_policy,
             False,
-        )
-
-
-        _create_table_on_shard(
-            ctx,
-            listing_table,
-            config["listing_table_zk_path_prefix"],
-            config["storage_policy"],
         )
 
         deleted, total_size = _clean_object_storage(
