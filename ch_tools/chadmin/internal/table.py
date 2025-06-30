@@ -577,7 +577,7 @@ def change_table_uuid(
         logging.debug("{}.{} is a table.", database, table)
         _verify_possible_change_uuid(ctx, table_local_metadata_path, new_local_uuid)
         if old_table_uuid == new_local_uuid:
-            logging.debug(
+            logging.info(
                 "Table {}.{} has uuid {}. Don't need to update current table uuid {}. Finish changing",
                 database,
                 table,
