@@ -549,10 +549,10 @@ def _verify_possible_change_uuid(
 
     table_shared_id = get_table_shared_id(ctx, metadata.replica_path)
 
-        if dst_uuid != table_shared_id:
-            raise ClickException(
-                f"Changing uuid for ReplicatedMergeTree that different from table_shared_id path was not allowed. replica_path={metadata.replica_path}, dst_uuid={dst_uuid}, table_shared_id={table_shared_id}"
-            )
+    if dst_uuid != table_shared_id:
+        raise ClickException(
+            f"Changing uuid for ReplicatedMergeTree that different from table_shared_id path was not allowed. replica_path={metadata.replica_path}, dst_uuid={dst_uuid}, table_shared_id={table_shared_id}"
+        )
 
     if dst_uuid != table_shared_id:
         logging.warning(
