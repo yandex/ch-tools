@@ -26,7 +26,6 @@ from ch_tools.common.clickhouse.client.clickhouse_client import (
     clickhouse_client,
 )
 from ch_tools.common.clickhouse.client.query import Query
-from ch_tools.common.clickhouse.config import get_cluster_name
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
@@ -102,6 +101,7 @@ def clean(
     ]
     storage_policy = config["storage_policy"]
 
+
     # Create listing table for storing paths from object storage.
     # Create orphaned objects for accumulating the result.
     try:
@@ -118,6 +118,14 @@ def clean(
             orphaned_objects_table_zk_path_prefix,
             storage_policy,
             False,
+        )
+
+
+        _create_table_on_shard(
+            ctx,
+            listing_table,
+            config["listing_table_zk_path_prefix"],
+            config["storage_policy"],
         )
 
         deleted, total_size = _clean_object_storage(
@@ -435,6 +443,22 @@ def _insert_listing_batch(
 
 def _drop_table_on_shard(ctx: Context, table_name: str) -> None:
     execute_query_on_shard(ctx, f"DROP TABLE IF EXISTS {table_name} SYNC", format_=None)
+
+
+def _create_table_on_shard(
+    ctx: Context, table_name: str, table_zk_path_prefix: str, storage_policy: str
+) -> None:
+    engine = (
+        f"ReplicatedMergeTree('{table_zk_path_prefix}/{{shard}}/{table_name}', '{{replica}}')"
+        if has_zk()
+        else "MergeTree"
+    )
+
+    execute_query_on_shard(
+        ctx,
+        f"CREATE TABLE IF NOT EXISTS {table_name} (obj_path String, obj_size UInt64) ENGINE {engine} ORDER BY obj_path SETTINGS storage_policy = '{storage_policy}'",
+        format_=None,
+    )
 
 
 def _get_default_object_name_prefix(

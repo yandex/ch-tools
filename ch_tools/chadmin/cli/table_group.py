@@ -906,12 +906,12 @@ def change_uuid_command(
         else:
             tables = [table]
 
-        logging.info("Tables for changing uuid: {}", tables)
+        logging.debug("Tables for changing uuid: {}", tables)
 
         for table_name in tables:
             table_info = get_info_from_system_tables(ctx, database, table_name)
 
-            logging.info("table_info={}", table_info)
+            logging.debug("table_info={}", table_info)
 
             if zk:
                 table_local_metadata_path = table_info["metadata_path"]
@@ -922,9 +922,8 @@ def change_uuid_command(
 
                 metadata = parse_table_metadata(table_local_metadata_path)
                 if not metadata.table_engine.is_table_engine_replicated():
-                    raise RuntimeError(
-                        f"Table {table_name} is not replicated. Failed get uuid from table_shared_id node."
-                    )
+                    logging.info(f"Table {table_name} is not replicated. Skip it.")
+                    continue
 
                 replica_path = metadata.replica_path
 
@@ -950,7 +949,7 @@ def change_uuid_command(
                 database,
                 table_name,
                 engine=table_info["engine"],
-                new_uuid=uuid,
+                new_local_uuid=uuid,
                 old_table_uuid=old_table_uuid,
                 table_local_metadata_path=table_local_metadata_path,
                 attached=True,
