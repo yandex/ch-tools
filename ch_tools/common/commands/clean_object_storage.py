@@ -24,7 +24,6 @@ from ch_tools.chadmin.internal.zookeeper import has_zk
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 from ch_tools.common.clickhouse.client.query import Query
-from ch_tools.common.clickhouse.config import get_cluster_name
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
@@ -74,19 +73,19 @@ def clean(
     config = ctx.obj["config"]["object_storage"]["clean"]
 
     listing_table = f"{config['listing_table_database']}.{config['listing_table_prefix']}{disk_conf.name}"
-    listing_table_zk_path_prefix = config["listing_table_zk_path_prefix"]
 
     # Create listing table for storing paths from object storage
     try:
         if not use_saved_list:
             _drop_table_on_shard(ctx, listing_table)
 
-        if has_zk():
-            create_table_query = f"CREATE TABLE IF NOT EXISTS {listing_table} ON CLUSTER {get_cluster_name(ctx)} (obj_path String, obj_size UInt64) ENGINE ReplicatedMergeTree('{listing_table_zk_path_prefix}/{{shard}}/{listing_table}', '{{replica}}') ORDER BY obj_path SETTINGS storage_policy = '{config['storage_policy']}'"
-        else:
-            create_table_query = f"CREATE TABLE IF NOT EXISTS {listing_table} (obj_path String, obj_size UInt64) ENGINE MergeTree ORDER BY obj_path SETTINGS storage_policy = '{config['storage_policy']}'"
+        _create_table_on_shard(
+            ctx,
+            listing_table,
+            config["listing_table_zk_path_prefix"],
+            config["storage_policy"],
+        )
 
-        execute_query(ctx, create_table_query)
         deleted, total_size = _clean_object_storage(
             ctx,
             object_name_prefix,
@@ -257,6 +256,22 @@ def _insert_listing_batch(
 
 def _drop_table_on_shard(ctx: Context, table_name: str) -> None:
     execute_query_on_shard(ctx, f"DROP TABLE IF EXISTS {table_name} SYNC", format_=None)
+
+
+def _create_table_on_shard(
+    ctx: Context, table_name: str, table_zk_path_prefix: str, storage_policy: str
+) -> None:
+    engine = (
+        f"ReplicatedMergeTree('{table_zk_path_prefix}/{{shard}}/{table_name}', '{{replica}}')"
+        if has_zk()
+        else "MergeTree"
+    )
+
+    execute_query_on_shard(
+        ctx,
+        f"CREATE TABLE IF NOT EXISTS {table_name} (obj_path String, obj_size UInt64) ENGINE {engine} ORDER BY obj_path SETTINGS storage_policy = '{storage_policy}'",
+        format_=None,
+    )
 
 
 def _get_default_object_name_prefix(
