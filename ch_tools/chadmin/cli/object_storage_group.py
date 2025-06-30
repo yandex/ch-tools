@@ -14,6 +14,7 @@ from ch_tools.chadmin.internal.zookeeper import (
     create_zk_nodes,
     update_zk_nodes,
 )
+from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config import get_clickhouse_config
@@ -176,6 +177,7 @@ def clean_command(
             _store_state_local_save(ctx, state)
 
         if error_msg:
+            logging.exception(f"Cleaning failed with error: {error_msg}")
             sys.exit(1)
 
     _print_response(ctx, dry_run, deleted, total_size)
