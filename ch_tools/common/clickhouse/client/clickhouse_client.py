@@ -222,7 +222,7 @@ class ClickhouseClient:
 
     def query_json_data(
         self: Self,
-        query: str,
+        query: Union[str, Query],
         query_args: Optional[Dict[str, Any]] = None,
         compact: bool = True,
         post_data: Any = None,
@@ -252,6 +252,9 @@ class ClickhouseClient:
             settings=settings,
             port=port,
         )["data"]
+
+    def query_json_data_first_row(self, **kwargs):
+        return self.query_json_data(**kwargs)[0]
 
     def render_query(self, query, **kwargs):
         env = Environment()
