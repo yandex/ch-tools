@@ -591,6 +591,12 @@ def reattach_partitions_command(
         "disk_name",
         help="Filter in partitions to delete by the specified disk.",
     ),
+    option(
+        "--use-partition-list-from-json",
+        default=None,
+        type=str,
+        help="Use list of partitions from the file. Example 'SELECT database, table, partition_id ... FORMAT JSON' > file && chadmin partition attach --use-partition-list-from-json <file>.",
+    ),
     constraint=RequireAtLeast(1),
 )
 @option(
@@ -612,6 +618,7 @@ def delete_partitions_command(
     max_date,
     disk_name,
     dry_run,
+    use_partition_list_from_json,
 ):
     """Delete one or several partitions."""
     partitions = get_partitions(
@@ -625,6 +632,7 @@ def delete_partitions_command(
         max_date=max_date,
         disk_name=disk_name,
         format_="JSON",
+        use_partition_list_from_json=use_partition_list_from_json,
     )["data"]
     for p in partitions:
         drop_partition(
