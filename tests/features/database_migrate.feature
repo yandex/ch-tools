@@ -1683,3 +1683,161 @@ Feature: chadmin database migrate command
     """
     (42)
     """
+
+  @require_version_24.8
+  Scenario: Restore table replica after migration to Replicated
+    Given we have executed queries on clickhouse01
+    """
+    CREATE DATABASE non_repl_db ON CLUSTER '{cluster}';
+    CREATE TABLE non_repl_db.test_table1
+    ON CLUSTER '{cluster}'
+    (
+        `a` Int
+    )
+    ENGINE = ReplicatedMergeTree('/clickhouse/test_table1/{shard}', '{replica}')
+    ORDER BY a;
+    INSERT INTO non_repl_db.test_table1 VALUES (42);
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db -e Replicated
+    """
+    Then it completes successfully
+    When we execute command on clickhouse02
+    """
+    chadmin database migrate -d non_repl_db -e Replicated
+    """
+    Then it completes successfully
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper delete '/clickhouse/test_table1/shard1/replicas/clickhouse01.ch_tools_test'
+    """
+    Then it completes successfully
+
+    When we execute query on clickhouse01
+    """
+    DETACH TABLE non_repl_db.test_table1 PERMANENTLY SYNC
+    """
+    Then it completes successfully
+    When we execute query on clickhouse01
+    """
+    ATTACH TABLE non_repl_db.test_table1
+    """
+    Then it completes successfully
+    
+    When we execute query on clickhouse01
+    """
+    SELECT is_readonly FROM system.replicas WHERE table='test_table1'
+    """
+    Then we get response
+    """
+    1
+    """
+    When we execute query on clickhouse01
+    """
+    SYSTEM RESTORE REPLICA non_repl_db.test_table1
+    """
+    Then it completes successfully
+    When we execute query on clickhouse01
+    """
+    SELECT is_readonly FROM system.replicas WHERE table='test_table1'
+    """
+    Then we get response
+    """
+    0
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM non_repl_db.test_table1
+    """
+    Then we get response
+    """
+    42
+    """
+
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper delete '/clickhouse/test_table1/'
+    """
+    Then it completes successfully
+    When we execute query on clickhouse01
+    """
+    DETACH TABLE non_repl_db.test_table1 PERMANENTLY SYNC
+    """
+    Then it completes successfully
+    When we execute query on clickhouse01
+    """
+    ATTACH TABLE non_repl_db.test_table1
+    """
+    Then it completes successfully
+    
+    When we execute query on clickhouse01
+    """
+    SELECT is_readonly FROM system.replicas WHERE table='test_table1'
+    """
+    Then we get response
+    """
+    1
+    """
+    When we execute query on clickhouse02
+    """
+    SELECT is_readonly FROM system.replicas WHERE table='test_table1'
+    """
+    Then we get response
+    """
+    1
+    """
+
+    When we execute query on clickhouse01
+    """
+    SYSTEM RESTORE REPLICA non_repl_db.test_table1
+    """
+    Then it completes successfully
+    When we execute query on clickhouse01
+    """
+    SELECT is_readonly FROM system.replicas WHERE table='test_table1'
+    """
+    Then we get response
+    """
+    0
+    """
+
+    When we execute query on clickhouse01
+    """
+    INSERT INTO non_repl_db.test_table1 VALUES (43);
+    """
+    When we execute query on clickhouse02
+    """
+    SYSTEM SYNC REPLICA non_repl_db.test_table1
+    """
+
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM non_repl_db.test_table1 ORDER BY a FORMAT Values
+    """
+    Then we get response
+    """
+    (42),(43)
+    """
+
+    When we execute query on clickhouse02
+    """
+    SYSTEM RESTORE REPLICA non_repl_db.test_table1
+    """
+    Then it completes successfully
+    When we execute query on clickhouse02
+    """
+    SELECT is_readonly FROM system.replicas WHERE table='test_table1'
+    """
+    Then we get response
+    """
+    0
+    """
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM non_repl_db.test_table1 ORDER BY a FORMAT Values
+    """
+    Then we get response
+    """
+    (42),(43)
+    """
