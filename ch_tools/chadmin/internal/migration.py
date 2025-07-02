@@ -18,6 +18,7 @@ from ch_tools.chadmin.internal.table import (
 )
 from ch_tools.chadmin.internal.utils import execute_query, replace_macros
 from ch_tools.chadmin.internal.zookeeper import (
+    delete_zk_node,
     escape_for_zookeeper,
     format_path,
     get_zk_node,
@@ -98,7 +99,7 @@ def _generate_counter(ctx: Context, zk: KazooClient, db_zk_path: str) -> str:
     counter = path_counter[path_counter.rfind("-") + 1 :]
     assert len(counter) > 0
 
-    logging.info(
+    logging.debug(
         "path_counter={}, after parse counter={}",
         path_counter,
         counter,
@@ -110,12 +111,12 @@ def _generate_counter(ctx: Context, zk: KazooClient, db_zk_path: str) -> str:
 def _check_result_txn(results: List) -> None:
     for result in results:
         if isinstance(result, NodeExistsError):
-            logging.info("result contains NodeExistsError.")
+            logging.debug("result contains NodeExistsError.")
             raise NodeExistsError()
         if isinstance(result, Exception):
             logging.error("result contains ex={}, type=P{}.", result, type(result))
             raise result
-        logging.info("check_result_txn: result={}, continue.", result)
+        logging.debug("check_result_txn: result={}, continue.", result)
 
 
 def get_shard_and_replica_from_macros(ctx: Context) -> Tuple[str, str]:
@@ -175,7 +176,7 @@ def restore_replica(
             )
 
         result = txn.commit()
-        logging.info("Txn was committed. Result {}", result)
+        logging.debug("Txn was committed. Result {}", result)
 
         _check_result_txn(result)
 
@@ -206,7 +207,7 @@ def migrate_as_non_first_replica(ctx: Context, migrating_database: str) -> None:
         _check_tables_consistent(ctx, migrating_database, tables_info)
 
         result = txn.commit()
-        logging.info("Txn was committed. Result {}", result)
+        logging.debug("Txn was committed. Result {}", result)
 
         _check_result_txn(result)
 
@@ -224,7 +225,7 @@ def migrate_as_non_first_replica(ctx: Context, migrating_database: str) -> None:
 def _get_host_id(ctx: Context, migrating_database: str, replica: str) -> str:
     host_name = replica
 
-    logging.info("host_name={}", host_name)
+    logging.debug("host_name={}", host_name)
 
     query = f"""
         SELECT uuid FROM system.databases WHERE database='{migrating_database}'
@@ -236,7 +237,7 @@ def _get_host_id(ctx: Context, migrating_database: str, replica: str) -> str:
     tcp_port = ch_server_config.ports[ClickhousePort.TCP]
 
     result = f"{escape_for_zookeeper(host_name)}:{tcp_port}:{database_uuid}"
-    logging.info("_get_host_id={}", result)
+    logging.debug("_get_host_id={}", result)
 
     return result
 
@@ -363,7 +364,7 @@ def _create_database_replica(
     Create replica nodes for Replicated database.
     https://github.com/ClickHouse/ClickHouse/blob/master/src/Databases/DatabaseReplicated.cpp#L714
     """
-    logging.info("call create_database_replica")
+    logging.debug("call create_database_replica")
 
     shard, replica = get_shard_and_replica_from_macros(ctx)
 
@@ -387,7 +388,7 @@ def _create_database_replica(
     """
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
     server_uuid = rows["data"][0]["id"]
-    logging.info("rows={}, server_uuid={}", rows, server_uuid)
+    logging.debug("rows={}, server_uuid={}", rows, server_uuid)
 
     txn.create(
         path=format_path(ctx, replica_node + "/active"),
@@ -436,7 +437,7 @@ def _create_database_metadata_nodes(
                 value=local_table_metadata.encode(),
             )
 
-            logging.info(
+            logging.debug(
                 "add table metadata to txn: {}",
                 local_table_metadata,
             )
@@ -475,12 +476,12 @@ def _get_tables_info_and_detach(ctx: Context, database_name: str) -> dict:
     tables = rows["data"]
 
     for row in rows["data"]:
-        logging.info("got row={}", row)
+        logging.debug("got row={}", row)
         table_name = row["name"]
         metadata_path = row["metadata_path"]
         create_table_query = row["create_table_query"]
 
-        logging.info(
+        logging.debug(
             "table_name={}, metadata_path={}, create_table_query={}",
             table_name,
             metadata_path,
@@ -503,17 +504,29 @@ def is_table_schema_equal(
 
     local_table_metadata = read_local_table_metadata(ctx, table_local_metadata_path)
 
+    logging.debug("Table {} has local metadata={}", table_name, local_table_metadata)
+
     zk_table_metadata = zk_table_metadata.rstrip()
     local_table_metadata = local_table_metadata.rstrip()
 
     local_table_metadata = remove_uuid_from_metadata(local_table_metadata)
     zk_table_metadata = remove_uuid_from_metadata(zk_table_metadata)
-
-    logging.info(
-        "Compare metadata: local={}, zk={}", local_table_metadata, zk_table_metadata
+    logging.debug(
+        "Table {} has zookeeper metadata={}", table_name, local_table_metadata
     )
 
-    return local_table_metadata == zk_table_metadata
+    is_equal = local_table_metadata == zk_table_metadata
+
+    if is_equal:
+        logging.info(
+            f"Table {database_name}.{table_name}: local metadata is the same as zookeeper metadata"
+        )
+    else:
+        logging.warning(
+            f"Table {database_name}.{table_name}: local metadata differs from zookeeper metadata"
+        )
+
+    return is_equal
 
 
 def _change_tables_uuid(ctx: Context, tables_info: dict, database_name: str) -> bool:
@@ -530,7 +543,7 @@ def _change_tables_uuid(ctx: Context, tables_info: dict, database_name: str) -> 
 
         zk_table_uuid = metadata.parse_uuid(zk_table_metadata)
 
-        logging.info(
+        logging.debug(
             "Table {} has old_table_uuid={}, zk_table_uuid={}",
             table_name,
             old_table_uuid,
@@ -538,7 +551,11 @@ def _change_tables_uuid(ctx: Context, tables_info: dict, database_name: str) -> 
         )
 
         if zk_table_uuid == old_table_uuid:
-            logging.info("Equal uuid. Don't need to change uuid.")
+            logging.debug(
+                "Table {}.{} has equal uuid. Don't need to change uuid.",
+                database_name,
+                table_name,
+            )
             continue
 
         was_changed = True
@@ -588,11 +605,22 @@ def migrate_database_to_replicated(ctx: Context, database: str) -> None:
         migrate_as_non_first_replica(ctx, database)
 
 
-def migrate_database_to_atomic(ctx: Context, database: str) -> None:
+def migrate_database_to_atomic(
+    ctx: Context, database: str, clean_zookeeper: bool
+) -> None:
     metadata_repl_db = parse_database_from_metadata(database)
     _detach_dbs(ctx, dbs=[database])
     try:
+        replica_path = metadata_repl_db.replica_path
         metadata_repl_db.set_atomic()
+
+        if clean_zookeeper:
+            logging.debug(
+                "Set clean_zookeeper - delete zookeeper nodes {}",
+                replica_path,
+            )
+            delete_zk_node(ctx, replica_path)
+
     except Exception as ex:
         logging.error("Failed set atomic in metadata: {}", ex)
         _attach_dbs(ctx, dbs=[database])

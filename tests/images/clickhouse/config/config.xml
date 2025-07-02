@@ -42,7 +42,7 @@
             <default />
             <object_storage>
                 <type>s3</type>
-                <endpoint>{{ conf.s3.endpoint }}/{{ conf.s3.bucket }}/data/</endpoint>
+                <endpoint>{{ conf.s3.endpoint }}/{{ conf.s3.bucket }}/data/cluster_id/shard_1/</endpoint>
                 <access_key_id>{{ conf.s3.access_key_id }}</access_key_id>
                 <secret_access_key>{{ conf.s3.access_secret_key }}</secret_access_key>
             </object_storage>
