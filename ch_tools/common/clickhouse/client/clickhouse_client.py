@@ -256,6 +256,10 @@ class ClickhouseClient:
     def query_json_data_first_row(self, **kwargs):
         return self.query_json_data(**kwargs)[0]
 
+    def try_query_json_data_first_row(self, **kwargs):
+        data = self.query_json_data(**kwargs)
+        return None if not data else data[0]
+
     def render_query(self, query, **kwargs):
         env = Environment()
 
@@ -284,21 +288,36 @@ def clickhouse_client(ctx: Context) -> ClickhouseClient:
     Init ClickHouse client and store to the context if it doesn't exist.
     """
     if not ctx.obj.get("chcli"):
-        ch_server_config = get_clickhouse_config(ctx)
-        tools_config = ctx.obj["config"]["clickhouse"]
-        user, password = clickhouse_credentials(ctx)
-        ctx.obj["chcli"] = ClickhouseClient(
-            host=tools_config["host"],
-            ports=ch_server_config.ports,
-            user=user,
-            password=password,
-            cert_path=ch_server_config.cert_path,
-            insecure=tools_config["insecure"],
-            timeout=tools_config["timeout"],
-            settings=tools_config["settings"],
-        )
+        ctx.obj["chcli"] = _clickhouse_client(ctx)
 
     return ctx.obj["chcli"]
+
+
+def custom_clickhouse_client(
+    ctx: Context, *, host: Optional[str] = None
+) -> ClickhouseClient:
+    """
+    Return ClickHouse client with opportunity to override config parameters.
+    Does not store ClickHouse client in context unlike `clickhouse_client(ctx)`.
+    """
+    return _clickhouse_client(ctx, host)
+
+
+def _clickhouse_client(ctx: Context, host: Optional[str] = None) -> ClickhouseClient:
+    ch_server_config = get_clickhouse_config(ctx)
+    tools_config = ctx.obj["config"]["clickhouse"]
+    user, password = clickhouse_credentials(ctx)
+
+    return ClickhouseClient(
+        host=host or tools_config["host"],
+        ports=ch_server_config.ports,
+        user=user,
+        password=password,
+        cert_path=ch_server_config.cert_path,
+        insecure=tools_config["insecure"],
+        timeout=tools_config["timeout"],
+        settings=tools_config["settings"],
+    )
 
 
 def clickhouse_credentials(ctx):

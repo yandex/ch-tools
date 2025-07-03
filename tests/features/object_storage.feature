@@ -33,7 +33,7 @@ Feature: chadmin object-storage commands
     """
     - WouldDelete: <WouldDelete>
       TotalSize: <TotalSize>
-    """  
+    """
   Examples:
     | scope   | WouldDelete | TotalSize   |
     | host    | [1-9][0-9]* | [1-9][0-9]* |
@@ -236,4 +236,20 @@ Feature: chadmin object-storage commands
     Then we get response contains
     """
     Sanity check not passed
+    """
+
+  Scenario: Clean orphaned objects works when orphaned ZK paths exists
+    When we execute chadmin create zk nodes on clickhouse01
+    """
+      /_system/tables/shard1/default.listing_objects_from_object_storage/replicas/clickhouse01
+      /_system/tables/shard1/default.orphaned_objects_object_storage/replicas/clickhouse01
+    """
+    When we try to execute command on clickhouse02
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h
+    """
+    Then we get response matches
+    """
+    - WouldDelete: 0
+      TotalSize: 0
     """
