@@ -188,7 +188,6 @@ def clean_command(
             _store_state_local_save(ctx, state)
 
         if error_msg:
-            logging.exception(f"Cleaning failed with error: {error_msg}")
             sys.exit(1)
 
     _print_response(ctx, dry_run, deleted, total_size)

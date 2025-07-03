@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 import click
 from click import Context
 from humanfriendly import format_size
+from kazoo.exceptions import NoNodeError
 
 from ch_tools.chadmin.internal.object_storage import cleanup_s3_object_storage
 from ch_tools.chadmin.internal.object_storage.obj_list_item import ObjListItem
@@ -14,16 +15,21 @@ from ch_tools.chadmin.internal.object_storage.s3_iterator import (
     s3_object_storage_iterator,
 )
 from ch_tools.chadmin.internal.system import match_ch_version
+from ch_tools.chadmin.internal.table_replica import system_table_drop_replica_by_zk_path
 from ch_tools.chadmin.internal.utils import (
     chunked,
     execute_query,
     execute_query_on_shard,
 )
-from ch_tools.chadmin.internal.zookeeper import has_zk
+from ch_tools.chadmin.internal.zookeeper import (
+    has_zk,
+    list_zk_nodes,
+)
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import (
     ClickhouseClient,
     clickhouse_client,
+    custom_clickhouse_client,
 )
 from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
@@ -51,6 +57,40 @@ class CleanScope(str, Enum):
     CLUSTER = "cluster"
 
 
+def _clean_orphaned_zk_paths(
+    ctx: Context, table_name: str, replica_zk_prefix: str
+) -> None:
+    if not has_zk():
+        return
+
+    database, table = table_name.split(".")
+
+    try:
+        nodes = list_zk_nodes(
+            ctx, f"{replica_zk_prefix}/{{shard}}/{table_name}/replicas"
+        )
+    except NoNodeError:
+        return
+
+    if not nodes:
+        return
+
+    for node in nodes:
+        replicas_path, replica = os.path.split(node)
+        if not replica:
+            continue
+
+        ch_client = custom_clickhouse_client(ctx, host=replica)
+        res = ch_client.try_query_json_data_first_row(
+            query=f"SELECT name FROM system.tables WHERE database = '{database}' AND name = '{table}'",
+            compact=True,
+        )
+
+        if not res:
+            zk_replicas_path, _ = os.path.split(replicas_path)
+            system_table_drop_replica_by_zk_path(ctx, replica, zk_replicas_path)
+
+
 def _create_object_listing_table(
     ctx: Context,
     table_name: str,
@@ -58,6 +98,8 @@ def _create_object_listing_table(
     storage_policy: str,
     recreate_table: bool,
 ) -> None:
+    _clean_orphaned_zk_paths(ctx, table_name, replica_zk_prefix)
+
     if not recreate_table:
         _drop_table_on_shard(ctx, table_name)
 
