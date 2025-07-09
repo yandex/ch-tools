@@ -12,7 +12,6 @@ from ch_tools.common.clickhouse.config import (
     ClickhouseKeeperConfig,
     ClickhouseUsersConfig,
 )
-from ch_tools.common.utils import version_ge
 
 from ..utils import clickhouse_client
 from .data import DiagnosticsData, add_command, add_query, execute_query
