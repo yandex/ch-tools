@@ -1,7 +1,7 @@
 import re
 import sys
 
-from click import argument, group, option, pass_context
+from click import Context, argument, group, option, pass_context
 from kazoo.security import make_digest_acl
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -9,17 +9,21 @@ from ch_tools.chadmin.internal.table_replica import get_table_replica
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
     create_zk_nodes,
+    delete,
     delete_zk_nodes,
+    find_leaf_nodes,
     get_zk_node,
     get_zk_node_acls,
     list_zk_nodes,
     update_acls_zk_node,
     update_zk_nodes,
+    zk_client,
 )
 from ch_tools.chadmin.internal.zookeeper_clean import clean_zk_metadata_for_hosts
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_json, print_response
 from ch_tools.common.cli.parameters import ListParamType, StringParamType
+from ch_tools.common.commands.clean_object_storage import _get_zero_copy_zookeeper_path
 from ch_tools.common.config import load_config
 
 
@@ -356,3 +360,71 @@ def remove_hosts_from_table(ctx, zookeeper_table_path, fqdn, dry_run):
         cleanup_ddl_queue=False,
         dry_run=dry_run,
     )
+
+
+@zookeeper_group.command("clean-zk-locks")
+@option(
+    "--zero_copy_path",
+    "zero_copy_path",
+    default="",
+    help=(
+        "Path to zero-copy related data in ZooKeeper."
+        "Will use 'remote_fs_zero_copy_zookeeper_path' value from ClickHouse by default."
+    ),
+)
+@option(
+    "--table-id",
+    "table_uuid",
+    default="",
+    help=(
+        "do help"
+    ),
+)
+@option(
+    "-p",
+    "--part-id",
+    "part_id",
+    default="",
+    help=(
+        "do help"
+    ),
+)
+@option(
+    "-r",
+    "--replica",
+    "replica",
+    default="",
+    help=(
+        "do help"
+    ),
+)
+@option(
+    "--dry-run",
+    "dry_run",
+    is_flag=True,
+    help=("Do not delete objects. Show only statistics."),
+)
+@pass_context
+def clean_zk_locks_command(
+    ctx: Context,
+    zero_copy_path: str,
+    table_uuid: str,
+    part_id: str,
+    replica: str,
+    dry_run:bool,
+) -> None:
+    """
+    Clean zero copy locks.
+    """
+    zero_copy_path = zero_copy_path or _get_zero_copy_zookeeper_path(ctx)
+    default = r".+"
+    with zk_client(ctx) as zk:
+        uuid = re.escape(table_uuid) or default
+        part = re.escape(part_id) or default
+        replica = re.escape(replica) or default
+        template = fr"{uuid}/{part}/.+/{replica}"
+        nodes = find_leaf_nodes(zk, zero_copy_path, [template])
+        if dry_run:
+            logging.info(f"Will delete nodes: {nodes}")
+        else:
+            delete(zk, nodes)

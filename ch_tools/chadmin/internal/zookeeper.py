@@ -4,10 +4,11 @@ from collections import deque
 from contextlib import contextmanager
 from math import sqrt
 
+from click import Context
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError, NotEmptyError
 
-from ch_tools.chadmin.internal.utils import chunked, replace_macros
+from ch_tools.chadmin.internal.utils import chunked, execute_query, replace_macros
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
 
@@ -139,6 +140,36 @@ def find_paths(zk, root_path, included_paths_regexp, excluded_paths=None):
     return list(paths)
 
 
+def find_leaf_nodes(zk, root_path, included_paths_regexp, excluded_paths=None):
+    """
+    Traverse zookeeper tree from root_path with bfs approach.
+
+    Return paths of leaf nodes that match the include regular expression and do not match the excluded one.
+    Note that root_path is not trying to be matched in regular expressions.
+    """
+    paths = set()
+    queue = deque([root_path])
+    included_regexp = re.compile("|".join(included_paths_regexp))
+    excluded_regexp = re.compile("|".join(excluded_paths)) if excluded_paths else None
+    while len(queue):
+        path = queue.popleft()
+
+        children = get_children(zk, path)
+        if not children:
+            subpath = os.path.relpath(path, root_path)
+            if not excluded_regexp or not re.match(excluded_regexp, subpath):
+                print(subpath)
+                if re.match(included_regexp, subpath):
+                    print("matched")
+                    paths.add(path)
+
+        for child_node in get_children(zk, path):
+            child_path = os.path.join(path, child_node)
+            queue.append(child_path)
+
+    return list(paths)
+
+
 def delete_nodes_transaction(zk, to_delete_in_trasaction):
     """
     Perform deletion for the list of nodes in a single transaction.
@@ -194,6 +225,14 @@ def remove_subpaths(paths):
     return ["/".join(path) for path in normalized_paths]
 
 
+def delete(zk, nodes):
+    # When number of nodes to delete is large preferable to use greater transaction size.
+    operations_in_transaction = max(100, int(sqrt(len(nodes))))
+
+    for transaction_orerations in chunked(reversed(nodes), operations_in_transaction):
+        delete_nodes_transaction(zk, transaction_orerations)
+
+
 def delete_recursive(zk, paths, dry_run=False):
     """
     Kazoo already has the ability to recursively delete nodes, but the implementation is quite naive
@@ -220,13 +259,7 @@ def delete_recursive(zk, paths, dry_run=False):
     logging.info("Got {} nodes to remove.", len(nodes_to_delete))
     if dry_run:
         return
-    # When number of nodes to delete is large preferable to use greater transaction size.
-    operations_in_transaction = max(100, int(sqrt(len(nodes_to_delete))))
-
-    for transaction_orerations in chunked(
-        reversed(nodes_to_delete), operations_in_transaction
-    ):
-        delete_nodes_transaction(zk, transaction_orerations)
+    delete(zk, nodes_to_delete, dry_run)
 
 
 def escape_for_zookeeper(s: str) -> str:
@@ -304,3 +337,14 @@ def _get_zk_client(ctx):
         verify_certs=verify_ssl_certs,
         randomize_hosts=zk_randomize_hosts,
     )
+
+
+def _get_zero_copy_zookeeper_path(ctx: Context) -> str:
+    """
+    Returns ZooKeeper path for zero-copy table-independent info.
+
+    '/clickhouse/zero_copy/zero_copy_s3' is default.
+    """
+    query = "SELECT value FROM system.merge_tree_settings WHERE name = 'remote_fs_zero_copy_zookeeper_path'"
+    base_path = execute_query(ctx, query, format_="Raw")
+    return os.path.join(base_path, "zero_copy_s3")
