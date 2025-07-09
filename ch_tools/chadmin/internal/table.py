@@ -539,20 +539,18 @@ def _verify_possible_change_uuid(
         metadata.replica_path,
     )
     if check_replica_path_contains_macros(metadata.replica_path, "uuid"):
-        logging.error(
+
+        raise ClickException(
             f"Changing uuid for ReplicatedMergeTree that contains macros uuid in replica path was not allowed. replica_path={metadata.replica_path}"
         )
-        if check_replica_path_contains_macros(metadata.replica_path, "uuid"):
-            raise ClickException(
-                f"Changing uuid for ReplicatedMergeTree that contains macros uuid in replica path was not allowed. replica_path={metadata.replica_path}"
-            )
 
     table_shared_id = get_table_shared_id(ctx, metadata.replica_path)
 
-    if dst_uuid != table_shared_id:
-        raise ClickException(
-            f"Changing uuid for ReplicatedMergeTree that different from table_shared_id path was not allowed. replica_path={metadata.replica_path}, dst_uuid={dst_uuid}, table_shared_id={table_shared_id}"
-        )
+    logging.debug(
+        "Check that dst_uuid {} is equal with table_shared_id {} node.",
+        dst_uuid,
+        table_shared_id,
+    )
 
     if dst_uuid != table_shared_id:
         logging.warning(
