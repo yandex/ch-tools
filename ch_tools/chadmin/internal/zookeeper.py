@@ -131,7 +131,6 @@ def find_paths(zk, root_path, included_paths_regexp, excluded_paths=None):
             continue
         for child_node in get_children(zk, path):
             subpath = os.path.join(path, child_node)
-
             if re.match(included_regexp, subpath):
                 paths.add(subpath)
             else:
@@ -259,7 +258,7 @@ def delete_recursive(zk, paths, dry_run=False):
     logging.info("Got {} nodes to remove.", len(nodes_to_delete))
     if dry_run:
         return
-    delete(zk, nodes_to_delete, dry_run)
+    delete(zk, nodes_to_delete)
 
 
 def escape_for_zookeeper(s: str) -> str:

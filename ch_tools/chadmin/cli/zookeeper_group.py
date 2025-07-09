@@ -1,17 +1,28 @@
 import re
 import sys
 
-from click import Context, argument, group, option, pass_context
+from cloup import (
+    Context,
+    argument,
+    constraint,
+    group,
+    option,
+    option_group,
+    pass_context,
+)
+from cloup.constraints import IsSet, If, RequireAtLeast, require_all
 from kazoo.security import make_digest_acl
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.table_replica import get_table_replica
 from ch_tools.chadmin.internal.zookeeper import (
+    _get_zero_copy_zookeeper_path,
     check_zk_node,
     create_zk_nodes,
     delete,
+    delete_recursive,
     delete_zk_nodes,
-    find_leaf_nodes,
+    find_paths,
     get_zk_node,
     get_zk_node_acls,
     list_zk_nodes,
@@ -23,7 +34,6 @@ from ch_tools.chadmin.internal.zookeeper_clean import clean_zk_metadata_for_host
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_json, print_response
 from ch_tools.common.cli.parameters import ListParamType, StringParamType
-from ch_tools.common.commands.clean_object_storage import _get_zero_copy_zookeeper_path
 from ch_tools.common.config import load_config
 
 
@@ -372,32 +382,35 @@ def remove_hosts_from_table(ctx, zookeeper_table_path, fqdn, dry_run):
         "Will use 'remote_fs_zero_copy_zookeeper_path' value from ClickHouse by default."
     ),
 )
-@option(
-    "--table-id",
-    "table_uuid",
-    default="",
-    help=(
-        "do help"
+@option_group(
+    "Cleaning scope selection selection options",
+    option(
+        "-t",
+        "--table-uuid",
+        "table_uuid",
+        default="",
+        help=("do help"),
     ),
-)
-@option(
-    "-p",
-    "--part-id",
-    "part_id",
-    default="",
-    help=(
-        "do help"
+    option(
+        "-p",
+        "--part-id",
+        "part_id",
+        default="",
+        help=("do help"),
     ),
+    # constraint=If(IsSet("part_id"), then=require_all),
 )
 @option(
     "-r",
     "--replica",
     "replica",
     default="",
-    help=(
-        "do help"
-    ),
+    help=("do help"),
 )
+# @constraint(
+#     RequireAtLeast(1),
+#     ["table_uuid", "part_id", "replica"],
+# )
 @option(
     "--dry-run",
     "dry_run",
@@ -411,20 +424,40 @@ def clean_zk_locks_command(
     table_uuid: str,
     part_id: str,
     replica: str,
-    dry_run:bool,
+    dry_run: bool,
 ) -> None:
     """
     Clean zero copy locks.
     """
     zero_copy_path = zero_copy_path or _get_zero_copy_zookeeper_path(ctx)
-    default = r".+"
+
     with zk_client(ctx) as zk:
-        uuid = re.escape(table_uuid) or default
-        part = re.escape(part_id) or default
-        replica = re.escape(replica) or default
-        template = fr"{uuid}/{part}/.+/{replica}"
-        nodes = find_leaf_nodes(zk, zero_copy_path, [template])
-        if dry_run:
+        # uuid/part/blob_path/replica
+        # TODO: delete empty parent nodes
+        if replica:
+            anything = r".+"
+            uuid = re.escape(table_uuid) or anything
+            part = re.escape(part_id) or anything
+            replica = re.escape(replica)
+            template = rf"{zero_copy_path}/{uuid}/{part}/.+/{replica}"
+            nodes = find_paths(
+                zk, zero_copy_path, [template]
+            )  # find_leaf_nodes(zk, zero_copy_path, [template])
             logging.info(f"Will delete nodes: {nodes}")
-        else:
+            if dry_run:
+                return
             delete(zk, nodes)
+        else:
+            if part_id:
+                if not table_uuid:
+                    raise RuntimeError(
+                        "If part-id is set, table-uuid is required"
+                    )  # TODO: cloup constraints
+                template = re.escape(rf"{zero_copy_path}/{table_uuid}/{part_id}")
+            else:
+                template = re.escape(rf"{zero_copy_path}/{table_uuid}")
+            nodes = find_paths(zk, zero_copy_path, [template])
+            logging.info(f"Will recursively delete nodes: {nodes}")
+            if dry_run:
+                return
+            delete_recursive(zk, nodes)
