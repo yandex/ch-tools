@@ -1,5 +1,5 @@
 import json
-from typing import Any, List, Dict
+from typing import Any, Dict, List
 
 
 class DbaasConfig:
@@ -95,6 +95,7 @@ class DbaasConfig:
         for subcluster in self._config["cluster"]["subclusters"].values():
             if "clickhouse_cluster" in subcluster["roles"]:
                 return subcluster
+        raise RuntimeError("Unreachable")
 
     @staticmethod
     def load() -> 'DbaasConfig':

@@ -3,7 +3,9 @@ import re
 from collections import deque
 from contextlib import contextmanager
 from math import sqrt
-from typing import Any, Dict, List, Optional, Set, Generator, Union
+from typing import Any, Dict, Generator, List, Optional, Set, Union
+
+from click import Context
 
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError, NotEmptyError
@@ -12,7 +14,7 @@ from ch_tools.chadmin.internal.utils import chunked, replace_macros
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
 from ch_tools.common.clickhouse.config.clickhouse import ClickhouseConfig
-from click import Context
+
 
 def has_zk() -> bool:
     return not ClickhouseConfig.load().zookeeper.is_empty()
@@ -132,7 +134,7 @@ def find_paths(zk: KazooClient, root_path: str, included_paths_regexp: List[str]
     Return paths of nodes that match the include regular expression and do not match the excluded one.
     """
     paths: Set[str] = set()
-    queue: deque = deque([root_path])
+    queue: deque[str] = deque([root_path])
     included_regexp = re.compile("|".join(included_paths_regexp))
     excluded_regexp = re.compile("|".join(excluded_paths)) if excluded_paths else None
     while len(queue):
