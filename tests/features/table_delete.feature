@@ -398,7 +398,7 @@ Feature: chadmin delete detached table commands
     Then we get response
     """
     """
-    Then the list of children on clickhouse01 for zk node /clickhouse/tables/{shard}/ are equal to
+    Then the list of children on clickhouse01 for zk node /clickhouse/tables/{shard}/ is equal to
     """
     """
 

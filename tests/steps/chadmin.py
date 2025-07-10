@@ -49,14 +49,14 @@ def step_table_cleanup(context, node, fqdn, zk_table_path):
     assert result.exit_code == 0, f" output:\n {result.output.decode().strip()}"
 
 
-@then("the list of children on {node:w} for zk node {zk_node} are equal to")
+@then("the list of children on {node:w} for zk node {zk_node} is equal to")
 def step_childen_list(context, node, zk_node):
     container = get_container(context, node)
     result = Chadmin(container).zk_list(zk_node)
     assert_that(result.output.decode(), equal_to(context.text + "\n"))
 
 
-@then("the list of children on {node:w} for zk node {zk_node} are empty")
+@then("the list of children on {node:w} for zk node {zk_node} is empty")
 def step_childen_list_empty(context, node, zk_node):
     container = get_container(context, node)
     result = Chadmin(container).zk_list(zk_node)

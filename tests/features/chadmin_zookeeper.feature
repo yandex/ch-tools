@@ -8,6 +8,161 @@ Feature: chadmin zookeeper commands.
     And a working clickhouse on clickhouse02
 
 
+  Scenario: Cleanup all zero-copy locks for two replicas with one lock for third replica present
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS test ON CLUSTER 'cluster'; 
+    CREATE DATABASE test ON CLUSTER 'cluster';
+
+    CREATE TABLE test.table_01 UUID '10000000-0000-0000-0000-000000000001' ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n
+    SETTINGS storage_policy='object_storage',allow_remote_fs_zero_copy_replication=1;
+    INSERT INTO test.table_01 SELECT number FROM numbers(2);
+
+    CREATE TABLE test.table_02 UUID '10000000-0000-0000-0000-000000000002' ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_02', '{replica}') PARTITION BY n ORDER BY n
+    SETTINGS storage_policy='object_storage',allow_remote_fs_zero_copy_replication=1;
+    INSERT INTO test.table_02 SELECT number FROM numbers(2);
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/0_0_0_0/blob_path/clickhouse03.ch_tools_test
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper clean-zk-locks --replica clickhouse01.ch_tools_test
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper clean-zk-locks --replica clickhouse01.ch_tools_test --dry-run
+    """
+    Then we get response
+    """
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper clean-zk-locks --replica clickhouse02.ch_tools_test --dry-run
+    """
+    Then we get response contains 
+    """
+    clickhouse02.ch_tools_test
+    """
+    And the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/0_0_0_0/blob_path/ is equal to
+    """
+    /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/0_0_0_0/blob_path/clickhouse03.ch_tools_test
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper clean-zk-locks --replica clickhouse02.ch_tools_test
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/ is equal to
+    """
+    /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001
+    """
+    And the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001 is equal to
+    """
+    /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/0_0_0_0
+    """
+
+  Scenario: Cleanup all zero-copy locks for replicas with table and part filters
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid1/part1/blob1/replica1
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid1/part1/blob1/replica2
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid1/part1/blob2/replica1
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid1/part2/blob1/replica1
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid2/part1/blob1/replica1
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper clean-zk-locks --table-uuid uuid2 --replica replica1
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/ is equal to
+    """
+    /clickhouse/zero_copy/zero_copy_s3/uuid1
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper clean-zk-locks --table-uuid uuid1 --part-id part2 --replica replica1
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/uuid1 is equal to
+    """
+    /clickhouse/zero_copy/zero_copy_s3/uuid1/part1
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper clean-zk-locks --table-uuid uuid1 --part-id part1 --replica replica1
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/uuid1/part1/blob1 is equal to
+    """
+    /clickhouse/zero_copy/zero_copy_s3/uuid1/part1/blob1/replica2
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper clean-zk-locks --table-uuid uuid1 --replica replica2
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
+
+  Scenario: Cleanup zero-copy locks without replica filter
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid1/part1/blob1/replica1
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid1/part1/blob1/replica2
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid1/part1/blob2/replica1
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid1/part2/blob1/replica1
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid2/part1/blob1/replica1
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper clean-zk-locks --table-uuid uuid2
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/ is equal to
+    """
+    /clickhouse/zero_copy/zero_copy_s3/uuid1
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper clean-zk-locks --table-uuid uuid1 --part-id part2
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/uuid1 is equal to
+    """
+    /clickhouse/zero_copy/zero_copy_s3/uuid1/part1
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper clean-zk-locks --table-uuid uuid1 --part-id part1
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
+
+
   Scenario: Cleanup all hosts
     When we execute queries on clickhouse01
     """
@@ -25,7 +180,7 @@ Feature: chadmin zookeeper commands.
     """
 
     And we do hosts cleanup on clickhouse01 with fqdn clickhouse01.ch_tools_test,clickhouse02.ch_tools_test and zk root /
-    Then the list of children on clickhouse01 for zk node /tables/ are empty
+    Then the list of children on clickhouse01 for zk node /tables/ is empty
 
   Scenario: Cleanup all hosts dry run
     When we execute queries on clickhouse01
@@ -44,7 +199,7 @@ Feature: chadmin zookeeper commands.
     """
 
     And we do hosts dry cleanup on clickhouse01 with fqdn clickhouse01.ch_tools_test,clickhouse02.ch_tools_test and zk root /
-    Then the list of children on clickhouse01 for zk node /tables/ are equal to
+    Then the list of children on clickhouse01 for zk node /tables/ is equal to
     """
     /tables/table_01
     /tables/table_02
@@ -67,11 +222,11 @@ Feature: chadmin zookeeper commands.
     """
 
     And we do hosts cleanup on clickhouse01 with fqdn clickhouse01.ch_tools_test and zk root /
-    Then the list of children on clickhouse01 for zk node /tables/table_01/replicas are equal to
+    Then the list of children on clickhouse01 for zk node /tables/table_01/replicas is equal to
     """
     /tables/table_01/replicas/clickhouse02.ch_tools_test
     """
-    And the list of children on clickhouse01 for zk node /tables/table_02/replicas are equal to
+    And the list of children on clickhouse01 for zk node /tables/table_02/replicas is equal to
     """
     /tables/table_02/replicas/clickhouse02.ch_tools_test
     """
@@ -93,11 +248,11 @@ Feature: chadmin zookeeper commands.
     """
 
     And we do hosts cleanup on clickhouse01 with fqdn clickhouse02.ch_tools_test and zk root /
-    Then the list of children on clickhouse02 for zk node /tables/table_01/replicas are equal to
+    Then the list of children on clickhouse02 for zk node /tables/table_01/replicas is equal to
     """
     /tables/table_01/replicas/clickhouse01.ch_tools_test
     """
-    And the list of children on clickhouse02 for zk node /tables/table_02/replicas are equal to
+    And the list of children on clickhouse02 for zk node /tables/table_02/replicas is equal to
     """
     /tables/table_02/replicas/clickhouse01.ch_tools_test
     """
@@ -110,7 +265,7 @@ Feature: chadmin zookeeper commands.
     DETACH DATABASE testdb ON CLUSTER 'cluster';
     """
     And we do hosts cleanup on clickhouse01 with fqdn clickhouse01.ch_tools_test and zk root /
-    Then the list of children on clickhouse01 for zk node /clickhouse/databases/test/replicas/ are equal to
+    Then the list of children on clickhouse01 for zk node /clickhouse/databases/test/replicas/ is equal to
     """
     /clickhouse/databases/test/replicas/shard1|clickhouse02.ch_tools_test
     """
@@ -123,7 +278,7 @@ Feature: chadmin zookeeper commands.
     DETACH DATABASE testdb ON CLUSTER 'cluster';
     """
     And we do hosts cleanup on clickhouse01 with fqdn clickhouse01.ch_tools_test,clickhouse02.ch_tools_test and zk root /
-    Then the list of children on clickhouse01 for zk node /clickhouse/databases/ are empty
+    Then the list of children on clickhouse01 for zk node /clickhouse/databases/ is empty
 
   Scenario: Zookeeper recursive delete command
     When we execute chadmin create zk nodes on clickhouse01
@@ -133,7 +288,7 @@ Feature: chadmin zookeeper commands.
       /test/a/f
     """
     And we delete zookeepers nodes /test/a on clickhouse01
-    Then the list of children on clickhouse01 for zk node /test are empty
+    Then the list of children on clickhouse01 for zk node /test is empty
 
   Scenario: Zookeeper delete parent and child nodes
     When we execute chadmin create zk nodes on clickhouse01
@@ -144,7 +299,7 @@ Feature: chadmin zookeeper commands.
     # Make sure that it is okey to delete the node and its child.
     And we delete zookeepers nodes /test/a,/test/a/b on clickhouse01
     And we delete zookeepers nodes /test/c/d,/test/c on clickhouse01
-    Then the list of children on clickhouse01 for zk node /test are empty
+    Then the list of children on clickhouse01 for zk node /test is empty
 
 
   Scenario: Set finished to ddl with removed host.
