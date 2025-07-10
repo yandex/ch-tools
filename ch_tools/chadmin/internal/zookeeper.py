@@ -6,7 +6,6 @@ from math import sqrt
 from typing import Any, Dict, Generator, List, Optional, Set, Union
 
 from click import Context
-
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError, NotEmptyError
 
