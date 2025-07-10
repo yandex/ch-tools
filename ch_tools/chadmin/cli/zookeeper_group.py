@@ -1,3 +1,4 @@
+import os
 import re
 import sys
 
@@ -10,7 +11,7 @@ from cloup import (
     option_group,
     pass_context,
 )
-from cloup.constraints import IsSet, If, RequireAtLeast, require_all
+from cloup.constraints import If, IsSet, RequireExactly
 from kazoo.security import make_digest_acl
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -19,10 +20,11 @@ from ch_tools.chadmin.internal.zookeeper import (
     _get_zero_copy_zookeeper_path,
     check_zk_node,
     create_zk_nodes,
-    delete,
     delete_recursive,
+    delete_zero_copy_locks_for_replica,
     delete_zk_nodes,
     find_paths,
+    get_children,
     get_zk_node,
     get_zk_node_acls,
     list_zk_nodes,
@@ -432,32 +434,30 @@ def clean_zk_locks_command(
     zero_copy_path = zero_copy_path or _get_zero_copy_zookeeper_path(ctx)
 
     with zk_client(ctx) as zk:
-        # uuid/part/blob_path/replica
-        # TODO: delete empty parent nodes
         if replica:
             anything = r".+"
             uuid = re.escape(table_uuid) or anything
             part = re.escape(part_id) or anything
             replica = re.escape(replica)
             template = rf"{zero_copy_path}/{uuid}/{part}/.+/{replica}"
-            nodes = find_paths(
-                zk, zero_copy_path, [template]
-            )  # find_leaf_nodes(zk, zero_copy_path, [template])
-            logging.info(f"Will delete nodes: {nodes}")
-            if dry_run:
-                return
-            delete(zk, nodes)
+            delete_zero_copy_locks_for_replica(zk, zero_copy_path, template, dry_run)
         else:
+            # No need to find every replica's path. Removing part's or table's directory is enough.
             if part_id:
                 if not table_uuid:
                     raise RuntimeError(
                         "If part-id is set, table-uuid is required"
                     )  # TODO: cloup constraints
                 template = re.escape(rf"{zero_copy_path}/{table_uuid}/{part_id}")
+                paths = find_paths(zk, zero_copy_path, [template])
+                if not paths:
+                    return
+                table_path = os.path.dirname(paths[0])
+                # Checking if we can just delete the table's directory instead
+                if len(get_children(zk, table_path)) == 1:
+                    paths = [table_path]
             else:
                 template = re.escape(rf"{zero_copy_path}/{table_uuid}")
-            nodes = find_paths(zk, zero_copy_path, [template])
-            logging.info(f"Will recursively delete nodes: {nodes}")
-            if dry_run:
-                return
-            delete_recursive(zk, nodes)
+                paths = find_paths(zk, zero_copy_path, [template])
+
+            delete_recursive(zk, paths, dry_run)

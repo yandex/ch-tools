@@ -115,6 +115,47 @@ def set_node_value(zk, path, value):
             logging.warning("Can not set for node: {}  value : {}", path, value)
 
 
+def delete_zero_copy_locks_for_replica(zk, path, path_regex, dry_run=False):
+    """ """
+    # Lock path is 'root_path/table_uuid/part_id/blob_path/replica'
+    for table in get_children(zk, path):
+        table_path = os.path.join(path, table)
+        paths_to_delete = []
+        table_will_be_empty = True
+
+        for part in get_children(zk, table_path):
+            part_path = os.path.join(table_path, part)
+            part_will_be_empty = True
+
+            for blob in get_children(zk, part_path):
+                blob_path = os.path.join(part_path, blob)
+                blob_will_be_empty = True
+
+                for replica in get_children(zk, blob_path):
+                    replica_path = os.path.join(blob_path, replica)
+                    if re.match(path_regex, replica_path):
+                        paths_to_delete.append(replica_path)
+                    else:
+                        blob_will_be_empty = False
+
+                if blob_will_be_empty:
+                    paths_to_delete.append(blob_path)
+                else:
+                    part_will_be_empty = False
+
+            if part_will_be_empty:
+                paths_to_delete.append(part_path)
+            else:
+                table_will_be_empty = False
+            # TODO: probably add batching on part level
+
+        if table_will_be_empty:
+            delete_recursive(zk, [table_path], dry_run)
+        else:
+            delete_recursive(zk, paths_to_delete, dry_run)
+        paths_to_delete = []
+
+
 def find_paths(zk, root_path, included_paths_regexp, excluded_paths=None):
     """
     Traverse zookeeper tree from root_path with bfs approach.
@@ -135,36 +176,6 @@ def find_paths(zk, root_path, included_paths_regexp, excluded_paths=None):
                 paths.add(subpath)
             else:
                 queue.append(os.path.join(path, subpath))
-
-    return list(paths)
-
-
-def find_leaf_nodes(zk, root_path, included_paths_regexp, excluded_paths=None):
-    """
-    Traverse zookeeper tree from root_path with bfs approach.
-
-    Return paths of leaf nodes that match the include regular expression and do not match the excluded one.
-    Note that root_path is not trying to be matched in regular expressions.
-    """
-    paths = set()
-    queue = deque([root_path])
-    included_regexp = re.compile("|".join(included_paths_regexp))
-    excluded_regexp = re.compile("|".join(excluded_paths)) if excluded_paths else None
-    while len(queue):
-        path = queue.popleft()
-
-        children = get_children(zk, path)
-        if not children:
-            subpath = os.path.relpath(path, root_path)
-            if not excluded_regexp or not re.match(excluded_regexp, subpath):
-                print(subpath)
-                if re.match(included_regexp, subpath):
-                    print("matched")
-                    paths.add(path)
-
-        for child_node in get_children(zk, path):
-            child_path = os.path.join(path, child_node)
-            queue.append(child_path)
 
     return list(paths)
 
@@ -224,14 +235,6 @@ def remove_subpaths(paths):
     return ["/".join(path) for path in normalized_paths]
 
 
-def delete(zk, nodes):
-    # When number of nodes to delete is large preferable to use greater transaction size.
-    operations_in_transaction = max(100, int(sqrt(len(nodes))))
-
-    for transaction_orerations in chunked(reversed(nodes), operations_in_transaction):
-        delete_nodes_transaction(zk, transaction_orerations)
-
-
 def delete_recursive(zk, paths, dry_run=False):
     """
     Kazoo already has the ability to recursively delete nodes, but the implementation is quite naive
@@ -257,8 +260,16 @@ def delete_recursive(zk, paths, dry_run=False):
 
     logging.info("Got {} nodes to remove.", len(nodes_to_delete))
     if dry_run:
+        print("Will delete ", nodes_to_delete)
         return
-    delete(zk, nodes_to_delete)
+
+    # When number of nodes to delete is large preferable to use greater transaction size.
+    operations_in_transaction = max(100, int(sqrt(len(nodes_to_delete))))
+
+    for transaction_orerations in chunked(
+        reversed(nodes_to_delete), operations_in_transaction
+    ):
+        delete_nodes_transaction(zk, transaction_orerations)
 
 
 def escape_for_zookeeper(s: str) -> str:
