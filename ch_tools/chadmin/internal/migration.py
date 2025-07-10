@@ -619,7 +619,8 @@ def migrate_database_to_atomic(
                 "Set clean_zookeeper - delete zookeeper nodes {}",
                 replica_path,
             )
-            delete_zk_node(ctx, replica_path)
+            if replica_path:
+                delete_zk_node(ctx, replica_path)
 
     except Exception as ex:
         logging.error("Failed set atomic in metadata: {}", ex)

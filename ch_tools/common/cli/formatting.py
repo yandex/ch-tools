@@ -128,10 +128,12 @@ def _purify_value(
 
             item = value[key]
 
-            formatter = field_formatters.get(key) or None if field_formatters else None
+            key_formatter: Optional[Callable] = (
+                field_formatters.get(key) or None if field_formatters else None
+            )
             item = (
-                formatter(item)
-                if formatter
+                key_formatter(item)
+                if key_formatter
                 else _purify_value(ctx, item, formatters=formatters)
             )
 
