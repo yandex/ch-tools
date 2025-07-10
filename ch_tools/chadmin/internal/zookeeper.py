@@ -45,7 +45,9 @@ def get_children(zk: KazooClient, path: str) -> List[str]:
         return []  # in the case ZK deletes a znode while we traverse the tree
 
 
-def list_zk_nodes(ctx: Context, path: str, verbose: bool = False) -> Union[List[str], List[Dict[str, Any]]]:
+def list_zk_nodes(
+    ctx: Context, path: str, verbose: bool = False
+) -> Union[List[str], List[Dict[str, Any]]]:
     def _stat_node(zk: KazooClient, node: str) -> Dict[str, Any]:
         descendants_count = 0
         queue = [node]
@@ -67,7 +69,12 @@ def list_zk_nodes(ctx: Context, path: str, verbose: bool = False) -> Union[List[
         return [_stat_node(zk, node) for node in nodes] if verbose else nodes
 
 
-def create_zk_nodes(ctx: Context, paths: List[str], value: Optional[Union[str, bytes]] = None, make_parents: bool = False) -> None:
+def create_zk_nodes(
+    ctx: Context,
+    paths: List[str],
+    value: Optional[Union[str, bytes]] = None,
+    make_parents: bool = False,
+) -> None:
     if isinstance(value, str):
         value = value.encode()
     else:
@@ -126,7 +133,12 @@ def set_node_value(zk: KazooClient, path: str, value: str) -> None:
             logging.warning("Can not set for node: {}  value : {}", path, value)
 
 
-def find_paths(zk: KazooClient, root_path: str, included_paths_regexp: List[str], excluded_paths: Optional[List[str]] = None) -> List[str]:
+def find_paths(
+    zk: KazooClient,
+    root_path: str,
+    included_paths_regexp: List[str],
+    excluded_paths: Optional[List[str]] = None,
+) -> List[str]:
     """
     Traverse zookeeper tree from root_path with bfs approach.
 
@@ -151,7 +163,9 @@ def find_paths(zk: KazooClient, root_path: str, included_paths_regexp: List[str]
     return list(paths)
 
 
-def delete_nodes_transaction(zk: KazooClient, to_delete_in_trasaction: List[str]) -> None:
+def delete_nodes_transaction(
+    zk: KazooClient, to_delete_in_trasaction: List[str]
+) -> None:
     """
     Perform deletion for the list of nodes in a single transaction.
     If the transaction fails, go through the list and delete the nodes one by one.

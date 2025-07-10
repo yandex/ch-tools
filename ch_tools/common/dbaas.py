@@ -98,6 +98,6 @@ class DbaasConfig:
         raise RuntimeError("Unreachable")
 
     @staticmethod
-    def load() -> 'DbaasConfig':
+    def load() -> "DbaasConfig":
         with open("/etc/dbaas.conf", "r", encoding="utf-8") as file:
             return DbaasConfig(json.load(file))
