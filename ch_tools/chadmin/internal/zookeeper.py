@@ -8,6 +8,7 @@ from typing import Any, Dict, Generator, List, Optional, Set, Union
 from click import Context
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError, NotEmptyError
+from kazoo.protocol.states import ZnodeStat
 
 from ch_tools.chadmin.internal.utils import chunked, replace_macros
 from ch_tools.common import logging
@@ -26,13 +27,13 @@ def get_zk_node(ctx: Context, path: str, binary: bool = False) -> str:
         return value if binary else value.decode().strip()
 
 
-def check_zk_node(ctx: Context, path: str) -> bool:
+def check_zk_node(ctx: Context, path: str) -> Optional[ZnodeStat]:
     with zk_client(ctx) as zk:
         path = format_path(ctx, path)
         return zk.exists(path)
 
 
-def get_zk_node_acls(ctx: Context, path: str) -> List[str]:
+def get_zk_node_acls(ctx: Context, path: str) -> List[ZnodeStat]:
     with zk_client(ctx) as zk:
         path = format_path(ctx, path)
         return zk.get_acls(path)
