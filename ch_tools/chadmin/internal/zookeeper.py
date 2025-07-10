@@ -27,7 +27,7 @@ def get_zk_node(ctx: Context, path: str, binary: bool = False) -> str:
         return value if binary else value.decode().strip()
 
 
-def check_zk_node(ctx: Context, path: str) -> Optional[ZnodeStat]:
+def check_zk_node(ctx: Context, path: str) -> ZnodeStat:
     with zk_client(ctx) as zk:
         path = format_path(ctx, path)
         return zk.exists(path)
