@@ -1727,7 +1727,7 @@ Feature: chadmin database migrate command
     """
     chadmin zookeeper list /clickhouse/repl_db
     """
-    Then we get response contains
+    Then it fails with response contains
     """
     kazoo.exceptions.NoNodeError
     """

@@ -613,7 +613,7 @@ def change_table_uuid(
         move_table_local_store(old_table_uuid, new_local_uuid)
     except Exception:
         logging.error(
-            "Failed move_table_local_store. old uuid={}, new_local_uuid={}. Need restore uuid in metadata for table={}. error={}",
+            "Failed move_table_local_store. old uuid={}, new_local_uuid={}. Need restore uuid in metadata for table={}.",
             old_table_uuid,
             new_local_uuid,
             f"{database}.{table}",
