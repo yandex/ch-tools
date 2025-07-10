@@ -1,6 +1,6 @@
 import re
 import sys
-from typing import Any, List, cast
+from typing import Any
 
 from click import Context, argument, group, option, pass_context
 from kazoo.security import make_digest_acl
