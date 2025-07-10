@@ -1,6 +1,6 @@
 import re
 import sys
-from typing import Any
+from typing import Any, List, cast
 
 from click import Context, argument, group, option, pass_context
 from kazoo.security import make_digest_acl
@@ -144,7 +144,7 @@ def list_command(ctx: Context, path: str, verbose: bool) -> None:
     if verbose:
         print_response(ctx, nodes, format_="table")
     else:
-        logging.info("\n".join(nodes))
+        logging.info("\n".join(nodes)) # type: ignore
 
 
 @zookeeper_group.command("stat")
