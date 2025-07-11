@@ -228,7 +228,7 @@ def delete_recursive(zk, paths, dry_run=False):
 
     logging.info("Got {} nodes to remove.", len(nodes_to_delete))
     if dry_run:
-        print("Will delete ", nodes_to_delete)
+        logging.info("Would delete nodes: {}", nodes_to_delete)
         return
 
     # When number of nodes to delete is large preferable to use greater transaction size.

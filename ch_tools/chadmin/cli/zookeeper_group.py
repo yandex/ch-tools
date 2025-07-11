@@ -408,7 +408,7 @@ def remove_hosts_from_table(
     ),
 )
 @option_group(
-    "Cleaning scope selection selection options",
+    "Cleaning scope selection options",
     option(
         "-t",
         "--table-uuid",
