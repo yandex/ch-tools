@@ -1,9 +1,10 @@
 import os
 import sys
 import time
+from typing import Any, Optional
 
 import requests
-from click import FloatRange, group, option, pass_context
+from click import Context, FloatRange, group, option, pass_context
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.clickhouse_disks import S3_METADATA_STORE_PATH
@@ -14,6 +15,7 @@ from ch_tools.common import logging
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.client.error import ClickhouseError
 from ch_tools.common.commands.replication_lag import estimate_replication_lag
+from ch_tools.common.result import Result
 from ch_tools.common.utils import execute
 
 BASE_TIMEOUT = 600
@@ -22,7 +24,7 @@ S3_PART_LOAD_SPEED = 0.5  # in data parts per second
 
 
 @group("wait", cls=Chadmin)
-def wait_group():
+def wait_group() -> None:
     """Commands to wait until Clickhouse is in a certain state."""
     pass
 
@@ -89,18 +91,18 @@ def wait_group():
 )
 @pass_context
 def wait_replication_sync_command(
-    ctx,
-    replica_timeout,
-    total_timeout,
-    status,
-    pause,
-    xcrit,
-    crit,
-    warn,
-    mwarn,
-    mcrit,
-    lightweight,
-):
+    ctx: Context,
+    replica_timeout: Any,
+    total_timeout: Any,
+    status: int,
+    pause: Any,
+    xcrit: int,
+    crit: int,
+    warn: int,
+    mwarn: float,
+    mcrit: float,
+    lightweight: bool,
+) -> None:
     """Wait for ClickHouse server to sync replication with other replicas."""
     # Lightweight sync is added in 23.4
     try:
@@ -151,7 +153,7 @@ def wait_replication_sync_command(
 
     # Replication lag
     while time.time() < deadline:
-        res = estimate_replication_lag(ctx, xcrit, crit, warn, mwarn, mcrit)
+        res: Result = estimate_replication_lag(ctx, xcrit, crit, warn, mwarn, mcrit)
         if res.code <= status:
             sys.exit(0)
         time.sleep(pause.total_seconds())
@@ -169,7 +171,7 @@ def wait_replication_sync_command(
 )
 @option("-q", "--quiet", is_flag=True, default=False, help="Quiet mode.")
 @pass_context
-def wait_started_command(ctx, timeout, quiet):
+def wait_started_command(ctx: Context, timeout: Optional[int], quiet: bool) -> None:
     """Wait for ClickHouse server to start up."""
     if quiet:
         logging.disable_stdout_logger()
@@ -193,7 +195,7 @@ def wait_started_command(ctx, timeout, quiet):
     sys.exit(1)
 
 
-def get_timeout():
+def get_timeout() -> int:
     """
     Calculate and return timeout.
     """
@@ -203,7 +205,7 @@ def get_timeout():
     return timeout
 
 
-def get_local_data_part_count():
+def get_local_data_part_count() -> int:
     """
     Return approximate number of data parts stored locally.
     """
@@ -214,7 +216,7 @@ def get_local_data_part_count():
     )
 
 
-def get_s3_data_part_count():
+def get_s3_data_part_count() -> int:
     """
     Return approximate number of data parts stored in S3.
     """
@@ -228,7 +230,7 @@ def get_s3_data_part_count():
     )
 
 
-def is_clickhouse_alive():
+def is_clickhouse_alive() -> bool:
     """
     Check if ClickHouse server is alive or not.
     """
@@ -244,5 +246,5 @@ def is_clickhouse_alive():
     return False
 
 
-def warmup_system_users(ctx):
+def warmup_system_users(ctx: Context) -> None:
     execute_query(ctx, "SELECT count() FROM system.users", timeout=300)

@@ -1,7 +1,7 @@
 import json
 import subprocess
 from datetime import timedelta
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import requests
 from click import Context
@@ -42,7 +42,7 @@ class ClickhouseClient:
         cert_path: Optional[str] = None,
         timeout: int,
         settings: Optional[Dict[str, Any]] = None,
-    ):
+    ) -> None:
         self.host = host
         self.insecure = insecure
         self.user = user
@@ -51,18 +51,18 @@ class ClickhouseClient:
         self.password = password
         self._settings = settings or {}
         self._timeout = timeout
-        self._ch_version = None
+        self._ch_version: Optional[str] = None
 
-    def get_clickhouse_version(self):
+    def get_clickhouse_version(self) -> str:
         """
         Get ClickHouse server version.
         """
         if self._ch_version is None:
             self._ch_version = self.query("SELECT version()")
 
-        return self._ch_version
+        return self._ch_version  # type: ignore
 
-    def get_uptime(self):
+    def get_uptime(self) -> timedelta:
         """
         Get uptime of ClickHouse server.
         """
@@ -71,14 +71,14 @@ class ClickhouseClient:
 
     def _execute_http(
         self,
-        query,
-        format_,
-        post_data,
-        timeout,
-        stream,
-        per_query_settings,
-        port,
-    ):
+        query: Optional[Query],
+        format_: Optional[str],
+        post_data: Any,
+        timeout: Optional[int],
+        stream: bool,
+        per_query_settings: Dict[str, Any],
+        port: ClickhousePort,
+    ) -> Any:
         schema = "https" if port == ClickhousePort.HTTPS else "http"
         url = f"{schema}://{self.host}:{self.ports[port]}"
         headers = {}
@@ -124,7 +124,12 @@ class ClickhouseClient:
         except requests.exceptions.HTTPError as e:
             raise ClickhouseError(str(query), e.response) from None
 
-    def _execute_tcp(self, query, format_, port):
+    def _execute_tcp(
+        self,
+        query: Optional[Query],
+        format_: Optional[str],
+        port: ClickhousePort,
+    ) -> Any:
         # Private method, we are sure that port is tcps or tcp and presents in config
         cmd = [
             "clickhouse-client",
@@ -253,10 +258,10 @@ class ClickhouseClient:
             port=port,
         )["data"]
 
-    def query_json_data_first_row(self, **kwargs):
+    def query_json_data_first_row(self, **kwargs: Any) -> Any:
         return self.query_json_data(**kwargs)[0]
 
-    def render_query(self, query, **kwargs):
+    def render_query(self, query: str, **kwargs: Any) -> str:
         env = Environment()
 
         env.globals["version_ge"] = lambda version: version_ge(
@@ -301,7 +306,7 @@ def clickhouse_client(ctx: Context) -> ClickhouseClient:
     return ctx.obj["chcli"]
 
 
-def clickhouse_credentials(ctx):
+def clickhouse_credentials(ctx: Context) -> Tuple[str, str]:
     """
     Return credentials to connect to ClickHouse.
     """

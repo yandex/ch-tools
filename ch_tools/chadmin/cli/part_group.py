@@ -1,6 +1,7 @@
 from collections import OrderedDict
-from typing import List
+from typing import Any, Dict, List, Optional
 
+from click import Context
 from cloup import Choice, group, option, option_group, pass_context
 from cloup.constraints import If, IsSet, RequireAtLeast, RequireExactly
 
@@ -29,7 +30,7 @@ FIELD_FORMATTERS = {
 
 
 @group("part", cls=Chadmin)
-def part_group():
+def part_group() -> None:
     """
     Commands to manage data parts.
     """
@@ -93,11 +94,18 @@ def part_group():
 )
 @pass_context
 def list_parts_command(
-    ctx, active, min_size, max_size, detached, reason, order_by, **kwargs
-):
+    ctx: Context,
+    active: bool,
+    min_size: Optional[int],
+    max_size: Optional[int],
+    detached: bool,
+    reason: Optional[str],
+    order_by: Optional[str],
+    **kwargs: Any,
+) -> None:
     """List data parts."""
 
-    def _table_formatter(part):
+    def _table_formatter(part: Dict[str, Any]) -> OrderedDict:
         result = OrderedDict()
         result["database"] = part["database"]
         result["table"] = part["table"]
@@ -202,7 +210,14 @@ def list_parts_command(
 )
 @option("-w", "--workers", default=4, help="Number of workers.")
 @pass_context
-def attach_parts_command(ctx, _all, keep_going, dry_run, workers, **kwargs):
+def attach_parts_command(
+    ctx: Context,
+    _all: bool,
+    keep_going: bool,
+    dry_run: bool,
+    workers: int,
+    **kwargs: Any,
+) -> None:
     """Attach one or several parts."""
     parts = list_detached_parts(ctx, reason="", **kwargs)
 
@@ -288,7 +303,13 @@ def attach_parts_command(ctx, _all, keep_going, dry_run, workers, **kwargs):
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 @pass_context
-def detach_parts_command(ctx, _all, keep_going, dry_run, **kwargs):
+def detach_parts_command(
+    ctx: Context,
+    _all: bool,
+    keep_going: bool,
+    dry_run: bool,
+    **kwargs: Any,
+) -> None:
     """Detach one or several parts."""
     parts = list_parts(ctx, **kwargs)
     for part in parts:
@@ -384,16 +405,16 @@ def detach_parts_command(ctx, _all, keep_going, dry_run, **kwargs):
 )
 @pass_context
 def delete_parts_command(
-    ctx,
-    _all,
-    detached,
-    min_size,
-    max_size,
-    reason,
-    keep_going,
-    dry_run,
-    **kwargs,
-):
+    ctx: Context,
+    _all: bool,
+    detached: bool,
+    min_size: Optional[int],
+    max_size: Optional[int],
+    reason: Optional[str],
+    keep_going: bool,
+    dry_run: bool,
+    **kwargs: Any,
+) -> None:
     """Delete one or several data parts."""
     if detached:
         parts = list_detached_parts(
@@ -513,13 +534,13 @@ def delete_parts_command(
 )
 @pass_context
 def move_parts_command(
-    ctx,
-    new_disk_name,
-    keep_going,
-    sync_mode,
-    dry_run,
-    **kwargs,
-):
+    ctx: Context,
+    new_disk_name: str,
+    keep_going: bool,
+    sync_mode: bool,
+    dry_run: bool,
+    **kwargs: Any,
+) -> None:
     """Move one or several data parts."""
     parts = list_parts(ctx, active=True, **kwargs)
     for part in parts:

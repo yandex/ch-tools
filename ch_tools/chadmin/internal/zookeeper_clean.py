@@ -4,9 +4,9 @@ import re
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from typing import Deque, Dict, Generator, List, Optional, Tuple
+from typing import Any, Callable, Deque, Dict, Generator, List, Optional, Tuple
 
-from click import BadParameter
+from click import BadParameter, Context
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError
 from kazoo.interfaces import IAsyncResult
@@ -40,8 +40,8 @@ from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
 REPLICATED_DATABASE_MARKER = bytes("DatabaseReplicated", "utf-8")
 
 
-def replace_macros_in_nodes(func):
-    def wrapper(ctx, nodes, *args, **kwargs):
+def replace_macros_in_nodes(func: Callable) -> Callable:
+    def wrapper(ctx: Context, nodes: List[str], *args: Any, **kwargs: Any) -> Callable:
         replace_macros_nodes = [format_path(ctx, node) for node in nodes]
         return func(ctx, replace_macros_nodes, *args, **kwargs)
 
@@ -72,7 +72,7 @@ class ZookeeperTreeInspector:
         get() -> get the one node with list of children.
     """
 
-    def __init__(self, zk: KazooClient, max_parrallel_tasks: int = 5):
+    def __init__(self, zk: KazooClient, max_parrallel_tasks: int = 5) -> None:
         self._zk_client = zk
         self._max_active_tasks = max_parrallel_tasks
 
@@ -191,15 +191,15 @@ class ZookeeperTreeInspector:
 # pylint: disable=too-many-statements
 @replace_macros_in_nodes
 def clean_zk_metadata_for_hosts(
-    ctx,
-    nodes,
-    zk_cleanup_root_path="/",
-    cleanup_tables=True,
-    cleanup_database=True,
-    cleanup_ddl_queue=True,
-    zk_ddl_query_path=None,
-    dry_run=False,
-):
+    ctx: Context,
+    nodes: List[str],
+    zk_cleanup_root_path: str = "/",
+    cleanup_tables: bool = True,
+    cleanup_database: bool = True,
+    cleanup_ddl_queue: bool = True,
+    zk_ddl_query_path: Optional[str] = None,
+    dry_run: bool = False,
+) -> None:
     """
     Perform cleanup in zookeeper after deleting hosts in the cluster or whole cluster deleting.
     """
@@ -291,7 +291,7 @@ def clean_zk_metadata_for_hosts(
             if is_table and not collect_tables:
                 continue
 
-            replicas_list = get_children(
+            replicas_list: List[str] = get_children(
                 zk, os.path.join(replicated_object.path, "replicas")
             )
 
@@ -316,7 +316,13 @@ def clean_zk_metadata_for_hosts(
         )
         return (databases_to_cleanup, tables_to_cleanup)
 
-    def _drop_table_replica_task(ctx, table_zk_path, replica, dry_run, retry_decorator):
+    def _drop_table_replica_task(
+        ctx: Context,
+        table_zk_path: str,
+        replica: str,
+        dry_run: bool,
+        retry_decorator: Any,
+    ) -> None:
         """
         Workaround for the problem from:
         https://github.com/ClickHouse/ClickHouse/pull/70642
@@ -335,8 +341,12 @@ def clean_zk_metadata_for_hosts(
             )
 
     def _drop_database_replica_task(
-        ctx, database_zk_path, replica, dry_run, retry_decorator
-    ):
+        ctx: Context,
+        database_zk_path: str,
+        replica: str,
+        dry_run: bool,
+        retry_decorator: Any,
+    ) -> None:
         """
         Task for the system drop database replica query with retry.
         """
@@ -351,10 +361,10 @@ def clean_zk_metadata_for_hosts(
         clean_zk_metadata_config = ctx.obj["config"]["chadmin"]["zookeeper"][
             "clean_zk_metadata_for_hosts"
         ]
-        max_workers = clean_zk_metadata_config["workers"]
-        min_wait_time_sec = clean_zk_metadata_config["retry_min_wait_sec"]
-        max_wait_time_sec = clean_zk_metadata_config["retry_max_wait_sec"]
-        max_retries = clean_zk_metadata_config["max_retries"]
+        max_workers: int = clean_zk_metadata_config["workers"]
+        min_wait_time_sec: int = clean_zk_metadata_config["retry_min_wait_sec"]
+        max_wait_time_sec: int = clean_zk_metadata_config["retry_max_wait_sec"]
+        max_retries: int = clean_zk_metadata_config["max_retries"]
 
         retry_decorator = retry(
             retry=(
@@ -419,7 +429,7 @@ def clean_zk_metadata_for_hosts(
 
         execute_tasks_in_parallel(tasks, max_workers=max_workers)
 
-    def _get_hosts_from_ddl(zk, ddl_task_path):
+    def _get_hosts_from_ddl(zk: KazooClient, ddl_task_path: str) -> Dict[str, str]:
         """
         Extract hostnames from the ddl task. Returns in dict format as { 'escaped_hostname'  : 'escaped_hostname:port' }
         Example of ddl:
@@ -442,8 +452,11 @@ def clean_zk_metadata_for_hosts(
                     return result
         except NoNodeError:
             pass
+        return {}
 
-    def _is_ddl_task_finished(zk, ddl_number_of_hosts, ddl_path):
+    def _is_ddl_task_finished(
+        zk: KazooClient, ddl_number_of_hosts: int, ddl_path: str
+    ) -> bool:
         """
         Check that ddl is finished.
         """
@@ -455,8 +468,11 @@ def clean_zk_metadata_for_hosts(
         )
 
     def _wait_ddl_tasks_finished(
-        zk, dll_tasks_to_remove, wait_time=0.3, max_attemps=20
-    ):
+        zk: KazooClient,
+        dll_tasks_to_remove: List[Tuple[str, int]],
+        wait_time: float = 0.3,
+        max_attemps: int = 20,
+    ) -> None:
         """
         Go thought list of tasks to remove and tries to wait until all of them finish.
         """
@@ -478,25 +494,25 @@ def clean_zk_metadata_for_hosts(
                     ddl_data[0],
                 )
 
-    def mark_finished_ddl_query(zk):
+    def mark_finished_ddl_query(zk: KazooClient) -> None:
         """
         If after deleting a host there are still unfinished ddl tasks in the queue,
         then we pretend that the host has completed this task.
 
         """
-        ddl_tasks_to_remove = []
+        ddl_tasks_to_remove: List[Tuple[str, int]] = []
 
         logging.info("Start ddl query cleanup for nodes: {}", ",".join(nodes))
 
-        for ddl_task in get_children(zk, format_path(ctx, zk_ddl_query_path)):
-            ddl_task_full = os.path.join(zk_ddl_query_path, ddl_task)
+        for ddl_task in get_children(zk, format_path(ctx, zk_ddl_query_path)):  # type: ignore
+            ddl_task_full: str = os.path.join(zk_ddl_query_path, ddl_task)  # type: ignore
             logging.info("DDL task full path: {}", ddl_task_full)
 
             have_mention = False
             ddl_hosts_dict = _get_hosts_from_ddl(zk, ddl_task_full)
 
             for host in nodes:
-                escaped_host_name = escape_for_zookeeper(host)
+                escaped_host_name: str = escape_for_zookeeper(host)
                 if escaped_host_name not in ddl_hosts_dict:
                     logging.info("Host is not mentioned in DDL task value")
                     continue
@@ -514,7 +530,7 @@ def clean_zk_metadata_for_hosts(
                     zk.create(finished_path, b"0\n")
 
             if have_mention:
-                ddl_tasks_to_remove.append([ddl_task_full, len(ddl_hosts_dict)])
+                ddl_tasks_to_remove.append((ddl_task_full, len(ddl_hosts_dict)))
 
         logging.info("Finish mark ddl query")
         chunk_size = 100
@@ -525,10 +541,9 @@ def clean_zk_metadata_for_hosts(
 
         logging.info("DDL queue cleanup finished")
 
-    zk_root_path = format_path(ctx, zk_cleanup_root_path)
+    zk_root_path: str = format_path(ctx, zk_cleanup_root_path)
 
     with zk_client(ctx) as zk:
-
         cleanup_tables_and_databases(zk)
 
         if cleanup_ddl_queue:

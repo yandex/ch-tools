@@ -287,7 +287,7 @@ def format_timestamp(ctx: Context, value: datetime) -> str:
     return result
 
 
-def format_duration(value: int) -> str:
+def format_duration(value: timedelta) -> Any:
     return humanfriendly.format_timespan(value)
 
 

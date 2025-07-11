@@ -5,7 +5,7 @@ Command-line parameters.
 import os
 import re
 import sys
-from typing import Sequence, Union
+from typing import Any, Sequence, Union
 
 import click
 import humanfriendly
@@ -30,7 +30,7 @@ class ListParamType(click.ParamType):
         self.type = type
         self.separator = separator
 
-    def convert(self, value, param, ctx):
+    def convert(self, value, param, ctx):  # type: ignore
         value = _preprocess_value(value)
         result = [v.strip() for v in re.split(self.separator, value) if v]
 
@@ -50,7 +50,7 @@ class YamlParamType(click.ParamType):
 
     name = "yaml"
 
-    def convert(self, value, param, ctx):
+    def convert(self, value, param, ctx):  # type: ignore
         try:
             value = _preprocess_value(value)
             return yaml.safe_load(value)
@@ -67,7 +67,7 @@ class StringParamType(click.ParamType):
 
     name = "string"
 
-    def convert(self, value, param, ctx):
+    def convert(self, value, param, ctx):  # type: ignore
         return _preprocess_value(value)
 
 
@@ -78,7 +78,7 @@ class RegexpParamType(click.ParamType):
 
     name = "regexp"
 
-    def convert(self, value, param, ctx):
+    def convert(self, value, param, ctx):  # type: ignore
         try:
             return re.compile(value)
         except re.error:
@@ -92,7 +92,7 @@ class TimeSpanParamType(click.ParamType):
 
     name = "timespan"
 
-    def convert(self, value, param, ctx):
+    def convert(self, value, param, ctx):  # type: ignore
         try:
             return parse_timespan(value)
         except humanfriendly.InvalidTimespan as e:
@@ -108,7 +108,7 @@ class BytesParamType(click.ParamType):
 
     name = "bytes"
 
-    def convert(self, value, param, ctx):
+    def convert(self, value, param, ctx):  # type: ignore
         if isinstance(value, str):
             value = value.strip()
             if value.startswith("-"):
@@ -122,18 +122,18 @@ class BytesParamType(click.ParamType):
         return value
 
 
-def _preprocess_value(value):
+def _preprocess_value(value: Any) -> str:
     """
     Preprocess command-line parameter value. It adds support of reading from file and stdin.
     """
     if value == "-":
         return sys.stdin.read()
 
-    if value.startswith("@"):
+    if isinstance(value, str) and value.startswith("@"):
         with open(os.path.expanduser(value[1:]), encoding="utf-8") as f:
             return f.read()
 
-    return value
+    return str(value)
 
 
 def env_var_help(v: Union[str, Sequence[str]]) -> str:
