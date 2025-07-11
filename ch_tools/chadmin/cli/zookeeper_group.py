@@ -1,23 +1,41 @@
+import os
 import re
 import sys
-from typing import Any
+from typing import Any, Optional
 
-from click import Context, argument, group, option, pass_context
+from cloup import (
+    Context,
+    argument,
+    constraint,
+    group,
+    option,
+    option_group,
+    pass_context,
+)
+from cloup.constraints import If, IsSet, RequireAtLeast, require_all
 from kazoo.security import make_digest_acl
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.table_replica import get_table_replica
 from ch_tools.chadmin.internal.zookeeper import (
+    _get_zero_copy_zookeeper_path,
     check_zk_node,
     create_zk_nodes,
+    delete_recursive,
     delete_zk_nodes,
+    find_paths,
+    get_children,
     get_zk_node,
     get_zk_node_acls,
     list_zk_nodes,
     update_acls_zk_node,
     update_zk_nodes,
+    zk_client,
 )
-from ch_tools.chadmin.internal.zookeeper_clean import clean_zk_metadata_for_hosts
+from ch_tools.chadmin.internal.zookeeper_clean import (
+    clean_zk_metadata_for_hosts,
+    delete_zero_copy_locks_for_replica,
+)
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_json, print_response
 from ch_tools.common.cli.parameters import ListParamType, StringParamType
@@ -338,6 +356,12 @@ def clickhouse_hosts_command(
         zk_ddl_query_path=config["clickhouse"]["distributed_ddl_path"],
         dry_run=dry_run,
     )
+    for replica in fqdn:
+        clean_zk_locks_command(
+            ctx,
+            replica=replica,
+            dry_run=dry_run,
+        )
 
 
 @zookeeper_group.command(
@@ -365,3 +389,91 @@ def remove_hosts_from_table(
         cleanup_ddl_queue=False,
         dry_run=dry_run,
     )
+    for replica in fqdn:
+        clean_zk_locks_command(
+            ctx,
+            replica=replica,
+            dry_run=dry_run,
+        )
+
+
+@zookeeper_group.command("cleanup-zero-copy-locks")
+@option(
+    "--zero_copy_path",
+    "zero_copy_path",
+    default=None,
+    help=(
+        "Path to zero-copy related data in ZooKeeper."
+        "Will use 'remote_fs_zero_copy_zookeeper_path' value from ClickHouse by default."
+    ),
+)
+@option_group(
+    "Cleaning scope selection options",
+    option(
+        "-t",
+        "--table-uuid",
+        "table_uuid",
+        default=None,
+        help=("UUID of a table to clean."),
+    ),
+    option(
+        "-p",
+        "--part-id",
+        "part_id",
+        default=None,
+        help=("Part id to clean. Also requires table to be specified."),
+    ),
+    constraint=If(IsSet("part_id"), then=require_all),
+)
+@option(
+    "-r",
+    "--replica",
+    "replica",
+    default=None,
+    help=("Replica name to clean."),
+)
+@constraint(
+    RequireAtLeast(1),
+    ["table_uuid", "part_id", "replica"],
+)
+@option(
+    "--dry-run",
+    "dry_run",
+    is_flag=True,
+    help=("Do not delete objects. Show only statistics."),
+)
+@pass_context
+def clean_zk_locks_command(
+    ctx: Context,
+    zero_copy_path: Optional[str] = None,
+    table_uuid: Optional[str] = None,
+    part_id: Optional[str] = None,
+    replica: Optional[str] = None,
+    dry_run: bool = False,
+) -> None:
+    """
+    Clean zero copy locks.
+    """
+    zero_copy_path = zero_copy_path or _get_zero_copy_zookeeper_path(ctx)
+
+    with zk_client(ctx) as zk:
+        if replica:
+            delete_zero_copy_locks_for_replica(
+                zk, zero_copy_path, table_uuid, part_id, replica, dry_run
+            )
+        else:
+            # No need to find every replica's path. Removing part's or table's directory is enough.
+            if part_id:
+                template = re.escape(rf"{zero_copy_path}/{table_uuid}/{part_id}")
+                paths = find_paths(zk, zero_copy_path, [template])
+                if not paths:
+                    return
+                table_path = os.path.dirname(paths[0])
+                # Checking if we can just delete the table's directory instead
+                if len(get_children(zk, table_path)) == 1:
+                    paths = [table_path]
+            else:
+                template = re.escape(rf"{zero_copy_path}/{table_uuid}")
+                paths = find_paths(zk, zero_copy_path, [template])
+
+            delete_recursive(zk, paths, dry_run)

@@ -4,10 +4,11 @@ from collections import deque
 from contextlib import contextmanager
 from math import sqrt
 
+from click import Context
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError, NotEmptyError
 
-from ch_tools.chadmin.internal.utils import chunked, replace_macros
+from ch_tools.chadmin.internal.utils import chunked, execute_query, replace_macros
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
 from ch_tools.common.clickhouse.config.clickhouse import ClickhouseConfig
@@ -139,7 +140,6 @@ def find_paths(zk, root_path, included_paths_regexp, excluded_paths=None):
             continue
         for child_node in get_children(zk, path):
             subpath = os.path.join(path, child_node)
-
             if re.match(included_regexp, subpath):
                 paths.add(subpath)
             else:
@@ -228,7 +228,9 @@ def delete_recursive(zk, paths, dry_run=False):
 
     logging.info("Got {} nodes to remove.", len(nodes_to_delete))
     if dry_run:
+        logging.info("Would delete nodes: {}", nodes_to_delete)
         return
+
     # When number of nodes to delete is large preferable to use greater transaction size.
     operations_in_transaction = max(100, int(sqrt(len(nodes_to_delete))))
 
@@ -313,3 +315,14 @@ def _get_zk_client(ctx):
         verify_certs=verify_ssl_certs,
         randomize_hosts=zk_randomize_hosts,
     )
+
+
+def _get_zero_copy_zookeeper_path(ctx: Context) -> str:
+    """
+    Returns ZooKeeper path for zero-copy table-independent info.
+
+    '/clickhouse/zero_copy/zero_copy_s3' is default.
+    """
+    query = "SELECT value FROM system.merge_tree_settings WHERE name = 'remote_fs_zero_copy_zookeeper_path'"
+    base_path = execute_query(ctx, query, format_="Raw")
+    return os.path.join(base_path, "zero_copy_s3")

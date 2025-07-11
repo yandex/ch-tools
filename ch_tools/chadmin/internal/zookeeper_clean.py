@@ -27,6 +27,7 @@ from ch_tools.chadmin.internal.table_replica import (
 )
 from ch_tools.chadmin.internal.utils import chunked
 from ch_tools.chadmin.internal.zookeeper import (
+    delete_recursive,
     delete_zk_nodes,
     escape_for_zookeeper,
     format_path,
@@ -38,6 +39,7 @@ from ch_tools.common.clickhouse.client import ClickhouseError
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
 
 REPLICATED_DATABASE_MARKER = bytes("DatabaseReplicated", "utf-8")
+ZERO_COPY_LOCKS_TO_DELETE_BATCH = 10000
 
 
 def replace_macros_in_nodes(func):
@@ -538,3 +540,58 @@ def clean_zk_metadata_for_hosts(
                 )
 
             mark_finished_ddl_query(zk)
+
+
+def delete_zero_copy_locks_for_replica(
+    zk, root_path, table_uuid, part_id, replica_name, dry_run=False
+):
+    """
+    Recursively find all zero-copy lock's paths by regex and delete them.
+    """
+    anything = r".+"
+    table_uuid = re.escape(table_uuid) if table_uuid else anything
+    part_id = re.escape(part_id) if part_id else anything
+    replica_name = re.escape(replica_name)
+    template = rf"{root_path}/{table_uuid}/{part_id}/.+/{replica_name}"
+
+    # Lock path is 'root_path/table_uuid/part_id/blob_path/replica_name'
+    for table in get_children(zk, root_path):
+        table_path = os.path.join(root_path, table)
+        paths_to_delete = []
+        table_will_be_empty = True
+
+        for part in get_children(zk, table_path):
+            part_path = os.path.join(table_path, part)
+            part_will_be_empty = True
+
+            for blob in get_children(zk, part_path):
+                blob_path = os.path.join(part_path, blob)
+                blob_will_be_empty = True
+
+                for replica in get_children(zk, blob_path):
+                    replica_path = os.path.join(blob_path, replica)
+                    if re.match(template, replica_path):
+                        paths_to_delete.append(replica_path)
+                    else:
+                        blob_will_be_empty = False
+
+                if blob_will_be_empty:
+                    paths_to_delete.append(blob_path)
+                else:
+                    part_will_be_empty = False
+
+            if part_will_be_empty:
+                paths_to_delete.append(part_path)
+            else:
+                table_will_be_empty = False
+
+            # Batch delete in case of too much locks
+            if len(paths_to_delete) >= ZERO_COPY_LOCKS_TO_DELETE_BATCH:
+                delete_recursive(zk, paths_to_delete, dry_run)
+                paths_to_delete = []
+
+        if table_will_be_empty:
+            delete_recursive(zk, [table_path], dry_run)
+        else:
+            delete_recursive(zk, paths_to_delete, dry_run)
+        paths_to_delete = []
