@@ -22,7 +22,6 @@ from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
     create_zk_nodes,
     delete_recursive,
-    delete_zero_copy_locks_for_replica,
     delete_zk_nodes,
     find_paths,
     get_children,
@@ -33,7 +32,10 @@ from ch_tools.chadmin.internal.zookeeper import (
     update_zk_nodes,
     zk_client,
 )
-from ch_tools.chadmin.internal.zookeeper_clean import clean_zk_metadata_for_hosts
+from ch_tools.chadmin.internal.zookeeper_clean import (
+    clean_zk_metadata_for_hosts,
+    delete_zero_copy_locks_for_replica,
+)
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_json, print_response
 from ch_tools.common.cli.parameters import ListParamType, StringParamType
@@ -348,6 +350,12 @@ def clickhouse_hosts_command(ctx, fqdn, clean_ddl_queue, dry_run):
         zk_ddl_query_path=config["clickhouse"]["distributed_ddl_path"],
         dry_run=dry_run,
     )
+    for replica in fqdn:
+        clean_zk_locks_command(
+            ctx,
+            replica=replica,
+            dry_run=dry_run,
+        )
 
 
 @zookeeper_group.command(
@@ -373,13 +381,19 @@ def remove_hosts_from_table(ctx, zookeeper_table_path, fqdn, dry_run):
         cleanup_ddl_queue=False,
         dry_run=dry_run,
     )
+    for replica in fqdn:
+        clean_zk_locks_command(
+            ctx,
+            replica=replica,
+            dry_run=dry_run,
+        )
 
 
 @zookeeper_group.command("cleanup-zero-copy-locks")
 @option(
     "--zero_copy_path",
     "zero_copy_path",
-    default="",
+    default=None,
     help=(
         "Path to zero-copy related data in ZooKeeper."
         "Will use 'remote_fs_zero_copy_zookeeper_path' value from ClickHouse by default."
@@ -423,11 +437,11 @@ def remove_hosts_from_table(ctx, zookeeper_table_path, fqdn, dry_run):
 @pass_context
 def clean_zk_locks_command(
     ctx: Context,
-    zero_copy_path: str,
-    table_uuid: Optional[str],
-    part_id: Optional[str],
-    replica: Optional[str],
-    dry_run: bool,
+    zero_copy_path: Optional[str] = None,
+    table_uuid: Optional[str] = None,
+    part_id: Optional[str] = None,
+    replica: Optional[str] = None,
+    dry_run: bool = False,
 ) -> None:
     """
     Clean zero copy locks.
@@ -436,12 +450,9 @@ def clean_zk_locks_command(
 
     with zk_client(ctx) as zk:
         if replica:
-            anything = r".+"
-            uuid = re.escape(table_uuid) if table_uuid else anything
-            part = re.escape(part_id) if part_id else anything
-            replica = re.escape(replica)
-            template = rf"{zero_copy_path}/{uuid}/{part}/.+/{replica}"
-            delete_zero_copy_locks_for_replica(zk, zero_copy_path, template, dry_run)
+            delete_zero_copy_locks_for_replica(
+                zk, zero_copy_path, table_uuid, part_id, replica, dry_run
+            )
         else:
             # No need to find every replica's path. Removing part's or table's directory is enough.
             if part_id:

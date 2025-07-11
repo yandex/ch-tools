@@ -12,8 +12,6 @@ from ch_tools.chadmin.internal.utils import chunked, execute_query, replace_macr
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
 
-ZERO_COPY_LOCKS_TO_DELETE_BATCH = 10000
-
 
 def get_zk_node(ctx, path, binary=False):
     with zk_client(ctx) as zk:
@@ -115,53 +113,6 @@ def set_node_value(zk, path, value):
             zk.set(path, value.encode())
         except NoNodeError:
             logging.warning("Can not set for node: {}  value : {}", path, value)
-
-
-def delete_zero_copy_locks_for_replica(zk, path, path_regex, dry_run=False):
-    """
-    Recursively find all zero-copy lock's paths by regex and delete them.
-    """
-    # Lock path is 'root_path/table_uuid/part_id/blob_path/replica'
-    for table in get_children(zk, path):
-        table_path = os.path.join(path, table)
-        paths_to_delete = []
-        table_will_be_empty = True
-
-        for part in get_children(zk, table_path):
-            part_path = os.path.join(table_path, part)
-            part_will_be_empty = True
-
-            for blob in get_children(zk, part_path):
-                blob_path = os.path.join(part_path, blob)
-                blob_will_be_empty = True
-
-                for replica in get_children(zk, blob_path):
-                    replica_path = os.path.join(blob_path, replica)
-                    if re.match(path_regex, replica_path):
-                        paths_to_delete.append(replica_path)
-                    else:
-                        blob_will_be_empty = False
-
-                if blob_will_be_empty:
-                    paths_to_delete.append(blob_path)
-                else:
-                    part_will_be_empty = False
-
-            if part_will_be_empty:
-                paths_to_delete.append(part_path)
-            else:
-                table_will_be_empty = False
-
-            # Batch delete in case of too much locks
-            if len(paths_to_delete) >= ZERO_COPY_LOCKS_TO_DELETE_BATCH:
-                delete_recursive(zk, paths_to_delete, dry_run)
-                paths_to_delete = []
-
-        if table_will_be_empty:
-            delete_recursive(zk, [table_path], dry_run)
-        else:
-            delete_recursive(zk, paths_to_delete, dry_run)
-        paths_to_delete = []
 
 
 def find_paths(zk, root_path, included_paths_regexp, excluded_paths=None):
