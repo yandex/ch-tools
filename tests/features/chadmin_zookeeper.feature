@@ -34,18 +34,18 @@ Feature: chadmin zookeeper commands.
     """
     And we execute command on clickhouse01
     """
-    chadmin zookeeper clean-zk-locks --replica clickhouse01.ch_tools_test
+    chadmin zookeeper cleanup-zero-copy-locks --replica clickhouse01.ch_tools_test
     """
     And we execute command on clickhouse01
     """
-    chadmin zookeeper clean-zk-locks --replica clickhouse01.ch_tools_test --dry-run
+    chadmin zookeeper cleanup-zero-copy-locks --replica clickhouse01.ch_tools_test --dry-run
     """
     Then we get response
     """
     """
     When we execute command on clickhouse01
     """
-    chadmin zookeeper clean-zk-locks --replica clickhouse02.ch_tools_test --dry-run
+    chadmin zookeeper cleanup-zero-copy-locks --replica clickhouse02.ch_tools_test --dry-run
     """
     Then we get response contains 
     """
@@ -57,7 +57,7 @@ Feature: chadmin zookeeper commands.
     """
     When we execute command on clickhouse01
     """
-    chadmin zookeeper clean-zk-locks --replica clickhouse02.ch_tools_test
+    chadmin zookeeper cleanup-zero-copy-locks --replica clickhouse02.ch_tools_test
     """
     Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/ is equal to
     """
@@ -91,7 +91,7 @@ Feature: chadmin zookeeper commands.
     """
     When we execute command on clickhouse01
     """
-    chadmin zookeeper clean-zk-locks --table-uuid uuid2 --replica replica1
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid uuid2 --replica replica1
     """
     Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/ is equal to
     """
@@ -99,7 +99,7 @@ Feature: chadmin zookeeper commands.
     """
     When we execute command on clickhouse01
     """
-    chadmin zookeeper clean-zk-locks --table-uuid uuid1 --part-id part2 --replica replica1
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid uuid1 --part-id part2 --replica replica1
     """
     Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/uuid1 is equal to
     """
@@ -107,7 +107,7 @@ Feature: chadmin zookeeper commands.
     """
     When we execute command on clickhouse01
     """
-    chadmin zookeeper clean-zk-locks --table-uuid uuid1 --part-id part1 --replica replica1
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid uuid1 --part-id part1 --replica replica1
     """
     Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/uuid1/part1/blob1 is equal to
     """
@@ -115,7 +115,7 @@ Feature: chadmin zookeeper commands.
     """
     When we execute command on clickhouse01
     """
-    chadmin zookeeper clean-zk-locks --table-uuid uuid1 --replica replica2
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid uuid1 --replica replica2
     """
     Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
 
@@ -142,7 +142,7 @@ Feature: chadmin zookeeper commands.
     """
     When we execute command on clickhouse01
     """
-    chadmin zookeeper clean-zk-locks --table-uuid uuid2
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid uuid2
     """
     Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/ is equal to
     """
@@ -150,7 +150,7 @@ Feature: chadmin zookeeper commands.
     """
     When we execute command on clickhouse01
     """
-    chadmin zookeeper clean-zk-locks --table-uuid uuid1 --part-id part2
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid uuid1 --part-id part2
     """
     Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/uuid1 is equal to
     """
@@ -158,7 +158,7 @@ Feature: chadmin zookeeper commands.
     """
     When we execute command on clickhouse01
     """
-    chadmin zookeeper clean-zk-locks --table-uuid uuid1 --part-id part1
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid uuid1 --part-id part1
     """
     Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
 

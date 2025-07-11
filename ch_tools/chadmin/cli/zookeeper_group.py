@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+from typing import Optional
 
 from cloup import (
     Context,
@@ -11,7 +12,7 @@ from cloup import (
     option_group,
     pass_context,
 )
-from cloup.constraints import If, IsSet, RequireExactly
+from cloup.constraints import If, IsSet, RequireAtLeast, require_all
 from kazoo.security import make_digest_acl
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -374,7 +375,7 @@ def remove_hosts_from_table(ctx, zookeeper_table_path, fqdn, dry_run):
     )
 
 
-@zookeeper_group.command("clean-zk-locks")
+@zookeeper_group.command("cleanup-zero-copy-locks")
 @option(
     "--zero_copy_path",
     "zero_copy_path",
@@ -390,29 +391,29 @@ def remove_hosts_from_table(ctx, zookeeper_table_path, fqdn, dry_run):
         "-t",
         "--table-uuid",
         "table_uuid",
-        default="",
-        help=("do help"),
+        default=None,
+        help=("UUID of a table to clean."),
     ),
     option(
         "-p",
         "--part-id",
         "part_id",
-        default="",
-        help=("do help"),
+        default=None,
+        help=("Part id to clean. Also requires table to be specified."),
     ),
-    # constraint=If(IsSet("part_id"), then=require_all),
+    constraint=If(IsSet("part_id"), then=require_all),
 )
 @option(
     "-r",
     "--replica",
     "replica",
-    default="",
-    help=("do help"),
+    default=None,
+    help=("Replica name to clean."),
 )
-# @constraint(
-#     RequireAtLeast(1),
-#     ["table_uuid", "part_id", "replica"],
-# )
+@constraint(
+    RequireAtLeast(1),
+    ["table_uuid", "part_id", "replica"],
+)
 @option(
     "--dry-run",
     "dry_run",
@@ -423,9 +424,9 @@ def remove_hosts_from_table(ctx, zookeeper_table_path, fqdn, dry_run):
 def clean_zk_locks_command(
     ctx: Context,
     zero_copy_path: str,
-    table_uuid: str,
-    part_id: str,
-    replica: str,
+    table_uuid: Optional[str],
+    part_id: Optional[str],
+    replica: Optional[str],
     dry_run: bool,
 ) -> None:
     """
@@ -436,18 +437,14 @@ def clean_zk_locks_command(
     with zk_client(ctx) as zk:
         if replica:
             anything = r".+"
-            uuid = re.escape(table_uuid) or anything
-            part = re.escape(part_id) or anything
+            uuid = re.escape(table_uuid) if table_uuid else anything
+            part = re.escape(part_id) if part_id else anything
             replica = re.escape(replica)
             template = rf"{zero_copy_path}/{uuid}/{part}/.+/{replica}"
             delete_zero_copy_locks_for_replica(zk, zero_copy_path, template, dry_run)
         else:
             # No need to find every replica's path. Removing part's or table's directory is enough.
             if part_id:
-                if not table_uuid:
-                    raise RuntimeError(
-                        "If part-id is set, table-uuid is required"
-                    )  # TODO: cloup constraints
                 template = re.escape(rf"{zero_copy_path}/{table_uuid}/{part_id}")
                 paths = find_paths(zk, zero_copy_path, [template])
                 if not paths:
