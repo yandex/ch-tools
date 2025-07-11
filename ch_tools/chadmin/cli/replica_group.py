@@ -124,7 +124,7 @@ def list_command(ctx: Context, **kwargs: Any) -> None:
         "--database",
         "database_pattern",
         help="Filter in replicas to restore by the specified database name pattern."
-    " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
     option(
         "--exclude-database",
