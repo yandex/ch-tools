@@ -1,6 +1,8 @@
 import json
 from collections import OrderedDict
+from typing import Any, Dict, Optional
 
+from click import Context
 from cloup import Choice, constraint, group, option, option_group, pass_context
 from cloup.constraints import AnySet, If, IsSet, RequireAtLeast, RequireExactly
 
@@ -19,7 +21,7 @@ from ch_tools.common.cli.parameters import BytesParamType
 
 
 @group("partition", cls=Chadmin)
-def partition_group():
+def partition_group() -> None:
     """
     Commands to manage partitions.
     """
@@ -123,7 +125,7 @@ def partition_group():
     ["has_replication_tasks"],
 )
 @pass_context
-def list_partitions_command(ctx, **kwargs):
+def list_partitions_command(ctx: Context, **kwargs: Any) -> None:
     """List partitions."""
     logging.info(get_partitions(ctx, format_="PrettyCompact", **kwargs))
 
@@ -186,15 +188,15 @@ def list_partitions_command(ctx, **kwargs):
 )
 @pass_context
 def attach_partitions_command(
-    ctx,
-    _all,
-    database,
-    table,
-    partition_id,
-    keep_going,
-    dry_run,
-    **kwargs,
-):
+    ctx: Context,
+    _all: bool,
+    database: Optional[str],
+    table: Optional[str],
+    partition_id: Optional[str],
+    keep_going: bool,
+    dry_run: bool,
+    **kwargs: Any,
+) -> None:
     """Attach one or several partitions."""
     partitions = get_partitions(
         ctx,
@@ -320,22 +322,22 @@ def attach_partitions_command(
 )
 @pass_context
 def detach_partitions_command(
-    ctx,
-    _all,
-    database,
-    table,
-    partition_id,
-    disk_name,
-    merging,
-    mutating,
-    has_replication_tasks,
-    min_replication_task_postpone_count,
-    max_replication_task_postpone_count,
-    replication_task_exception,
-    keep_going,
-    dry_run,
-    use_partition_list_from_json,
-):
+    ctx: Context,
+    _all: bool,
+    database: Optional[str],
+    table: Optional[str],
+    partition_id: Optional[str],
+    disk_name: Optional[str],
+    merging: bool,
+    mutating: bool,
+    has_replication_tasks: bool,
+    min_replication_task_postpone_count: Optional[int],
+    max_replication_task_postpone_count: Optional[int],
+    replication_task_exception: Optional[str],
+    keep_going: bool,
+    dry_run: bool,
+    use_partition_list_from_json: Optional[str],
+) -> None:
     """Detach one or several partitions."""
     partitions = get_partitions(
         ctx,
@@ -481,29 +483,29 @@ def detach_partitions_command(
 )
 @pass_context
 def reattach_partitions_command(
-    ctx,
-    _all,
-    database,
-    table,
-    partition_id,
-    min_partition_id,
-    max_partition_id,
-    disk_name,
-    merging,
-    mutating,
-    has_replication_tasks,
-    min_replication_task_postpone_count,
-    max_replication_task_postpone_count,
-    replication_task_exception,
-    limit,
-    keep_going,
-    limit_errors,
-    dry_run,
-    use_partition_list_from_json,
-):
+    ctx: Context,
+    _all: bool,
+    database: Optional[str],
+    table: Optional[str],
+    partition_id: Optional[str],
+    min_partition_id: Optional[str],
+    max_partition_id: Optional[str],
+    disk_name: Optional[str],
+    merging: bool,
+    mutating: bool,
+    has_replication_tasks: bool,
+    min_replication_task_postpone_count: Optional[int],
+    max_replication_task_postpone_count: Optional[int],
+    replication_task_exception: Optional[str],
+    limit: Optional[int],
+    keep_going: bool,
+    limit_errors: int,
+    dry_run: bool,
+    use_partition_list_from_json: Optional[str],
+) -> None:
     """Perform sequential attach and detach of one or several partitions."""
 
-    def _table_formatter(partition):
+    def _table_formatter(partition: Dict[str, Any]) -> OrderedDict:
         return OrderedDict(
             (
                 ("database", partition["database"]),
@@ -608,18 +610,18 @@ def reattach_partitions_command(
 )
 @pass_context
 def delete_partitions_command(
-    ctx,
-    database,
-    table,
-    partition_id,
-    min_partition_id,
-    max_partition_id,
-    min_date,
-    max_date,
-    disk_name,
-    dry_run,
-    use_partition_list_from_json,
-):
+    ctx: Context,
+    database: Optional[str],
+    table: Optional[str],
+    partition_id: Optional[str],
+    min_partition_id: Optional[str],
+    max_partition_id: Optional[str],
+    min_date: Optional[str],
+    max_date: Optional[str],
+    disk_name: Optional[str],
+    dry_run: bool,
+    use_partition_list_from_json: Optional[str],
+) -> None:
     """Delete one or several partitions."""
     partitions = get_partitions(
         ctx,
@@ -682,17 +684,17 @@ def delete_partitions_command(
 )
 @pass_context
 def optimize_partitions_command(
-    ctx,
-    database,
-    table,
-    partition_id,
-    min_partition_id,
-    max_partition_id,
-    min_date,
-    max_date,
-    disk_name,
-    dry_run,
-):
+    ctx: Context,
+    database: Optional[str],
+    table: Optional[str],
+    partition_id: Optional[str],
+    min_partition_id: Optional[str],
+    max_partition_id: Optional[str],
+    min_date: Optional[str],
+    max_date: Optional[str],
+    disk_name: Optional[str],
+    dry_run: bool,
+) -> None:
     """Optimize partitions."""
     for p in get_partitions(
         ctx,
@@ -753,17 +755,17 @@ def optimize_partitions_command(
 )
 @pass_context
 def materialize_ttl_command(
-    ctx,
-    database,
-    table,
-    partition_id,
-    min_partition_id,
-    max_partition_id,
-    min_date,
-    max_date,
-    disk_name,
-    dry_run,
-):
+    ctx: Context,
+    database: Optional[str],
+    table: Optional[str],
+    partition_id: Optional[str],
+    min_partition_id: Optional[str],
+    max_partition_id: Optional[str],
+    min_date: Optional[str],
+    max_date: Optional[str],
+    disk_name: Optional[str],
+    dry_run: bool,
+) -> None:
     """Materialize TTL."""
     for p in get_partitions(
         ctx,
@@ -782,7 +784,7 @@ def materialize_ttl_command(
         )
 
 
-def read_and_validate_partitions_from_json(json_path):
+def read_and_validate_partitions_from_json(json_path: str) -> Dict[str, Any]:
 
     base_exception_str = "Incorrect json file, there are no {corrupted_section}. Use the JSON format for ch query to get correct format."
     with open(json_path, "r", encoding="utf-8") as json_file:
@@ -802,33 +804,33 @@ def read_and_validate_partitions_from_json(json_path):
 
 
 def get_partitions(
-    ctx,
-    database,
-    table,
+    ctx: Context,
+    database: Optional[str],
+    table: Optional[str],
     *,
-    partition_id=None,
-    min_partition_id=None,
-    max_partition_id=None,
-    min_date=None,
-    max_date=None,
-    min_part_count=None,
-    max_part_count=None,
-    min_size=None,
-    max_size=None,
-    active_parts=None,
-    disk_name=None,
-    merging=None,
-    mutating=None,
-    has_replication_tasks=None,
-    min_replication_task_postpone_count=None,
-    max_replication_task_postpone_count=None,
-    replication_task_exception=None,
-    detached=None,
-    order_by=None,
-    limit=None,
-    format_=None,
-    use_partition_list_from_json=None,
-):
+    partition_id: Optional[str] = None,
+    min_partition_id: Optional[str] = None,
+    max_partition_id: Optional[str] = None,
+    min_date: Optional[str] = None,
+    max_date: Optional[str] = None,
+    min_part_count: Optional[int] = None,
+    max_part_count: Optional[int] = None,
+    min_size: Optional[int] = None,
+    max_size: Optional[int] = None,
+    active_parts: Optional[bool] = None,
+    disk_name: Optional[str] = None,
+    merging: Optional[bool] = None,
+    mutating: Optional[bool] = None,
+    has_replication_tasks: Optional[bool] = None,
+    min_replication_task_postpone_count: Optional[int] = None,
+    max_replication_task_postpone_count: Optional[int] = None,
+    replication_task_exception: Optional[str] = None,
+    detached: Optional[bool] = None,
+    order_by: Optional[str] = None,
+    limit: Optional[int] = None,
+    format_: Optional[str] = None,
+    use_partition_list_from_json: Optional[str] = None,
+) -> Any:
     # pylint: disable=too-many-locals
     if use_partition_list_from_json:
         return read_and_validate_partitions_from_json(use_partition_list_from_json)
