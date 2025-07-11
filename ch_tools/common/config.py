@@ -44,9 +44,20 @@ DEFAULT_CONFIG = {
         "bucket_name_prefix": "cloud-storage-",
         "clean": {
             "listing_table_prefix": "listing_objects_from_",
+            "orphaned_objects_table_prefix": "orphaned_objects_",
             "listing_table_database": "default",
+            "orphaned_objects_table_database": "default",
+            "listing_table_zk_path_prefix": "/_system/tables",
+            "orphaned_objects_table_zk_path_prefix": "/_system/tables",
             "storage_policy": "default",
             "antijoin_timeout": 10 * 60,
+            "verify": True,
+            "verify_paths_regex": {
+                "host": r"^(\w+)/(\w+)/(\w+)/",
+                "shard": r"^(\w+)/(\w+)/(\w+)/",
+                "cluster": r"^(\w+)/(\w+)/",
+            },
+            "verify_size_error_rate_threshold_bytes": 1024 * 1024 * 1024,  ## 1 GB
         },
     },
     "zookeeper": {

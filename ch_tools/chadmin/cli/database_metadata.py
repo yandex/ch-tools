@@ -6,6 +6,8 @@ from typing import Optional, Tuple
 from ch_tools.chadmin.cli import metadata
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_METADATA_PATH
 
+PATTERN_UUID_FROM_METADATA = r"(ATTACH\s+\w+\s+(?:\w+\s+)*UUID\s+')([^']+)('.*)"
+
 
 class DatabaseEngine(Enum):
     ATOMIC = "Atomic"
@@ -13,6 +15,17 @@ class DatabaseEngine(Enum):
 
     def is_replicated(self) -> bool:
         return self == DatabaseEngine.REPLICATED
+
+    @classmethod
+    def from_str(cls, engine_str: str) -> "DatabaseEngine":
+        engine = engine_str.strip().lower()
+        for supported_engine in cls:
+            if supported_engine.value.lower() == engine:
+                return supported_engine
+        raise ValueError(f"Unknown DatabaseEngine: {engine_str}")
+
+    def __str__(self) -> str:
+        return self.value
 
 
 @dataclass
@@ -44,6 +57,22 @@ class DatabaseMetadata:
 
         with open(file_path, "w", encoding="utf-8") as f:
             f.writelines(lines)
+
+    def set_replicated(self) -> None:
+        self.database_engine = DatabaseEngine.REPLICATED
+        self.replica_path = f"/clickhouse/{self.database_name}"
+        self.shard = "{shard}"
+        self.replica_name = "{replica}"
+
+        self.update_metadata_file()
+
+    def set_atomic(self) -> None:
+        self.database_engine = DatabaseEngine.ATOMIC
+        self.replica_path = None
+        self.shard = None
+        self.replica_name = None
+
+        self.update_metadata_file()
 
 
 def db_metadata_path(database_name: str) -> str:
@@ -106,7 +135,10 @@ def _parse_database_replica_params(line: str) -> Tuple[str, str, str]:
     matches = re.findall(pattern, line)
 
     if len(matches) != 3:
-        raise ValueError(
-            "Failed parse metadata for replicated engine: {}".format(len(matches))
-        )
+        raise ValueError(f"Failed parse metadata for replicated engine: {len(matches)}")
     return matches[0], matches[1], matches[2]
+
+
+def remove_uuid_from_metadata(text_metadata: str) -> str:
+    result = re.sub(PATTERN_UUID_FROM_METADATA, r"\1\3", text_metadata)
+    return result

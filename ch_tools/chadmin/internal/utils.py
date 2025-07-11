@@ -1,6 +1,7 @@
 """
 Utility functions.
 """
+
 import re
 import subprocess
 from itertools import islice
@@ -8,6 +9,7 @@ from typing import Iterable, Iterator
 
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
+from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
 
 def execute_query(
@@ -19,6 +21,7 @@ def execute_query(
     format_="default",
     stream=False,
     settings=None,
+    replica=None,
     **kwargs,
 ):
     """
@@ -27,7 +30,12 @@ def execute_query(
     if format_ == "default":
         format_ = "PrettyCompact"
 
-    return clickhouse_client(ctx).query(
+    ch_client = clickhouse_client(ctx)
+
+    if replica is not None:
+        ch_client.host = replica
+
+    return ch_client.query(
         query=query,
         query_args=kwargs,
         timeout=timeout,
@@ -37,6 +45,33 @@ def execute_query(
         stream=stream,
         settings=settings,
     )
+
+
+def execute_query_on_shard(
+    ctx,
+    query,
+    timeout=None,
+    echo=False,
+    dry_run=False,
+    format_="default",
+    stream=False,
+    settings=None,
+    **kwargs,
+):
+    replicas = ClickhouseInfo.get_replicas(ctx)
+    for replica in replicas:
+        execute_query(
+            ctx,
+            query,
+            timeout=timeout,
+            echo=echo,
+            dry_run=dry_run,
+            format_=format_,
+            stream=stream,
+            settings=settings,
+            replica=replica,
+            **kwargs,
+        )
 
 
 def format_query(query):

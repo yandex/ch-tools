@@ -152,9 +152,7 @@ class ClickhouseClient:
         stdout, stderr = proc.communicate(input=query.for_execute().encode())
 
         if proc.returncode:
-            raise RuntimeError(
-                '"{0}" failed with: {1}'.format(masked_cmd, stderr.decode())
-            )
+            raise RuntimeError(f'"{masked_cmd}" failed with: {stderr.decode()}')
 
         response = stdout.decode().strip()
 
@@ -224,7 +222,7 @@ class ClickhouseClient:
 
     def query_json_data(
         self: Self,
-        query: str,
+        query: Union[str, Query],
         query_args: Optional[Dict[str, Any]] = None,
         compact: bool = True,
         post_data: Any = None,
@@ -254,6 +252,9 @@ class ClickhouseClient:
             settings=settings,
             port=port,
         )["data"]
+
+    def query_json_data_first_row(self, **kwargs):
+        return self.query_json_data(**kwargs)[0]
 
     def render_query(self, query, **kwargs):
         env = Environment()

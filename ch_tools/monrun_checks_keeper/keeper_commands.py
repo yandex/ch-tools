@@ -52,7 +52,7 @@ def alive_command(ctx):
         client = KazooClient(**args)
         client.start()
         client.get("/")
-        client.create(path="/{0}_alive".format(socket.getfqdn()), ephemeral=True)
+        client.create(path=f"/{socket.getfqdn()}_alive", ephemeral=True)
         client.stop()
         client.close()
     except Exception as e:

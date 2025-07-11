@@ -1,53 +1,19 @@
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry]
+[project]
 name = "clickhouse-tools"
-version = "1.0.0"
-license = "MIT"
 description = "clickhouse-tools is a set of tools for administration and diagnostics of ClickHouse DBMS."
-
-authors = [
-    "Alexander Burmak <alex-burmak@yandex-team.ru>",
-    "Dmitry Starov <dstaroff@yandex-team.ru>",
-    "Anton Ivashkin <iantonspb@yandex-team.ru>",
-    "Grigory Pervakov <pervakovg@yandex-team.ru>",
-    "Petr Nuzhnov <petrnuzhnov@yandex-team.ru>",
-    "Egor Medvedev <egor-medvedev@yandex-team.ru>",
-    "Aleksei Filatov <alexfvk@yandex-team.ru>",
-    "Evgeny Dyukov <secwall@yandex-team.ru>",
-    "Evgeny Strizhnev <estrizhnev@yandex-team.ru>",
-    "Vadim Volodin <vadim-volodin@yandex-team.ru>",
-    "Anton Chaporgin <chapson@yandex-team.ru>",
-    "Evgenii Kopanev <ekopanev@yandex-team.ru>",
-    "Mikhail Kot <myrrc@yandex-team.ru>",
-]
-
-maintainers = [
-    "Alexander Burmak <alex-burmak@yandex-team.ru>",
-    "Dmitry Starov <dstaroff@yandex-team.ru>",
-    "Anton Ivashkin <iantonspb@yandex-team.ru>",
-    "Grigory Pervakov <pervakovg@yandex-team.ru>",
-    "Petr Nuzhnov <petrnuzhnov@yandex-team.ru>",
-    "Egor Medvedev <egor-medvedev@yandex-team.ru>",
-    "Aleksei Filatov <alexfvk@yandex-team.ru>",
-    "Evgenii Kopanev <ekopanev@yandex-team.ru>",
-    "Mikhail Kot <myrrc@yandex-team.ru>",
-]
-
+license = "MIT"
 readme = "README.md"
 homepage = "https://github.com/yandex/ch-tools"
 repository = "https://github.com/yandex/ch-tools"
-
-keywords=[
+dynamic = ["version"]
+requires-python = ">=3.9"
+keywords = [
     "clickhouse",
     "database",
     "monitoring",
     "diagnostics",
     "administration",
 ]
-
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -63,100 +29,172 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Database",
     "Typing :: Typed",
 ]
-
-packages = [
-    { include = "ch_tools" },
+authors = [
+    { name = "Alexander Burmak", email = "alex-burmak@yandex-team.ru" },
+    { name = "Dmitry Starov", email = "dstaroff@yandex-team.ru" },
+    { name = "Anton Ivashkin", email = "iantonspb@yandex-team.ru" },
+    { name = "Grigorii Pervakov", email = "pervakovg@yandex-team.ru" },
+    { name = "Petr Nuzhnov", email = "petrnuzhnov@yandex-team.ru" },
+    { name = "Egor Medvedev", email = "egor-medvedev@yandex-team.ru" },
+    { name = "Aleksei Filatov", email = "alexfvk@yandex-team.ru" },
+    { name = "Evgeny Dyukov", email = "secwall@yandex-team.ru" },
+    { name = "Evgeny Strizhnev", email = "estrizhnev@yandex-team.ru" },
+    { name = "Vadim Volodin", email = "vadim-volodin@yandex-team.ru" },
+    { name = "Anton Chaporgin", email = "chapson@yandex-team.ru" },
+    { name = "Evgenii Kopanev", email = "ekopanev@yandex-team.ru" },
+    { name = "Mikhail Kot", email = "myrrc@yandex-team.ru" },
+    { name = "Mikhail Burdukov", email = "mburdukov@yandex-team.ru" },
+    { name = "Kirill Garbar", email = "kirillgarbar@yandex-team.ru" },
+    { name = "Konstantin Morozov", email = "kst-morozov@yandex-team.ru" },
+]
+maintainers = [
+    { name = "Alexander Burmak", email = "alex-burmak@yandex-team.ru" },
+    { name = "Egor Medvedev", email = "egor-medvedev@yandex-team.ru" },
+    { name = "Aleksei Filatov", email = "alexfvk@yandex-team.ru" },
+    { name = "Mikhail Burdukov", email = "mburdukov@yandex-team.ru" },
+    { name = "Kirill Garbar", email = "kirillgarbar@yandex-team.ru" },
+    { name = "Konstantin Morozov", email = "kst-morozov@yandex-team.ru" },
+]
+dependencies = [
+    "boto3 >= 1.24, < 1.36",
+    "click >= 8.1, < 8.2",
+    "cloup",
+    "deepdiff >= 8.0",
+    "dnspython",
+    "file_read_backwards",
+    "humanfriendly",
+    "jinja2",
+    "kazoo",
+    "lxml",
+    "packaging",
+    "psutil",
+    "pygments",
+    "pyopenssl >= 25.0",
+    "python-dateutil",
+    "pyyaml >= 5.4",
+    "requests >= 2.20",
+    "tabulate",
+    "tenacity",
+    "termcolor",
+    "tqdm",
+    "xmltodict",
+    "loguru",
 ]
 
-include = ["resources/"]
-
-
-[tool.poetry.dependencies]
-python = "^3.6.2"
-
-boto3 = "~1.23.10"
-click = "~8.0.4"
-cloup = "*"
-deepdiff = "<6.4.0"  # 6.4.0 version contains a bug https://github.com/seperman/deepdiff/issues/415
-dnspython = "*"
-file_read_backwards = "*"
-humanfriendly = "*"
-jinja2 = "*"
-kazoo = "*"
-lxml = "*"
-psutil = "*"
-pygments = "*"
-pyopenssl = "<25.0.0"  # Since 25.0.0 has dependency conflict for Python >= 3.7
-python-dateutil = "*"
-pyyaml = "<5.4"
-requests = "<2.30.0"
-tabulate = "*"
-tenacity = "*"
-termcolor = "*"
-tqdm = "*"
-typing-extensions = "~4.1.1"
-xmltodict = "*"
-loguru = "*"
-cffi = { version = "1.16.0", python = ">=3.12" }
-setuptools = { version = "*", python = ">=3.12" }
-
-[tool.poetry.dev-dependencies]
-# TODO: use groups in a modern version of poetry
-# tests
-behave = "*"
-docker = "*"
-docker-compose = "*"
-pyhamcrest = "*"
-pytest = "*"
-pyfakefs = [
-    { version = "*", python = "<3.12" },
-    { version = "5.5.0", python = ">=3.12" }
+[dependency-groups]
+dev = [
+    "behave",
+    "docker >= 7.1",
+    "pyhamcrest",
+    "pytest",
+    "pyfakefs",
+    "black >= 25.1",
+    "ruff",
+    "isort >= 6.0",
+    "mypy >= 1.10",
+    "pylint >= 3.0, < 4.0",
+    "types-kazoo",
+    "types-python-dateutil",
+    "types-pyyaml",
+    "types-requests",
+    "types-tabulate",
+    "codespell",
+    "tomli",
 ]
 
-# lint
-black = { version = "^22.0", python = ">=3.10" }
-ruff = { version = "*", python = ">=3.10" }
-isort = { version = "^5.0", extras = ["pyproject"], python = ">=3.10" }
-mypy = { version = "~1.5", python = ">=3.10" }
-pylint = { version = "^3.1", python = ">=3.10" }
-types-pyOpenSSL = { version = "*", python = ">=3.10" }
-types-python-dateutil = { version = "*", python = ">=3.10" }
-types-pyyaml = { version = "*", python = ">=3.10" }
-types-requests = { version = "*", python = ">=3.10" }
-types-setuptools = { version = "*", python = ">=3.10" }
-types-tabulate = { version = "*", python = ">=3.10" }
-codespell = { version = "*", python = ">=3.10" }
-tomli = { version = "*", python = ">=3.10" }
-
-[tool.poetry.scripts]
+[project.scripts]
 chadmin = "ch_tools.chadmin.chadmin_cli:main"
 ch-monitoring = "ch_tools.monrun_checks.main:main"
 keeper-monitoring = "ch_tools.monrun_checks_keeper.main:main"
 
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "ch_tools/version.txt"
+pattern = "(?P<version>.+)"
+
+[tool.hatch.build]
+ignore-vcs = true  # to prevent excluding generated files
+only-include = ["ch_tools", "resources"]
+
+
 [tool.isort]
 profile = "black"
+
+
+[tool.codespell]
+ignore-words-list = 'sav,fpr'  # `fpr` is used in parsing GPG output
+
 
 [tool.ruff]
 lint.select = ["E", "F", "W", "A"]
 lint.ignore = [
     "A003",  # "Class attribute is shadowing a Python builtin"
+    "A005",  # Module `logging` shadows a Python standard-library module
     "E402",  # "Module level import not at top of file", duplicate corresponding pylint check
     "E501",  # "Line too long"
-    "A005",  # Module `logging` shadows a Python standard-library module
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # "Unused import"
 
+
+[tool.pylint.main]
+py-version = "3.9"  # Minimum Python version to use for version dependent checks
+jobs = 4  # Use multiple processes to speed up Pylint
+ignored-modules = [  # List of module names for which member attributes should not be checked
+    "behave",
+    "requests.packages",
+]
+
+[tool.pylint."messages control"]
+disable = [
+    "broad-exception-caught",
+    "consider-using-max-builtin",
+    "duplicate-code",
+    "fixme",
+    "inconsistent-return-statements",
+    "line-too-long",
+    "missing-module-docstring",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "not-callable",
+    "raise-missing-from",
+    "too-few-public-methods",
+    "unnecessary-pass",
+    "use-dict-literal",
+]
+
+[tool.pylint.basic]
+include-naming-hint = true
+
+[tool.pylint.design]
+max-args = 25
+max-positional-arguments = 25
+max-locals = 25
+max-branches = 16
+max-statements = 65
+max-returns = 8
+max-attributes = 10
+max-public-methods = 30
+
+[tool.pylint.refactoring]
+max-nested-blocks = 7
+
+[tool.pylint.reports]
+score = false
+
+
 [tool.mypy]
+python_version = 3.9
 ignore_missing_imports = true
 disallow_incomplete_defs = true
 check_untyped_defs = true
 exclude = ['tests/staging']
-
-[tool.codespell]
-skip = 'poetry.lock'
-ignore-words-list = 'sav,fpr'  # `fpr` is used in parsing GPG output

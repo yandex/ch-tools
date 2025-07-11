@@ -1,5 +1,4 @@
 import os
-import sys
 import time
 
 import requests
@@ -110,8 +109,7 @@ def wait_replication_sync_command(
             )
             lightweight = False
     except Exception as e:
-        logging.error(f"Connection error while getting CH version: {e}")
-        sys.exit(1)
+        raise ConnectionError(f"Connection error while getting CH version: {e}")
 
     start_time = time.time()
     deadline = start_time + total_timeout.total_seconds()
@@ -134,29 +132,27 @@ def wait_replication_sync_command(
                 settings={"receive_timeout": time_left},
             )
     except requests.exceptions.ReadTimeout:
-        logging.error("Read timeout while running query.")
-        sys.exit(1)
+        raise ConnectionError("Read timeout while running query.")
     except requests.exceptions.ConnectionError:
-        logging.error("Connection error while running query.")
-        sys.exit(1)
+        raise ConnectionError("Connection error while running query.")
     except ClickhouseError as e:
+
         if "TIMEOUT_EXCEEDED" in str(e):
-            logging.error("Timeout while running query.")
-            sys.exit(1)
-        raise
+            error_msg = "Timeout while running query."
+        else:
+            error_msg = f"Clickhouse error while running query: {e}"
+        raise RuntimeError(error_msg)
 
     if lightweight:
-        sys.exit(0)
+        return
 
     # Replication lag
     while time.time() < deadline:
         res = estimate_replication_lag(ctx, xcrit, crit, warn, mwarn, mcrit)
         if res.code <= status:
-            sys.exit(0)
+            return
         time.sleep(pause.total_seconds())
-
-    logging.error("Timeout while waiting on replication-lag command.")
-    sys.exit(1)
+    raise RuntimeError("Timeout while waiting on replication-lag command.")
 
 
 @wait_group.command("started")
@@ -186,10 +182,9 @@ def wait_started_command(ctx, timeout, quiet):
 
     if ch_is_alive:
         warmup_system_users(ctx)
-        sys.exit(0)
+        return
 
-    logging.error("ClickHouse is dead")
-    sys.exit(1)
+    raise ConnectionError("ClickHouse is dead")
 
 
 def get_timeout():

@@ -6,9 +6,11 @@ Manage test environment.
 import argparse
 import pickle
 from types import SimpleNamespace
+from typing import Any
 
 import configuration
 from modules import compose, docker, minio, templates
+from modules.typing import ContextT
 
 from ch_tools.common import logging
 
@@ -36,7 +38,7 @@ STAGES = {
 }
 
 
-def create(context):
+def create(context: ContextT) -> None:
     """
     Create test environment.
     """
@@ -46,28 +48,28 @@ def create(context):
         pickle.dump(context.conf, session_conf)
 
 
-def start(context):
+def start(context: ContextT) -> None:
     """
     Start test environment runtime.
     """
     _run_stage("start", context)
 
 
-def restart(context):
+def restart(context: ContextT) -> None:
     """
     Restart test environment runtime.
     """
     _run_stage("restart", context)
 
 
-def stop(context):
+def stop(context: ContextT) -> None:
     """
     Stop test environment runtime.
     """
     _run_stage("stop", context)
 
 
-def _run_stage(stage, context):
+def _run_stage(stage: str, context: ContextT) -> None:
     """
     Run stage steps.
     """
@@ -79,7 +81,7 @@ def _run_stage(stage, context):
         step(context)
 
 
-def _init_context(context):
+def _init_context(context: ContextT) -> None:
     """
     Initialize context.
     """
@@ -97,7 +99,7 @@ def _init_context(context):
         context.conf = configuration.create()
 
 
-def cli_main():
+def cli_main() -> None:
     """
     CLI entry.
     """
@@ -114,7 +116,7 @@ def cli_main():
     commands[args.command](context)
 
 
-def _parse_args(commands):
+def _parse_args(commands: dict) -> Any:
     """
     Parse command-line arguments.
     """

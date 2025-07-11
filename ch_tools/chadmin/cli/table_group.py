@@ -1,5 +1,4 @@
 import os
-import sys
 from collections import OrderedDict
 from typing import Any
 
@@ -7,13 +6,18 @@ from cloup import Choice, Context, argument, group, option, option_group, pass_c
 from cloup.constraints import (
     AnySet,
     If,
+    IsSet,
     RequireAtLeast,
+    RequireExactly,
     accept_none,
     constraint,
     require_all,
+    require_one,
 )
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
+from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
+from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
 from ch_tools.chadmin.internal.table import (
     attach_table,
     change_table_uuid,
@@ -23,9 +27,14 @@ from ch_tools.chadmin.internal.table import (
     get_info_from_system_tables,
     get_table,
     get_table_uuids_from_cluster,
+    get_tables_names_from_system_tables,
     list_table_columns,
     list_tables,
     materialize_ttl,
+)
+from ch_tools.chadmin.internal.table_metadata import (
+    get_table_shared_id,
+    parse_table_metadata,
 )
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
@@ -39,7 +48,7 @@ FIELD_FORMATTERS = {
 
 
 @group("table", cls=Chadmin)
-def table_group():
+def table_group() -> None:
     """Commands to manage tables."""
     pass
 
@@ -55,7 +64,12 @@ def table_group():
     help="Account only active data parts.",
 )
 @pass_context
-def get_command(ctx, database_name, table_name, active_parts):
+def get_command(
+    ctx: Context,
+    database_name: str,
+    table_name: str,
+    active_parts: str,
+) -> None:
     """
     Get table.
     """
@@ -133,12 +147,12 @@ def get_command(ctx, database_name, table_name, active_parts):
     help="Limit the max number of objects in the output.",
 )
 @pass_context
-def list_command(ctx, **kwargs):
+def list_command(ctx: Context, **kwargs: Any) -> None:
     """
     List tables.
     """
 
-    def _table_formatter(item):
+    def _table_formatter(item: dict) -> OrderedDict:
         return OrderedDict(
             (
                 ("database", item["database"]),
@@ -166,7 +180,7 @@ def list_command(ctx, **kwargs):
 @argument("database_name", metavar="DATABASE")
 @argument("table_name", metavar="TABLE")
 @pass_context
-def columns_command(ctx, database_name, table_name):
+def columns_command(ctx: Context, database_name: str, table_name: str) -> None:
     """
     Describe columns for table.
     """
@@ -273,16 +287,16 @@ def columns_command(ctx, database_name, table_name):
 @constraint(If("detached", then=accept_none), ["on_cluster", "dry_run"])
 @pass_context
 def delete_command(
-    ctx,
-    _all,
-    on_cluster,
-    sync_mode,
-    dry_run,
-    detached,
-    database_name,
-    table_name,
-    **kwargs,
-):
+    ctx: Context,
+    _all: bool,
+    on_cluster: bool,
+    sync_mode: bool,
+    dry_run: bool,
+    detached: bool,
+    database_name: str,
+    table_name: str,
+    **kwargs: Any,
+) -> None:
     """
     Delete one or several tables.
     """
@@ -384,7 +398,14 @@ def delete_command(
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 @pass_context
-def recreate_command(ctx, _all, database_name, table_name, dry_run, **kwargs):
+def recreate_command(
+    ctx: Context,
+    _all: bool,
+    database_name: str,
+    table_name: str,
+    dry_run: bool,
+    **kwargs: Any,
+) -> None:
     """
     Recreate one or several tables.
     """
@@ -489,14 +510,14 @@ def recreate_command(ctx, _all, database_name, table_name, dry_run, **kwargs):
 )
 @pass_context
 def detach_command(
-    ctx,
-    _all,
-    database_name,
-    table_name,
-    on_cluster,
-    dry_run,
-    **kwargs,
-):
+    ctx: Context,
+    _all: bool,
+    database_name: str,
+    table_name: str,
+    on_cluster: bool,
+    dry_run: bool,
+    **kwargs: Any,
+) -> None:
     """
     Detach one or several tables.
     """
@@ -597,14 +618,14 @@ def detach_command(
 )
 @pass_context
 def reattach_command(
-    ctx,
-    _all,
-    database_name,
-    table_name,
-    on_cluster,
-    dry_run,
-    **kwargs,
-):
+    ctx: Context,
+    _all: bool,
+    database_name: str,
+    table_name: str,
+    on_cluster: bool,
+    dry_run: bool,
+    **kwargs: Any,
+) -> None:
     """
     Reattach one or several tables.
     """
@@ -652,7 +673,13 @@ def reattach_command(
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 @pass_context
-def attach_command(ctx, database_name, table_name, on_cluster, dry_run):
+def attach_command(
+    ctx: Context,
+    database_name: str,
+    table_name: str,
+    on_cluster: bool,
+    dry_run: bool,
+) -> None:
     """
     Attach table.
     """
@@ -731,7 +758,14 @@ def attach_command(ctx, database_name, table_name, on_cluster, dry_run):
     help="Enable dry run mode and do not perform any modifying actions.",
 )
 @pass_context
-def materialize_ttl_command(ctx, _all, database_name, table_name, dry_run, **kwargs):
+def materialize_ttl_command(
+    ctx: Context,
+    _all: bool,
+    database_name: str,
+    table_name: str,
+    dry_run: bool,
+    **kwargs: Any,
+) -> None:
     """
     Materialize TTL for one or several tables.
     """
@@ -841,35 +875,93 @@ def set_flag_command(
 
 @table_group.command("change")
 @option("-d", "--database", required=True)
-@option("-t", "--table", required=True)
-@option("-uuid", "--uuid", required=True)
+@option("-t", "--table", help="Change uuid for particular table.")
+@option(
+    "-all", "--all", "_all", is_flag=True, help="Change uuid for all tables in database"
+)
+@constraint(require_one, ["table", "_all"])
+@option_group(
+    "Change table uuid options",
+    option("-uuid", "--uuid", help="Set the table UUID explicitly"),
+    option("-zk", "--zk", is_flag=True, help="Set uuid from table_shared_id node"),
+    constraint(require_one, ["uuid", "zk"]),
+    constraint(
+        If(
+            IsSet(
+                "_all",
+            ),
+            then=RequireExactly(1),
+        ),
+        ["zk"],
+    ),
+)
 @pass_context
-def change_uuid_command(ctx, database, table, uuid):
-    table_info = get_info_from_system_tables(ctx, database, table)
+def change_uuid_command(
+    ctx: Context, database: str, table: str, uuid: str, zk: bool, _all: bool
+) -> None:
+    if _all:
+        tables = get_tables_names_from_system_tables(ctx, database)
+    else:
+        tables = [table]
 
-    old_table_uuid = table_info["uuid"]
-    table_local_metadata_path = table_info["metadata_path"]
+    logging.info("Tables for changing uuid: {}", tables)
 
-    change_table_uuid(
-        ctx,
-        database,
-        table,
-        new_uuid=uuid,
-        old_table_uuid=old_table_uuid,
-        table_local_metadata_path=table_local_metadata_path,
-        attached=True,
-    )
+    for table_name in tables:
+        table_info = get_info_from_system_tables(ctx, database, table_name)
+
+        logging.info("table_info={}", table_info)
+
+        if zk:
+            table_local_metadata_path = table_info["metadata_path"]
+            if match_str_ch_version(get_version(ctx), "25.1"):
+                table_local_metadata_path = (
+                    f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
+                )
+
+            metadata = parse_table_metadata(table_local_metadata_path)
+            if not metadata.table_engine.is_table_engine_replicated():
+                raise RuntimeError(
+                    f"Table {table_name} is not replicated. Failed get uuid from table_shared_id node."
+                )
+
+            replica_path = metadata.replica_path
+
+            logging.debug(
+                "Table {} is being changed table_shared_id {} by path {}",
+                table_name,
+                uuid,
+                replica_path,
+            )
+            uuid = get_table_shared_id(ctx, replica_path)
+            logging.debug(
+                "Table {} contains table_shared_id {} by path {}",
+                table_name,
+                uuid,
+                replica_path,
+            )
+
+        old_table_uuid = table_info["uuid"]
+        table_local_metadata_path = table_info["metadata_path"]
+
+        change_table_uuid(
+            ctx,
+            database,
+            table_name,
+            engine=table_info["engine"],
+            new_local_uuid=uuid,
+            old_table_uuid=old_table_uuid,
+            table_local_metadata_path=table_local_metadata_path,
+            attached=True,
+        )
 
 
 @table_group.command("check-uuid-equal")
 @option("-d", "--database", required=True)
 @option("-t", "--table", required=True)
 @pass_context
-def check_uuid_equal(ctx, database, table):
-    # @todo refactoring
+def check_uuid_equal(ctx: Context, database: str, table: str) -> None:
     uuids = get_table_uuids_from_cluster(ctx, database, table)
     logging.info("Table {} has uuid: {}", table, uuids)
 
     if len(uuids) > 1:
-        logging.error("Table {} has different uuid in cluster", table)
-        sys.exit(1)
+        raise RuntimeError(f"Table {table} has different uuid in cluster")

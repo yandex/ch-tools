@@ -13,13 +13,14 @@ from modules.clickhouse import (
     ping,
 )
 from modules.docker import get_container
+from modules.typing import ContextT
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 
 @given("a working clickhouse on {node:w}")
 @then("a clickhouse will be worked on {node:w}")
 @retry(wait=wait_fixed(0.5), stop=stop_after_attempt(40))
-def step_wait_for_clickhouse_alive(context, node):
+def step_wait_for_clickhouse_alive(context: ContextT, node: str) -> None:
     """
     Wait until clickhouse is ready to accept incoming requests.
     """
@@ -28,13 +29,13 @@ def step_wait_for_clickhouse_alive(context, node):
 
 @given("we have executed query on {node:w}")
 @when("we execute query on {node:w}")
-def step_clickhouse_query(context, node):
+def step_clickhouse_query(context: ContextT, node: str) -> None:
     context.ret_code, context.response = get_response(context, node, context.text)
 
 
 @given("we have executed queries on {node:w}")
 @when("we execute queries on {node:w}")
-def step_clickhouse_queries(context, node):
+def step_clickhouse_queries(context: ContextT, node: str) -> None:
     queries = []
     for string in context.text.split(";"):
         string = string.strip()
@@ -47,21 +48,21 @@ def step_clickhouse_queries(context, node):
 
 @given("we get response code {code:d}")
 @then("we get response code {code:d}")
-def step_clickhouse_response(context, code):
+def step_clickhouse_response(context: ContextT, code: str) -> None:
     assert_that(code, equal_to(context.ret_code))
 
 
 @then("{node1:w} has the same schema as {node2:w}")
-def step_has_same_schema(context, node1, node2):
-    def _get_schema(node):
+def step_has_same_schema(context: ContextT, node1: str, node2: str) -> None:
+    def _get_schema(node: str) -> dict:
         return get_all_user_schemas(context, node)
 
     assert_that(_get_schema(node1), equal_to(_get_schema(node2)))
 
 
 @then("{node1:w} has the same data as {node2:w}")
-def step_same_clickhouse_data(context, node1, node2):
-    def _get_data(node):
+def step_same_clickhouse_data(context: ContextT, node1: str, node2: str) -> None:
+    def _get_data(node: str) -> dict:
         _, data = get_all_user_data(context, node)
         return data
 
@@ -69,14 +70,14 @@ def step_same_clickhouse_data(context, node1, node2):
 
 
 @then("there are no unfinished dll queries on {node:w}")
-def step_check_unfinished_ddl(context, node):
+def step_check_unfinished_ddl(context: ContextT, node: str) -> None:
     query = "SELECT count(*) FROM system.distributed_ddl_queue WHERE status!='Finished'"
     ret_code, response = get_response(context, node, query)
     assert_that(response, equal_to("0"))
 
 
 @when("we put the  clickhouse config to path {path} with restarting on {node:w}")
-def step_put_config(context, path, node):
+def step_put_config(context: ContextT, path: str, node: str) -> None:
     config = context.text
     container = get_container(context, node)
     result = container.exec_run(
@@ -91,7 +92,7 @@ def step_put_config(context, path, node):
 
 
 @then("save uuid table {table} in context on {node:w}")
-def step_save_table_uuid(context, table, node):
+def step_save_table_uuid(context: ContextT, table: str, node: str) -> None:
     query = f"SELECT uuid FROM system.tables WHERE name='{table}'"
     ret_code, response = get_response(context, node, query)
     assert 200 == ret_code
@@ -104,7 +105,9 @@ def step_save_table_uuid(context, table, node):
 @then(
     "check uuid table {table} equal to table_shared_id by path {table_shared_id_path} on {node:w}"
 )
-def step_check_table_uuid_equal_zk(context, table, table_shared_id_path, node):
+def step_check_table_uuid_equal_zk(
+    context: ContextT, table: str, table_shared_id_path: str, node: str
+) -> None:
     query = f"SELECT uuid FROM system.tables WHERE name='{table}'"
     ret_code, local_uuid = get_response(context, node, query)
     assert 200 == ret_code
@@ -128,7 +131,9 @@ def step_check_table_uuid_equal_zk(context, table, table_shared_id_path, node):
 
 
 @then("check {disk} disk contains table {table} data in {node:w}")
-def step_check_disk_contains_table_data(context, disk, table, node):
+def step_check_disk_contains_table_data(
+    context: ContextT, disk: str, table: str, node: str
+) -> None:
     """
     Check that disk contains table data (using table uuid that saved in step_save_table_uuid)
     """
@@ -141,7 +146,9 @@ def step_check_disk_contains_table_data(context, disk, table, node):
 
 
 @then("check table {table} not exists on {disk} disk in {node:w}")
-def step_check_table_not_exists_on_disk(context, table, disk, node):
+def step_check_table_not_exists_on_disk(
+    context: ContextT, table: str, disk: str, node: str
+) -> None:
     """
     Check that table not exists on disk (using table uuid that saved in step_save_table_uuid)
     """
@@ -157,8 +164,8 @@ def step_check_table_not_exists_on_disk(context, table, disk, node):
     "populated clickhouse with {count:d} replicated tables on {node:w} with {database_name} database and {table_prefix} prefix"
 )
 def step_populate_with_replicated_tables(
-    context, count, node, database_name, table_prefix
-):
+    context: ContextT, count: int, node: str, database_name: str, table_prefix: str
+) -> None:
     """
     Creates <count> number of replicated tables: database_name.table_prefix
     """
@@ -183,7 +190,7 @@ def step_populate_with_replicated_tables(
 
 
 @then("{count:d} readonly replicas on {node:w}")
-def step_check_number_ro_replicas(context, count, node):
+def step_check_number_ro_replicas(context: ContextT, count: int, node: str) -> None:
     query = "SELECT count() FROM system.replicas WHERE is_readonly=1"
 
     ret_code, response = get_response(context, node, query)

@@ -78,10 +78,12 @@ def parse_table_metadata(table_metadata_path: str) -> TableMetadata:
                     replica_path, replica_name = _parse_replica_params(line)
 
     if table_uuid is None:
-        raise RuntimeError(f"Empty UUID from metadata: '{table_metadata_path}'")
+        raise RuntimeError(f"Empty UUID from table metadata: '{table_metadata_path}'")
 
     if table_engine is None:
-        raise RuntimeError(f"Empty table engine from metadata: '{table_metadata_path}'")
+        raise RuntimeError(
+            f"Empty table engine from table metadata: '{table_metadata_path}'"
+        )
 
     return TableMetadata(table_uuid, table_engine, replica_path, replica_name)
 
@@ -115,6 +117,7 @@ def check_replica_path_contains_macros(path: str, macros: str) -> bool:
 def update_uuid_table_metadata_file(
     table_local_metadata_path: str, new_uuid: str
 ) -> None:
+    logging.debug("set uuid {} to metadata {}", new_uuid, table_local_metadata_path)
     with open(table_local_metadata_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
@@ -131,15 +134,17 @@ def get_table_store_path(table_uuid: str) -> str:
 
 
 def move_table_local_store(old_table_uuid: str, new_uuid: str) -> None:
+    logging.debug("call move_table_local_store")
     old_table_store_path = get_table_store_path(old_table_uuid)
-    logging.info("old_table_store_path={}", old_table_store_path)
+    logging.debug("old_table_store_path={}", old_table_store_path)
 
-    assert os.path.exists(old_table_store_path)
+    if not os.path.exists(old_table_store_path):
+        raise RuntimeError(f"File {old_table_store_path} doesn't exist.")
 
     target = f"{CLICKHOUSE_PATH}/store/{new_uuid[:3]}"
 
     if not os.path.exists(target):
-        logging.info("need create path={}", target)
+        logging.debug("need create path={}", target)
         os.mkdir(target)
         os.chmod(target, 0o750)
         uid = pwd.getpwnam("clickhouse").pw_uid
@@ -147,10 +152,10 @@ def move_table_local_store(old_table_uuid: str, new_uuid: str) -> None:
 
         os.chown(target, uid, gid)
     else:
-        logging.info("path exists: {}", target)
+        logging.debug("path exists: {}", target)
 
     new_table_store_path = get_table_store_path(new_uuid)
-    logging.info("new_table_store_path={}", new_table_store_path)
+    logging.debug("new_table_store_path={}", new_table_store_path)
 
     os.rename(old_table_store_path, new_table_store_path)
 
@@ -163,7 +168,7 @@ def get_table_shared_id(ctx: Context, zookeeper_path: str) -> str:
     table_shared_id_node_path = zookeeper_path + "/table_shared_id"
 
     table_uuid = get_zk_node(ctx, table_shared_id_node_path)
-    logging.info("zk_path={} contains table_shared_id={}", zookeeper_path, table_uuid)
+    logging.debug("zk_path={} contains table_shared_id={}", zookeeper_path, table_uuid)
 
     return table_uuid
 
@@ -172,3 +177,13 @@ def remove_replicated_params(create_table_query: str) -> str:
     return re.sub(
         REPLICATED_MERGE_TREE_PATTERN, "ReplicatedMergeTree", create_table_query
     )
+
+
+def is_table(engine: str) -> bool:
+    logging.debug("check is table {}", engine)
+    return engine not in ["View", "MaterializedView"]
+
+
+def is_view(engine: str) -> bool:
+    logging.debug("is_view {}", engine)
+    return engine == "View"

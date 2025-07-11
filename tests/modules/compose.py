@@ -5,6 +5,7 @@ Docker Compose interface.
 import os
 import random
 import shlex
+import shutil
 import subprocess
 
 import docker
@@ -112,7 +113,7 @@ def _validate_config(config_path: str) -> None:
     """
     Perform config validation by calling `docker-compose config`
     """
-    _call_compose_on_config(config_path, "__config_test", "config")
+    _call_compose_on_config(config_path, "config_test", "config")
 
 
 def _generate_compose_config(config: dict) -> dict:
@@ -120,12 +121,10 @@ def _generate_compose_config(config: dict) -> dict:
     Create docker compose config.
     """
     compose_config: dict = {
-        "version": "2",
         "networks": {
             "test_net": {
-                "external": {
-                    "name": config["network_name"],
-                },
+                "name": config["network_name"],
+                "external": True,
             },
         },
         "services": {},
@@ -219,6 +218,10 @@ def _call_compose_on_config(conf_path: str, project_name: str, action: str) -> N
     """
     Execute docker-compose action by invoking `docker-compose`.
     """
-    compose_cmd = f"docker-compose --file {conf_path} -p {project_name} {action}"
+    docker_compose = "docker-compose"
+    if shutil.which(docker_compose) is None:
+        docker_compose = "docker compose"
+
+    compose_cmd = f"{docker_compose} --file {conf_path} -p {project_name} {action}"
     # Note: build paths are resolved relative to config file location.
     subprocess.check_call(shlex.split(compose_cmd))

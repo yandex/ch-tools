@@ -55,9 +55,9 @@ def execute(command):
     stdout, stderr = proc.communicate()
 
     if proc.returncode:
-        msg = '"{0}" failed with code {1}'.format(command, proc.returncode)
+        msg = f'"{command}" failed with code {proc.returncode}'
         if stderr:
-            msg = "{0}: {1}".format(msg, stderr.decode())
+            msg = f"{msg}: {stderr.decode()}"
 
         raise RuntimeError(msg)
 

@@ -19,9 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: ./.github/actions/setup_dependencies
-      with:
-        python-version: "3.10"
+    - uses: astral-sh/setup-uv@v6
     - name: "lint: isort"
       run: make isort
     - name: "lint: black"
@@ -37,34 +35,40 @@ jobs:
 
   tests:
     needs: lint
-    runs-on: ubuntu-${{ matrix.target.ubuntu }}
+    runs-on: ubuntu-latest
     env:
       CLICKHOUSE_VERSION: ${{ matrix.clickhouse }}
-      CLICKHOUSE_VERSIONS: ${{ matrix.clickhouse }}
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - { python: "3.10", ubuntu: "latest" }
-          - { python: "3.12", ubuntu: "24.04" }
-        clickhouse:
-          - "22.8.21.38"
-          - "23.3.22.3"
-          - "23.8.16.40"
-          - "24.3.18.7"
-          - "24.8.14.39"
-          - "25.3.3.42"
-          - "latest"
+        include:
+        - python: "3.9"
+          clickhouse: "latest"
+        - python: "3.10"
+          clickhouse: "22.8.21.38"
+        - python: "3.10"
+          clickhouse: "23.3.22.3"
+        - python: "3.10"
+          clickhouse: "23.8.16.40"
+        - python: "3.10"
+          clickhouse: "24.3.18.7"
+        - python: "3.10"
+          clickhouse: "24.8.14.39"
+        - python: "3.10"
+          clickhouse: "25.3.3.42"
+        - python: "3.10"
+          clickhouse: "latest"
+        - python: "3.11"
+          clickhouse: "latest"
+        - python: "3.12"
+          clickhouse: "latest"
+        - python: "3.13"
+          clickhouse: "latest"
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup_dependencies
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: ${{ matrix.target.python }}
-      - name: build base images
-        uses: docker/bake-action@v5
-        with:
-          files: tests/bake.hcl
-          push: false
+          python-version: ${{ matrix.python }}
 
       - run: make test-unit
       - run: make test-integration
@@ -72,7 +76,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: ${{ failure() }}
         with:
-          name: integration-test-logs-py${{ matrix.target.python }}-clickhouse-${{ matrix.clickhouse }}
+          name: integration-test-logs-py${{ matrix.python }}-clickhouse-${{ matrix.clickhouse }}
           path: tests/staging/logs/
           if-no-files-found: ignore
 
@@ -81,25 +85,6 @@ jobs:
         if: always()
         with:
           report_paths: 'tests/reports/*.xml'
-
-
-  push_to_dockerhub:
-    runs-on: ubuntu-latest
-    env:
-      CLICKHOUSE_VERSIONS: "22.8.21.38, 23.3.22.3, 23.8.16.40, 24.3.18.7, 24.8.14.39, 25.3.3.42, latest"
-    if: ${{ github.event_name == 'push' }}
-    steps:
-    - uses: actions/checkout@v4
-    - name: login to dockerhub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-    - name: build and push base images
-      uses: docker/bake-action@v5
-      with:
-        files: tests/bake.hcl
-        push: true
 
 
   release:
@@ -114,9 +99,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - uses: ./.github/actions/setup_dependencies
-      with:
-        python-version: ${{ matrix.target.python }}
+    - uses: astral-sh/setup-uv@v6
 
     - name: build project
       run: make build-python-packages

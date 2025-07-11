@@ -1,6 +1,5 @@
 import os
-import sys
-from typing import Dict
+from typing import Any, Dict, Optional
 
 from click import ClickException, Context
 
@@ -17,6 +16,8 @@ from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
 from ch_tools.chadmin.internal.table_metadata import (
     check_replica_path_contains_macros,
     get_table_shared_id,
+    is_table,
+    is_view,
     move_table_local_store,
     parse_table_metadata,
     update_uuid_table_metadata_file,
@@ -30,7 +31,12 @@ DISK_LOCAL_KEY = "local"
 DISK_OBJECT_STORAGE_KEY = "object_storage"
 
 
-def get_table(ctx, database_name, table_name, active_parts=None):
+def get_table(
+    ctx: Context,
+    database_name: str,
+    table_name: str,
+    active_parts: Optional[str] = None,
+) -> dict:
     tables = list_tables(
         ctx,
         database_name=database_name,
@@ -45,21 +51,21 @@ def get_table(ctx, database_name, table_name, active_parts=None):
 
 
 def list_tables(
-    ctx,
+    ctx: Context,
     *,
-    database_name=None,
-    database_pattern=None,
-    exclude_database_pattern=None,
-    table_name=None,
-    table_pattern=None,
-    exclude_table_pattern=None,
-    engine_pattern=None,
-    exclude_engine_pattern=None,
-    is_readonly=None,
-    active_parts=None,
-    order_by=None,
-    limit=None,
-):
+    database_name: Optional[str] = None,
+    database_pattern: Optional[str] = None,
+    exclude_database_pattern: Optional[str] = None,
+    table_name: Optional[str] = None,
+    table_pattern: Optional[str] = None,
+    exclude_table_pattern: Optional[str] = None,
+    engine_pattern: Optional[str] = None,
+    exclude_engine_pattern: Optional[str] = None,
+    is_readonly: Optional[bool] = None,
+    active_parts: Optional[str] = None,
+    order_by: Optional[str] = None,
+    limit: Optional[int] = None,
+) -> list:
     order_by = {
         "size": "disk_size DESC",
         "parts": "parts DESC",
@@ -163,7 +169,9 @@ def list_tables(
     )["data"]
 
 
-def list_table_columns(ctx, database_name, table_name):
+def list_table_columns(
+    ctx: Context, database_name: str, table_name: str
+) -> list[Dict[str, Any]]:
     query = """
         SELECT
             name,
@@ -187,15 +195,15 @@ def list_table_columns(ctx, database_name, table_name):
 
 
 def detach_table(
-    ctx,
-    database_name,
-    table_name,
-    permanently=True,
+    ctx: Context,
+    database_name: str,
+    table_name: str,
+    permanently: Optional[bool] = True,
     *,
-    cluster=None,
-    echo=False,
-    dry_run=False,
-):
+    cluster: Optional[bool] = None,
+    echo: Optional[bool] = False,
+    dry_run: Optional[bool] = False,
+) -> None:
     """
     Perform "DETACH TABLE" for the specified table.
     """
@@ -226,14 +234,14 @@ def detach_table(
 
 
 def attach_table(
-    ctx,
-    database_name,
-    table_name,
+    ctx: Context,
+    database_name: str,
+    table_name: str,
     *,
-    cluster=None,
-    echo=False,
-    dry_run=False,
-):
+    cluster: Optional[bool] = None,
+    echo: Optional[bool] = False,
+    dry_run: Optional[bool] = False,
+) -> None:
     """
     Perform "ATTACH TABLE" for the specified table.
     """
@@ -259,15 +267,15 @@ def attach_table(
 
 
 def delete_table(
-    ctx,
-    database_name,
-    table_name,
+    ctx: Context,
+    database_name: str,
+    table_name: str,
     *,
-    cluster=None,
-    echo=False,
-    sync_mode=True,
-    dry_run=False,
-):
+    cluster: Optional[bool] = None,
+    echo: Optional[bool] = False,
+    sync_mode: Optional[bool] = True,
+    dry_run: Optional[bool] = False,
+) -> None:
     """
     Perform "DROP TABLE" for the specified table.
     """
@@ -296,7 +304,7 @@ def delete_table(
     )
 
 
-def check_table_dettached(ctx, database_name, table_name):
+def check_table_dettached(ctx: Context, database_name: str, table_name: str) -> None:
     query = """
         SELECT
             1
@@ -402,7 +410,7 @@ def _remove_table_data_from_disk(
         )
 
 
-def delete_detached_table(ctx, database_name, table_name):
+def delete_detached_table(ctx: Context, database_name: str, table_name: str) -> None:
     logging.info("Call delete_detached_table: {}.{}", database_name, table_name)
 
     escaped_database_name = database_name.encode("unicode_escape").decode("utf-8")
@@ -470,7 +478,13 @@ def delete_detached_table(ctx, database_name, table_name):
     )
 
 
-def materialize_ttl(ctx, database_name, table_name, echo=False, dry_run=False):
+def materialize_ttl(
+    ctx: Context,
+    database_name: str,
+    table_name: str,
+    echo: bool = False,
+    dry_run: bool = False,
+) -> None:
     """
     Materialize TTL for the specified table.
     """
@@ -479,13 +493,22 @@ def materialize_ttl(ctx, database_name, table_name, echo=False, dry_run=False):
     execute_query(ctx, query, timeout=timeout, echo=echo, dry_run=dry_run, format_=None)
 
 
-def get_info_from_system_tables(ctx, database, table):
+def get_info_from_system_tables(ctx: Context, database: str, table: str) -> dict:
     query = f"""
-        SELECT uuid, metadata_path FROM system.tables WHERE database='{database}' AND table='{table}'
+        SELECT uuid, metadata_path, engine FROM system.tables WHERE database='{database}' AND table='{table}'
     """
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)["data"]
 
     return rows[0]
+
+
+def get_tables_names_from_system_tables(ctx: Context, database: str) -> list:
+    query = f"""
+        SELECT name FROM system.tables WHERE database='{database}'
+        AND engine not in ['View', 'MaterializedView']
+    """
+    rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)["data"]
+    return [row["name"] for row in rows]
 
 
 def get_table_uuids_from_cluster(ctx: Context, database: str, table: str) -> list:
@@ -499,59 +522,116 @@ def get_table_uuids_from_cluster(ctx: Context, database: str, table: str) -> lis
 def _verify_possible_change_uuid(
     ctx: Context, table_local_metadata_path: str, dst_uuid: str
 ) -> None:
+    logging.debug(
+        "call _verify_possible_change_uuid with path={}, new uuid={}",
+        table_local_metadata_path,
+        dst_uuid,
+    )
     metadata = parse_table_metadata(table_local_metadata_path)
 
-    if metadata.table_engine.is_table_engine_replicated():
-        logging.info(
-            "Metadata={} with Replicated table engine, replica_name={}, replica_path={}",
-            table_local_metadata_path,
-            metadata.replica_name,
-            metadata.replica_path,
+    if not metadata.table_engine.is_table_engine_replicated():
+        return
+
+    logging.debug(
+        "Table metadata={} with Replicated table engine, replica_name={}, replica_path={}",
+        table_local_metadata_path,
+        metadata.replica_name,
+        metadata.replica_path,
+    )
+    if check_replica_path_contains_macros(metadata.replica_path, "uuid"):
+
+        raise ClickException(
+            f"Changing uuid for ReplicatedMergeTree that contains macros uuid in replica path was not allowed. replica_path={metadata.replica_path}"
         )
-        if check_replica_path_contains_macros(metadata.replica_path, "uuid"):
-            logging.error(
-                f"Changing uuid for ReplicatedMergeTree that contains macros uuid in replica path was not allowed. replica_path={metadata.replica_path}"
-            )
-            sys.exit(1)
 
-        table_shared_id = get_table_shared_id(ctx, metadata.replica_path)
+    table_shared_id = get_table_shared_id(ctx, metadata.replica_path)
 
-        if dst_uuid != table_shared_id:
-            logging.error(
-                f"Changing uuid for ReplicatedMergeTree that different from table_shared_id path was not allowed. replica_path={metadata.replica_path}, dst_uuid={dst_uuid}, table_shared_id={table_shared_id}"
-            )
-            sys.exit(1)
+    logging.debug(
+        "Check that dst_uuid {} is equal with table_shared_id {} node.",
+        dst_uuid,
+        table_shared_id,
+    )
 
-    if metadata.table_uuid == dst_uuid:
-        logging.error("Table has already had uuid {}", metadata.table_uuid)
-        sys.exit(1)
+    if dst_uuid != table_shared_id:
+        logging.warning(
+            f"dst_uuid={dst_uuid} is different from table_shared_id={table_shared_id}."
+        )
 
 
 def change_table_uuid(
     ctx: Context,
     database: str,
     table: str,
-    new_uuid: str,
+    engine: str,
+    new_local_uuid: str,
     old_table_uuid: str,
     table_local_metadata_path: str,
     attached: bool,
 ) -> None:
+    logging.debug("call change_table_uuid with table={}", table)
     if match_str_ch_version(get_version(ctx), "25.1"):
-        table_local_metadata_path = CLICKHOUSE_PATH + "/" + table_local_metadata_path
+        table_local_metadata_path = f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
 
-    _verify_possible_change_uuid(ctx, table_local_metadata_path, new_uuid)
-    if attached:
+    if is_table(engine=engine):
+        logging.debug("{}.{} is a table.", database, table)
+        _verify_possible_change_uuid(ctx, table_local_metadata_path, new_local_uuid)
+        if old_table_uuid == new_local_uuid:
+            logging.info(
+                "Table {}.{} has uuid {}. Don't need to update current table uuid {}. Finish changing",
+                database,
+                table,
+                old_table_uuid,
+                new_local_uuid,
+            )
+            return
+
+        logging.info(
+            "Table's {}.{} uuid {} will be updated to uuid {}",
+            database,
+            table,
+            old_table_uuid,
+            new_local_uuid,
+        )
+    else:
+        logging.info("{}.{} is not a table, skip checking.", database, table)
+
+    if attached and not is_view(engine=engine):
+        # we could not just detach view - problem with cleanupDetachedTables
         detach_table(ctx, database_name=database, table_name=table, permanently=False)
-    update_uuid_table_metadata_file(table_local_metadata_path, new_uuid)
+    update_uuid_table_metadata_file(table_local_metadata_path, new_local_uuid)
+
+    if not is_table(engine):
+        logging.info(
+            "Table {}.{} has engine={}. Don't need move in local store.",
+            database,
+            table,
+            engine,
+        )
+        return
 
     try:
-        move_table_local_store(old_table_uuid, new_uuid)
-    except Exception as ex:
+        move_table_local_store(old_table_uuid, new_local_uuid)
+    except Exception:
         logging.error(
-            "Failed move_table_local_store. old uuid={}, new_uuid={}. Need restore uuid in metadata for table={}. error={}",
+            "Failed move_table_local_store. old uuid={}, new_local_uuid={}. Need restore uuid in metadata for table={}.",
             old_table_uuid,
-            new_uuid,
+            new_local_uuid,
             f"{database}.{table}",
-            ex,
         )
-        sys.exit(1)
+        raise
+
+    logging.info(
+        "Local table store {}.{} was moved from {} to {}",
+        database,
+        table,
+        old_table_uuid,
+        new_local_uuid,
+    )
+
+
+def read_local_table_metadata(ctx: Context, table_local_metadata_path: str) -> str:
+    if match_str_ch_version(get_version(ctx), "25.1"):
+        table_local_metadata_path = f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
+
+    with open(table_local_metadata_path, "r", encoding="utf-8") as f:
+        return f.read()

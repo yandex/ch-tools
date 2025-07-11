@@ -11,6 +11,11 @@ from kazoo.exceptions import NoNodeError, NotEmptyError
 from ch_tools.chadmin.internal.utils import chunked, execute_query, replace_macros
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
+from ch_tools.common.clickhouse.config.clickhouse import ClickhouseConfig
+
+
+def has_zk() -> bool:
+    return not ClickhouseConfig.load().zookeeper.is_empty()
 
 
 def get_zk_node(ctx, path, binary=False):
@@ -69,7 +74,11 @@ def create_zk_nodes(ctx, paths, value=None, make_parents=False):
 
     with zk_client(ctx) as zk:
         for path in paths:
-            zk.create(format_path(ctx, path), value, makepath=make_parents)
+            zk.create(
+                format_path(ctx, path),
+                value,
+                makepath=make_parents,
+            )
 
 
 def update_zk_nodes(ctx, paths, value):

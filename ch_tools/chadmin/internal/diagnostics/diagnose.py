@@ -179,8 +179,28 @@ def diagnose(ctx: Context, output_format: str, normalize_queries: bool) -> None:
                 format_=OutputFormat.Vertical,
                 section="Queries",
             ),
+            add_query(
+                diagnostics,
+                "system.errors",
+                client=client,
+                query=query.SELECT_SYSTEM_ERRORS,
+                format_=OutputFormat.Vertical,
+            ),
         ]
     )
+
+    if "moves" in system_tables:
+        tasks.extend(
+            [
+                add_query(
+                    diagnostics,
+                    "Moves in progress",
+                    client=client,
+                    query=query.SELECT_MOVES,
+                    format_=OutputFormat.Vertical,
+                ),
+            ]
+        )
 
     if "query_log" in system_tables:
         tasks.extend(

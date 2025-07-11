@@ -1,23 +1,30 @@
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 import click
 from click import Context
 from humanfriendly import format_size
 
-from ch_tools.chadmin.internal.object_storage import (
-    ObjListItem,
-    cleanup_s3_object_storage,
-)
+from ch_tools.chadmin.internal.object_storage import cleanup_s3_object_storage
+from ch_tools.chadmin.internal.object_storage.obj_list_item import ObjListItem
 from ch_tools.chadmin.internal.object_storage.s3_iterator import (
     s3_object_storage_iterator,
 )
 from ch_tools.chadmin.internal.system import match_ch_version
-from ch_tools.chadmin.internal.utils import chunked, execute_query
+from ch_tools.chadmin.internal.utils import (
+    chunked,
+    execute_query,
+    execute_query_on_shard,
+)
+from ch_tools.chadmin.internal.zookeeper import has_zk
 from ch_tools.common import logging
-from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
+from ch_tools.common.clickhouse.client.clickhouse_client import (
+    ClickhouseClient,
+    clickhouse_client,
+)
 from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
@@ -44,6 +51,19 @@ class CleanScope(str, Enum):
     CLUSTER = "cluster"
 
 
+def _create_object_listing_table(
+    ctx: Context,
+    table_name: str,
+    replica_zk_prefix: str,
+    storage_policy: str,
+    recreate_table: bool,
+) -> None:
+    if not recreate_table:
+        _drop_table_on_shard(ctx, table_name)
+
+    _create_table_on_shard(ctx, table_name, replica_zk_prefix, storage_policy)
+
+
 def clean(
     ctx: Context,
     object_name_prefix: str,
@@ -54,6 +74,7 @@ def clean(
     dry_run: bool,
     keep_paths: bool,
     use_saved_list: bool,
+    verify_paths_regex: Optional[str] = None,
 ) -> Tuple[int, int]:
     """
     Clean orphaned S3 objects.
@@ -68,15 +89,31 @@ def clean(
     config = ctx.obj["config"]["object_storage"]["clean"]
 
     listing_table = f"{config['listing_table_database']}.{config['listing_table_prefix']}{disk_conf.name}"
-    # Create listing table for storing paths from object storage
-    try:
-        if not use_saved_list:
-            _drop_table(ctx, listing_table)
+    listing_table_zk_path_prefix = config["listing_table_zk_path_prefix"]
+    orphaned_objects_table = f"{config['orphaned_objects_table_database']}.{config['orphaned_objects_table_prefix']}{disk_conf.name}"
+    orphaned_objects_table_zk_path_prefix = config[
+        "orphaned_objects_table_zk_path_prefix"
+    ]
+    storage_policy = config["storage_policy"]
 
-        execute_query(
+    # Create listing table for storing paths from object storage.
+    # Create orphaned objects for accumulating the result.
+    try:
+        _create_object_listing_table(
             ctx,
-            f"CREATE TABLE IF NOT EXISTS {listing_table} (obj_path String, obj_size UInt64) ENGINE MergeTree ORDER BY obj_path SETTINGS storage_policy = '{config['storage_policy']}'",
+            listing_table,
+            listing_table_zk_path_prefix,
+            storage_policy,
+            use_saved_list,
         )
+        _create_object_listing_table(
+            ctx,
+            orphaned_objects_table,
+            orphaned_objects_table_zk_path_prefix,
+            storage_policy,
+            False,
+        )
+
         deleted, total_size = _clean_object_storage(
             ctx,
             object_name_prefix,
@@ -86,13 +123,145 @@ def clean(
             cluster_name,
             dry_run,
             listing_table,
+            orphaned_objects_table,
             use_saved_list,
+            verify_paths_regex,
         )
     finally:
         if not keep_paths:
-            _drop_table(ctx, listing_table)
+            _drop_table_on_shard(ctx, listing_table)
+            _drop_table_on_shard(ctx, orphaned_objects_table)
 
     return deleted, total_size
+
+
+def _object_list_generator(
+    ch_client: ClickhouseClient,
+    table_name: str,
+    query_settings: Dict[str, Any],
+    chunk_size: int = 10 * 1024 * 1024,
+) -> Callable:
+
+    def obj_list_iterator() -> Iterator[ObjListItem]:
+        with ch_client.query(
+            f"SELECT obj_path, obj_size FROM {table_name}",
+            format_="TabSeparated",
+            settings=query_settings,
+            stream=True,
+        ) as resp:
+            for line in resp.iter_lines(chunk_size=chunk_size):
+                yield ObjListItem.from_tab_separated(line.decode().strip())
+
+    return obj_list_iterator
+
+
+def _sanity_check_before_cleanup(
+    ctx: Context,
+    orphaned_objects_iterator: Callable,
+    ch_client: ClickhouseClient,
+    listing_table: str,
+    remote_data_paths_table: str,
+    verify_paths_regex: Optional[str],
+    clean_scope: CleanScope,
+) -> None:
+
+    size_error_rate_threshold = ctx.obj["config"]["object_storage"]["clean"][
+        "verify_size_error_rate_threshold_bytes"
+    ]
+    if verify_paths_regex:
+        paths_regex = verify_paths_regex
+    else:
+        paths_regex = ctx.obj["config"]["object_storage"]["clean"][
+            "verify_paths_regex"
+        ][clean_scope]
+
+    remote_data_paths_query_settings = (
+        {"traverse_shadow_remote_data_paths": 1}
+        if match_ch_version(ctx, min_version="24.3")
+        else {}
+    )
+
+    def perform_check_paths():
+        ### Compare path from system.remote_data_path and from list to delete. They must match the regex.
+        ### Perform such check to prevent silly mistakes if the paths are completely different.
+        ch_objects_cnt = int(
+            ch_client.query_json_data_first_row(
+                query=Query(
+                    f"SELECT count() FROM {remote_data_paths_table}",
+                    sensitive_args={"user_password": ch_client.password or ""},
+                ),
+                settings=remote_data_paths_query_settings,
+                compact=True,
+            )[0]
+        )
+        ## Nothing to check
+        if ch_objects_cnt == 0:
+            return
+        path_form_ch = ch_client.query_json_data_first_row(
+            query=Query(
+                f"SELECT remote_path FROM {remote_data_paths_table} LIMIT 1",
+                sensitive_args={"user_password": ch_client.password or ""},
+            ),
+            settings=remote_data_paths_query_settings,
+            compact=True,
+        )[0]
+
+        if not re.match(paths_regex, path_form_ch):
+            raise RuntimeError(
+                "Sanity check not passed, because remote_path({}) doesn't matches the regex({}).".format(
+                    path_form_ch, paths_regex
+                )
+            )
+
+        for orphaned_object in orphaned_objects_iterator():
+            if not re.match(paths_regex, orphaned_object.path):
+                raise RuntimeError(
+                    "Sanity check not passed, because orphaned object({}) doesn't matches the regex({}).".format(
+                        orphaned_object.path, paths_regex
+                    )
+                )
+
+    def perform_check_size():
+        ### Total size of objects after cleanup must be very close to sum(bytes) FROM system.remote_data_paths
+        real_size_in_bucket = int(
+            ch_client.query_json_data_first_row(
+                query=f"SELECT sum(obj_size) FROM {listing_table}",
+                compact=True,
+            )[0]
+        )
+
+        ch_size_in_bucket = int(
+            ch_client.query_json_data_first_row(
+                query=Query(
+                    f"SELECT sum(size) FROM (SELECT DISTINCT remote_path, size FROM {remote_data_paths_table})",
+                    sensitive_args={"user_password": ch_client.password or ""},
+                ),
+                settings=remote_data_paths_query_settings,
+                compact=True,
+            )[0]
+        )
+
+        size_to_delete = 0
+        for orphaned_object in orphaned_objects_iterator():
+            size_to_delete += orphaned_object.size
+
+        if (
+            abs(real_size_in_bucket - size_to_delete - ch_size_in_bucket)
+            > size_error_rate_threshold
+        ):
+            raise RuntimeError(
+                "Sanity check not passed, because after delete size in the bucket will be less than total size of objects known by the clickhouse. Size in CH {} , Total size in bucket {}, would delete {}".format(
+                    format_size(ch_size_in_bucket),
+                    format_size(real_size_in_bucket),
+                    format_size(size_to_delete),
+                )
+            )
+
+    perform_check_paths()
+
+    ## In ver < 23.3 no column size in the system.remote_data_paths
+    if match_ch_version(ctx, min_version="23.3"):
+        perform_check_size()
 
 
 def _clean_object_storage(
@@ -104,7 +273,9 @@ def _clean_object_storage(
     cluster_name: str,
     dry_run: bool,
     listing_table: str,
+    orphaned_objects_table: str,
     use_saved_list: bool,
+    verify_paths_regex: Optional[str] = None,
 ) -> Tuple[int, int]:
     """
     Delete orphaned objects from object storage.
@@ -151,10 +322,11 @@ def _clean_object_storage(
 
     antijoin_query = Query(
         f"""
-        SELECT obj_path, obj_size FROM {listing_table} AS object_storage
-          LEFT ANTI JOIN {remote_data_paths_table} AS object_table
-          ON object_table.remote_path = object_storage.obj_path
-            AND object_table.disk_name = '{disk_conf.name}'
+        INSERT INTO {orphaned_objects_table}
+            SELECT obj_path, obj_size FROM {listing_table} AS object_storage
+            LEFT ANTI JOIN {remote_data_paths_table} AS object_table
+            ON object_table.remote_path = object_storage.obj_path
+                    AND object_table.disk_name = '{disk_conf.name}'
         {settings}
     """,
         sensitive_args={"user_password": user_password},
@@ -169,24 +341,39 @@ def _clean_object_storage(
     deleted = 0
     total_size = 0
     timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
-    with ch_client.query(
+    query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
+    execute_query(
+        ctx,
         antijoin_query,
-        timeout=timeout,
-        settings={"receive_timeout": timeout, "max_execution_time": 0},
-        stream=True,
-        format_="TabSeparated",
-    ) as resp:
-        # Setting chunk_size to 10MB, but usually incoming chunks are not larger than 1MB
-        for lines in chunked(
-            resp.iter_lines(chunk_size=10 * 1024 * 1024), KEYS_BATCH_SIZE
-        ):
-            keys = (
-                ObjListItem.from_tab_separated(line.decode().strip()) for line in lines
-            )
-            deleted, total_size = cleanup_s3_object_storage(disk_conf, keys, dry_run)
-            logging.info(
-                f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
-            )
+        settings=query_settings,
+    )
+    orphaned_objects_iterator = _object_list_generator(
+        ch_client,
+        orphaned_objects_table,
+        query_settings,
+    )
+    if ctx.obj["config"]["object_storage"]["clean"]["verify"]:
+        _sanity_check_before_cleanup(
+            ctx,
+            orphaned_objects_iterator,
+            ch_client,
+            listing_table,
+            remote_data_paths_table,
+            verify_paths_regex,
+            clean_scope,
+        )
+
+    deleted, total_size = 0, 0
+    for objects in chunked(orphaned_objects_iterator(), KEYS_BATCH_SIZE):
+        chunk_deleted, chunk_size = cleanup_s3_object_storage(
+            disk_conf, iter(objects), dry_run
+        )
+        deleted += chunk_deleted
+        total_size += chunk_size
+
+    logging.info(
+        f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
+    )
 
     return deleted, total_size
 
@@ -240,8 +427,24 @@ def _insert_listing_batch(
     )
 
 
-def _drop_table(ctx: Context, table_name: str) -> None:
-    execute_query(ctx, f"DROP TABLE IF EXISTS {table_name} SYNC", format_=None)
+def _drop_table_on_shard(ctx: Context, table_name: str) -> None:
+    execute_query_on_shard(ctx, f"DROP TABLE IF EXISTS {table_name} SYNC", format_=None)
+
+
+def _create_table_on_shard(
+    ctx: Context, table_name: str, table_zk_path_prefix: str, storage_policy: str
+) -> None:
+    engine = (
+        f"ReplicatedMergeTree('{table_zk_path_prefix}/{{shard}}/{table_name}', '{{replica}}')"
+        if has_zk()
+        else "MergeTree"
+    )
+
+    execute_query_on_shard(
+        ctx,
+        f"CREATE TABLE IF NOT EXISTS {table_name} (obj_path String, obj_size UInt64) ENGINE {engine} ORDER BY obj_path SETTINGS storage_policy = '{storage_policy}'",
+        format_=None,
+    )
 
 
 def _get_default_object_name_prefix(

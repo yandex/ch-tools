@@ -42,10 +42,10 @@ DEFAULT_CLUSTER_NAME = "{cluster}"
 def object_storage_group(ctx: Context, disk_name: str) -> None:
     """Commands to manage S3 objects and their metadata."""
     ch_config = get_clickhouse_config(ctx)
-    ctx.obj[
-        "disk_configuration"
-    ] = ch_config.storage_configuration.s3_disk_configuration(
-        disk_name, ctx.obj["config"]["object_storage"]["bucket_name_prefix"]
+    ctx.obj["disk_configuration"] = (
+        ch_config.storage_configuration.s3_disk_configuration(
+            disk_name, ctx.obj["config"]["object_storage"]["bucket_name_prefix"]
+        )
     )
 
 
@@ -125,6 +125,14 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     default="",
     help=("Zookeeper node path for storage total size of orphaned objects."),
 )
+@option(
+    "--verify-paths-regex",
+    "verify_paths_regex",
+    default=None,
+    help=(
+        "Regex for verifying that paths for delete and in system.remote_data_paths are ."
+    ),
+)
 @pass_context
 def clean_command(
     ctx: Context,
@@ -138,6 +146,7 @@ def clean_command(
     use_saved_list: bool,
     store_state_local: bool,
     store_state_zk_path: str,
+    verify_paths_regex: Optional[str],
 ) -> None:
     """
     Clean orphaned S3 objects.
@@ -161,10 +170,8 @@ def clean_command(
             dry_run,
             keep_paths,
             use_saved_list,
+            verify_paths_regex,
         )
-    except Exception as e:
-        error_msg = str(e)
-        raise
     finally:
         state = OrphanedObjectsState(total_size, error_msg)
 

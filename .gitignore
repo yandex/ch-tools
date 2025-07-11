@@ -2,7 +2,6 @@
 .idea
 .install-deps
 .mypy_cache/
-.python-version
 .pytype/
 .ruff_cache/
 .session_conf.sav
@@ -14,4 +13,4 @@ out/
 tests/reports/
 tests/staging/
 .venv/
-version.txt
+ch_tools/version.txt

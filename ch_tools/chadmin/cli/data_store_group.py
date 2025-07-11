@@ -184,7 +184,7 @@ def remove_data(path: str) -> None:
         errors = "\n".join(list(args))
         logging.error("ERROR: {}", errors)
 
-    shutil.rmtree(path=path, onerror=onerror)
+    shutil.rmtree(path=path, onerror=onerror)  # pylint: disable=deprecated-argument
 
 
 @data_store_group.command("cleanup-data-dir")

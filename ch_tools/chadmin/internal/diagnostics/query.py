@@ -225,6 +225,22 @@ ORDER BY create_time DESC
 """
 )
 
+SELECT_MOVES = str.strip(
+    # language=clickhouse
+    r"""
+SELECT
+    database,
+    table,
+    elapsed,
+    target_disk_name,
+    part_name,
+    part_size,
+    thread_id
+FROM system.moves
+ORDER BY (database, table, part_name) DESC
+"""
+)
+
 SELECT_RECENT_DATA_PARTS = str.strip(
     # language=clickhouse
     r"""
@@ -483,5 +499,15 @@ SELECT
     version
 FROM system.crash_log
 ORDER BY event_time DESC
+"""
+)
+
+SELECT_SYSTEM_ERRORS = str.strip(
+    # language=clickhouse
+    r"""
+SELECT *
+FROM system.errors
+WHERE last_error_time >= now() - INTERVAL 1 DAY
+ORDER BY last_error_time DESC
 """
 )
