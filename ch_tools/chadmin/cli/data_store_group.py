@@ -2,9 +2,10 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import List, NamedTuple, Optional, Set, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Set
 
 import boto3
+from boto3 import client as Boto3Client
 from click import Context, group, option, pass_context
 from cloup.constraints import AcceptAtMost, constraint
 
@@ -40,7 +41,7 @@ class TablePartition(NamedTuple):
 
 
 @group("data-store", cls=Chadmin)
-def data_store_group():
+def data_store_group() -> None:
     """
     Commands for manipulating data stored by ClickHouse.
     """
@@ -75,9 +76,13 @@ def data_store_group():
     help="Flag to only orphaned metadata.",
 )
 def clean_orphaned_tables_command(
-    ctx, column, remove, store_path, show_only_orphaned_metadata
-):
-    results = []
+    ctx: Context,
+    column: Optional[str],
+    remove: bool,
+    store_path: str,
+    show_only_orphaned_metadata: bool,
+) -> None:
+    results: List[Dict[str, Any]] = []
     for prefix in os.listdir(store_path):
         path = store_path + "/" + prefix
         try:
@@ -98,12 +103,12 @@ def clean_orphaned_tables_command(
 def process_path(
     path: str,
     prefix: str,
-    column: str,
+    column: Optional[str],
     remove: bool,
-) -> dict:
+) -> Dict[str, Any]:
     logging.info("Processing path {} with prefix {}:", path, prefix)
 
-    result = {
+    result: Dict[str, Any] = {
         "path": path,
         "status": "unknown",
         "size": 0,
@@ -180,7 +185,7 @@ def du(path: str) -> str:
 
 
 def remove_data(path: str) -> None:
-    def onerror(*args):
+    def onerror(*args: Any) -> None:
         errors = "\n".join(list(args))
         logging.error("ERROR: {}", errors)
 
@@ -224,9 +229,15 @@ def remove_data(path: str) -> None:
     help="Flag to remove only local metadata.",
 )
 def cleanup_data_dir(
-    ctx, remove, disk, keep_going, max_sql_objects, max_workers, remove_only_metadata
-):
-    lost_data: List[dict] = []
+    ctx: Context,
+    remove: bool,
+    disk: str,
+    keep_going: bool,
+    max_sql_objects: int,
+    max_workers: int,
+    remove_only_metadata: bool,
+) -> None:
+    lost_data: List[Dict[str, Any]] = []
     path_to_disk = CLICKHOUSE_PATH + (f"/disks/{disk}" if disk != "default" else "")
     data_path = path_to_disk + "/data"
 
@@ -267,7 +278,7 @@ def cleanup_data_dir(
     print_response(ctx, lost_data, default_format="table")
 
 
-def remove_orphaned_sql_object_metadata(data):
+def remove_orphaned_sql_object_metadata(data: Dict[str, Any]) -> None:
     path = data["path"]
 
     retcode, stderr = remove_from_disk(path)
@@ -279,8 +290,12 @@ def remove_orphaned_sql_object_metadata(data):
 
 
 def remove_orphaned_sql_object_full(
-    data, disk, path_to_disk, ch_version, disks_config_path
-):
+    data: Dict[str, Any],
+    disk: str,
+    path_to_disk: str,
+    ch_version: str,
+    disks_config_path: str,
+) -> None:
 
     path = data["path"]
 
@@ -304,7 +319,7 @@ def remove_orphaned_sql_object_full(
 def collect_orphaned_sql_objects_recursive(
     metadata_path: str,
     data_path: str,
-    lost_data: list,
+    lost_data: List[Dict[str, Any]],
     depth: int,
     max_depth: int,
     max_sql_objects: int,
@@ -361,7 +376,9 @@ def collect_orphaned_sql_objects_recursive(
 )
 @constraint(AcceptAtMost(1), ["detach", "reattach"])
 @pass_context
-def detect_broken_partitions(ctx, root_path, reattach, detach):
+def detect_broken_partitions(
+    ctx: Context, root_path: str, reattach: bool, detach: bool
+) -> None:
     ch_config = get_clickhouse_config(ctx)
 
     disk_conf: S3DiskConfiguration = (
@@ -375,7 +392,7 @@ def detect_broken_partitions(ctx, root_path, reattach, detach):
         aws_access_key_id=disk_conf.access_key_id,
         aws_secret_access_key=disk_conf.secret_access_key,
     )
-    repaired_partitions = set()
+    repaired_partitions: Set[TablePartition] = set()
 
     for path, _, files in os.walk(root_path):
         objects: List[S3ObjectLocalInfo] = []
@@ -445,7 +462,7 @@ def try_repair_partition(
         attach_partition(ctx, table_partition)
 
 
-def check_key_in_object_storage(s3_client: boto3.client, bucket: str, key: str) -> bool:
+def check_key_in_object_storage(s3_client: Boto3Client, bucket: str, key: str) -> bool:
     """
     Check that object exists in s3 bucket with the specified key.
     """
@@ -487,7 +504,7 @@ def print_partitions(ctx: Context, repaired_partitions: Set[TablePartition]) -> 
     """
 
     # It's not really necessary, just to make output stable for tests.
-    partitions_list: List[Tuple[str, str]] = list(repaired_partitions)
+    partitions_list: List[TablePartition] = list(repaired_partitions)
     partitions_list.sort()
 
     result = [

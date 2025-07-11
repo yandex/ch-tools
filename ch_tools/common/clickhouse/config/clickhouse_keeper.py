@@ -1,4 +1,5 @@
 import os
+from typing import Any, Optional, Tuple
 
 from ...utils import first_value
 from .path import (
@@ -13,20 +14,20 @@ class ClickhouseKeeperConfig:
     ClickHouse keeper server config (config.xml).
     """
 
-    def __init__(self, config, config_path):
+    def __init__(self, config: Any, config_path: str) -> None:
         self._config = config
         self._config_path = config_path
 
     @property
-    def _clickhouse(self):
+    def _clickhouse(self) -> Any:
         return first_value(self._config)
 
     @property
-    def _keeper_server(self):
+    def _keeper_server(self) -> Any:
         return self._clickhouse.get("keeper_server", {})
 
     @property
-    def port_pair(self):
+    def port_pair(self) -> Tuple[int, bool]:
         """
         :returns tuple (ClickHouse port, port is secure)
           If both <tcp_port> and <tcp_port_secure> are present, a secure port
@@ -39,7 +40,7 @@ class ClickhouseKeeperConfig:
         return int(self._keeper_server.get("tcp_port", 0)), False
 
     @property
-    def tls_cert_path(self):
+    def tls_cert_path(self) -> Optional[str]:
         return (
             self._clickhouse.get("openSSL", {})
             .get("server", {})
@@ -47,28 +48,28 @@ class ClickhouseKeeperConfig:
         )
 
     @property
-    def snapshots_dir(self):
+    def snapshots_dir(self) -> Optional[str]:
         return self._keeper_server.get("snapshot_storage_path")
 
     @property
-    def storage_dir(self):
+    def storage_dir(self) -> Optional[str]:
         return self._keeper_server.get("storage_path")
 
     @property
-    def separated(self):
+    def separated(self) -> bool:
         """
         Return True if ClickHouse Keeper is configured to run in separate process.
         """
         return self._config_path == CLICKHOUSE_KEEPER_CONFIG_PATH
 
-    def dump(self, mask_secrets=True):
+    def dump(self, mask_secrets: bool = True) -> str:
         return dump_config(self._config, mask_secrets=mask_secrets)
 
-    def dump_xml(self, mask_secrets=True):
+    def dump_xml(self, mask_secrets: bool = True) -> str:
         return dump_config(self._config, mask_secrets=mask_secrets, xml_format=True)
 
     @staticmethod
-    def load():
+    def load() -> "ClickhouseKeeperConfig":
         if os.path.exists(CLICKHOUSE_KEEPER_CONFIG_PATH):
             config_path = CLICKHOUSE_KEEPER_CONFIG_PATH
         else:

@@ -1,6 +1,7 @@
 import datetime
+from typing import Any, Optional
 
-from click import Choice, argument, group, option, pass_context
+from click import Choice, Context, argument, group, option, pass_context
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.utils import execute_query
@@ -9,7 +10,7 @@ from ch_tools.common.clickhouse.config import get_cluster_name
 
 
 @group("query-log", cls=Chadmin)
-def query_log_group():
+def query_log_group() -> None:
     """
     Commands for retrieving information from system.query_log.
     """
@@ -26,7 +27,7 @@ def query_log_group():
     help="Search for log record on all hosts of the cluster.",
 )
 @pass_context
-def get_query_command(ctx, **kwargs):
+def get_query_command(ctx: Context, **kwargs: Any) -> None:
     result = f"{get_queries(ctx, **kwargs, verbose=True)}\nProfileEvents:{get_query_metrics(ctx, **kwargs)}\nSettings:{get_query_settings(ctx, **kwargs)}"
     logging.info(result)
 
@@ -111,8 +112,15 @@ def get_query_command(ctx, **kwargs):
 )
 @pass_context
 def list_queries_command(
-    ctx, date, min_date, max_date, min_time, max_time, time, **kwargs
-):
+    ctx: Context,
+    date: Optional[str],
+    min_date: Optional[str],
+    max_date: Optional[str],
+    min_time: Optional[str],
+    max_time: Optional[str],
+    time: Optional[str],
+    **kwargs: Any,
+) -> None:
     if not any((date, min_date, max_date, time, min_time, max_time)):
         date = datetime.date.today().isoformat()
 
@@ -146,19 +154,19 @@ def list_queries_command(
 @option("--failed", is_flag=True)
 @pass_context
 def get_statistics_command(
-    ctx,
-    user,
-    exclude_user,
-    query_pattern,
-    error,
-    date,
-    min_date,
-    max_date,
-    min_time,
-    max_time,
-    time,
-    failed,
-):
+    ctx: Context,
+    user: Optional[str],
+    exclude_user: Optional[str],
+    query_pattern: Optional[str],
+    error: Optional[str],
+    date: Optional[str],
+    min_date: Optional[str],
+    max_date: Optional[str],
+    min_time: Optional[str],
+    max_time: Optional[str],
+    time: Optional[str],
+    failed: bool,
+) -> None:
     min_date = min_date or date
     max_date = max_date or date
     min_time = min_time or time
@@ -242,7 +250,7 @@ def get_statistics_command(
     help="Search for log record on all hosts of the cluster.",
 )
 @pass_context
-def get_query_settings_command(ctx, query_id, on_cluster):
+def get_query_settings_command(ctx: Context, query_id: str, on_cluster: bool) -> None:
     cluster = get_cluster_name(ctx) if on_cluster else None
     query_str = """
         SELECT
@@ -270,7 +278,7 @@ def get_query_settings_command(ctx, query_id, on_cluster):
     help="Search for log record on all hosts of the cluster.",
 )
 @pass_context
-def get_query_metrics_command(ctx, query_id, on_cluster):
+def get_query_metrics_command(ctx: Context, query_id: str, on_cluster: bool) -> None:
     cluster = get_cluster_name(ctx) if on_cluster else None
     query_str = """
         SELECT
@@ -290,26 +298,26 @@ def get_query_metrics_command(ctx, query_id, on_cluster):
 
 
 def get_queries(
-    ctx,
-    user=None,
-    exclude_user=None,
-    query_id=None,
-    query_pattern=None,
-    exclude_query_pattern=None,
-    error_pattern=None,
-    exclude_error_pattern=None,
-    min_date=None,
-    max_date=None,
-    min_time=None,
-    max_time=None,
-    client=None,
-    failed=None,
-    is_initial_query=None,
-    on_cluster=False,
-    limit=10,
-    order_by="query_start_time",
-    verbose=False,
-):
+    ctx: Context,
+    user: Optional[str] = None,
+    exclude_user: Optional[str] = None,
+    query_id: Optional[str] = None,
+    query_pattern: Optional[str] = None,
+    exclude_query_pattern: Optional[str] = None,
+    error_pattern: Optional[str] = None,
+    exclude_error_pattern: Optional[str] = None,
+    min_date: Optional[str] = None,
+    max_date: Optional[str] = None,
+    min_time: Optional[str] = None,
+    max_time: Optional[str] = None,
+    client: Optional[str] = None,
+    failed: Optional[bool] = None,
+    is_initial_query: Optional[bool] = None,
+    on_cluster: bool = False,
+    limit: int = 10,
+    order_by: str = "query_start_time",
+    verbose: bool = False,
+) -> Any:
     cluster = get_cluster_name(ctx) if on_cluster else None
     query_str = """
         SELECT
@@ -428,7 +436,11 @@ def get_queries(
     )
 
 
-def get_query_settings(ctx, query_id, on_cluster=False):
+def get_query_settings(
+    ctx: Context,
+    query_id: str,
+    on_cluster: bool = False,
+) -> Any:
     cluster = get_cluster_name(ctx) if on_cluster else None
     query_str = """
         SELECT
@@ -446,7 +458,11 @@ def get_query_settings(ctx, query_id, on_cluster=False):
     return execute_query(ctx, query_str, query_id=query_id, cluster=cluster)
 
 
-def get_query_metrics(ctx, query_id, on_cluster=False):
+def get_query_metrics(
+    ctx: Context,
+    query_id: str,
+    on_cluster: bool = False,
+) -> Any:
     cluster = get_cluster_name(ctx) if on_cluster else None
     query_str = """
         SELECT

@@ -1,6 +1,7 @@
 import json
+from typing import Any, Dict, List, Optional
 
-from click import ClickException
+from click import ClickException, Context
 
 from ch_tools.chadmin.internal.part import attach_part
 from ch_tools.chadmin.internal.utils import execute_query
@@ -11,7 +12,9 @@ from ch_tools.common.clickhouse.client.error import ClickhouseError
 RESTORE_STATE_FILE_PATH = "/tmp/restore_replica_parts.json"
 
 
-def get_table_replica(ctx, database_name, table_name):
+def get_table_replica(
+    ctx: Context, database_name: str, table_name: str
+) -> Dict[str, Any]:
     """
     Get replica of replicated table.
     """
@@ -31,19 +34,19 @@ def get_table_replica(ctx, database_name, table_name):
 
 
 def list_table_replicas(
-    ctx,
+    ctx: Context,
     *,
-    database_name=None,
-    database_pattern=None,
-    exclude_database_pattern=None,
-    table_name=None,
-    table_pattern=None,
-    exclude_table_pattern=None,
-    zookeeper_path=None,
-    is_readonly=None,
-    verbose=False,
-    limit=None,
-):
+    database_name: Optional[str] = None,
+    database_pattern: Optional[str] = None,
+    exclude_database_pattern: Optional[str] = None,
+    table_name: Optional[str] = None,
+    table_pattern: Optional[str] = None,
+    exclude_table_pattern: Optional[str] = None,
+    zookeeper_path: Optional[str] = None,
+    is_readonly: Optional[bool] = None,
+    verbose: bool = False,
+    limit: Optional[int] = None,
+) -> List[Dict[str, Any]]:
     """
     List replicas of replicated tables.
     """
@@ -124,13 +127,13 @@ def list_table_replicas(
 
 
 def restart_table_replica(
-    ctx,
-    database_name,
-    table_name,
+    ctx: Context,
+    database_name: str,
+    table_name: str,
     *,
-    cluster=None,
-    dry_run=False,
-):
+    cluster: Optional[str] = None,
+    dry_run: bool = False,
+) -> None:
     """
     Perform "SYSTEM RESTART REPLICA" for the specified replicated table.
     """
@@ -142,13 +145,13 @@ def restart_table_replica(
 
 
 def restore_table_replica(
-    ctx,
-    database_name,
-    table_name,
+    ctx: Context,
+    database_name: str,
+    table_name: str,
     *,
-    cluster=None,
-    dry_run=False,
-):
+    cluster: Optional[str] = None,
+    dry_run: bool = False,
+) -> None:
     """
     Perform "SYSTEM RESTORE REPLICA" for the specified replicated table.
     """
@@ -159,7 +162,12 @@ def restore_table_replica(
     execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
 
 
-def system_table_drop_replica_by_zk_path(ctx, replica, table_zk_path, dry_run=False):
+def system_table_drop_replica_by_zk_path(
+    ctx: Context,
+    replica: str,
+    table_zk_path: str,
+    dry_run: bool = False,
+) -> None:
     """
     Perform "SYSTEM DROP REPLICA <replica> ZKPATH <table_zk_paht>" query.
     """
@@ -169,7 +177,13 @@ def system_table_drop_replica_by_zk_path(ctx, replica, table_zk_path, dry_run=Fa
     execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
 
 
-def system_table_drop_replica(ctx, replica, database, table, dry_run=False):
+def system_table_drop_replica(
+    ctx: Context,
+    replica: str,
+    database: str,
+    table: str,
+    dry_run: bool = False,
+) -> None:
     """
     Perform "SYSTEM DROP REPLICA <replica> FROM TABLE <database.table>" query.
     """
@@ -179,10 +193,10 @@ def system_table_drop_replica(ctx, replica, database, table, dry_run=False):
 
 
 def list_active_parts(
-    ctx,
-    database_name,
-    table_name,
-):
+    ctx: Context,
+    database_name: str,
+    table_name: str,
+) -> List[Dict[str, str]]:
     """
     List active parts of a table.
     """
@@ -196,7 +210,7 @@ def list_active_parts(
     )["data"]
 
 
-def no_replicas_in_zookeeper(ctx, database_name, table_name):
+def no_replicas_in_zookeeper(ctx: Context, database_name: str, table_name: str) -> bool:
     replicas_path = (
         get_table_replica(ctx, database_name, table_name)["zookeeper_path"]
         + "/replicas"
@@ -204,7 +218,7 @@ def no_replicas_in_zookeeper(ctx, database_name, table_name):
     return not bool(check_zk_node(ctx, replicas_path))
 
 
-def is_first_replica(ctx, database_name, table_name):
+def is_first_replica(ctx: Context, database_name: str, table_name: str) -> bool:
     # This condition can't be checked by just looking at table's zk path
     # before restore. There is a race condition when more than 1 replica is
     # restored at the same time.
@@ -217,11 +231,17 @@ def is_first_replica(ctx, database_name, table_name):
     return czxid_replicas == czxid_current_replica
 
 
-def table_is_readonly(ctx, database_name, table_name):
+def table_is_readonly(ctx: Context, database_name: str, table_name: str) -> bool:
     return bool(get_table_replica(ctx, database_name, table_name)["is_readonly"])
 
 
-def restore_replica(ctx, database, table, cluster, dry_run):
+def restore_replica(
+    ctx: Context,
+    database: str,
+    table: str,
+    cluster: Optional[str],
+    dry_run: bool,
+) -> None:
     # TODO: remove attach when restore is fixed in ClickHouse
     parts_to_attach = list_active_parts(ctx, database, table)
     try:
@@ -280,7 +300,7 @@ def restore_replica(ctx, database, table, cluster, dry_run):
                         raise
 
 
-def _dump_json_with_parts(parts_to_attach):
+def _dump_json_with_parts(parts_to_attach: List[Dict[str, str]]) -> None:
     logging.error(
         """
                 Failed to restore replica with, try again when connection to ZooKeeper is restored.

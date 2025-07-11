@@ -1,5 +1,8 @@
 import json
 import re
+from typing import Any, Dict, List, Optional
+
+from click import Context
 
 from ch_tools.chadmin.internal.clickhouse_disks import remove_from_ch_disk
 from ch_tools.chadmin.internal.system import get_version
@@ -7,25 +10,25 @@ from ch_tools.chadmin.internal.utils import execute_query
 
 
 def list_parts(
-    ctx,
+    ctx: Context,
     *,
-    database=None,
-    table=None,
-    partition_id=None,
-    min_partition_id=None,
-    max_partition_id=None,
-    part_name=None,
-    disk_name=None,
-    level=None,
-    min_level=None,
-    max_level=None,
-    min_size=None,
-    max_size=None,
-    active=None,
-    order_by=None,
-    limit=None,
-    use_part_list_from_json=None,
-):
+    database: Optional[str] = None,
+    table: Optional[str] = None,
+    partition_id: Optional[str] = None,
+    min_partition_id: Optional[str] = None,
+    max_partition_id: Optional[str] = None,
+    part_name: Optional[str] = None,
+    disk_name: Optional[str] = None,
+    level: Optional[int] = None,
+    min_level: Optional[int] = None,
+    max_level: Optional[int] = None,
+    min_size: Optional[int] = None,
+    max_size: Optional[int] = None,
+    active: Optional[bool] = None,
+    order_by: Optional[str] = None,
+    limit: Optional[int] = None,
+    use_part_list_from_json: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     """
     List data parts.
     """
@@ -140,22 +143,22 @@ def list_parts(
 
 
 def list_detached_parts(
-    ctx,
+    ctx: Context,
     *,
-    database=None,
-    table=None,
-    partition_id=None,
-    min_partition_id=None,
-    max_partition_id=None,
-    part_name=None,
-    disk_name=None,
-    level=None,
-    min_level=None,
-    max_level=None,
-    reason=None,
-    limit=None,
-    use_part_list_from_json=None,
-):
+    database: Optional[str] = None,
+    table: Optional[str] = None,
+    partition_id: Optional[str] = None,
+    min_partition_id: Optional[str] = None,
+    max_partition_id: Optional[str] = None,
+    part_name: Optional[str] = None,
+    disk_name: Optional[str] = None,
+    level: Optional[int] = None,
+    min_level: Optional[int] = None,
+    max_level: Optional[int] = None,
+    reason: Optional[str] = None,
+    limit: Optional[int] = None,
+    use_part_list_from_json: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     """
     List detached data parts.
     """
@@ -234,7 +237,7 @@ def list_detached_parts(
     )["data"]
 
 
-def get_disks(ctx):
+def get_disks(ctx: Context) -> Dict[str, Dict[str, str]]:
     """
     Get disks.
     """
@@ -250,7 +253,13 @@ def get_disks(ctx):
     return {disk["name"]: disk for disk in disks}
 
 
-def attach_part(ctx, database, table, part_name, dry_run=False):
+def attach_part(
+    ctx: Context,
+    database: str,
+    table: str,
+    part_name: str,
+    dry_run: bool = False,
+) -> None:
     """
     Attach the specified data part.
     """
@@ -259,7 +268,13 @@ def attach_part(ctx, database, table, part_name, dry_run=False):
     execute_query(ctx, query, timeout=timeout, format_=None, echo=True, dry_run=dry_run)
 
 
-def detach_part(ctx, database, table, part_name, dry_run=False):
+def detach_part(
+    ctx: Context,
+    database: str,
+    table: str,
+    part_name: str,
+    dry_run: bool = False,
+) -> None:
     """
     Detach the specified data part.
     """
@@ -269,14 +284,14 @@ def detach_part(ctx, database, table, part_name, dry_run=False):
 
 
 def move_part(
-    ctx,
-    database,
-    table,
-    part_name,
-    new_disk_name,
-    sync_mode=True,
-    dry_run=False,
-):
+    ctx: Context,
+    database: str,
+    table: str,
+    part_name: str,
+    new_disk_name: str,
+    sync_mode: bool = True,
+    dry_run: bool = False,
+) -> None:
     """
     Move the specified data part.
     """
@@ -298,7 +313,13 @@ def move_part(
     )
 
 
-def drop_part(ctx, database, table, part_name, dry_run=False):
+def drop_part(
+    ctx: Context,
+    database: str,
+    table: str,
+    part_name: str,
+    dry_run: bool = False,
+) -> None:
     """
     Drop the specified data part.
     """
@@ -307,7 +328,13 @@ def drop_part(ctx, database, table, part_name, dry_run=False):
     execute_query(ctx, query, timeout=timeout, format_=None, echo=True, dry_run=dry_run)
 
 
-def drop_detached_part(ctx, database, table, part_name, dry_run=False):
+def drop_detached_part(
+    ctx: Context,
+    database: str,
+    table: str,
+    part_name: str,
+    dry_run: bool = False,
+) -> None:
     """
     Drop the specified detached data part.
     """
@@ -316,7 +343,12 @@ def drop_detached_part(ctx, database, table, part_name, dry_run=False):
     execute_query(ctx, query, timeout=timeout, format_=None, echo=True, dry_run=dry_run)
 
 
-def drop_detached_part_from_disk(ctx, disk, path, dry_run=False):
+def drop_detached_part_from_disk(
+    ctx: Context,
+    disk: Dict[str, str],
+    path: str,
+    dry_run: bool = False,
+) -> None:
     """
     Drop the specified detached data part using clickhouse-disks.
     """
@@ -328,22 +360,22 @@ def drop_detached_part_from_disk(ctx, disk, path, dry_run=False):
 
 
 def list_part_log(
-    ctx,
-    cluster=None,
-    database=None,
-    table=None,
-    partition=None,
-    part=None,
-    min_date=None,
-    max_date=None,
-    min_time=None,
-    max_time=None,
-    event_type=None,
-    exclude_event_type=None,
-    failed=None,
-    order_by=None,
-    limit=None,
-):
+    ctx: Context,
+    cluster: Optional[str] = None,
+    database: Optional[str] = None,
+    table: Optional[str] = None,
+    partition: Optional[str] = None,
+    part: Optional[str] = None,
+    min_date: Optional[str] = None,
+    max_date: Optional[str] = None,
+    min_time: Optional[str] = None,
+    max_time: Optional[str] = None,
+    event_type: Optional[str] = None,
+    exclude_event_type: Optional[str] = None,
+    failed: Optional[bool] = None,
+    order_by: Optional[str] = None,
+    limit: Optional[int] = None,
+) -> List[Dict[str, Any]]:
     order_by = {
         "size": "size_in_bytes DESC",
         "rows": "rows DESC",
@@ -449,7 +481,7 @@ def list_part_log(
     )["data"]
 
 
-def read_and_validate_parts_from_json(json_path):
+def read_and_validate_parts_from_json(json_path: str) -> Dict[str, Any]:
     base_exception_str = "Incorrect json file, there are no {corrupted_section}. Use the JSON format for ch query to get correct format."
     with open(json_path, "r", encoding="utf-8") as json_file:
         json_obj = json.load(json_file)
@@ -467,5 +499,5 @@ def read_and_validate_parts_from_json(json_path):
     return json_obj
 
 
-def part_has_suffix(part_name):
-    return re.match(r".*_try[1-9]$", part_name)
+def part_has_suffix(part_name: str) -> bool:
+    return bool(re.match(r".*_try[1-9]$", part_name))

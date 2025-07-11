@@ -3,11 +3,11 @@ import re
 import socket
 import ssl
 import time
-from typing import Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from click import command, option, pass_context
+from click import Context, command, option, pass_context
 from kazoo.client import KazooClient
-from kazoo.security import make_digest_acl
+from kazoo.security import ACL, make_digest_acl
 
 from ch_tools.common.clickhouse.config import ClickhouseKeeperConfig
 from ch_tools.common.result import CRIT, OK, WARNING, Result
@@ -24,13 +24,13 @@ context = ssl.create_default_context()
 
 @command("alive")
 @pass_context
-def alive_command(ctx):
+def alive_command(ctx: Context) -> Result:
     """Check (Zoo)Keeper service is alive"""
     try:
         keeper_port, use_ssl = get_keeper_port_pair()
         username = ctx.obj["config"]["zookeeper"]["username"]
         password = ctx.obj["config"]["zookeeper"]["password"]
-        args = {
+        args: Dict[str, Any] = {
             "hosts": f"127.0.0.1:{keeper_port}",
             "connection_retry": ctx.obj.get("retries"),
             "command_retry": ctx.obj.get("retries"),
@@ -45,7 +45,7 @@ def alive_command(ctx):
                     f"{username}:{password}",
                 )
             ]
-            acls = [make_digest_acl(username, password, all=True)]
+            acls: List[ACL] = [make_digest_acl(username, password, all=True)]
             args["auth_data"] = auth_data
             args["default_acl"] = acls
 
@@ -63,48 +63,48 @@ def alive_command(ctx):
 
 @command("avg_latency")
 @pass_context
-def avg_latency_command(ctx):
+def avg_latency_command(ctx: Context) -> Result:
     """Check average (Zoo)Keeper latency"""
     return Result(OK, keeper_mntr(ctx)["zk_avg_latency"])
 
 
 @command("min_latency")
 @pass_context
-def min_latency_command(ctx):
+def min_latency_command(ctx: Context) -> Result:
     """Check minimum (Zoo)Keeper latency"""
     return Result(OK, keeper_mntr(ctx)["zk_min_latency"])
 
 
 @command("max_latency")
 @pass_context
-def max_latency_command(ctx):
+def max_latency_command(ctx: Context) -> Result:
     """Check maximum (Zoo)Keeper latency"""
     return Result(OK, keeper_mntr(ctx)["zk_max_latency"])
 
 
 @command("queue")
 @pass_context
-def queue_command(ctx):
+def queue_command(ctx: Context) -> Result:
     """Check number of queued requests on (Zoo)Keeper server"""
     return Result(OK, keeper_mntr(ctx)["zk_outstanding_requests"])
 
 
 @command("descriptors")
 @pass_context
-def descriptors_command(ctx):
+def descriptors_command(ctx: Context) -> Result:
     """Check number of open file descriptors on (Zoo)Keeper server"""
     return Result(OK, keeper_mntr(ctx)["zk_open_file_descriptor_count"])
 
 
 @command("version")
 @pass_context
-def get_version_command(ctx):
+def get_version_command(ctx: Context) -> Result:
     """Check (Zoo)Keeper version"""
     return Result(OK, keeper_mntr(ctx)["zk_version"])
 
 
 @command("snapshot")
-def check_snapshots():
+def check_snapshots() -> Result:
     """Check (Zoo)Keeper snapshots"""
     latest = "No (zoo)keeper snapshots done yet"
     if os.path.exists(ZOOKEEPER_CFG_FILE):
@@ -119,7 +119,7 @@ def check_snapshots():
 
 
 @command("last_null_pointer")
-def check_last_null_pointer_exc():
+def check_last_null_pointer_exc() -> Result:
     """
     Get moment from Zookeeper logs then NullPointerException appeared during last 24 hours
     """
@@ -173,7 +173,7 @@ def tls_command(
         port, is_secure = get_keeper_port_pair()
         if not is_secure:
             return Result(OK, "Keeper doesn't have security port.")
-        port_list = [port]
+        port_list = [port]  # type: ignore
 
     path = get_keeper_cert_path()
     if not path:
@@ -182,27 +182,29 @@ def tls_command(
     return check_cert_on_ports(port_list, crit, warn, chain, path)
 
 
-def get_zookeeper_log_files_for_last_day():
+def get_zookeeper_log_files_for_last_day() -> List[str]:
     """Collect Zookeeper logs for last 24 hours"""
     current_timestamp = time.time()
     logs_path = read_zookeeper_config().get(
         "dataLogDir", DEFAULT_ZOOKEEPER_DATA_LOG_DIR
     )
-    log_files = filter(
-        lambda file: (current_timestamp - os.path.getmtime(file)) < 60 * 60 * 24,
-        [
-            os.path.join(root, name)
-            for root, _, files in os.walk(logs_path)
-            for name in files
-            if name.endswith(".log")
-        ],
+    log_files = list(
+        filter(
+            lambda file: (current_timestamp - os.path.getmtime(file)) < 60 * 60 * 24,
+            [
+                os.path.join(root, name)
+                for root, _, files in os.walk(logs_path)
+                for name in files
+                if name.endswith(".log")
+            ],
+        )
     )
     return sorted(log_files, key=os.path.getctime)
 
 
-def get_keeper_snapshot_files():
+def get_keeper_snapshot_files() -> List[str]:
     """Perform look over all possible folders for snapshots files and grab it"""
-    files = []
+    files: List[str] = []
     ch_config = ClickhouseKeeperConfig.load()
     dirs = [KEEPER_DEFAULT_PATH, CH_DBMS_DEFAULT_PATH, ch_config.snapshots_dir]
     if ch_config.storage_dir:
@@ -213,7 +215,7 @@ def get_keeper_snapshot_files():
     return files
 
 
-def get_snapshot_files(snapshots_dir):
+def get_snapshot_files(snapshots_dir: str) -> List[str]:
     """Select snapshot files in given directory"""
     return [
         os.path.join(root, name)
@@ -238,7 +240,7 @@ def read_zookeeper_config() -> Dict[str, str]:
     return config
 
 
-def get_keeper_port_pair():
+def get_keeper_port_pair() -> Tuple[int, bool]:
     """
     :returns tuple (port for (Zoo)Keeper, port is secure).
       If no config was found, default (insecure) port 2181 is returned.
@@ -249,7 +251,7 @@ def get_keeper_port_pair():
         return 2181, False
 
 
-def get_keeper_cert_path():
+def get_keeper_cert_path() -> Optional[str]:
     """
     :returns path to Keeper TLS cert if exists.
     """
@@ -259,7 +261,7 @@ def get_keeper_cert_path():
         return None
 
 
-def keeper_command(cmd, timeout, verify_ssl_certs):
+def keeper_command(cmd: str, timeout: int, verify_ssl_certs: bool) -> str:
     """
     Execute (Zoo)Keeper 4-letter command.
     """
@@ -282,11 +284,11 @@ def keeper_command(cmd, timeout, verify_ssl_certs):
             return sock.makefile().read(-1)
 
 
-def keeper_mntr(ctx):
+def keeper_mntr(ctx: Context) -> Dict[str, str]:
     """
     Execute (Zoo)Keeper mntr command and parse its output.
     """
-    result = {}
+    result: Dict[str, str] = {}
     attempt = 0
     while True:
         try:

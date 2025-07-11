@@ -3,7 +3,7 @@ import io
 import json
 import subprocess
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import yaml
 from requests.exceptions import RequestException
@@ -15,37 +15,43 @@ from .utils import delayed
 
 
 class DiagnosticsData:
-    def __init__(self, hostname: str, normalize_queries: bool):
+    def __init__(self, hostname: str, normalize_queries: bool) -> None:
         self.hostname = hostname
         self.normalize_queries = normalize_queries
         self._sections: List[Dict[str, Any]] = [{"section": None, "data": {}}]
 
     @delayed
-    def add_string(self, name, value, section=None):
+    def add_string(self, name: str, value: str, section: Optional[str] = None) -> None:
         self._section(section)[name] = {
             "type": "string",
             "value": value,
         }
 
     @delayed
-    def add_url(self, name, value, section=None):
+    def add_url(self, name: str, value: str, section: Optional[str] = None) -> None:
         self._section(section)[name] = {
             "type": "url",
             "value": value,
         }
 
     @delayed
-    def add_xml_document(self, name, document, section=None):
+    def add_xml_document(
+        self, name: str, document: str, section: Optional[str] = None
+    ) -> None:
         self._section(section)[name] = {
             "type": "xml",
             "value": document,
         }
 
     @delayed
-    def add_query(self, name, query, result, section=None):
+    def add_query(
+        self, name: str, query: str, result: str, section: Optional[str] = None
+    ) -> None:
         self.add_query_sync(name, query, result, section)
 
-    def add_query_sync(self, name, query, result, section=None):
+    def add_query_sync(
+        self, name: str, query: str, result: str, section: Optional[str] = None
+    ) -> None:
         self._section(section)[name] = {
             "type": "query",
             "query": query,
@@ -53,17 +59,21 @@ class DiagnosticsData:
         }
 
     @delayed
-    def add_command(self, name, command, result, section=None):
+    def add_command(
+        self, name: str, command: str, result: str, section: Optional[str] = None
+    ) -> None:
         self.add_command_sync(name, command, result, section)
 
-    def add_command_sync(self, name, command, result, section=None):
+    def add_command_sync(
+        self, name: str, command: str, result: str, section: Optional[str] = None
+    ) -> None:
         self._section(section)[name] = {
             "type": "command",
             "command": command,
             "result": result,
         }
 
-    def dump(self, format_):
+    def dump(self, format_: str) -> None:
         if format_.startswith("json"):
             result = self._dump_json()
         elif format_.startswith("yaml"):
@@ -77,46 +87,55 @@ class DiagnosticsData:
         else:
             logging.info(result)
 
-    def _section(self, name=None):
+    def _section(self, name: Optional[str] = None) -> Dict[str, Any]:
         if self._sections[-1]["section"] != name:
             self._sections.append({"section": name, "data": {}})
 
         return self._sections[-1]["data"]
 
-    def _dump_json(self):
+    def _dump_json(self) -> str:
         """
         Dump diagnostic data in JSON format.
         """
         return json.dumps(self._sections, indent=2, ensure_ascii=False)
 
-    def _dump_yaml(self):
+    def _dump_yaml(self) -> str:
         """
         Dump diagnostic data in YAML format.
         """
         return yaml.dump(self._sections, default_flow_style=False, allow_unicode=True)
 
-    def _dump_wiki(self):
+    def _dump_wiki(self) -> str:
         """
         Dump diagnostic data in Yandex wiki format.
         """
 
-        def _write_title(buffer_, value):
+        def _write_title(buffer_: io.StringIO, value: str) -> None:
             buffer_.write(f"===+ {value}\n")
 
-        def _write_subtitle(buffer_, value):
+        def _write_subtitle(buffer_: io.StringIO, value: str) -> None:
             buffer_.write(f"====+ {value}\n")
 
-        def _write_string_item(buffer_, name_, item_):
+        def _write_string_item(
+            buffer_: io.StringIO, name_: str, item_: Dict[str, str]
+        ) -> None:
             value = item_["value"]
             if value != "":
                 value = f"**{value}**"
             buffer_.write(f"{name_}: {value}\n")
 
-        def _write_url_item(buffer_, name_, item_):
+        def _write_url_item(
+            buffer_: io.StringIO, name_: str, item_: Dict[str, str]
+        ) -> None:
             value = item_["value"]
             buffer_.write(f"**{name_}**\n{value}\n")
 
-        def _write_xml_item(buffer_, section_name_, name_, item_):
+        def _write_xml_item(
+            buffer_: io.StringIO,
+            section_name_: Optional[str],
+            name_: str,
+            item_: Dict[str, str],
+        ) -> None:
             if section_name_:
                 buffer_.write(f"=====+ {name_}\n")
             else:
@@ -124,7 +143,12 @@ class DiagnosticsData:
 
             _write_result(buffer_, item_["value"], format_="XML")
 
-        def _write_query_item(buffer_, section_name_, name_, item_):
+        def _write_query_item(
+            buffer_: io.StringIO,
+            section_name_: Optional[str],
+            name_: str,
+            item_: Dict[str, str],
+        ) -> None:
             if section_name_:
                 buffer_.write(f"=====+ {name_}\n")
             else:
@@ -133,7 +157,12 @@ class DiagnosticsData:
             _write_query(buffer_, item_["query"])
             _write_result(buffer_, item_["result"])
 
-        def _write_command_item(buffer_, section_name_, name_, item_):
+        def _write_command_item(
+            buffer_: io.StringIO,
+            section_name_: Optional[str],
+            name_: str,
+            item_: Dict[str, str],
+        ) -> None:
             if section_name_:
                 buffer_.write(f"=====+ {name_}\n")
             else:
@@ -142,7 +171,12 @@ class DiagnosticsData:
             _write_command(buffer_, item_["command"])
             _write_result(buffer_, item_["result"])
 
-        def _write_unknown_item(buffer_, section_name_, name_, item_):
+        def _write_unknown_item(
+            buffer_: io.StringIO,
+            section_name_: Optional[str],
+            name_: str,
+            item_: Dict[str, Any],
+        ) -> None:
             if section_name_:
                 buffer_.write(f"**{name_}**\n")
             else:
@@ -150,22 +184,27 @@ class DiagnosticsData:
 
             json.dump(item_, buffer_, indent=2)
 
-        def _write_query(buffer_, query):
+        def _write_query(buffer_: io.StringIO, query: str) -> None:
             buffer_.write("<{ query\n")
             buffer_.write("%%(SQL)\n")
             buffer_.write(query)
             buffer_.write("\n%%\n")
             buffer_.write("}>\n\n")
 
-        def _write_command(buffer_, command):
+        def _write_command(buffer_: io.StringIO, command: str) -> None:
             buffer_.write("<{ command\n")
             buffer_.write("%%\n")
             buffer_.write(command)
             buffer_.write("\n%%\n")
             buffer_.write("}>\n\n")
 
-        def _write_result(buffer_, result, format_=None):
-            buffer_.write(f"%%({format_})\n" if format_ else "%%\n")
+        def _write_result(
+            buffer_: io.StringIO, result: str, format_: Optional[str] = None
+        ) -> None:
+            if format_:
+                buffer_.write(f"%%({format_})\n")
+            else:
+                buffer_.write("%%\n")
             buffer_.write(result)
             buffer_.write("\n%%\n")
 
@@ -195,7 +234,14 @@ class DiagnosticsData:
 
 
 @delayed
-def add_query(diagnostics, name, client, query, format_, section=None):
+def add_query(
+    diagnostics: DiagnosticsData,
+    name: str,
+    client: ClickhouseClient,
+    query: str,
+    format_: OutputFormat,
+    section: Optional[str] = None,
+) -> None:
     query_args = {
         "normalize_queries": diagnostics.normalize_queries,
     }
@@ -230,13 +276,18 @@ def execute_query(
 
 
 @delayed
-def add_command(diagnostics, name, command, section=None):
+def add_command(
+    diagnostics: DiagnosticsData,
+    name: str,
+    command: str,
+    section: Optional[str] = None,
+) -> None:
     diagnostics.add_command_sync(
         name=name, command=command, result=_execute_command(command), section=section
     )
 
 
-def _execute_command(command, input_=None):
+def _execute_command(command: str, input_: Optional[bytes] = None) -> str:
     # pylint: disable=consider-using-with
 
     proc = subprocess.Popen(
