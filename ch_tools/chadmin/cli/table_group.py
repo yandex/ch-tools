@@ -1,5 +1,4 @@
 import os
-import sys
 from collections import OrderedDict
 from typing import Any
 
@@ -900,63 +899,60 @@ def set_flag_command(
 def change_uuid_command(
     ctx: Context, database: str, table: str, uuid: str, zk: bool, _all: bool
 ) -> None:
-    try:
-        if _all:
-            tables = get_tables_names_from_system_tables(ctx, database)
-        else:
-            tables = [table]
+    if _all:
+        tables = get_tables_names_from_system_tables(ctx, database)
+    else:
+        tables = [table]
 
-        logging.debug("Tables for changing uuid: {}", tables)
+    logging.info("Tables for changing uuid: {}", tables)
 
-        for table_name in tables:
-            table_info = get_info_from_system_tables(ctx, database, table_name)
+    for table_name in tables:
+        table_info = get_info_from_system_tables(ctx, database, table_name)
 
-            logging.debug("table_info={}", table_info)
+        logging.info("table_info={}", table_info)
 
-            if zk:
-                table_local_metadata_path = table_info["metadata_path"]
-                if match_str_ch_version(get_version(ctx), "25.1"):
-                    table_local_metadata_path = (
-                        f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
-                    )
-
-                metadata = parse_table_metadata(table_local_metadata_path)
-                if not metadata.table_engine.is_table_engine_replicated():
-                    logging.info(f"Table {table_name} is not replicated. Skip it.")
-                    continue
-
-                replica_path = metadata.replica_path
-
-                logging.debug(
-                    "Table {} is being changed table_shared_id {} by path {}",
-                    table_name,
-                    uuid,
-                    replica_path,
-                )
-                uuid = get_table_shared_id(ctx, replica_path)
-                logging.debug(
-                    "Table {} contains table_shared_id {} by path {}",
-                    table_name,
-                    uuid,
-                    replica_path,
-                )
-
-            old_table_uuid = table_info["uuid"]
+        if zk:
             table_local_metadata_path = table_info["metadata_path"]
+            if match_str_ch_version(get_version(ctx), "25.1"):
+                table_local_metadata_path = (
+                    f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
+                )
 
-            change_table_uuid(
-                ctx,
-                database,
+            metadata = parse_table_metadata(table_local_metadata_path)
+            if not metadata.table_engine.is_table_engine_replicated():
+                raise RuntimeError(
+                    f"Table {table_name} is not replicated. Failed get uuid from table_shared_id node."
+                )
+
+            replica_path = metadata.replica_path
+
+            logging.debug(
+                "Table {} is being changed table_shared_id {} by path {}",
                 table_name,
-                engine=table_info["engine"],
-                new_local_uuid=uuid,
-                old_table_uuid=old_table_uuid,
-                table_local_metadata_path=table_local_metadata_path,
-                attached=True,
+                uuid,
+                replica_path,
             )
-    except Exception as ex:
-        logging.error("Failed: {}", ex)
-        sys.exit(1)
+            uuid = get_table_shared_id(ctx, replica_path)
+            logging.debug(
+                "Table {} contains table_shared_id {} by path {}",
+                table_name,
+                uuid,
+                replica_path,
+            )
+
+        old_table_uuid = table_info["uuid"]
+        table_local_metadata_path = table_info["metadata_path"]
+
+        change_table_uuid(
+            ctx,
+            database,
+            table_name,
+            engine=table_info["engine"],
+            new_local_uuid=uuid,
+            old_table_uuid=old_table_uuid,
+            table_local_metadata_path=table_local_metadata_path,
+            attached=True,
+        )
 
 
 @table_group.command("check-uuid-equal")
@@ -968,5 +964,4 @@ def check_uuid_equal(ctx: Context, database: str, table: str) -> None:
     logging.info("Table {} has uuid: {}", table, uuids)
 
     if len(uuids) > 1:
-        logging.error("Table {} has different uuid in cluster", table)
-        sys.exit(1)
+        raise RuntimeError(f"Table {table} has different uuid in cluster")

@@ -1,5 +1,4 @@
 import os
-import sys
 from typing import Any, Dict, Optional
 
 from click import ClickException, Context
@@ -540,10 +539,10 @@ def _verify_possible_change_uuid(
         metadata.replica_path,
     )
     if check_replica_path_contains_macros(metadata.replica_path, "uuid"):
-        logging.error(
+
+        raise ClickException(
             f"Changing uuid for ReplicatedMergeTree that contains macros uuid in replica path was not allowed. replica_path={metadata.replica_path}"
         )
-        sys.exit(1)
 
     table_shared_id = get_table_shared_id(ctx, metadata.replica_path)
 
@@ -612,15 +611,14 @@ def change_table_uuid(
 
     try:
         move_table_local_store(old_table_uuid, new_local_uuid)
-    except Exception as ex:
+    except Exception:
         logging.error(
-            "Failed move_table_local_store. old uuid={}, new_local_uuid={}. Need restore uuid in metadata for table={}. error={}",
+            "Failed move_table_local_store. old uuid={}, new_local_uuid={}. Need restore uuid in metadata for table={}.",
             old_table_uuid,
             new_local_uuid,
             f"{database}.{table}",
-            ex,
         )
-        sys.exit(1)
+        raise
 
     logging.info(
         "Local table store {}.{} was moved from {} to {}",

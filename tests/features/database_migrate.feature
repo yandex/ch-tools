@@ -1723,11 +1723,11 @@ Feature: chadmin database migrate command
     (42)
     """
 
-    When we execute command on clickhouse02
+    When we try to execute command on clickhouse02
     """
     chadmin zookeeper list /clickhouse/repl_db
     """
-    Then we get response contains
+    Then it fails with response contains
     """
     kazoo.exceptions.NoNodeError
     """
