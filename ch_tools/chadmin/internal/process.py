@@ -1,10 +1,12 @@
-from click import ClickException
+from typing import Any, Dict, List, Optional
+
+from click import ClickException, Context
 
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 
 
-def get_process(ctx, query_id):
+def get_process(ctx: Context, query_id: str) -> Dict[str, Any]:
     """
     Get executing query from system.processes table.
     """
@@ -17,16 +19,16 @@ def get_process(ctx, query_id):
 
 
 def list_processes(
-    ctx,
-    user=None,
-    exclude_user=None,
-    query_id=None,
-    query_pattern=None,
-    cluster=None,
-    limit=None,
-    order_by="elapsed",
-    verbose=False,
-):
+    ctx: Context,
+    user: Optional[str] = None,
+    exclude_user: Optional[str] = None,
+    query_id: Optional[str] = None,
+    query_pattern: Optional[str] = None,
+    cluster: Optional[str] = None,
+    limit: Optional[int] = None,
+    order_by: str = "elapsed",
+    verbose: bool = False,
+) -> List[Dict[str, Any]]:
     """
     Get list of executing queries from system.processes table.
     """
@@ -95,7 +97,12 @@ def list_processes(
     )["data"]
 
 
-def kill_process(ctx, query_id=None, user=None, exclude_user=None):
+def kill_process(
+    ctx: Context,
+    query_id: Optional[str] = None,
+    user: Optional[str] = None,
+    exclude_user: Optional[str] = None,
+) -> None:
     """
     Perform "KILL QUERY".
     """
@@ -120,14 +127,14 @@ def kill_process(ctx, query_id=None, user=None, exclude_user=None):
 
 
 def list_merges(
-    ctx,
+    ctx: Context,
     *,
-    database=None,
-    table=None,
-    is_mutation=None,
-    cluster=None,
-    limit=None,
-):
+    database: Optional[str] = None,
+    table: Optional[str] = None,
+    is_mutation: Optional[bool] = None,
+    cluster: Optional[str] = None,
+    limit: Optional[int] = None,
+) -> List[Dict[str, Any]]:
     """
     Get list of executing merges from system.merges table.
     """
@@ -190,13 +197,13 @@ def list_merges(
 
 
 def list_moves(
-    ctx,
+    ctx: Context,
     *,
-    database=None,
-    table=None,
-    cluster=None,
-    limit=None,
-):
+    database: Optional[str] = None,
+    table: Optional[str] = None,
+    cluster: Optional[str] = None,
+    limit: Optional[int] = None,
+) -> List[Dict[str, Any]]:
     """
     Get list of executing moves from system.moves table.
     """
@@ -241,13 +248,13 @@ def list_moves(
 
 
 def list_replicated_fetches(
-    ctx,
+    ctx: Context,
     *,
-    database=None,
-    table=None,
-    cluster=None,
-    limit=None,
-):
+    database: Optional[str] = None,
+    table: Optional[str] = None,
+    cluster: Optional[str] = None,
+    limit: Optional[int] = None,
+) -> List[Dict[str, Any]]:
     """
     Get list of executing fetches from system.replicated_fetches table.
     """
@@ -299,7 +306,12 @@ def list_replicated_fetches(
     )["data"]
 
 
-def stop_merges(ctx, database, table, dry_run=False):
+def stop_merges(
+    ctx: Context,
+    database: str,
+    table: str,
+    dry_run: bool = False,
+) -> None:
     """
     Stop merges for the specified table.
     """
@@ -307,7 +319,12 @@ def stop_merges(ctx, database, table, dry_run=False):
     execute_query(ctx, query, timeout=300, format_=None, echo=True, dry_run=dry_run)
 
 
-def start_merges(ctx, database, table, dry_run=False):
+def start_merges(
+    ctx: Context,
+    database: str,
+    table: str,
+    dry_run: bool = False,
+) -> None:
     """
     Start merges for the specified table.
     """
