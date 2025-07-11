@@ -3,7 +3,7 @@ import io
 import json
 import subprocess
 import sys
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional
 
 import yaml
 from requests.exceptions import RequestException

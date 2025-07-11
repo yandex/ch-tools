@@ -1,7 +1,7 @@
 from collections import OrderedDict
-from typing import List
+from typing import Any, Dict, List, Optional
 
-from click import ClickException
+from click import ClickException, Context
 from cloup import argument, constraint, group, option, option_group, pass_context
 from cloup.constraints import AnySet, If, RequireAtLeast, accept_none, require_all
 
@@ -18,7 +18,7 @@ from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
 
 
 @group("replica", cls=Chadmin)
-def replica_group():
+def replica_group() -> None:
     """Commands to manage table replicas."""
     pass
 
@@ -27,7 +27,7 @@ def replica_group():
 @argument("database_name", metavar="DATABASE")
 @argument("table_name", metavar="TABLE")
 @pass_context
-def get_replica_command(ctx, database_name, table_name):
+def get_replica_command(ctx: Context, database_name: str, table_name: str) -> None:
     """
     Get table replica.
     """
@@ -75,12 +75,12 @@ def get_replica_command(ctx, database_name, table_name):
     help="Limit the max number of objects in the output.",
 )
 @pass_context
-def list_command(ctx, **kwargs):
+def list_command(ctx: Context, **kwargs: Any) -> None:
     """
     List table replicas.
     """
 
-    def _table_formatter(item):
+    def _table_formatter(item: Dict[str, Any]) -> OrderedDict:
         return OrderedDict(
             (
                 ("database", item["database"]),
@@ -124,7 +124,7 @@ def list_command(ctx, **kwargs):
         "--database",
         "database_pattern",
         help="Filter in replicas to restore by the specified database name pattern."
-        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
     option(
         "--exclude-database",
@@ -167,14 +167,14 @@ def list_command(ctx, **kwargs):
 )
 @pass_context
 def restart_replica_command(
-    ctx,
-    _all,
-    database_name,
-    table_name,
-    on_cluster,
-    dry_run,
-    **kwargs,
-):
+    ctx: Context,
+    _all: bool,
+    database_name: Optional[str],
+    table_name: Optional[str],
+    on_cluster: bool,
+    dry_run: bool,
+    **kwargs: Any,
+) -> None:
     """
     Restart one or several table replicas.
     """
@@ -258,16 +258,16 @@ def restart_replica_command(
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
 @pass_context
 def restore_command(
-    ctx,
-    _all,
-    database_name,
-    table_name,
-    on_cluster,
-    dry_run,
-    workers,
-    keep_going,
-    **kwargs,
-):
+    ctx: Context,
+    _all: bool,
+    database_name: Optional[str],
+    table_name: Optional[str],
+    on_cluster: bool,
+    dry_run: bool,
+    workers: int,
+    keep_going: bool,
+    **kwargs: Any,
+) -> None:
     """
     Restore one or several table replicas.
     """
