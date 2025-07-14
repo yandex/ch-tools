@@ -1,4 +1,3 @@
-import os
 import re
 import sys
 from typing import Any, Optional
@@ -18,23 +17,18 @@ from kazoo.security import make_digest_acl
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.table_replica import get_table_replica
 from ch_tools.chadmin.internal.zookeeper import (
-    _get_zero_copy_zookeeper_path,
     check_zk_node,
     create_zk_nodes,
-    delete_recursive,
     delete_zk_nodes,
-    find_paths,
-    get_children,
     get_zk_node,
     get_zk_node_acls,
     list_zk_nodes,
     update_acls_zk_node,
     update_zk_nodes,
-    zk_client,
 )
 from ch_tools.chadmin.internal.zookeeper_clean import (
     clean_zk_metadata_for_hosts,
-    delete_zero_copy_locks_for_replica,
+    delete_zero_copy_locks,
 )
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_json, print_response
@@ -357,9 +351,9 @@ def clickhouse_hosts_command(
         dry_run=dry_run,
     )
     for replica in fqdn:
-        clean_zk_locks_command(
+        delete_zero_copy_locks(
             ctx,
-            replica=replica,
+            replica_name=replica,
             dry_run=dry_run,
         )
 
@@ -390,9 +384,9 @@ def remove_hosts_from_table(
         dry_run=dry_run,
     )
     for replica in fqdn:
-        clean_zk_locks_command(
+        delete_zero_copy_locks(
             ctx,
-            replica=replica,
+            replica_name=replica,
             dry_run=dry_run,
         )
 
@@ -454,26 +448,4 @@ def clean_zk_locks_command(
     """
     Clean zero copy locks.
     """
-    zero_copy_path = zero_copy_path or _get_zero_copy_zookeeper_path(ctx)
-
-    with zk_client(ctx) as zk:
-        if replica:
-            delete_zero_copy_locks_for_replica(
-                zk, zero_copy_path, table_uuid, part_id, replica, dry_run
-            )
-        else:
-            # No need to find every replica's path. Removing part's or table's directory is enough.
-            if part_id:
-                template = re.escape(rf"{zero_copy_path}/{table_uuid}/{part_id}")
-                paths = find_paths(zk, zero_copy_path, [template])
-                if not paths:
-                    return
-                table_path = os.path.dirname(paths[0])
-                # Checking if we can just delete the table's directory instead
-                if len(get_children(zk, table_path)) == 1:
-                    paths = [table_path]
-            else:
-                template = re.escape(rf"{zero_copy_path}/{table_uuid}")
-                paths = find_paths(zk, zero_copy_path, [template])
-
-            delete_recursive(zk, paths, dry_run)
+    delete_zero_copy_locks(ctx, zero_copy_path, table_uuid, part_id, replica, dry_run)
