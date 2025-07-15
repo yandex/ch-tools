@@ -1,5 +1,7 @@
 from collections import OrderedDict
+from typing import Any
 
+from click import Context
 from cloup import group, option, pass_context
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -14,7 +16,7 @@ FIELD_FORMATTERS = {
 
 
 @group("move", cls=Chadmin)
-def move_group():
+def move_group() -> None:
     """Commands to manage moves (retrieve information from system.moves)."""
     pass
 
@@ -45,7 +47,7 @@ def move_group():
     help="Limit the max number of objects in the output.",
 )
 @pass_context
-def list_command(ctx, on_cluster, limit, **kwargs):
+def list_command(ctx: Context, on_cluster: bool, limit: int, **kwargs: Any) -> None:
     """List executing merges."""
 
     def _table_formatter(item):

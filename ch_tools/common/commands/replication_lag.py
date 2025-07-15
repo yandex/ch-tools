@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 from tabulate import tabulate
 
@@ -105,7 +105,7 @@ def estimate_replication_lag(ctx, xcrit, crit, warn, mwarn, mcrit, verbose=0):
     return Result(code=2, message=msg, verbose=msg_verbose)
 
 
-def get_replication_lag(ch_client):
+def get_replication_lag(ch_client: Any) -> Tuple[int, int, int, int, Any]:
     """
     Get max absolute_delay from system.replicas.
     """
@@ -153,7 +153,7 @@ def get_replication_lag(ch_client):
     return lag, lag_with_errors, max_execution, max_merges, chart
 
 
-def get_tables_with_replication_delay(ch_client):
+def get_tables_with_replication_delay(ch_client: Any) -> Any:
     """
     Get tables with absolute_delay > 0 and total_replicas > 1.
     """
@@ -169,7 +169,7 @@ def get_tables_with_replication_delay(ch_client):
     return ch_client.query_json_data(query=query, compact=False)
 
 
-def count_errors(ch_client, tables, exceptions_limit):
+def count_errors(ch_client: Any, tables: Any, exceptions_limit: int) -> Any:
     """
     Add count of replication errors.
     """
@@ -200,7 +200,7 @@ def count_errors(ch_client, tables, exceptions_limit):
     return ch_client.query_json_data(query=query, compact=False)
 
 
-def is_userfault_exception(exception):
+def is_userfault_exception(exception: str) -> bool:
     """
     Check if exception was caused by user.
     Current list:
@@ -219,7 +219,7 @@ def is_userfault_exception(exception):
     return False
 
 
-def get_max_replicated_merges_in_queue(ch_client):
+def get_max_replicated_merges_in_queue(ch_client: Any) -> int:
     """
     Get max_replicated_merges_in_queue value
     """

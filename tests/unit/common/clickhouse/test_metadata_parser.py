@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from ch_tools.chadmin.cli.database_metadata import remove_uuid_from_metadata
@@ -78,7 +80,7 @@ PATH_TO_TESTS = "tests/unit/common/clickhouse/"
         ),
     ],
 )
-def test_parse_table_metadata_non_repl(file, expected):
+def test_parse_table_metadata_non_repl(file: str, expected: dict) -> None:
     metadata = parse_table_metadata(table_metadata_path=PATH_TO_TESTS + file)
     assert metadata.table_uuid == expected["table_uuid"]
     assert metadata.table_engine == expected["table_engine"]
@@ -161,7 +163,7 @@ def test_parse_table_metadata_non_repl(file, expected):
         ),
     ],
 )
-def test_parse_table_metadata_repl(file, expected):
+def test_parse_table_metadata_repl(file: str, expected: dict) -> None:
     metadata = parse_table_metadata(table_metadata_path=PATH_TO_TESTS + file)
     assert metadata.table_uuid == expected["table_uuid"]
     assert metadata.table_engine == expected["table_engine"]
@@ -199,7 +201,7 @@ def test_parse_table_metadata_repl(file, expected):
         ),
     ],
 )
-def test_broken_metadata(file, exception_msg):
+def test_broken_metadata(file: str, exception_msg: str) -> None:
     with pytest.raises(RuntimeError, match=exception_msg):
         _ = parse_table_metadata(table_metadata_path=PATH_TO_TESTS + file)
 
@@ -221,7 +223,7 @@ def test_broken_metadata(file, exception_msg):
         ),
     ],
 )
-def test_is_engine_replicated(start, finish, is_replicated):
+def test_is_engine_replicated(start: Any, finish: Any, is_replicated: bool) -> None:
     engines_list = list(MergeTreeFamilyEngines)
     start_idx = 0 if start is None else engines_list.index(start)
     finish_idx = len(engines_list) if finish is None else engines_list.index(finish)
@@ -230,7 +232,7 @@ def test_is_engine_replicated(start, finish, is_replicated):
         assert is_replicated == engines_list[idx].is_table_engine_replicated()
 
 
-def test_last_merge_tree_family_engine():
+def test_last_merge_tree_family_engine() -> None:
     engines_list = list(MergeTreeFamilyEngines)
     assert MergeTreeFamilyEngines.REPLICATED_GRAPHITE_MERGE_TREE == engines_list[-1]
 
@@ -317,5 +319,5 @@ FROM non_repl_db.foo
         ),
     ],
 )
-def test_remove_uuid_from_metadata(metadata, result):
+def test_remove_uuid_from_metadata(metadata: str, result: str) -> None:
     assert result == remove_uuid_from_metadata(metadata)

@@ -1,6 +1,6 @@
 import warnings
 from functools import wraps
-from typing import Optional
+from typing import Any, Optional
 
 import click
 import cloup
@@ -136,7 +136,13 @@ class KeeperChecks(cloup.Group):
 )
 @cloup.version_option(__version__)
 @cloup.pass_context
-def cli(ctx, settings, retries, timeout, no_verify_ssl_certs):
+def cli(
+    ctx: click.Context,
+    settings: Any,
+    retries: int,
+    timeout: float,
+    no_verify_ssl_certs: bool,
+) -> None:
     config = load_config()
 
     for setting_path, value in settings:
@@ -171,7 +177,7 @@ for command in COMMANDS:
 cli.add_command(check_last_null_pointer_exc)
 
 
-def main():
+def main() -> None:
     """
     Program entry point.
     """

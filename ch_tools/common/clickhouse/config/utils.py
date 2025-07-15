@@ -1,13 +1,13 @@
 import os.path
 from copy import deepcopy
-from typing import MutableMapping
+from typing import Any, MutableMapping
 
 import xmltodict
 
 from ch_tools.common.utils import first_value
 
 
-def load_config(config_path, configd_dir="config.d"):
+def load_config(config_path: str, configd_dir: str = "config.d") -> Any:
     """
     Load ClickHouse config file.
     """
@@ -31,7 +31,9 @@ def load_config(config_path, configd_dir="config.d"):
     return config
 
 
-def dump_config(config, *, mask_secrets=True, xml_format=False):
+def dump_config(
+    config: Any, *, mask_secrets: bool = True, xml_format: bool = False
+) -> Any:
     """
     Dump ClickHouse config.
     """
@@ -46,12 +48,12 @@ def dump_config(config, *, mask_secrets=True, xml_format=False):
     return result
 
 
-def _load_config(config_path):
+def _load_config(config_path: str) -> Any:
     with open(config_path, "r", encoding="utf-8") as file:
         return xmltodict.parse(file.read())
 
 
-def _merge_configs(main_config, additional_config):
+def _merge_configs(main_config: Any, additional_config: Any) -> None:
     for key, value in additional_config.items():
         if key not in main_config:
             main_config[key] = value
@@ -65,7 +67,7 @@ def _merge_configs(main_config, additional_config):
             main_config[key] = value
 
 
-def _apply_config_directives(config_section, include_config):
+def _apply_config_directives(config_section: Any, include_config: Any) -> None:
     for key, item in config_section.items():
         if not isinstance(item, dict):
             continue
@@ -78,7 +80,7 @@ def _apply_config_directives(config_section, include_config):
         _apply_config_directives(item, include_config)
 
 
-def _mask_secrets(config):
+def _mask_secrets(config: Any) -> None:
     if isinstance(config, MutableMapping):
         for key, value in list(config.items()):
             if isinstance(value, MutableMapping):

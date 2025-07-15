@@ -1,6 +1,7 @@
 from collections import OrderedDict
+from typing import Any, Optional
 
-from click import Choice, group, option, pass_context
+from click import Choice, Context, group, option, pass_context
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.part import list_part_log
@@ -15,7 +16,7 @@ FIELD_FORMATTERS = {
 
 
 @group("part-log", cls=Chadmin)
-def part_log_group():
+def part_log_group() -> None:
     """
     Commands for retrieving information from system.part_log.
     """
@@ -75,16 +76,16 @@ def part_log_group():
 )
 @pass_context
 def list_part_log_command(
-    ctx,
-    on_cluster,
-    date,
-    min_date,
-    max_date,
-    min_time,
-    max_time,
-    time,
-    **kwargs,
-):
+    ctx: Context,
+    on_cluster: bool,
+    date: Optional[str],
+    min_date: Optional[str],
+    max_date: Optional[str],
+    min_time: Optional[str],
+    max_time: Optional[str],
+    time: Optional[str],
+    **kwargs: Any,
+) -> None:
     cluster = get_cluster_name(ctx) if on_cluster else None
     min_date = min_date or date
     max_date = max_date or date

@@ -43,7 +43,7 @@ class DatabaseMetadata:
         self.shard = db_metadata.shard
         self.replica_name = db_metadata.replica_name
 
-    def update_metadata_file(self):
+    def update_metadata_file(self) -> None:
         file_path = db_metadata_path(self.database_name)
 
         with open(file_path, "r", encoding="utf-8") as f:

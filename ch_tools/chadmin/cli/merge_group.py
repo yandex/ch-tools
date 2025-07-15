@@ -1,6 +1,7 @@
 from collections import OrderedDict
+from typing import Any
 
-from click import group, option, pass_context
+from click import Context, group, option, pass_context
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.process import list_merges
@@ -23,7 +24,7 @@ FIELD_FORMATTERS = {
 
 
 @group("merge", cls=Chadmin)
-def merge_group():
+def merge_group() -> None:
     """Commands to manage merges (retrieve information from system.merges)."""
     pass
 
@@ -49,7 +50,7 @@ def merge_group():
     help="Limit the max number of objects in the output.",
 )
 @pass_context
-def list_command(ctx, on_cluster, limit, **kwargs):
+def list_command(ctx: Context, on_cluster: bool, limit: int, **kwargs: Any) -> None:
     """List executing merges."""
 
     def _table_formatter(merge):

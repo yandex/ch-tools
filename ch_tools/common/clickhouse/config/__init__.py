@@ -1,3 +1,5 @@
+from typing import Any
+
 from click import Context
 
 from .clickhouse import ClickhouseConfig
@@ -20,9 +22,9 @@ def get_clickhouse_config(ctx: Context) -> ClickhouseConfig:
     return ctx.obj["clickhouse_config"]
 
 
-def get_macros(ctx):
+def get_macros(ctx: Context) -> dict[str, Any]:
     return get_clickhouse_config(ctx).macros
 
 
-def get_cluster_name(ctx):
+def get_cluster_name(ctx: Context) -> Any:
     return get_clickhouse_config(ctx).cluster_name
