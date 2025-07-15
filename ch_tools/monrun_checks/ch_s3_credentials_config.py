@@ -1,9 +1,10 @@
 import os
 import time
 from datetime import timedelta
+from typing import Any
 
 import requests
-from click import pass_context
+from click import Context, pass_context
 from cloup import command, option
 
 from ch_tools.common import logging
@@ -23,7 +24,7 @@ from ch_tools.common.result import CRIT, OK, WARNING, Result
     help="Whether S3 credentials config should be present or not.",
 )
 @pass_context
-def s3_credentials_configs_command(ctx, present):
+def s3_credentials_configs_command(ctx: Context, present: bool) -> Result:
     """
     Check S3 credentials config.
     """
@@ -76,7 +77,7 @@ def s3_credentials_configs_command(ctx, present):
         return Result(CRIT, "Internal error")
 
 
-def _request_token(metadata_service_endpoint):
+def _request_token(metadata_service_endpoint: str) -> Any:
     return requests.get(
         f"{metadata_service_endpoint}/computeMetadata/v1/instance/service-accounts/default/token",
         headers={"Metadata-Flavor": "Google"},

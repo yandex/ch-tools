@@ -86,7 +86,7 @@ class ClickhouseConfig:
     def dump(self, mask_secrets: bool = True) -> Any:
         return dump_config(self._config, mask_secrets=mask_secrets)
 
-    def dump_xml(self, mask_secrets=True):
+    def dump_xml(self, mask_secrets: bool = True) -> Any:
         return dump_config(self._config, mask_secrets=mask_secrets, xml_format=True)
 
     @staticmethod

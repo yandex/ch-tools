@@ -3,7 +3,7 @@ import os
 import pwd
 import re
 from enum import Enum
-from typing import Tuple
+from typing import Optional, Tuple
 
 from click import Context
 
@@ -52,7 +52,18 @@ class MergeTreeFamilyEngines(Enum):
 
 
 class TableMetadata:
-    def __init__(self, table_uuid, table_engine, replica_path=None, replica_name=None):
+    table_uuid: str
+    table_engine: MergeTreeFamilyEngines
+    replica_path: Optional[str] = None
+    replica_name: Optional[str] = None
+
+    def __init__(
+        self,
+        table_uuid: str,
+        table_engine: MergeTreeFamilyEngines,
+        replica_path: Optional[str] = None,
+        replica_name: Optional[str] = None,
+    ) -> None:
         self.table_uuid = table_uuid
         self.table_engine = table_engine
         self.replica_path = replica_path

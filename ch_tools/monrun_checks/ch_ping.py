@@ -19,7 +19,7 @@ from ch_tools.common.result import CRIT, OK, WARNING, Result
 )
 @click.option("-w", "--warning", "warn", type=int, default=2, help="Warning threshold.")
 @click.pass_context
-def ping_command(ctx, number, crit, warn):
+def ping_command(ctx: click.Context, number: int, crit: int, warn: int) -> Result:
     """
     Ping all available ClickHouse ports.
     """

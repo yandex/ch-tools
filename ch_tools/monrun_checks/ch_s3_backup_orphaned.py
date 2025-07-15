@@ -5,7 +5,7 @@ from ch_tools.common.result import OK, WARNING, Result
 
 
 @click.command("orphaned-backups")
-def orphaned_backups_command():
+def orphaned_backups_command() -> Result:
     """
     Check for orphaned backups.
     """

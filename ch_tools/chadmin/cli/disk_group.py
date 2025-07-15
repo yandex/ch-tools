@@ -9,7 +9,7 @@ from ch_tools.common import logging
 
 
 @group("disks", cls=Chadmin)
-def disks_group():
+def disks_group() -> None:
     """Commands to manage disks."""
     pass
 

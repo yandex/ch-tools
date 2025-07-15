@@ -26,7 +26,7 @@ class ListParamType(click.ParamType):
 
     name = "list"
 
-    def __init__(self, type=None, separator=r"[,\s]+"):  # noqa: A002
+    def __init__(self, type: Any = None, separator: str = r"[,\s]+"):  # noqa: A002
         self.type = type
         self.separator = separator
 

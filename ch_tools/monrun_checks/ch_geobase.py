@@ -9,7 +9,7 @@ from ch_tools.common.result import CRIT, OK, Result
 
 @click.command("geobase")
 @click.pass_context
-def geobase_command(ctx):
+def geobase_command(ctx: click.Context) -> Result:
     """
     Check that embedded geobase is configured.
     """

@@ -1,6 +1,7 @@
 import pathlib
 import time
 from datetime import datetime
+from typing import Any, List, Optional
 
 import click
 
@@ -21,7 +22,7 @@ from ch_tools.common.result import Result
     type=int,
     help="Time interval to check in seconds.",
 )
-def core_dumps_command(core_directory, crit_seconds):
+def core_dumps_command(core_directory: str, crit_seconds: int) -> Result:
     """
     Check for core dumps.
     """
@@ -44,7 +45,7 @@ def core_dumps_command(core_directory, crit_seconds):
     return Result(status, message or "OK")
 
 
-def get_core_dumps(core_dir, interval_seconds=None):
+def get_core_dumps(core_dir: Any, interval_seconds: Optional[int] = None) -> List:
     """
     Get core dumps dumped during the last `interval_seconds`.
     """

@@ -198,3 +198,4 @@ ignore_missing_imports = true
 disallow_incomplete_defs = true
 check_untyped_defs = true
 exclude = ['tests/staging']
+disallow_untyped_defs = true

@@ -925,6 +925,8 @@ def change_uuid_command(
                     logging.info(f"Table {table_name} is not replicated. Skip it.")
                     continue
 
+                assert metadata.replica_path is not None
+
                 replica_path = metadata.replica_path
 
                 logging.debug(

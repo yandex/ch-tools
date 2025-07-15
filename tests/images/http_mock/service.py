@@ -6,12 +6,12 @@ app = Flask(__name__)
 
 
 @app.route("/computeMetadata/v1/instance/service-accounts/default/token")
-def token():
+def token() -> str:
     return json.dumps(
         {"access_token": "IAM_TOKEN", "expires_in": 0, "token_type": "Bearer"}
     )
 
 
 @app.route("/")
-def ping():
+def ping() -> str:
     return "OK"
