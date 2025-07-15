@@ -223,7 +223,7 @@ Feature: chadmin table change and check-uuid-equal
     """
     INSERT INTO non_repl_db.foo VALUES (42)
     """
-    When we execute command on clickhouse01
+    When we try to execute command on clickhouse01
     """
     chadmin table change -d non_repl_db -t foo --uuid '123e4567-e89b-12d3-a456-426614174000'
     """

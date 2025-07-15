@@ -1723,11 +1723,11 @@ Feature: chadmin database migrate command
     (42)
     """
 
-    When we execute command on clickhouse02
+    When we try to execute command on clickhouse02
     """
     chadmin zookeeper list /clickhouse/repl_db
     """
-    Then we get response contains
+    Then it fails with response contains
     """
     kazoo.exceptions.NoNodeError
     """
@@ -1854,10 +1854,6 @@ Feature: chadmin database migrate command
     """
     INSERT INTO non_repl_db.test_table1 VALUES (43);
     """
-    When we execute query on clickhouse02
-    """
-    SYSTEM SYNC REPLICA non_repl_db.test_table1
-    """
 
     When we execute query on clickhouse01
     """
@@ -1880,6 +1876,10 @@ Feature: chadmin database migrate command
     Then we get response
     """
     0
+    """
+    When we execute query on clickhouse02
+    """
+    SYSTEM SYNC REPLICA non_repl_db.test_table1
     """
     When we execute query on clickhouse02
     """

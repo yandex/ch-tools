@@ -1,4 +1,3 @@
-import sys
 from typing import Any, Optional
 
 from click import Context
@@ -206,60 +205,48 @@ def get_databases(
 def migrate_engine_command(
     ctx: Context, database: str, engine: str, clean_zookeeper: bool
 ) -> None:
-    try:
-        if not is_database_exists(ctx, database):
-            logging.error("Database {} does not exists, skip migrating", database)
-            sys.exit(1)
+    if not is_database_exists(ctx, database):
+        raise RuntimeError(f"Database {database} does not exists, skip migrating")
 
-        if DatabaseEngine.from_str(engine) == DatabaseEngine.REPLICATED:
-            migrate_database_to_replicated(ctx, database)
-        else:
-            migrate_database_to_atomic(ctx, database, clean_zookeeper)
-
-    except Exception as ex:
-        logging.error("Got exception: type={}, ex={}", type(ex), ex)
-        sys.exit(1)
+    if DatabaseEngine.from_str(engine) == DatabaseEngine.REPLICATED:
+        migrate_database_to_replicated(ctx, database)
+    else:
+        migrate_database_to_atomic(ctx, database, clean_zookeeper)
 
 
 @database_group.command("restore-replica")
 @option("-d", "--database", required=True)
 @pass_context
 def restore_replica_command(ctx: Context, database: str) -> None:
+    if not is_database_exists(ctx, database):
+        raise RuntimeError(f"Database {database} does not exists, skip restore")
+
+    db_metadata = parse_database_from_metadata(database)
+
+    if not db_metadata.database_engine.is_replicated():
+        raise RuntimeError(f"Database {database} is not Replicated, stop restore")
+
+    first_replica = True
     try:
-        if not is_database_exists(ctx, database):
-            logging.error("Database {} does not exists, skip restore", database)
-            sys.exit(1)
-
-        db_metadata = parse_database_from_metadata(database)
-
-        if not db_metadata.database_engine.is_replicated():
-            logging.error("Database {} is not Replicated, stop restore", database)
-            sys.exit(1)
-
-        first_replica = True
-        try:
-            create_database_nodes(
-                ctx,
-                database_name=database,
-                db_replica_path=db_metadata.replica_path,
-            )
-        except NodeExistsError as ex:
-            logging.info(
-                "create_database_nodes failed with NodeExistsError. {}, type={}. Restore as second replica",
-                ex,
-                type(ex),
-            )
-            first_replica = False
-        except Exception as ex:
-            logging.info("create_database_nodes failed with ex={}", type(ex))
-            raise ex
-
-        restore_replica(
+        create_database_nodes(
             ctx,
-            database,
-            first_replica=first_replica,
+            database_name=database,
             db_replica_path=db_metadata.replica_path,
         )
+    except NodeExistsError as ex:
+        logging.info(
+            "create_database_nodes failed with NodeExistsError. {}, type={}. Restore as second replica",
+            ex,
+            type(ex),
+        )
+        first_replica = False
     except Exception as ex:
-        logging.error("Got exception: type={}, ex={}", type(ex), ex)
-        sys.exit(1)
+        logging.info("create_database_nodes failed with ex={}", type(ex))
+        raise ex
+
+    restore_replica(
+        ctx,
+        database,
+        first_replica=first_replica,
+        db_replica_path=db_metadata.replica_path,
+    )

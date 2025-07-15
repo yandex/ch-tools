@@ -1,3 +1,4 @@
+import sys
 from functools import wraps
 from typing import Any, Optional
 
@@ -54,6 +55,7 @@ class Chadmin(cloup.Group):
                 logging.debug("Command completed")
             except Exception:
                 logging.exception("Command failed with error:", short_stdout=True)
+                sys.exit(1)
 
         cmd.callback = wrapper
         super().add_command(

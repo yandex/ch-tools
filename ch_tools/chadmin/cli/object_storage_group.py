@@ -1,4 +1,3 @@
-import sys
 from datetime import timedelta
 from typing import Any, Optional
 
@@ -14,7 +13,6 @@ from ch_tools.chadmin.internal.zookeeper import (
     create_zk_nodes,
     update_zk_nodes,
 )
-from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config import get_clickhouse_config
@@ -174,10 +172,6 @@ def clean_command(
             use_saved_list,
             verify_paths_regex,
         )
-    except Exception as e:
-        logging.exception("Clean orphaned s3 objects have failed with: {!r}", e)
-        error_msg = str(e)
-        raise
     finally:
         state = OrphanedObjectsState(total_size, error_msg)
 
@@ -186,10 +180,6 @@ def clean_command(
 
         if store_state_local:
             _store_state_local_save(ctx, state)
-
-        if error_msg:
-            logging.exception(f"Cleaning failed with error: {error_msg}")
-            sys.exit(1)
 
     _print_response(ctx, dry_run, deleted, total_size)
 

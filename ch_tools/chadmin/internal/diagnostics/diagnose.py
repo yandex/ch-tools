@@ -151,13 +151,6 @@ def diagnose(ctx: Context, output_format: str, normalize_queries: bool) -> None:
             ),
             add_query(
                 diagnostics,
-                "Moves in progress",
-                client=client,
-                query=query.SELECT_MOVES,
-                format_=OutputFormat.Vertical,
-            ),
-            add_query(
-                diagnostics,
                 "Recent data parts (modification time within last 3 minutes)",
                 client=client,
                 query=query.SELECT_RECENT_DATA_PARTS,
@@ -195,6 +188,19 @@ def diagnose(ctx: Context, output_format: str, normalize_queries: bool) -> None:
             ),
         ]
     )
+
+    if "moves" in system_tables:
+        tasks.extend(
+            [
+                add_query(
+                    diagnostics,
+                    "Moves in progress",
+                    client=client,
+                    query=query.SELECT_MOVES,
+                    format_=OutputFormat.Vertical,
+                ),
+            ]
+        )
 
     if "query_log" in system_tables:
         tasks.extend(

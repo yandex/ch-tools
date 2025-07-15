@@ -1,6 +1,5 @@
 import json
 import random
-import sys
 import time
 from typing import Any
 from xml.dom import minidom
@@ -71,10 +70,10 @@ def _add_xml_node(document: minidom.Document, root: Any, name: str) -> minidom.E
 def _get_token(ctx: Context) -> str:
     response = _request_token(ctx)
     if response.status_code != 200:
-        sys.exit(1)
+        raise RuntimeError(f"Can't get token. Response {response.status_code}")
     data = json.loads(response.content)
     if data["token_type"] != "Bearer":
-        sys.exit(1)
+        raise RuntimeError(f"Can't get token. Invalid Token type {data['token_type']}")
     return data["access_token"]
 
 
