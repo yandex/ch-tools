@@ -1,4 +1,6 @@
-from click import argument, group, option, pass_context
+from typing import Any, Optional
+
+from click import Context, argument, group, option, pass_context
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.utils import execute_query
@@ -6,7 +8,7 @@ from ch_tools.common import logging
 
 
 @group("thread-log", cls=Chadmin)
-def thread_log_group():
+def thread_log_group() -> None:
     """
     Commands for retrieving information from system.query_thread_log.
     """
@@ -23,8 +25,15 @@ def thread_log_group():
 @option("-v", "--verbose", is_flag=True, help="Verbose mode.")
 @pass_context
 def list_threads_command(
-    ctx, query_id, date, min_date, max_date, min_time, max_time, verbose
-):
+    ctx: Context,
+    query_id: str,
+    date: Optional[str],
+    min_date: Optional[str],
+    max_date: Optional[str],
+    min_time: Optional[str],
+    max_time: Optional[str],
+    verbose: bool,
+) -> None:
     min_date = min_date or date
     max_date = max_date or date
     logging.info(
@@ -41,14 +50,14 @@ def list_threads_command(
 
 
 def get_threads(
-    ctx,
-    query_id=None,
-    min_date=None,
-    max_date=None,
-    min_time=None,
-    max_time=None,
-    verbose=False,
-):
+    ctx: Context,
+    query_id: str,
+    min_date: Optional[str] = None,
+    max_date: Optional[str] = None,
+    min_time: Optional[str] = None,
+    max_time: Optional[str] = None,
+    verbose: bool = False,
+) -> Any:
     query_str = """
         SELECT
              query_id,
@@ -106,8 +115,14 @@ def get_threads(
 @option("--max-time")
 @pass_context
 def get_thread_metrics_command(
-    ctx, query_id, date, min_date, max_date, min_time, max_time
-):
+    ctx: Context,
+    query_id: str,
+    date: Optional[str],
+    min_date: Optional[str],
+    max_date: Optional[str],
+    min_time: Optional[str],
+    max_time: Optional[str],
+) -> None:
     min_date = min_date or date
     max_date = max_date or date
     query_str = """

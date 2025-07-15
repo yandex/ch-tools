@@ -2,7 +2,7 @@ import json
 import os
 import subprocess
 from datetime import timedelta
-from typing import List
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -16,19 +16,19 @@ class BackupConfig:
     Configuration of ch-backup tool.
     """
 
-    def __init__(self, config):
+    def __init__(self, config: Dict[str, Any]) -> None:
         self._config = config
 
     @property
-    def deduplication_age_limit(self):
+    def deduplication_age_limit(self) -> timedelta:
         return timedelta(**self._config["backup"]["deduplication_age_limit"])
 
     @property
-    def retain_count(self):
+    def retain_count(self) -> int:
         return self._config["backup"]["retain_count"]
 
     @staticmethod
-    def load():
+    def load() -> "BackupConfig":
         with open(
             "/etc/yandex/ch-backup/ch-backup.conf", "r", encoding="utf-8"
         ) as file:
@@ -36,7 +36,7 @@ class BackupConfig:
 
 
 @retry(json.decoder.JSONDecodeError)
-def get_backups() -> List[dict]:
+def get_backups() -> List[Dict[str, Any]]:
     """
     Get ClickHouse backups.
     """
@@ -56,7 +56,7 @@ def get_orphaned_chs3_backups() -> List[str]:
     return list(set(chs3_backups) - set(backup["name"] for backup in backups))
 
 
-def run(command, data=None):
+def run(command: str, data: Optional[str] = None) -> str:
     """
     Run the command and return its output.
     """
