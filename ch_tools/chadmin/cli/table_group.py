@@ -923,6 +923,8 @@ def change_uuid_command(
                 raise RuntimeError(
                     f"Table {table_name} is not replicated. Failed get uuid from table_shared_id node."
                 )
+            
+            assert metadata.replica_path is not None
 
             replica_path = metadata.replica_path
 
