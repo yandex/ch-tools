@@ -49,7 +49,7 @@ def replicated_fetch_group() -> None:
 def list_command(ctx: Context, on_cluster: bool, limit: int, **kwargs: Any) -> None:
     """List executing fetches."""
 
-    def _table_formatter(fetch):
+    def _table_formatter(fetch: Any) -> OrderedDict:
         return OrderedDict(
             (
                 ("database", fetch["database"]),

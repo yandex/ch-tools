@@ -53,7 +53,7 @@ def merge_group() -> None:
 def list_command(ctx: Context, on_cluster: bool, limit: int, **kwargs: Any) -> None:
     """List executing merges."""
 
-    def _table_formatter(merge):
+    def _table_formatter(merge: Any) -> OrderedDict:
         if merge["is_mutation"]:
             merge_type = "mutation"
         else:

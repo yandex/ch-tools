@@ -92,7 +92,7 @@ def list_part_log_command(
     min_time = min_time or time
     max_time = max_time or time
 
-    def _table_formatter(record):
+    def _table_formatter(record: Any) -> OrderedDict:
         result = OrderedDict()
         host = record.get("host")
         if host:

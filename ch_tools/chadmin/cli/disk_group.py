@@ -22,11 +22,11 @@ def disks_group():
     help="Path to S3 metadata.",
 )
 @option("--cleanup", is_flag=True, help="Remove parts with corrupted S3 metadata.")
-def check_s3_metadata_command(path, cleanup):
+def check_s3_metadata_command(path: str, cleanup: bool) -> None:
     check_dir(path, cleanup)
 
 
-def check_dir(path, cleanup):
+def check_dir(path: str, cleanup: bool) -> None:
     corrupted_dirs = []
     for dirpath, _, filenames in os.walk(path):
         for filename in filenames:
@@ -40,7 +40,7 @@ def check_dir(path, cleanup):
             shutil.rmtree(dirpath)
 
 
-def check_file(filename):
+def check_file(filename: str) -> bool:
     with open(filename, mode="r", encoding="latin-1") as file:
         lines = file.readlines(1024)
         if len(lines) != 5:

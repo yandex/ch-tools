@@ -16,7 +16,7 @@ from ch_tools.common.cli.parameters import StringParamType, TimeSpanParamType
 
 
 @group("flamegraph", cls=Chadmin)
-def flamegraph_group():
+def flamegraph_group() -> None:
     """
     Commands for collecting the flamegraph.
 

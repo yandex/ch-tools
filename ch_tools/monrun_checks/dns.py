@@ -126,7 +126,7 @@ def _get_host_ip(addr_type: str, imdsv2: bool) -> Union[IPv4Address, IPv6Address
 
 
 @lru_cache(maxsize=None)
-def _get_imdsv2_token():
+def _get_imdsv2_token() -> str:
     return requests.put(
         "http://169.254.169.254/latest/api/token",
         headers={"X-aws-ec2-metadata-token-ttl-seconds": "60"},
@@ -135,7 +135,7 @@ def _get_imdsv2_token():
 
 
 @lru_cache(maxsize=None)
-def _is_gcp():
+def _is_gcp() -> None:
     with open("/etc/dbaas.conf", encoding="utf-8") as f:
         vtype = json.load(f).get("flavor", {}).get("vtype", "")
         return vtype == "gcp"

@@ -56,7 +56,7 @@ class KeeperChecks(cloup.Group):
 
         @wraps(cmd_callback)
         @cloup.pass_context
-        def wrapper(ctx, *a, **kw):
+        def wrapper(ctx: Any, *a: Any, **kw: Any) -> Any:
             logging.configure(
                 ctx.obj["config"]["loguru"],
                 "keeper-monitoring",

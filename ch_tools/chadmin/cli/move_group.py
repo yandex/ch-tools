@@ -50,7 +50,7 @@ def move_group() -> None:
 def list_command(ctx: Context, on_cluster: bool, limit: int, **kwargs: Any) -> None:
     """List executing merges."""
 
-    def _table_formatter(item):
+    def _table_formatter(item: Any) -> OrderedDict:
         return OrderedDict(
             (
                 ("database", item["database"]),
