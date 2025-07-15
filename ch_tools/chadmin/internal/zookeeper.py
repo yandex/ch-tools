@@ -324,5 +324,5 @@ def _get_zero_copy_zookeeper_path(ctx: Context) -> str:
     '/clickhouse/zero_copy/zero_copy_s3' is default.
     """
     query = "SELECT value FROM system.merge_tree_settings WHERE name = 'remote_fs_zero_copy_zookeeper_path'"
-    base_path = execute_query(ctx, query, format_="Raw")
+    base_path = execute_query(ctx, query, format_="JSONCompact")["data"][0][0]
     return os.path.join(base_path, "zero_copy_s3")
