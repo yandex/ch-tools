@@ -129,7 +129,7 @@ def _preprocess_value(value: Any) -> str:
     if value == "-":
         return sys.stdin.read()
 
-    if isinstance(value, str) and value.startswith("@"):
+    if value.startswith("@"):
         with open(os.path.expanduser(value[1:]), encoding="utf-8") as f:
             return f.read()
 
