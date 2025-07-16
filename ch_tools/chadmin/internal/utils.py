@@ -5,7 +5,9 @@ Utility functions.
 import re
 import subprocess
 from itertools import islice
-from typing import Iterable, Iterator
+from typing import Any, Iterable, Iterator, Optional
+
+from click import Context
 
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
@@ -13,17 +15,17 @@ from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
 
 def execute_query(
-    ctx,
-    query,
-    timeout=None,
-    echo=False,
-    dry_run=False,
-    format_="default",
-    stream=False,
-    settings=None,
-    replica=None,
-    **kwargs,
-):
+    ctx: Context,
+    query: Any,
+    timeout: Optional[int] = None,
+    echo: Optional[bool] = False,
+    dry_run: Optional[bool] = False,
+    format_: Optional[str] = "default",
+    stream: bool = False,
+    settings: Optional[Any] = None,
+    replica: Optional[str] = None,
+    **kwargs: Any,
+) -> Any:
     """
     Execute ClickHouse query.
     """
@@ -48,16 +50,16 @@ def execute_query(
 
 
 def execute_query_on_shard(
-    ctx,
-    query,
-    timeout=None,
-    echo=False,
-    dry_run=False,
-    format_="default",
-    stream=False,
-    settings=None,
-    **kwargs,
-):
+    ctx: Context,
+    query: str,
+    timeout: Optional[int] = None,
+    echo: Optional[bool] = False,
+    dry_run: Optional[bool] = False,
+    format_: Optional[str] = "default",
+    stream: bool = False,
+    settings: Optional[Any] = None,
+    **kwargs: Any,
+) -> None:
     replicas = ClickhouseInfo.get_replicas(ctx)
     for replica in replicas:
         execute_query(
@@ -74,7 +76,7 @@ def execute_query_on_shard(
         )
 
 
-def format_query(query):
+def format_query(query: str) -> str:
     """
     Format SQL query for output.
     """
@@ -116,7 +118,7 @@ def replace_macros(string: str, macros: dict) -> str:
     )
 
 
-def remove_from_disk(path):
+def remove_from_disk(path: str) -> Any:
     cmd = f"rm -rf {path}"
     logging.info("Run : {}", cmd)
 

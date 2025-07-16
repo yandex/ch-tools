@@ -1,6 +1,6 @@
 import os.path
 from enum import Enum
-from typing import Dict
+from typing import Any, Dict
 
 from ch_tools.common.clickhouse.config.storage_configuration import (
     ClickhouseStorageConfiguration,
@@ -28,7 +28,7 @@ class ClickhouseConfig:
     ClickHouse server config (config.xml).
     """
 
-    def __init__(self, config, preprocessed):
+    def __init__(self, config: Any, preprocessed: Any) -> None:
         self._config = config
         self.preprocessed = preprocessed
 
@@ -37,7 +37,7 @@ class ClickhouseConfig:
         return first_value(self._config)
 
     @property
-    def macros(self):
+    def macros(self) -> dict:
         """
         ClickHouse macros.
         """
@@ -45,7 +45,7 @@ class ClickhouseConfig:
         return {key: value for key, value in macros.items() if not key.startswith("@")}
 
     @property
-    def cluster_name(self):
+    def cluster_name(self) -> Any:
         return self.macros["cluster"]
 
     @property
@@ -79,18 +79,18 @@ class ClickhouseConfig:
         return result
 
     @property
-    def cert_path(self):
+    def cert_path(self) -> str:
         openssl_server_config = self._config_root.get("openSSL", {}).get("server", {})
         return openssl_server_config.get("caConfig", CLICKHOUSE_CERT_PATH_DEFAULT)
 
-    def dump(self, mask_secrets=True):
+    def dump(self, mask_secrets: bool = True) -> Any:
         return dump_config(self._config, mask_secrets=mask_secrets)
 
-    def dump_xml(self, mask_secrets=True):
+    def dump_xml(self, mask_secrets: bool = True) -> Any:
         return dump_config(self._config, mask_secrets=mask_secrets, xml_format=True)
 
     @staticmethod
-    def load(try_preprocessed=False):
+    def load(try_preprocessed: bool = False) -> "ClickhouseConfig":
         if try_preprocessed and os.path.exists(
             CLICKHOUSE_SERVER_PREPROCESSED_CONFIG_PATH
         ):

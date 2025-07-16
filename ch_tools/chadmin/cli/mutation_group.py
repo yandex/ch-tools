@@ -1,4 +1,6 @@
-from click import argument, group, option, pass_context
+from typing import Any
+
+from click import Context, argument, group, option, pass_context
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.utils import execute_query
@@ -7,7 +9,7 @@ from ch_tools.common.clickhouse.config import get_cluster_name
 
 
 @group("mutation", cls=Chadmin)
-def mutation_group():
+def mutation_group() -> None:
     """
     Commands to manage mutations.
     """
@@ -18,7 +20,7 @@ def mutation_group():
 @argument("mutation", required=False)
 @option("--last", is_flag=True)
 @pass_context
-def get_mutation(ctx, mutation, last):
+def get_mutation(ctx: Context, mutation: Any, last: Any) -> None:
     """Get mutation."""
     if bool(mutation) == bool(last):
         ctx.fail("Mutation must be specified.")
@@ -59,7 +61,9 @@ def get_mutation(ctx, mutation, last):
     "-l", "--limit", type=int, help="Limit the max number of objects in the output."
 )
 @pass_context
-def list_mutations(ctx, is_done, command_pattern, on_cluster, limit):
+def list_mutations(
+    ctx: Context, is_done: Any, command_pattern: Any, on_cluster: bool, limit: int
+) -> None:
     """List mutations."""
     cluster = get_cluster_name(ctx) if on_cluster else None
     query = """
@@ -119,7 +123,7 @@ def list_mutations(ctx, is_done, command_pattern, on_cluster, limit):
     help="Kill mutations on all hosts of the cluster.",
 )
 @pass_context
-def kill_mutation(ctx, command_pattern, on_cluster):
+def kill_mutation(ctx: Context, command_pattern: Any, on_cluster: bool) -> None:
     """Kill one or several mutations."""
     cluster = get_cluster_name(ctx) if on_cluster else None
     query = """

@@ -1,4 +1,4 @@
-from click import command, option, pass_context
+from click import Context, command, option, pass_context
 
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
@@ -7,7 +7,7 @@ from ch_tools.common import logging
 @command("functions")
 @option("--name")
 @pass_context
-def list_functions_command(ctx, name):
+def list_functions_command(ctx: Context, name: str) -> None:
     """
     Show available functions.
     """

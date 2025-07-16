@@ -13,7 +13,7 @@ from ch_tools.chadmin.internal.system import match_str_ch_version, validate_vers
         "24.10.4.191-lts-645f29c",
     ],
 )
-def test_validate_version(version):
+def test_validate_version(version: str) -> None:
     validate_version(version)
 
 
@@ -29,5 +29,5 @@ def test_validate_version(version):
         ("24.10.4.191", "22.8.21.38-lts-34d87c12a"),
     ],
 )
-def test_match_str_ch_version(version, min_version):
+def test_match_str_ch_version(version: str, min_version: str) -> None:
     match_str_ch_version(version, min_version)

@@ -1,6 +1,7 @@
 from collections import OrderedDict
+from typing import Any
 
-from click import group, option, pass_context
+from click import Context, group, option, pass_context
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.process import list_replicated_fetches
@@ -20,7 +21,7 @@ FIELD_FORMATTERS = {
 
 
 @group("replicated-fetch", cls=Chadmin)
-def replicated_fetch_group():
+def replicated_fetch_group() -> None:
     """Commands to manage fetches (retrieve information from system.replicated_fetches)."""
     pass
 
@@ -45,10 +46,10 @@ def replicated_fetch_group():
     help="Limit the max number of objects in the output.",
 )
 @pass_context
-def list_command(ctx, on_cluster, limit, **kwargs):
+def list_command(ctx: Context, on_cluster: bool, limit: int, **kwargs: Any) -> None:
     """List executing fetches."""
 
-    def _table_formatter(fetch):
+    def _table_formatter(fetch: Any) -> OrderedDict:
         return OrderedDict(
             (
                 ("database", fetch["database"]),

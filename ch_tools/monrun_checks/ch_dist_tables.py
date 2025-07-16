@@ -1,5 +1,6 @@
 import pathlib
 import time
+from typing import Any
 from urllib.parse import quote
 
 import click
@@ -16,7 +17,7 @@ from ch_tools.common.result import Result
     "-w", "--warning", "warn", type=int, default=600, help="Warning threshold."
 )
 @click.pass_context
-def dist_tables_command(ctx, crit, warn):
+def dist_tables_command(ctx: click.Context, crit: int, warn: int) -> Result:
     """
     Check for old chunks on Distributed tables.
     """
@@ -56,7 +57,7 @@ def dist_tables_command(ctx, crit, warn):
     return Result(status, message or "OK")
 
 
-def get_chunk_timestamps(table):
+def get_chunk_timestamps(table: Any) -> Any:
     """
     Return timestamps of files contained within dist table directory.
     """
@@ -74,7 +75,7 @@ def get_chunk_timestamps(table):
     }
 
 
-def get_table_path(table):
+def get_table_path(table: Any) -> str:
     """
     Return path to table directory on file system.
     """

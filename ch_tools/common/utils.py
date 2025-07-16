@@ -2,18 +2,19 @@ import os
 import re
 import subprocess
 from pathlib import Path
+from typing import Any, Dict, List, Union
 
 from click import Context
 
 
-def version_ge(version1, version2):
+def version_ge(version1: str, version2: str) -> bool:
     """
     Return True if version1 is greater or equal than version2.
     """
     return parse_version(version1) >= parse_version(version2)
 
 
-def parse_version(version):
+def parse_version(version: str) -> List[int]:
     """
     Parse version string.
     """
@@ -28,7 +29,7 @@ def strip_query(query_text: str) -> str:
     return re.sub(r"\s{2,}", " ", query_text.replace("\n", " ")).strip()
 
 
-def clear_empty_directories_recursively(directory):
+def clear_empty_directories_recursively(directory: Union[str, Path]) -> None:
     try:
         directory = Path(directory)
         for item in directory.iterdir():
@@ -42,7 +43,7 @@ def clear_empty_directories_recursively(directory):
         )
 
 
-def execute(command):
+def execute(command: str) -> str:
     """
     Execute the specified command, check return code and return its output on success.
     """
@@ -64,7 +65,7 @@ def execute(command):
     return stdout.decode()
 
 
-def deep_merge(dest, update):
+def deep_merge(dest: Dict[Any, Any], update: Dict[Any, Any]) -> Dict[Any, Any]:
     """
     Deep merge two dictionaries.
     Like `dict.update`, but instead of updating only top-level keys, perform recursive dict merge.
@@ -77,11 +78,11 @@ def deep_merge(dest, update):
     return dest
 
 
-def first_key(mapping):
+def first_key(mapping: Dict[Any, Any]) -> Any:
     return next(iter(mapping.keys()))
 
 
-def first_value(mapping):
+def first_value(mapping: Dict[Any, Any]) -> Any:
     return next(iter(mapping.values()))
 
 
@@ -97,17 +98,20 @@ def get_full_command_name(ctx: Context) -> str:
     return f"{parent_cmd_name} {cmd_name}" if parent_cmd_name else cmd_name
 
 
-def get_by_key_path(object_, key_path, default=None):
+def get_by_key_path(object_: Any, key_path: str, default: Any = None) -> Any:
     """
     Get item by key path from object with arbitrary number of nested lists and dicts.
     """
 
-    def _get_key(obj, path):
+    def _get_key(obj: Any, path: List[str]) -> Any:
+        if not path:
+            return default
+
         key = path.pop(0)
 
         if isinstance(obj, list):
             try:
-                key = int(key)
+                key = int(key)  # type: ignore
             except Exception:
                 return default
 
@@ -125,12 +129,17 @@ def get_by_key_path(object_, key_path, default=None):
     return _get_key(object_, key_path.split("."))
 
 
-def update_by_key_path(object_, key_path, value):
+def update_by_key_path(object_: dict[str, Any], key_path: str, value: Any) -> None:
     """
     Update item by key path in object with arbitrary number of nested lists and dicts.
     """
 
-    def _update(obj, path, value, current_path_str):
+    def _update(
+        obj: dict[str, Any], path: List[str], value: Any, current_path_str: str
+    ) -> None:
+        if not path:
+            return
+
         key = path.pop(0)
         current_path_str = (
             f'{current_path_str}."{key}"' if current_path_str else f'"{key}"'
@@ -138,7 +147,7 @@ def update_by_key_path(object_, key_path, value):
 
         if isinstance(obj, list):
             try:
-                key = int(key)
+                key = int(key)  # type: ignore
             except Exception:
                 raise RuntimeError(
                     f'Key path "{key_path}" is invalid as {current_path_str} is a list.'
@@ -147,9 +156,9 @@ def update_by_key_path(object_, key_path, value):
         if not path:
             if isinstance(obj, list):
                 list_size = len(obj)
-                if key < list_size:
+                if key < list_size:  # type: ignore
                     obj[key] = value
-                elif key == list_size:
+                elif key == list_size:  # type: ignore
                     obj.append(value)
                 else:
                     raise RuntimeError(

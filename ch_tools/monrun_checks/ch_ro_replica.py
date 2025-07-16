@@ -12,7 +12,7 @@ from ch_tools.common.result import CRIT, OK, Result
     help="Show details about ro tables.",
 )
 @click.pass_context
-def ro_replica_command(ctx, verbose=False):
+def ro_replica_command(ctx: click.Context, verbose: bool = False) -> Result:
     """
     Check for readonly replicated tables.
     """

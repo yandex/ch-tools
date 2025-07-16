@@ -532,6 +532,8 @@ def _verify_possible_change_uuid(
     if not metadata.table_engine.is_table_engine_replicated():
         return
 
+    assert metadata.replica_path is not None
+
     logging.debug(
         "Table metadata={} with Replicated table engine, replica_name={}, replica_path={}",
         table_local_metadata_path,

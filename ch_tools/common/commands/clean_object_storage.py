@@ -181,7 +181,7 @@ def _sanity_check_before_cleanup(
         else {}
     )
 
-    def perform_check_paths():
+    def perform_check_paths() -> None:
         ### Compare path from system.remote_data_path and from list to delete. They must match the regex.
         ### Perform such check to prevent silly mistakes if the paths are completely different.
         ch_objects_cnt = int(
@@ -221,7 +221,7 @@ def _sanity_check_before_cleanup(
                     )
                 )
 
-    def perform_check_size():
+    def perform_check_size() -> None:
         ### Total size of objects after cleanup must be very close to sum(bytes) FROM system.remote_data_paths
         real_size_in_bucket = int(
             ch_client.query_json_data_first_row(

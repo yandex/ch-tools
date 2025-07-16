@@ -1,3 +1,6 @@
+from typing import Any, Optional
+
+from click import Context
 from cloup import Choice, argument, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
 
@@ -13,7 +16,7 @@ FIELD_FORMATTERS = {
 
 
 @group("process", cls=Chadmin)
-def process_group():
+def process_group() -> None:
     """
     Commands to manage processes.
     """
@@ -23,7 +26,7 @@ def process_group():
 @process_group.command("get")
 @argument("query_id")
 @pass_context
-def get_process_command(ctx, query_id):
+def get_process_command(ctx: Any, query_id: Any) -> None:
     """
     Get process.
     """
@@ -56,8 +59,15 @@ def get_process_command(ctx, query_id):
 )
 @pass_context
 def list_processes_command(
-    ctx, user, exclude_user, query, verbose, on_cluster, order_by, limit
-):
+    ctx: Context,
+    user: Any,
+    exclude_user: Any,
+    query: Any,
+    verbose: Any,
+    on_cluster: Any,
+    order_by: Any,
+    limit: Any,
+) -> None:
     """
     List processes.
     """
@@ -89,7 +99,13 @@ def list_processes_command(
     constraint=RequireAtLeast(1),
 )
 @pass_context
-def kill_process_command(ctx, _all, query_id, user, exclude_user):
+def kill_process_command(
+    ctx: Context,
+    _all: Any,
+    query_id: Optional[str],
+    user: Optional[str],
+    exclude_user: Optional[str],
+) -> None:
     """
     Kill one or several processes using "KILL QUERY" query.
     """

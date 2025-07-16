@@ -3,9 +3,12 @@ import re
 from collections import deque
 from contextlib import contextmanager
 from math import sqrt
+from typing import Any, Dict, Generator, List, Optional, Set, Union
 
+from click import Context
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError, NotEmptyError
+from kazoo.protocol.states import ZnodeStat
 
 from ch_tools.chadmin.internal.utils import chunked, replace_macros
 from ch_tools.common import logging
@@ -17,34 +20,36 @@ def has_zk() -> bool:
     return not ClickhouseConfig.load().zookeeper.is_empty()
 
 
-def get_zk_node(ctx, path, binary=False):
+def get_zk_node(ctx: Context, path: str, binary: bool = False) -> str:
     with zk_client(ctx) as zk:
         path = format_path(ctx, path)
         value = zk.get(path)[0]
         return value if binary else value.decode().strip()
 
 
-def check_zk_node(ctx, path):
+def check_zk_node(ctx: Context, path: str) -> ZnodeStat:
     with zk_client(ctx) as zk:
         path = format_path(ctx, path)
         return zk.exists(path)
 
 
-def get_zk_node_acls(ctx, path):
+def get_zk_node_acls(ctx: Context, path: str) -> List[ZnodeStat]:
     with zk_client(ctx) as zk:
         path = format_path(ctx, path)
         return zk.get_acls(path)
 
 
-def get_children(zk, path):
+def get_children(zk: KazooClient, path: str) -> List[str]:
     try:
         return zk.get_children(path)
     except NoNodeError:
         return []  # in the case ZK deletes a znode while we traverse the tree
 
 
-def list_zk_nodes(ctx, path, verbose=False):
-    def _stat_node(zk, node):
+def list_zk_nodes(
+    ctx: Context, path: str, verbose: bool = False
+) -> Union[List[str], List[Dict[str, Any]]]:
+    def _stat_node(zk: KazooClient, node: str) -> Dict[str, Any]:
         descendants_count = 0
         queue = [node]
         while queue:
@@ -65,10 +70,15 @@ def list_zk_nodes(ctx, path, verbose=False):
         return [_stat_node(zk, node) for node in nodes] if verbose else nodes
 
 
-def create_zk_nodes(ctx, paths, value=None, make_parents=False):
+def create_zk_nodes(
+    ctx: Context,
+    paths: List[str],
+    value: Optional[Union[str, bytes]] = None,
+    make_parents: bool = False,
+) -> None:
     if isinstance(value, str):
         value = value.encode()
-    else:
+    elif value is None:
         value = b""
 
     with zk_client(ctx) as zk:
@@ -80,7 +90,7 @@ def create_zk_nodes(ctx, paths, value=None, make_parents=False):
             )
 
 
-def update_zk_nodes(ctx, paths, value):
+def update_zk_nodes(ctx: Context, paths: List[str], value: Union[str, bytes]) -> None:
     if isinstance(value, str):
         value = value.encode()
 
@@ -89,22 +99,22 @@ def update_zk_nodes(ctx, paths, value):
             zk.set(format_path(ctx, path), value)
 
 
-def update_acls_zk_node(ctx, path, acls):
+def update_acls_zk_node(ctx: Context, path: str, acls: Any) -> None:
     with zk_client(ctx) as zk:
         zk.set_acls(format_path(ctx, path), acls)
 
 
-def delete_zk_node(ctx, path):
+def delete_zk_node(ctx: Context, path: str) -> None:
     delete_zk_nodes(ctx, [path])
 
 
-def delete_zk_nodes(ctx, paths, dry_run=False):
+def delete_zk_nodes(ctx: Context, paths: List[str], dry_run: bool = False) -> None:
     paths_formated = [format_path(ctx, path) for path in paths]
     with zk_client(ctx) as zk:
         delete_recursive(zk, paths_formated, dry_run)
 
 
-def format_path(ctx, path):
+def format_path(ctx: Context, path: str) -> str:
     args = ctx.obj.get("zk_client_args", {})
     no_ch_config = args.get("no_ch_config", False)
     if no_ch_config:
@@ -112,7 +122,7 @@ def format_path(ctx, path):
     return replace_macros(path, get_macros(ctx))
 
 
-def set_node_value(zk, path, value):
+def set_node_value(zk: KazooClient, path: str, value: str) -> None:
     """
     Set value to node in zk.
     """
@@ -123,14 +133,19 @@ def set_node_value(zk, path, value):
             logging.warning("Can not set for node: {}  value : {}", path, value)
 
 
-def find_paths(zk, root_path, included_paths_regexp, excluded_paths=None):
+def find_paths(
+    zk: KazooClient,
+    root_path: str,
+    included_paths_regexp: List[str],
+    excluded_paths: Optional[List[str]] = None,
+) -> List[str]:
     """
     Traverse zookeeper tree from root_path with bfs approach.
 
     Return paths of nodes that match the include regular expression and do not match the excluded one.
     """
-    paths = set()
-    queue = deque([root_path])
+    paths: Set[str] = set()
+    queue: deque[str] = deque([root_path])
     included_regexp = re.compile("|".join(included_paths_regexp))
     excluded_regexp = re.compile("|".join(excluded_paths)) if excluded_paths else None
     while len(queue):
@@ -148,7 +163,9 @@ def find_paths(zk, root_path, included_paths_regexp, excluded_paths=None):
     return list(paths)
 
 
-def delete_nodes_transaction(zk, to_delete_in_trasaction):
+def delete_nodes_transaction(
+    zk: KazooClient, to_delete_in_trasaction: List[str]
+) -> None:
     """
     Perform deletion for the list of nodes in a single transaction.
     If the transaction fails, go through the list and delete the nodes one by one.
@@ -181,7 +198,7 @@ def delete_nodes_transaction(zk, to_delete_in_trasaction):
                 pass
 
 
-def remove_subpaths(paths):
+def remove_subpaths(paths: List[str]) -> List[str]:
     """
     Removing from the list paths that are subpath of another.
 
@@ -189,13 +206,13 @@ def remove_subpaths(paths):
     [/a, /a/b/c<-remove it]
     """
     if not paths:
-        return
+        return []
     # Sorting the list in the lexicographic order
     paths.sort()
-    paths = [path.split("/") for path in paths]
-    normalized_paths = [paths[0]]
+    paths_splited = [path.split("/") for path in paths]
+    normalized_paths = [paths_splited[0]]
     # If path[i] has subnode path[j] then all paths from i to j will be subnode of i.
-    for path in paths:
+    for path in paths_splited:
         last = normalized_paths[-1]
         # Ignore the path if the last normalized one is its prefix
         if len(last) > len(path) or path[: len(last)] != last:
@@ -203,7 +220,7 @@ def remove_subpaths(paths):
     return ["/".join(path) for path in normalized_paths]
 
 
-def delete_recursive(zk, paths, dry_run=False):
+def delete_recursive(zk: KazooClient, paths: List[str], dry_run: bool = False) -> None:
     """
     Kazoo already has the ability to recursively delete nodes, but the implementation is quite naive
     and has poor performance with a large number of nodes being deleted.
@@ -253,7 +270,7 @@ def escape_for_zookeeper(s: str) -> str:
 
 
 @contextmanager
-def zk_client(ctx):
+def zk_client(ctx: Context) -> Generator[KazooClient, None, None]:
     zk = _get_zk_client(ctx)
     try:
         zk.start()
@@ -262,7 +279,7 @@ def zk_client(ctx):
         zk.stop()
 
 
-def _get_zk_client(ctx):
+def _get_zk_client(ctx: Context) -> KazooClient:
     """
     Create and return KazooClient.
     """

@@ -1,5 +1,6 @@
 import re
 from datetime import datetime, timedelta
+from typing import Any
 
 import click
 from file_read_backwards import FileReadBackwards
@@ -35,7 +36,9 @@ REGEXP = re.compile(
     "logfile",
     help="Log file path.",
 )
-def log_errors_command(crit, warn, watch_seconds, exclude, logfile):
+def log_errors_command(
+    crit: int, warn: int, watch_seconds: int, exclude: Any, logfile: str
+) -> Result:
     """
     Check errors in ClickHouse server logs.
     """

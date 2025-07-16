@@ -1,4 +1,4 @@
-from click import command, pass_context
+from click import Context, command, pass_context
 
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
@@ -6,7 +6,7 @@ from ch_tools.common import logging
 
 @command("stack-trace")
 @pass_context
-def stack_trace_command(ctx):
+def stack_trace_command(ctx: Context) -> None:
     """
     Collect stack traces.
     """

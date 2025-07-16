@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Optional
+from typing import Any, Optional
 
 from click import Choice, Context, group, option, pass_context
 from humanfriendly import format_size
@@ -205,7 +205,7 @@ def _print_response(ctx: Context, dry_run: bool, deleted: int, total_size: int) 
         {"WouldDelete" if dry_run else "Deleted": deleted, "TotalSize": total_size}
     ]
 
-    def _table_formatter(stats):
+    def _table_formatter(stats: Any) -> dict[str, Any]:
         result = {}
 
         if "Deleted" in stats:

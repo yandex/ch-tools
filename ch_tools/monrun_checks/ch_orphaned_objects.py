@@ -85,7 +85,7 @@ def orphaned_objects_command(
     return Result(OK, result_msg)
 
 
-def _check_mutually_exclusive(state_local, state_zk_path):
+def _check_mutually_exclusive(state_local: bool, state_zk_path: str) -> None:
     if not state_local and not state_zk_path:
         raise click.UsageError(
             "One of these options must be provided: --state-local, --state-zk-path"

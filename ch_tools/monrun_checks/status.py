@@ -1,3 +1,5 @@
+from typing import Any
+
 import click
 import tabulate
 
@@ -10,10 +12,10 @@ COLOR_MAP = {
 }
 
 
-def status_command(commands):
+def status_command(commands: Any) -> Any:
     @click.command("status")
     @click.pass_context
-    def status_impl(ctx):
+    def status_impl(ctx: Any) -> None:
         """
         Perform all checks.
         """

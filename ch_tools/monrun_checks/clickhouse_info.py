@@ -1,4 +1,7 @@
 import functools
+from typing import Any, List
+
+from click import Context
 
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 
@@ -6,7 +9,7 @@ from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_clien
 class ClickhouseInfo:
     @classmethod
     @functools.lru_cache(maxsize=1)
-    def get_replicas(cls, ctx):
+    def get_replicas(cls: Any, ctx: Context) -> List[str]:
         """
         Get hostnames of replicas.
         """
@@ -22,7 +25,7 @@ class ClickhouseInfo:
 
     @classmethod
     @functools.lru_cache(maxsize=1)
-    def get_cluster(cls, ctx):
+    def get_cluster(cls: Any, ctx: Context) -> Any:
         """
         Get cluster identifier.
         """

@@ -6,7 +6,7 @@ import json
 import os.path
 from datetime import datetime, timedelta, timezone
 from os.path import exists
-from typing import Dict, List, Sequence
+from typing import Any, Dict, List, Sequence
 
 from click import Context
 from cloup import command, option, pass_context
@@ -69,13 +69,13 @@ FAILED_PARTS_THRESHOLD = 10
 )
 @pass_context
 def backup_command(
-    ctx,
-    failed_backup_count_crit_threshold,
-    backup_age_warn_threshold,
-    backup_age_crit_threshold,
-    backup_count_warn_threshold,
-    min_uptime,
-):
+    ctx: Context,
+    failed_backup_count_crit_threshold: int,
+    backup_age_warn_threshold: Any,
+    backup_age_crit_threshold: Any,
+    backup_count_warn_threshold: int,
+    min_uptime: Any,
+) -> Any:
     """
     Check ClickHouse backups: its state, age and count.
     """
@@ -162,8 +162,8 @@ def _check_last_backup_not_failed(backups: List[Dict], crit_threshold: int) -> R
 
 def _check_backup_age(
     backups: List[Dict],
-    warn_threshold: timedelta,
-    crit_threshold: timedelta,
+    warn_threshold: Any,
+    crit_threshold: Any,
 ) -> Result:
     """
     Check that the last backup is not too old.
@@ -256,7 +256,7 @@ def _suppress_if_required(
         result.message += " (suppressed due to user fault errors)"
 
 
-def _get_backup_age(backup):
+def _get_backup_age(backup: Any) -> timedelta:
     """
     Calculate and return age of ClickHouse backup.
     """
