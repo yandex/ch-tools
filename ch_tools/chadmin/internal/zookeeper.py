@@ -3,6 +3,7 @@ import re
 from collections import deque
 from contextlib import contextmanager
 from math import sqrt
+from typing import Callable, Iterable, Optional
 
 from click import Context
 from kazoo.client import KazooClient
@@ -146,6 +147,39 @@ def find_paths(zk, root_path, included_paths_regexp, excluded_paths=None):
                 queue.append(os.path.join(path, subpath))
 
     return list(paths)
+
+
+def find_leafs_and_nodes(
+    zk: KazooClient, root_path: str, predicate: Callable
+) -> Iterable[str]:
+    """
+    Recursively traverses zookeeper directory and returns all paths that satisfy the predicate.
+
+    The predicate is applied on the leaf nodes only.
+    If all nodes in a directory satisfy the predicate, then path of the node is also returned.
+    """
+
+    def _gen_matched_paths(path: str) -> Iterable[str]:
+        children = set(get_children(zk, path))
+        matched_children = 0
+
+        if not children:
+            if predicate(path):
+                yield path
+
+        for child in children:
+            child_path = os.path.join(path, child)
+            for matched_path in _gen_matched_paths(child_path):
+                # Check if returned path is a direct children
+                matched_path_dir = os.path.dirname(matched_path)
+                if path == matched_path_dir:
+                    matched_children += 1
+                yield matched_path
+
+        if children and matched_children == len(children):
+            yield path
+
+    yield from _gen_matched_paths(root_path)
 
 
 def delete_nodes_transaction(zk, to_delete_in_trasaction):
@@ -317,12 +351,34 @@ def _get_zk_client(ctx):
     )
 
 
-def _get_zero_copy_zookeeper_path(ctx: Context) -> str:
+def _get_zero_copy_zookeeper_path(
+    ctx: Context, disk_type: Optional[str] = "s3", table_uuid: Optional[str] = None
+) -> str:
     """
     Returns ZooKeeper path for zero-copy table-independent info.
 
-    '/clickhouse/zero_copy/zero_copy_s3' is default.
+    '/clickhouse/zero_copy/zero_copy_s3' is default for s3 disk.
     """
+    disk_dir = f"zero_copy_{disk_type}"
+
+    if table_uuid:
+        get_settings_query = (
+            f"SELECT engine_full FROM system.tables WHERE uuid = '{table_uuid}'"
+        )
+        settings = execute_query(ctx, get_settings_query, format_="JSONCompact")["data"]
+        if settings:
+            match = re.search(
+                r"remote_fs_zero_copy_zookeeper_path\s*=\s*'([^']+)'", settings[0][0]
+            )
+            if match:
+                return os.path.join(match.group(1), disk_dir)
+        else:
+            logging.warning(
+                "Table with uuid {} doesn't exist. Will search for locks in default 'remote_fs_zero_copy_zookeeper_path' directory.",
+                table_uuid,
+            )
+
     query = "SELECT value FROM system.merge_tree_settings WHERE name = 'remote_fs_zero_copy_zookeeper_path'"
     base_path = execute_query(ctx, query, format_="JSONCompact")["data"][0][0]
-    return os.path.join(base_path, "zero_copy_s3")
+
+    return os.path.join(base_path, disk_dir)

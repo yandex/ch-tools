@@ -393,12 +393,21 @@ def remove_hosts_from_table(
 
 @zookeeper_group.command("cleanup-zero-copy-locks")
 @option(
-    "--zero_copy_path",
+    "--zero-copy-path",
     "zero_copy_path",
     default=None,
     help=(
         "Path to zero-copy related data in ZooKeeper."
         "Will use 'remote_fs_zero_copy_zookeeper_path' value from ClickHouse by default."
+    ),
+)
+@option(
+    "--disk_type",
+    "disk_type",
+    default="s3",
+    help=(
+        "Object storage disk type from ClickHouse."
+        "Examples are s3, hdfs, azure_blob_storage, local_blob_storage..."
     ),
 )
 @option_group(
@@ -440,6 +449,7 @@ def remove_hosts_from_table(
 def clean_zk_locks_command(
     ctx: Context,
     zero_copy_path: Optional[str] = None,
+    disk_type: Optional[str] = None,
     table_uuid: Optional[str] = None,
     part_id: Optional[str] = None,
     replica: Optional[str] = None,
@@ -448,4 +458,6 @@ def clean_zk_locks_command(
     """
     Clean zero copy locks.
     """
-    delete_zero_copy_locks(ctx, zero_copy_path, table_uuid, part_id, replica, dry_run)
+    delete_zero_copy_locks(
+        ctx, zero_copy_path, disk_type, table_uuid, part_id, replica, dry_run
+    )

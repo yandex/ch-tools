@@ -88,6 +88,7 @@ DEFAULT_CONFIG = {
                 "retry_max_wait_sec": 60 * 10,
                 "max_retries": 25,
             },
+            "verify_zookeeper_zero_copy_path_regex": r"zero_copy",
         },
     },
     "flamegraph": {
