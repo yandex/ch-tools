@@ -67,7 +67,7 @@ def _merge_configs(main_config: Any, additional_config: Any) -> None:
             main_config[key] = value
 
 
-def _apply_config_directives(config_section: Any, include_config: Any) -> None:
+def _apply_config_directives(config_section: dict, include_config: dict) -> None:
     for key, item in config_section.items():
         if not isinstance(item, dict):
             continue

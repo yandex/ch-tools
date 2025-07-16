@@ -135,7 +135,7 @@ def _get_imdsv2_token() -> str:
 
 
 @lru_cache(maxsize=None)
-def _is_gcp() -> None:
+def _is_gcp() -> bool:
     with open("/etc/dbaas.conf", encoding="utf-8") as f:
         vtype = json.load(f).get("flavor", {}).get("vtype", "")
         return vtype == "gcp"

@@ -78,8 +78,7 @@ def create_zk_nodes(
 ) -> None:
     if isinstance(value, str):
         value = value.encode()
-    else:
-        # seems strange
+    elif value is None:
         value = b""
 
     with zk_client(ctx) as zk:

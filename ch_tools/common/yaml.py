@@ -39,7 +39,6 @@ def dump_yaml(data: Any, file_path: Optional[str] = None) -> Any:
         )
 
     with open(os.path.expanduser(file_path), "w", encoding="utf-8") as f:
-        # bug
-        yaml.dump(
+        return yaml.dump(
             data, f, default_flow_style=False, allow_unicode=True, width=sys.maxsize
         )
