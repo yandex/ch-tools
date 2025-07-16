@@ -71,98 +71,145 @@ Feature: chadmin zookeeper commands.
   Scenario: Cleanup all zero-copy locks for replicas with table and part filters
     When we execute command on clickhouse01
     """
-    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid1/part1/blob1/replica1
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/0_0_0_1/blob1/replica1
     """
     And we execute command on clickhouse01
     """
-    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid1/part1/blob1/replica2
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/0_0_0_1/blob1/replica2
     """
     And we execute command on clickhouse01
     """
-    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid1/part1/blob2/replica1
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/0_0_0_1/blob2/replica1
     """
     And we execute command on clickhouse01
     """
-    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid1/part2/blob1/replica1
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/0_0_0_2/blob1/replica1
     """
     And we execute command on clickhouse01
     """
-    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid2/part1/blob1/replica1
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000002/0_0_0_1/blob1/replica1
     """
     When we execute command on clickhouse01
     """
-    chadmin zookeeper cleanup-zero-copy-locks --table-uuid uuid2 --replica replica1
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid 10000000-0000-0000-0000-000000000002 --replica replica1
     """
     Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/ is equal to
     """
-    /clickhouse/zero_copy/zero_copy_s3/uuid1
+    /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001
     """
     When we execute command on clickhouse01
     """
-    chadmin zookeeper cleanup-zero-copy-locks --table-uuid uuid1 --part-id part2 --replica replica1
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid 10000000-0000-0000-0000-000000000001 --part-id 0_0_0_2 --replica replica1
     """
-    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/uuid1 is equal to
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001 is equal to
     """
-    /clickhouse/zero_copy/zero_copy_s3/uuid1/part1
-    """
-    When we execute command on clickhouse01
-    """
-    chadmin zookeeper cleanup-zero-copy-locks --table-uuid uuid1 --part-id part1 --replica replica1
-    """
-    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/uuid1/part1/blob1 is equal to
-    """
-    /clickhouse/zero_copy/zero_copy_s3/uuid1/part1/blob1/replica2
+    /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/0_0_0_1
     """
     When we execute command on clickhouse01
     """
-    chadmin zookeeper cleanup-zero-copy-locks --table-uuid uuid1 --replica replica2
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid 10000000-0000-0000-0000-000000000001 --part-id 0_0_0_1 --replica replica1
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/0_0_0_1/blob1 is equal to
+    """
+    /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/0_0_0_1/blob1/replica2
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid 10000000-0000-0000-0000-000000000001 --replica replica2
     """
     Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
 
   Scenario: Cleanup zero-copy locks without replica filter
     When we execute command on clickhouse01
     """
-    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid1/part1/blob1/replica1
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/0_0_0_1/blob1/replica1
     """
     And we execute command on clickhouse01
     """
-    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid1/part1/blob1/replica2
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/0_0_0_1/blob1/replica2
     """
     And we execute command on clickhouse01
     """
-    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid1/part1/blob2/replica1
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/0_0_0_1/blob2/replica1
     """
     And we execute command on clickhouse01
     """
-    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid1/part2/blob1/replica1
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/all_0_0_2_1/blob1/replica1
     """
     And we execute command on clickhouse01
     """
-    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/uuid2/part1/blob1/replica1
+    chadmin zookeeper create --make-parents /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000002/0_0_0_1/blob1/replica1
     """
     When we execute command on clickhouse01
     """
-    chadmin zookeeper cleanup-zero-copy-locks --table-uuid uuid2
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid 10000000-0000-0000-0000-000000000002
     """
     Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/ is equal to
     """
-    /clickhouse/zero_copy/zero_copy_s3/uuid1
+    /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001
     """
     When we execute command on clickhouse01
     """
-    chadmin zookeeper cleanup-zero-copy-locks --table-uuid uuid1 --part-id part2
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid 10000000-0000-0000-0000-000000000001 --part-id all_0_0_2_1
     """
-    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/uuid1 is equal to
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001 is equal to
     """
-    /clickhouse/zero_copy/zero_copy_s3/uuid1/part1
+    /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/0_0_0_1
     """
     When we execute command on clickhouse01
     """
-    chadmin zookeeper cleanup-zero-copy-locks --table-uuid uuid1 --part-id part1
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid 10000000-0000-0000-0000-000000000001 --part-id 0_0_0_1
     """
     Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
 
+  Scenario: Cleanup all zero-copy locks for table with custom zookeeper zero-copy path
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS test ON CLUSTER 'cluster'; 
+    CREATE DATABASE test ON CLUSTER 'cluster';
 
+    CREATE TABLE test.table_01 UUID '10000000-0000-0000-0000-000000000001' ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n
+    SETTINGS storage_policy='object_storage',allow_remote_fs_zero_copy_replication=1,remote_fs_zero_copy_zookeeper_path='/custom/zero_copy/';
+    INSERT INTO test.table_01 SELECT number FROM numbers(2);
+    """
+    Then the list of children on clickhouse01 for zk node /custom/zero_copy/zero_copy_s3 is equal to
+    """
+    /custom/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid 10000000-0000-0000-0000-000000000001
+    """
+    Then the list of children on clickhouse01 for zk node /custom/zero_copy/zero_copy_s3 is empty
+
+  
+  Scenario: Cleanup zero-copy locks with invalid arguments
+    When we try to execute command on clickhouse01
+    """
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid 10000000-0000-0000-0000-00000asdasd
+    """
+    Then it fails with response contains
+    """
+    10000000-0000-0000-0000-00000asdasd
+    """
+    When we try to execute command on clickhouse01
+    """
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid 10000000-0000-0000-0000-000000000001 --part-id all_0_all_all
+    """
+    Then it fails with response contains
+    """
+    all_0_all_all
+    """
+    When we try to execute command on clickhouse01
+    """
+    chadmin zookeeper cleanup-zero-copy-locks --zero-copy-path /clickhouse/tables --replica r1
+    """
+    Then it fails with response contains
+    """
+    /clickhouse/tables
+    """
+    
   Scenario: Cleanup all hosts
     When we execute queries on clickhouse01
     """
