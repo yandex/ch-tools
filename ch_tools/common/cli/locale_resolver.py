@@ -20,7 +20,7 @@ class LocaleResolver:
     """
 
     @staticmethod
-    def resolve():
+    def resolve() -> None:
         lang, _ = locale.getlocale()
         locales, has_c, has_en_us = LocaleResolver._get_utf8_locales()
 

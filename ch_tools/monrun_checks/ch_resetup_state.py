@@ -2,6 +2,7 @@ import json
 import os
 import socket
 import subprocess
+from typing import Any
 
 import click
 import psutil
@@ -18,7 +19,9 @@ from ch_tools.monrun_checks.exceptions import die
 @click.option("-s", "--ssl", "ssl", is_flag=True, help="Use HTTPS rather than HTTP.")
 @click.option("--ca_bundle", "ca_bundle", help="Path to CA bundle to use.")
 @click.pass_context
-def resetup_state_command(ctx, port, ssl, ca_bundle):
+def resetup_state_command(
+    ctx: click.Context, port: int, ssl: bool, ca_bundle: Any
+) -> Any:
     """
     Check state of resetup process.
     """
@@ -37,7 +40,7 @@ def resetup_state_command(ctx, port, ssl, ca_bundle):
     return Result(OK)
 
 
-def check_resetup_running():
+def check_resetup_running() -> None:
     """
     Check for currently running `ch-backup restore-schema`
     """
@@ -46,7 +49,7 @@ def check_resetup_running():
             die(0, "resetup is running")
 
 
-def check_repsync_running():
+def check_repsync_running() -> None:
     """
     Check for currently running ch_wait_replication_sync.py script
     """
@@ -55,7 +58,7 @@ def check_repsync_running():
             die(0, "resetup is running (wait for replication sync)")
 
 
-def check_resetup_required():
+def check_resetup_required() -> None:
     """
     Check resetup conditions
     """
@@ -72,7 +75,14 @@ def check_resetup_required():
         die(0, "OK")
 
 
-def request(ctx, host, port, ssl, ca_bundle, query=None):
+def request(
+    ctx: click.Context,
+    host: str,
+    port: int,
+    ssl: bool,
+    ca_bundle: Any,
+    query: Any = None,
+) -> Any:
     """
     Send request to ClickHouse.
     """

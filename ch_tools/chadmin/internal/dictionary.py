@@ -1,7 +1,13 @@
+from typing import Any, Optional
+
+from click import Context
+
 from ch_tools.chadmin.internal.utils import execute_query
 
 
-def list_dictionaries(ctx, *, name=None, status=None):
+def list_dictionaries(
+    ctx: Context, *, name: Optional[str] = None, status: Optional[str] = None
+) -> Any:
     """
     List external dictionaries.
     """
@@ -24,7 +30,9 @@ def list_dictionaries(ctx, *, name=None, status=None):
     return execute_query(ctx, query, name=name, status=status, format_="JSON")["data"]
 
 
-def reload_dictionary(ctx, *, name, database=None):
+def reload_dictionary(
+    ctx: Context, *, name: str, database: Optional[str] = None
+) -> None:
     """
     Reload external dictionary.
     """

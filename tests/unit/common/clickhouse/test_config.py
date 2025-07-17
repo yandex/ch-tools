@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from ch_tools.common.clickhouse.config import ClickhouseConfig
@@ -122,7 +124,7 @@ from ch_tools.common.clickhouse.config.path import (
         ),
     ],
 )
-def test_config(fs, files, result):
+def test_config(fs: Any, files: Any, result: Any) -> None:
     for file_path, contents in files.items():
         fs.create_file(file_path, contents=contents)
 
@@ -171,7 +173,7 @@ def test_config(fs, files, result):
         ),
     ],
 )
-def test_config_zookeeper(fs, files, result):
+def test_config_zookeeper(fs: Any, files: Any, result: Any) -> None:
     for file_path, contents in files.items():
         fs.create_file(file_path, contents=contents)
 

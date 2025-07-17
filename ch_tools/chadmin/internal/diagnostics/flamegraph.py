@@ -1,6 +1,6 @@
 import os
 import time
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from click import Context
 
@@ -20,10 +20,10 @@ class ClickhouseTempFlamegraphConfigs:
         self._ctx = ctx
         self._trace_type = trace_type
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         setup_flamegraph_settings(self._ctx, self._trace_type)
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: Any) -> None:
         remove_flamegraph_settings(self._ctx)
 
 

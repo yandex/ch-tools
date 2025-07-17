@@ -6,8 +6,9 @@ import string
 from functools import wraps
 from random import choice as random_choise
 from types import SimpleNamespace
-from typing import Mapping, MutableMapping
+from typing import Any, Callable, Mapping, MutableMapping, Union
 
+from packaging.version import Version
 from packaging.version import parse as parse_version
 
 from ch_tools.common import logging
@@ -15,7 +16,9 @@ from ch_tools.common import logging
 from .typing import ContextT
 
 
-def merge(original, update):
+def merge(
+    original: MutableMapping[Any, Any], update: Mapping[Any, Any]
+) -> MutableMapping[Any, Any]:
     """
     Recursively merge update dict into original.
     """
@@ -32,14 +35,14 @@ def merge(original, update):
     return original
 
 
-def env_stage(event, fail=False):
+def env_stage(event: str, fail: bool = False) -> Callable:
     """
     Nicely logs env stage.
     """
 
-    def wrapper(fun):
+    def wrapper(fun: Callable) -> Callable:
         @wraps(fun)
-        def _wrapped_fun(*args, **kwargs):
+        def _wrapped_fun(*args: Any, **kwargs: Any) -> Any:
             stage_name = f"{fun.__module__}.{fun.__name__}"
             logging.info("initiating {} stage {}", event, stage_name)
             try:
@@ -81,7 +84,7 @@ def context_to_dict(context: ContextT) -> dict:
     return result
 
 
-def version_ge(current_version, comparing_version):
+def version_ge(current_version: Union[str, Version], comparing_version: str) -> bool:
     """
     Return True if `current_version` is greater or equal than `comparing_version`, or False otherwise.
     """
@@ -92,7 +95,7 @@ def version_ge(current_version, comparing_version):
     return parse_version(current_version) >= parse_version(comparing_version)  # type: ignore
 
 
-def version_lt(current_version, comparing_version):
+def version_lt(current_version: Union[str, Version], comparing_version: str) -> bool:
     """
     Return True if `current_version` is less than `comparing_version`, or False otherwise.
     """

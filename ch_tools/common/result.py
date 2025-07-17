@@ -23,7 +23,7 @@ class Status:
         self.verbose: list[str] = []
 
     @property
-    def message(self):
+    def message(self) -> str:
         """Result message."""
         # concatenate all received statuses
         message = ". ".join(self.text)

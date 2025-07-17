@@ -58,7 +58,7 @@ def render_docker_configs(context: ContextT) -> None:
                         shutil.copy(source_path, target_path)
 
 
-def _is_template(source_path):
+def _is_template(source_path: str) -> bool:
     for ignored_ext in IGNORED_EXT_LIST:
         if source_path.endswith(ignored_ext):
             return False
@@ -90,11 +90,11 @@ def _environment(context: ContextT, loader: Optional[BaseLoader] = None) -> Envi
     Create Environment object.
     """
 
-    def _get_file_size(container_name, path):
+    def _get_file_size(container_name: str, path: str) -> int:
         container = docker.get_container(context, container_name)
         return docker.get_file_size(container, path)
 
-    def _clickhouse_version(container_name):
+    def _clickhouse_version(container_name: str) -> str:
         return clickhouse_client(context, container_name).get_clickhouse_version()
 
     environment = Environment(

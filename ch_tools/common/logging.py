@@ -29,10 +29,10 @@ class Filter:
     Filter for luguru handler.
     """
 
-    def __init__(self, name):
+    def __init__(self, name: str) -> None:
         self._name = name
 
-    def __call__(self, record):
+    def __call__(self, record: Any) -> bool:
         """
         Filter callback to decide for each logged message whether it should be sent to the sink or not.
         """
@@ -40,7 +40,7 @@ class Filter:
         return record["extra"].get("logger_name") == self._name
 
 
-def make_filter(name):
+def make_filter(name: str) -> Filter:
     """
     Factory for filter creation.
     """
@@ -53,7 +53,7 @@ class InterceptHandler(logging.Handler):
     Helper class for logging interception.
     """
 
-    def emit(self, record: logging.LogRecord) -> None:
+    def emit(self, record: Any) -> None:
         """
         Intercept all records from the logging module and redirect them into loguru.
 
@@ -122,28 +122,34 @@ def configure(
     logging.basicConfig(handlers=[InterceptHandler()], level=0)
 
 
-def _log(level, msg, *args, **kwargs):
+def _log(level: str, msg: str, *args: Any, **kwargs: Any) -> None:
     exc_info = kwargs.get("exc_info", False)
     getLogger(logger_config["module"]).opt(exception=exc_info).log(
         level, msg, *args, **kwargs
     )
 
 
-def critical(msg, *args, **kwargs):
+def critical(msg: str, *args: Any, **kwargs: Any) -> None:
     """
     Log a message with severity 'CRITICAL'.
     """
     _log("CRITICAL", msg, *args, **kwargs)
 
 
-def error(msg, *args, **kwargs):
+def error(msg: Any, *args: Any, **kwargs: Any) -> None:
     """
     Log a message with severity 'ERROR'.
     """
     _log("ERROR", msg, *args, **kwargs)
 
 
-def exception(msg, *args, exc_info=True, short_stdout=False, **kwargs):
+def exception(
+    msg: Any,
+    *args: Any,
+    exc_info: bool = True,
+    short_stdout: bool = False,
+    **kwargs: Any,
+) -> None:
     """
     Log a message with severity 'ERROR' with exception information.
     """
@@ -160,28 +166,28 @@ def exception(msg, *args, exc_info=True, short_stdout=False, **kwargs):
         _log("ERROR", msg, *args, exc_info=exc_info, **kwargs)
 
 
-def warning(msg, *args, **kwargs):
+def warning(msg: Any, *args: Any, **kwargs: Any) -> None:
     """
     Log a message with severity 'WARNING'.
     """
     _log("WARNING", msg, *args, **kwargs)
 
 
-def info(msg, *args, **kwargs):
+def info(msg: Any, *args: Any, **kwargs: Any) -> None:
     """
     Log a message with severity 'INFO'.
     """
     _log("INFO", msg, *args, **kwargs)
 
 
-def debug(msg, *args, **kwargs):
+def debug(msg: Any, *args: Any, **kwargs: Any) -> None:
     """
     Log a message with severity 'DEBUG'.
     """
     _log("DEBUG", msg, *args, **kwargs)
 
 
-def log_status(status, msg):
+def log_status(status: Any, msg: str) -> None:
     """
     Log a message by status code.
     """
@@ -202,28 +208,28 @@ def getLogger(name: str) -> Any:
 
 
 # pylint: disable=invalid-name
-def getNativeLogger(name: str) -> Any:
+def getNativeLogger(name: str) -> logging.Logger:
     """
     Get logging logger with specific name. Might be used for interaction with other libraries.
     """
     return logging.getLogger(name)
 
 
-def add(sink, level, format_):
+def add(sink: Any, level: Any, format_: Any) -> None:
     """
     Add new log handler.
     """
     logger.add(sink=sink, level=level, format=format_)
 
 
-def set_module_log_level(module, level):
+def set_module_log_level(module: str, level: Any) -> None:
     """
     Set level for logging's logger. Might be used to control logs from other libraries.
     """
     getNativeLogger(module).setLevel(level)
 
 
-def disable_stdout_logger():
+def disable_stdout_logger() -> None:
     """
     Removes stdout handler. May be used for commands with "quiet" option.
     """
@@ -232,7 +238,7 @@ def disable_stdout_logger():
         logger_config["stdout_logger_id"] = None
 
 
-def enable_stdout_logger():
+def enable_stdout_logger() -> None:
     """
     Adds stdout logger.
     """
@@ -247,6 +253,6 @@ def enable_stdout_logger():
         )
 
 
-def print_last_exception():
+def print_last_exception() -> None:
     exc_type, value, traceback_ = sys.exc_info()
     traceback.print_exception(exc_type, value, traceback_, chain=False)

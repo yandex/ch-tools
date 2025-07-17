@@ -1,6 +1,7 @@
 import os.path
 import socket
 from copy import deepcopy
+from typing import Any
 
 from ch_tools.common.utils import deep_merge
 from ch_tools.common.yaml import load_yaml
@@ -236,7 +237,7 @@ DEFAULT_CONFIG = {
 }
 
 
-def load_config():
+def load_config() -> Any:
     """
     Read config file, apply defaults and return result configuration.
     """

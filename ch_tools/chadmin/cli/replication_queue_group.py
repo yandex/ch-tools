@@ -1,17 +1,19 @@
 from collections import defaultdict
+from typing import Any, Optional, Union
 
-from click import group, option, pass_context
+from click import Context, group, option, pass_context
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import delete_zk_node
 from ch_tools.common import logging
 from ch_tools.common.cli.parameters import TimeSpanParamType
+from ch_tools.common.clickhouse.client import OutputFormat
 from ch_tools.common.clickhouse.config import get_cluster_name
 
 
 @group("replication-queue", cls=Chadmin)
-def replication_queue_group():
+def replication_queue_group() -> None:
     """
     Commands to manage replication queue.
     """
@@ -94,7 +96,7 @@ def replication_queue_group():
     "-l", "--limit", type=int, help="Limit the max number of objects in the output."
 )
 @pass_context
-def list_replication_queue_command(ctx, **kwargs):
+def list_replication_queue_command(ctx: Context, **kwargs: Any) -> None:
     """
     List replication queue tasks.
     """
@@ -147,7 +149,7 @@ def list_replication_queue_command(ctx, **kwargs):
     " Multiple values can be specified through a comma.",
 )
 @pass_context
-def delete_command(ctx, **kwargs):
+def delete_command(ctx: Context, **kwargs: Any) -> None:
     """
     Delete replication queue tasks.
     """
@@ -182,24 +184,24 @@ def delete_command(ctx, **kwargs):
 
 
 def get_replication_queue_tasks(
-    ctx,
+    ctx: Context,
     *,
-    on_cluster=None,
-    failed=None,
-    exception=None,
-    executing=None,
-    min_age=None,
-    type_=None,
-    exclude_type=None,
-    database=None,
-    table=None,
-    partition_id=None,
-    min_postpone_count=None,
-    max_postpone_count=None,
-    verbose=None,
-    limit=None,
-    format_=None,
-):
+    on_cluster: Optional[bool] = None,
+    failed: Optional[bool] = None,
+    exception: Optional[str] = None,
+    executing: Optional[bool] = None,
+    min_age: Optional[Any] = None,
+    type_: Optional[str] = None,
+    exclude_type: Optional[str] = None,
+    database: Optional[str] = None,
+    table: Optional[str] = None,
+    partition_id: Optional[str] = None,
+    min_postpone_count: Optional[int] = None,
+    max_postpone_count: Optional[int] = None,
+    verbose: Optional[bool] = None,
+    limit: Optional[int] = None,
+    format_: Optional[Union[str, OutputFormat]] = None,
+) -> Any:
     cluster = get_cluster_name(ctx) if on_cluster else None
     query = """
     SELECT
@@ -291,7 +293,7 @@ def get_replication_queue_tasks(
     )
 
 
-def group_tasks_by_table(tasks):
+def group_tasks_by_table(tasks: Any) -> Any:
     result = defaultdict(list)
     for task in tasks:
         result[(task["database"], task["table"])].append(task)

@@ -1,4 +1,4 @@
-from click import group, option, pass_context
+from click import Context, group, option, pass_context
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.utils import execute_query
@@ -7,7 +7,7 @@ from ch_tools.common.clickhouse.config import get_cluster_name
 
 
 @group("crash-log", cls=Chadmin)
-def crash_log_group():
+def crash_log_group() -> None:
     """
     Commands for retrieving information from system.crash_log.
     """
@@ -23,7 +23,7 @@ def crash_log_group():
     help="Get log records from all hosts in the cluster.",
 )
 @pass_context
-def list_crashes_command(ctx, on_cluster):
+def list_crashes_command(ctx: Context, on_cluster: bool) -> None:
     cluster = get_cluster_name(ctx) if on_cluster else None
     query_str = """
         SELECT

@@ -1,6 +1,7 @@
 import click
 
 from ch_tools.common.commands.replication_lag import estimate_replication_lag
+from ch_tools.common.result import Result
 
 
 @click.command("replication-lag")
@@ -43,5 +44,13 @@ from ch_tools.common.commands.replication_lag import estimate_replication_lag
     help="Show details about lag.",
 )
 @click.pass_context
-def replication_lag_command(ctx, xcrit, crit, warn, mwarn, mcrit, verbose):
+def replication_lag_command(
+    ctx: click.Context,
+    xcrit: int,
+    crit: int,
+    warn: int,
+    mwarn: float,
+    mcrit: float,
+    verbose: int,
+) -> Result:
     return estimate_replication_lag(ctx, xcrit, crit, warn, mwarn, mcrit, verbose)

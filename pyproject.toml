@@ -95,7 +95,7 @@ dev = [
     "black >= 25.1",
     "ruff",
     "isort >= 6.0",
-    "mypy >= 1.10",
+    "mypy >= 1.17",
     "pylint >= 3.0, < 4.0",
     "types-kazoo",
     "types-python-dateutil",
@@ -198,3 +198,4 @@ ignore_missing_imports = true
 disallow_incomplete_defs = true
 check_untyped_defs = true
 exclude = ['tests/staging']
+disallow_untyped_defs = true

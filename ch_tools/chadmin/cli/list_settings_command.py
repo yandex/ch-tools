@@ -1,4 +1,4 @@
-from click import command, option, pass_context
+from click import Context, command, option, pass_context
 
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
@@ -8,7 +8,7 @@ from ch_tools.common import logging
 @option("--name")
 @option("--changed", is_flag=True)
 @pass_context
-def list_settings_command(ctx, name, changed):
+def list_settings_command(ctx: Context, name: str, changed: bool) -> None:
     """
     Show settings.
     """

@@ -1,7 +1,11 @@
+from click import Context
+
 from ch_tools.chadmin.internal.utils import execute_query
 
 
-def system_database_drop_replica(ctx, database_zk_path, replica, dry_run=False):
+def system_database_drop_replica(
+    ctx: Context, database_zk_path: str, replica: str, dry_run: bool = False
+) -> None:
     """
     Perform "SYSTEM DROP DATABASE REPLICA" query.
     """

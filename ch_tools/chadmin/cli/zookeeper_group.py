@@ -156,7 +156,7 @@ def list_command(ctx: Context, path: str, verbose: bool) -> None:
     if verbose:
         print_response(ctx, nodes, format_="table")
     else:
-        logging.info("\n".join(nodes))
+        logging.info("\n".join(nodes))  # type: ignore
 
 
 @zookeeper_group.command("stat")

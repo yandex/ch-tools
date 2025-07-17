@@ -1,4 +1,6 @@
-from click import group, option, pass_context
+from typing import Any
+
+from click import Context, group, option, pass_context
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.dictionary import list_dictionaries, reload_dictionary
@@ -7,7 +9,7 @@ from ch_tools.common.cli.formatting import print_response
 
 
 @group("dictionary", cls=Chadmin)
-def dictionary_group():
+def dictionary_group() -> None:
     """Commands to manage external dictionaries."""
     pass
 
@@ -16,7 +18,7 @@ def dictionary_group():
 @option("--name")
 @option("--status")
 @pass_context
-def list_command(ctx, name, status):
+def list_command(ctx: Context, name: str, status: str) -> None:
     """
     List dictionaries.
     """
@@ -32,7 +34,7 @@ def list_command(ctx, name, status):
 @option("--name")
 @option("--status")
 @pass_context
-def reload_command(ctx, name, status):
+def reload_command(ctx: Context, name: str, status: str) -> None:
     """
     Reload one or several dictionaries.
     """
@@ -42,7 +44,7 @@ def reload_command(ctx, name, status):
         reload_dictionary(ctx, database=dictionary["database"], name=dictionary["name"])
 
 
-def _full_name(dictionary):
+def _full_name(dictionary: Any) -> str:
     db_name = dictionary["database"]
     dict_name = dictionary["name"]
 

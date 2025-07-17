@@ -1,6 +1,6 @@
 import sys
 from functools import wraps
-from typing import Optional
+from typing import Any, Optional
 
 import click
 import cloup
@@ -33,7 +33,7 @@ class Chadmin(cloup.Group):
 
         @wraps(cmd_callback)
         @cloup.pass_context
-        def wrapper(ctx, *a, **kw):
+        def wrapper(ctx: Any, *a: Any, **kw: Any) -> None:
             logging.configure(
                 ctx.obj["config"]["loguru"],
                 "chadmin",

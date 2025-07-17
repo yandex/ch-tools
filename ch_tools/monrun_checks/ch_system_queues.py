@@ -1,3 +1,5 @@
+from typing import Any
+
 from cloup import command, option, pass_context
 
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
@@ -17,18 +19,18 @@ from ch_tools.common.result import CRIT, OK, WARNING, Result
 @option("--inserts-in-queue-crit", "inserts_in_queue_crit", type=int)
 @pass_context
 def system_queues_command(
-    ctx,
-    merges_in_queue_warn,
-    merges_in_queue_crit,
-    future_parts_warn,
-    future_parts_crit,
-    parts_to_check_warn,
-    parts_to_check_crit,
-    queue_size_warn,
-    queue_size_crit,
-    inserts_in_queue_warn,
-    inserts_in_queue_crit,
-):
+    ctx: Any,
+    merges_in_queue_warn: int,
+    merges_in_queue_crit: int,
+    future_parts_warn: int,
+    future_parts_crit: int,
+    parts_to_check_warn: int,
+    parts_to_check_crit: int,
+    queue_size_warn: int,
+    queue_size_crit: int,
+    inserts_in_queue_warn: int,
+    inserts_in_queue_crit: int,
+) -> Result:
     """
     Check system queues.
     """
@@ -69,7 +71,7 @@ def system_queues_command(
     return Result(OK)
 
 
-def _get_metrics(ctx):
+def _get_metrics(ctx: Any) -> list[dict]:
     """
     Select and return metrics form system.replicas.
     """
