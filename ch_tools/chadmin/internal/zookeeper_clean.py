@@ -566,8 +566,7 @@ def _clean_zero_copy_locks_for_table_and_part(
         if len(get_children(zk, table_path)) == 1:
             paths = [table_path]
     else:
-        template = re.escape(rf"{zero_copy_path}/{table_uuid}")
-        paths = find_paths(zk, zero_copy_path, [template])
+        paths = [f"{zero_copy_path}/{table_uuid}"] if table_uuid else []
 
     delete_recursive(zk, paths, dry_run)
 
