@@ -595,11 +595,12 @@ def _clean_zero_copy_locks_for_table_and_part(
     delete_recursive(zk, paths, dry_run)
 
 
-def _clean_zero_copy_locks_for_replica(
+def _clean_zero_copy_locks_for_remote_path_and_replica(
     zk: KazooClient,
     zero_copy_path: str,
     table_uuid: Optional[str],
     part_id: Optional[str],
+    remote_path_prefix: Optional[str],
     replica_name: str,
     dry_run: bool,
 ) -> None:
@@ -609,8 +610,11 @@ def _clean_zero_copy_locks_for_replica(
     anything = r".+"
     table_uuid = re.escape(table_uuid) if table_uuid else anything
     part_id = re.escape(part_id) if part_id else anything
-    replica_name = re.escape(replica_name)
-    template = rf"{zero_copy_path}/{table_uuid}/{part_id}/.+/{replica_name}"
+    remote_path = (
+        rf"{re.escape(remote_path_prefix)}.*" if remote_path_prefix else anything
+    )
+    replica_name = re.escape(replica_name) if replica_name else anything
+    template = rf"{zero_copy_path}/{table_uuid}/{part_id}/{remote_path}/{replica_name}"
     predicate = partial(re.match, template)
 
     paths_to_delete = []
@@ -631,6 +635,7 @@ def _validate_args(
     zero_copy_path: Optional[str] = None,
     table_uuid: Optional[str] = None,
     part_id: Optional[str] = None,
+    remote_path_prefix: Optional[str] = None,
 ) -> None:
     if zero_copy_path:
         verify_regex = ctx.obj["config"]["chadmin"]["zookeeper"][
@@ -657,6 +662,12 @@ def _validate_args(
                     f"Given 'part_id' value '{part_id}' doesn't look like a part name."
                 )
 
+    if remote_path_prefix:
+        if "/" in remote_path_prefix:
+            raise RuntimeError(
+                f"Given 'remote_path_prefix' value '{remote_path_prefix}' doesn't look like a valid prefix."
+            )
+
 
 def delete_zero_copy_locks(
     ctx: Context,
@@ -664,24 +675,31 @@ def delete_zero_copy_locks(
     disk_type: Optional[str] = None,
     table_uuid: Optional[str] = None,
     part_id: Optional[str] = None,
+    remote_path_prefix: Optional[str] = None,
     replica_name: Optional[str] = None,
     dry_run: bool = False,
 ) -> None:
     """
     Recursively find all zero-copy lock's paths by regex and delete them.
     """
-    _validate_args(ctx, zero_copy_path, table_uuid, part_id)
+    _validate_args(ctx, zero_copy_path, table_uuid, part_id, remote_path_prefix)
 
     zero_copy_path = zero_copy_path or _get_zero_copy_zookeeper_path(
         ctx, disk_type, table_uuid
     )
 
     with zk_client(ctx) as zk:
-        if not replica_name:
-            _clean_zero_copy_locks_for_table_and_part(
-                zk, zero_copy_path, table_uuid, part_id, dry_run
+        if replica_name or remote_path_prefix:
+            _clean_zero_copy_locks_for_remote_path_and_replica(
+                zk,
+                zero_copy_path,
+                table_uuid,
+                part_id,
+                remote_path_prefix,
+                replica_name,
+                dry_run,
             )
         else:
-            _clean_zero_copy_locks_for_replica(
-                zk, zero_copy_path, table_uuid, part_id, replica_name, dry_run
+            _clean_zero_copy_locks_for_table_and_part(
+                zk, zero_copy_path, table_uuid, part_id, dry_run
             )

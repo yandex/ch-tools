@@ -435,9 +435,18 @@ def remove_hosts_from_table(
     default=None,
     help=("Replica name to clean."),
 )
+@option(
+    "--remote-path-prefix",
+    "remote_path_prefix",
+    default=None,
+    help=(
+        "Prefix for the remote path component of the zero-copy lock path."
+        "Example: 'cloud_storage_shard_1_'"
+    ),
+)
 @constraint(
     RequireAtLeast(1),
-    ["table_uuid", "part_id", "replica"],
+    ["table_uuid", "part_id", "remote_path_prefix", "replica"],
 )
 @option(
     "--dry-run",
@@ -452,6 +461,7 @@ def clean_zk_locks_command(
     disk_type: Optional[str] = None,
     table_uuid: Optional[str] = None,
     part_id: Optional[str] = None,
+    remote_path_prefix: Optional[str] = None,
     replica: Optional[str] = None,
     dry_run: bool = False,
 ) -> None:
@@ -459,5 +469,12 @@ def clean_zk_locks_command(
     Clean zero copy locks.
     """
     delete_zero_copy_locks(
-        ctx, zero_copy_path, disk_type, table_uuid, part_id, replica, dry_run
+        ctx,
+        zero_copy_path,
+        disk_type,
+        table_uuid,
+        part_id,
+        remote_path_prefix,
+        replica,
+        dry_run,
     )

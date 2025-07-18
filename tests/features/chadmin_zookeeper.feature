@@ -183,6 +183,29 @@ Feature: chadmin zookeeper commands.
     """
     Then the list of children on clickhouse01 for zk node /custom/zero_copy/zero_copy_s3 is empty
 
+
+  Scenario: Cleanup all zero-copy locks for given remote path prefix
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS test ON CLUSTER 'cluster'; 
+    CREATE DATABASE test ON CLUSTER 'cluster';
+
+    CREATE TABLE test.table_01 UUID '10000000-0000-0000-0000-000000000001' ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n
+    SETTINGS storage_policy='object_storage',allow_remote_fs_zero_copy_replication=1;
+    INSERT INTO test.table_01 SELECT number FROM numbers(2);
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/ is equal to
+    """
+    /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/0_0_0_0
+    /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/1_0_0_0
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper cleanup-zero-copy-locks --remote-path-prefix 'data_cluster_id'
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/ is empty
+
   
   Scenario: Cleanup zero-copy locks with invalid arguments
     When we try to execute command on clickhouse01
@@ -208,6 +231,14 @@ Feature: chadmin zookeeper commands.
     Then it fails with response contains
     """
     /clickhouse/tables
+    """
+    When we try to execute command on clickhouse01
+    """
+    chadmin zookeeper cleanup-zero-copy-locks --remote-path-prefix cloud_storage/shard1/
+    """
+    Then it fails with response contains
+    """
+    cloud_storage/shard1/
     """
     
   Scenario: Cleanup all hosts
