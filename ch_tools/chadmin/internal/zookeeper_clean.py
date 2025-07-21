@@ -601,7 +601,7 @@ def _clean_zero_copy_locks_for_remote_path_and_replica(
     table_uuid: Optional[str],
     part_id: Optional[str],
     remote_path_prefix: Optional[str],
-    replica_name: str,
+    replica_name: Optional[str],
     dry_run: bool,
 ) -> None:
     """
