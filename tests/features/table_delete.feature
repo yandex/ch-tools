@@ -379,7 +379,7 @@ Feature: chadmin delete detached table commands
     """
     DETACH TABLE test_drop_db.test_repl SYNC;
     """
-    Then the list of children on clickhouse01 for zk node /clickhouse/tables/{shard}/ are equal to
+    Then the list of children on clickhouse01 for zk node /clickhouse/tables/{shard}/ is equal to
     """
     /clickhouse/tables/shard1/test_repl
     """
@@ -398,7 +398,7 @@ Feature: chadmin delete detached table commands
     Then we get response
     """
     """
-    Then the list of children on clickhouse01 for zk node /clickhouse/tables/{shard}/ are equal to
+    Then the list of children on clickhouse01 for zk node /clickhouse/tables/{shard}/ is equal to
     """
     """
 
@@ -431,12 +431,12 @@ Feature: chadmin delete detached table commands
     Then check local disk contains table test_repl_expected data in clickhouse01
     Then check local disk contains table test_repl_expected data in clickhouse02
 
-    Then the list of children on clickhouse01 for zk node /clickhouse/tables/{shard}/ are equal to
+    Then the list of children on clickhouse01 for zk node /clickhouse/tables/{shard}/ is equal to
     """
     /clickhouse/tables/shard1/test_repl
     /clickhouse/tables/shard1/test_repl_expected
     """
-    Then the list of children on clickhouse02 for zk node /clickhouse/tables/{shard}/ are equal to
+    Then the list of children on clickhouse02 for zk node /clickhouse/tables/{shard}/ is equal to
     """
     /clickhouse/tables/shard1/test_repl
     /clickhouse/tables/shard1/test_repl_expected
@@ -470,7 +470,7 @@ Feature: chadmin delete detached table commands
     """
     test_repl_expected
     """
-    Then the list of children on clickhouse01 for zk node /clickhouse/tables/{shard}/ are equal to
+    Then the list of children on clickhouse01 for zk node /clickhouse/tables/{shard}/ is equal to
     """
     /clickhouse/tables/shard1/test_repl
     /clickhouse/tables/shard1/test_repl_expected
@@ -494,7 +494,7 @@ Feature: chadmin delete detached table commands
     """
     test_repl_expected
     """
-    Then the list of children on clickhouse02 for zk node /clickhouse/tables/{shard}/ are equal to
+    Then the list of children on clickhouse02 for zk node /clickhouse/tables/{shard}/ is equal to
     """
     /clickhouse/tables/shard1/test_repl_expected
     """

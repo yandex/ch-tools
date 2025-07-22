@@ -4,7 +4,17 @@ import re
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from typing import Any, Callable, Deque, Dict, Generator, List, Optional, Tuple
+from functools import partial
+from typing import (
+    Any,
+    Callable,
+    Deque,
+    Dict,
+    Generator,
+    List,
+    Optional,
+    Tuple,
+)
 
 from click import BadParameter, Context
 from kazoo.client import KazooClient
@@ -27,8 +37,12 @@ from ch_tools.chadmin.internal.table_replica import (
 )
 from ch_tools.chadmin.internal.utils import chunked
 from ch_tools.chadmin.internal.zookeeper import (
+    _get_zero_copy_zookeeper_path,
+    delete_recursive,
     delete_zk_nodes,
     escape_for_zookeeper,
+    find_leafs_and_nodes,
+    find_paths,
     format_path,
     get_children,
     zk_client,
@@ -38,6 +52,7 @@ from ch_tools.common.clickhouse.client import ClickhouseError
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
 
 REPLICATED_DATABASE_MARKER = bytes("DatabaseReplicated", "utf-8")
+ZERO_COPY_LOCKS_TO_DELETE_BATCH = 10000
 
 
 def replace_macros_in_nodes(func: Callable) -> Callable:
@@ -553,3 +568,138 @@ def clean_zk_metadata_for_hosts(
                 )
 
             mark_finished_ddl_query(zk)
+
+
+def _clean_zero_copy_locks_for_table_and_part(
+    zk: KazooClient,
+    zero_copy_path: str,
+    table_uuid: Optional[str],
+    part_id: Optional[str],
+    dry_run: bool,
+) -> None:
+    """
+    No need to find every replica's path. Removing part's or table's directory is enough.
+    """
+    if part_id:
+        template = re.escape(rf"{zero_copy_path}/{table_uuid}/{part_id}")
+        paths = find_paths(zk, zero_copy_path, [template])
+        if not paths:
+            return
+        table_path = os.path.dirname(paths[0])
+        # Checking if we can just delete the table's directory instead
+        if len(get_children(zk, table_path)) == 1:
+            paths = [table_path]
+    else:
+        paths = [f"{zero_copy_path}/{table_uuid}"] if table_uuid else []
+
+    delete_recursive(zk, paths, dry_run)
+
+
+def _clean_zero_copy_locks_for_remote_path_and_replica(
+    zk: KazooClient,
+    zero_copy_path: str,
+    table_uuid: Optional[str],
+    part_id: Optional[str],
+    remote_path_prefix: Optional[str],
+    replica_name: Optional[str],
+    dry_run: bool,
+) -> None:
+    """
+    Find and delete all zero-copy locks for given replica.
+    """
+    anything = r".+"
+    table_uuid = re.escape(table_uuid) if table_uuid else anything
+    part_id = re.escape(part_id) if part_id else anything
+    remote_path = (
+        rf"{re.escape(remote_path_prefix)}.*" if remote_path_prefix else anything
+    )
+    replica_name = re.escape(replica_name) if replica_name else anything
+    template = rf"{zero_copy_path}/{table_uuid}/{part_id}/{remote_path}/{replica_name}"
+    predicate = partial(re.match, template)
+
+    paths_to_delete = []
+    for path_to_delete in find_leafs_and_nodes(zk, zero_copy_path, predicate):
+        # Do not delete root path
+        if zero_copy_path == path_to_delete:
+            continue
+        paths_to_delete.append(path_to_delete)
+        if len(paths_to_delete) >= ZERO_COPY_LOCKS_TO_DELETE_BATCH:
+            delete_recursive(zk, paths_to_delete, dry_run)
+            paths_to_delete = []
+
+    delete_recursive(zk, paths_to_delete, dry_run)
+
+
+def _validate_args(
+    ctx: Context,
+    zero_copy_path: Optional[str] = None,
+    table_uuid: Optional[str] = None,
+    part_id: Optional[str] = None,
+    remote_path_prefix: Optional[str] = None,
+) -> None:
+    if zero_copy_path:
+        verify_regex = ctx.obj["config"]["chadmin"]["zookeeper"][
+            "verify_zookeeper_zero_copy_path_regex"
+        ]
+        if not re.match(verify_regex, zero_copy_path):
+            raise RuntimeError(
+                f"Given 'zero_copy_path' value '{zero_copy_path}' doesn't look like a zero-copy path. See 'verify_zookeeper_zero_copy_path_regex' setting in config."
+            )
+
+    if table_uuid and not re.match(
+        r"^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$", table_uuid
+    ):
+        raise RuntimeError(
+            f"Given 'table_uuid' value '{table_uuid}' doesn't look like a uuid."
+        )
+
+    # partition_min_max_level_mutation
+    if part_id:
+        if not re.match(r"^(.+?)_(\d+)_(\d+)_(\d+)(_\d+)?$", part_id):
+            # Old part name format has YYYYMMDD_YYYYMMDD instead of partition id
+            if not re.match(r"^(\d{8})_(\d{8})_(\d+)_(\d+)_(\d+)(_\d+)?$", part_id):
+                raise RuntimeError(
+                    f"Given 'part_id' value '{part_id}' doesn't look like a part name."
+                )
+
+    if remote_path_prefix:
+        if "/" in remote_path_prefix:
+            raise RuntimeError(
+                f"Given 'remote_path_prefix' value '{remote_path_prefix}' doesn't look like a valid prefix."
+            )
+
+
+def delete_zero_copy_locks(
+    ctx: Context,
+    zero_copy_path: Optional[str] = None,
+    disk_type: Optional[str] = None,
+    table_uuid: Optional[str] = None,
+    part_id: Optional[str] = None,
+    remote_path_prefix: Optional[str] = None,
+    replica_name: Optional[str] = None,
+    dry_run: bool = False,
+) -> None:
+    """
+    Recursively find all zero-copy lock's paths by regex and delete them.
+    """
+    _validate_args(ctx, zero_copy_path, table_uuid, part_id, remote_path_prefix)
+
+    zero_copy_path = zero_copy_path or _get_zero_copy_zookeeper_path(
+        ctx, disk_type, table_uuid
+    )
+
+    with zk_client(ctx) as zk:
+        if replica_name or remote_path_prefix:
+            _clean_zero_copy_locks_for_remote_path_and_replica(
+                zk,
+                zero_copy_path,
+                table_uuid,
+                part_id,
+                remote_path_prefix,
+                replica_name,
+                dry_run,
+            )
+        else:
+            _clean_zero_copy_locks_for_table_and_part(
+                zk, zero_copy_path, table_uuid, part_id, dry_run
+            )

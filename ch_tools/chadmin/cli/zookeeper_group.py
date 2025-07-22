@@ -1,8 +1,17 @@
 import re
 import sys
-from typing import Any
+from typing import Any, Optional
 
-from click import Context, argument, group, option, pass_context
+from cloup import (
+    Context,
+    argument,
+    constraint,
+    group,
+    option,
+    option_group,
+    pass_context,
+)
+from cloup.constraints import If, IsSet, RequireAtLeast, require_all
 from kazoo.security import make_digest_acl
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -17,7 +26,10 @@ from ch_tools.chadmin.internal.zookeeper import (
     update_acls_zk_node,
     update_zk_nodes,
 )
-from ch_tools.chadmin.internal.zookeeper_clean import clean_zk_metadata_for_hosts
+from ch_tools.chadmin.internal.zookeeper_clean import (
+    clean_zk_metadata_for_hosts,
+    delete_zero_copy_locks,
+)
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_json, print_response
 from ch_tools.common.cli.parameters import ListParamType, StringParamType
@@ -338,6 +350,12 @@ def clickhouse_hosts_command(
         zk_ddl_query_path=config["clickhouse"]["distributed_ddl_path"],
         dry_run=dry_run,
     )
+    for replica in fqdn:
+        delete_zero_copy_locks(
+            ctx,
+            replica_name=replica,
+            dry_run=dry_run,
+        )
 
 
 @zookeeper_group.command(
@@ -364,4 +382,99 @@ def remove_hosts_from_table(
         cleanup_database=False,
         cleanup_ddl_queue=False,
         dry_run=dry_run,
+    )
+    for replica in fqdn:
+        delete_zero_copy_locks(
+            ctx,
+            replica_name=replica,
+            dry_run=dry_run,
+        )
+
+
+@zookeeper_group.command("cleanup-zero-copy-locks")
+@option(
+    "--zero-copy-path",
+    "zero_copy_path",
+    default=None,
+    help=(
+        "Path to zero-copy related data in ZooKeeper."
+        "Will use 'remote_fs_zero_copy_zookeeper_path' value from ClickHouse by default."
+    ),
+)
+@option(
+    "--disk_type",
+    "disk_type",
+    default="s3",
+    help=(
+        "Object storage disk type from ClickHouse."
+        "Examples are s3, hdfs, azure_blob_storage, local_blob_storage..."
+    ),
+)
+@option_group(
+    "Cleaning scope selection options",
+    option(
+        "-t",
+        "--table-uuid",
+        "table_uuid",
+        default=None,
+        help=("UUID of a table to clean."),
+    ),
+    option(
+        "-p",
+        "--part-id",
+        "part_id",
+        default=None,
+        help=("Part id to clean. Also requires table to be specified."),
+    ),
+    constraint=If(IsSet("part_id"), then=require_all),
+)
+@option(
+    "-r",
+    "--replica",
+    "replica",
+    default=None,
+    help=("Replica name to clean."),
+)
+@option(
+    "--remote-path-prefix",
+    "remote_path_prefix",
+    default=None,
+    help=(
+        "Prefix for the remote path component of the zero-copy lock path."
+        "Example: 'cloud_storage_shard_1_'"
+    ),
+)
+@constraint(
+    RequireAtLeast(1),
+    ["table_uuid", "part_id", "remote_path_prefix", "replica"],
+)
+@option(
+    "--dry-run",
+    "dry_run",
+    is_flag=True,
+    help=("Do not delete objects. Show only statistics."),
+)
+@pass_context
+def clean_zk_locks_command(
+    ctx: Context,
+    zero_copy_path: Optional[str] = None,
+    disk_type: Optional[str] = None,
+    table_uuid: Optional[str] = None,
+    part_id: Optional[str] = None,
+    remote_path_prefix: Optional[str] = None,
+    replica: Optional[str] = None,
+    dry_run: bool = False,
+) -> None:
+    """
+    Clean zero copy locks.
+    """
+    delete_zero_copy_locks(
+        ctx,
+        zero_copy_path,
+        disk_type,
+        table_uuid,
+        part_id,
+        remote_path_prefix,
+        replica,
+        dry_run,
     )
