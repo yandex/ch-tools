@@ -14,6 +14,7 @@ from ch_tools.chadmin.internal.table_replica import (
     system_table_drop_replica_by_zk_path,
 )
 from ch_tools.chadmin.internal.zookeeper_clean import delete_zero_copy_locks
+from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.clickhouse.config import get_cluster_name
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
@@ -347,13 +348,20 @@ def drop_command(
     zookeeper_path: str,
     table_uuid: str,
     zero_copy_path: Optional[str] = None,
-    disk_type: Optional[str] = None,
+    disk_type: str = "s3",
     dry_run: bool = False,
 ) -> None:
     """
     Drop replica and zero-copy locks in ZooKeeper.
     """
-    system_table_drop_replica_by_zk_path(ctx, replica, zookeeper_path, dry_run)
+    try:
+        system_table_drop_replica_by_zk_path(ctx, replica, zookeeper_path, dry_run)
+    except:
+        logging.warning(
+            "Drop replica failed, zero-copy locks are not deleted. "
+            "Retry this command or use 'zookeeper cleanup-zero-copy-locks' instead."
+        )
+        raise
     delete_zero_copy_locks(
         ctx,
         zero_copy_path=zero_copy_path,
