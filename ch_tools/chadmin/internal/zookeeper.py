@@ -313,6 +313,17 @@ def escape_for_zookeeper(s: str) -> str:
     return "".join(result)
 
 
+def get_table_shared_id(ctx: Context, zk_path: str) -> str:
+    """
+    Tries to get table_shared_id from given path in zookeeper.
+    """
+    shared_id_path = os.path.join(zk_path, "table_shared_id")
+    try:
+        return get_zk_node(ctx, shared_id_path)
+    except NoNodeError:
+        return ""
+
+
 @contextmanager
 def zk_client(ctx: Context) -> Generator[KazooClient, None, None]:
     zk = _get_zk_client(ctx)
