@@ -34,7 +34,7 @@ Feature: chadmin replica commands.
     """
     And we execute command on clickhouse01
     """
-    chadmin replica drop clickhouse01.ch_tools_test /tables/table_01 -t 10000000-0000-0000-0000-000000000001
+    chadmin replica drop clickhouse01.ch_tools_test /tables/table_01
     """
     Then the list of children on clickhouse01 for zk node /tables/table_01/replicas is equal to
     """
@@ -51,7 +51,7 @@ Feature: chadmin replica commands.
     """
     ANd we execute command on clickhouse01
     """
-    chadmin replica drop clickhouse02.ch_tools_test /tables/table_01 -t 10000000-0000-0000-0000-000000000001
+    chadmin replica drop clickhouse02.ch_tools_test /tables/table_01
     """
     Then the list of children on clickhouse01 for zk node /tables is equal to
     """

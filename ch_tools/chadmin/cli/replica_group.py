@@ -13,6 +13,7 @@ from ch_tools.chadmin.internal.table_replica import (
     restore_replica,
     system_table_drop_replica_by_zk_path,
 )
+from ch_tools.chadmin.internal.zookeeper import get_table_shared_id
 from ch_tools.chadmin.internal.zookeeper_clean import delete_zero_copy_locks
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
@@ -312,8 +313,9 @@ def restore_command(
     "--table-uuid",
     "table_uuid",
     default=None,
-    required=True,
-    help=("UUID of a table to clean."),
+    help=(
+        "UUID of a table to clean. Will get it from 'table_shared_id' node by default."
+    ),
 )
 @option(
     "--zero-copy-path",
@@ -362,6 +364,14 @@ def drop_command(
             "Retry this command or use 'zookeeper cleanup-zero-copy-locks' instead."
         )
         raise
+
+    table_uuid = table_uuid or get_table_shared_id(ctx, zookeeper_path)
+
+    if not table_uuid:
+        logging.info(
+            "Can't find table_shared_id to clean zero-copy locks. Cleaning is skipped."
+        )
+
     delete_zero_copy_locks(
         ctx,
         zero_copy_path=zero_copy_path,
