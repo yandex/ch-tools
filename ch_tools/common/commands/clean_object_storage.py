@@ -345,6 +345,7 @@ def _clean_object_storage(
     execute_query(
         ctx,
         antijoin_query,
+        timeout=timeout,
         settings=query_settings,
     )
     orphaned_objects_iterator = _object_list_generator(
