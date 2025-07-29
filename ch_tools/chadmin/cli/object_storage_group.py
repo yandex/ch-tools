@@ -129,9 +129,7 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     "--verify-paths-regex",
     "verify_paths_regex",
     default=None,
-    help=(
-        "Verify paths to delete and in system.remote_data_paths with regex."
-    ),
+    help=("Verify paths to delete and in system.remote_data_paths with regex."),
 )
 @option(
     "--max-size-to-delete-bytes",
