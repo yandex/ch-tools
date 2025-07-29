@@ -130,8 +130,15 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     "verify_paths_regex",
     default=None,
     help=(
-        "Regex for verifying that paths for delete and in system.remote_data_paths are ."
+        "Verify paths to delete and in system.remote_data_paths with regex."
     ),
+)
+@option(
+    "--max-size-to-delete-bytes",
+    "max_size_to_delete_bytes",
+    type=int,
+    default=0,
+    help=("Max size to delete."),
 )
 @pass_context
 def clean_command(
@@ -147,6 +154,7 @@ def clean_command(
     store_state_local: bool,
     store_state_zk_path: str,
     verify_paths_regex: Optional[str],
+    max_size_to_delete_bytes: int,
 ) -> None:
     """
     Clean orphaned S3 objects.
@@ -171,6 +179,7 @@ def clean_command(
             keep_paths,
             use_saved_list,
             verify_paths_regex,
+            max_size_to_delete_bytes,
         )
     finally:
         state = OrphanedObjectsState(total_size, error_msg)

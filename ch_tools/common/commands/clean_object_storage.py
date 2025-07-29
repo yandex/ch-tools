@@ -75,6 +75,7 @@ def clean(
     keep_paths: bool,
     use_saved_list: bool,
     verify_paths_regex: Optional[str] = None,
+    max_size_to_delete_bytes: int = 0,
 ) -> Tuple[int, int]:
     """
     Clean orphaned S3 objects.
@@ -126,6 +127,7 @@ def clean(
             orphaned_objects_table,
             use_saved_list,
             verify_paths_regex,
+            max_size_to_delete_bytes,
         )
     finally:
         if not keep_paths:
@@ -276,6 +278,7 @@ def _clean_object_storage(
     orphaned_objects_table: str,
     use_saved_list: bool,
     verify_paths_regex: Optional[str] = None,
+    max_size_to_delete_bytes: int = 0,
 ) -> Tuple[int, int]:
     """
     Delete orphaned objects from object storage.
@@ -366,11 +369,29 @@ def _clean_object_storage(
 
     deleted, total_size = 0, 0
     for objects in chunked(orphaned_objects_iterator(), KEYS_BATCH_SIZE):
+        batch_size = sum(obj.size for obj in objects)
+        is_last_batch = False
+
+        if (
+            max_size_to_delete_bytes
+            and total_size + batch_size > max_size_to_delete_bytes
+        ):
+            # To fit into the size restriction: sort all objects by size
+            # And remove elements from the end;
+            is_last_batch = True
+            objects = sorted(objects, key=lambda obj: obj.size)
+            while total_size + batch_size > max_size_to_delete_bytes:
+                batch_size -= objects[-1].size
+                objects.pop()
+
         chunk_deleted, chunk_size = cleanup_s3_object_storage(
             disk_conf, iter(objects), dry_run
         )
         deleted += chunk_deleted
         total_size += chunk_size
+
+        if is_last_batch:
+            break
 
     logging.info(
         f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
