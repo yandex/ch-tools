@@ -136,7 +136,11 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     "max_size_to_delete_bytes",
     type=int,
     default=0,
-    help=("Max size to delete."),
+    help=(
+        "Maximum total size (in bytes) of objects to delete. "
+        "If set to 0, no limit is applied. "
+        "Deletion will stop once this limit is reached."
+    ),
 )
 @pass_context
 def clean_command(
