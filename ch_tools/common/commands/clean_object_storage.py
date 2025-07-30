@@ -75,7 +75,8 @@ def clean(
     keep_paths: bool,
     use_saved_list: bool,
     verify_paths_regex: Optional[str] = None,
-    max_size_to_delete_bytes: int = 0,
+    max_size_to_delete_bytes: Optional[int] = None,
+    max_size_to_delete_fraction: Optional[float] = None,
 ) -> Tuple[int, int]:
     """
     Clean orphaned S3 objects.
@@ -128,6 +129,7 @@ def clean(
             use_saved_list,
             verify_paths_regex,
             max_size_to_delete_bytes,
+            max_size_to_delete_fraction,
         )
     finally:
         if not keep_paths:
@@ -278,7 +280,8 @@ def _clean_object_storage(
     orphaned_objects_table: str,
     use_saved_list: bool,
     verify_paths_regex: Optional[str] = None,
-    max_size_to_delete_bytes: int = 0,
+    max_size_to_delete_bytes: Optional[int] = None,
+    max_size_to_delete_fraction: Optional[float] = None,
 ) -> Tuple[int, int]:
     """
     Delete orphaned objects from object storage.
@@ -293,7 +296,9 @@ def _clean_object_storage(
         logging.info(
             f"Collecting objects... (Disk: '{disk_conf.name}', Endpoint '{disk_conf.endpoint_url}', Bucket: '{disk_conf.bucket_name}', Prefix: '{prefix}')",
         )
-        _traverse_object_storage(ctx, listing_table, from_time, to_time, prefix)
+        size_of_object_storage = _traverse_object_storage(
+            ctx, listing_table, from_time, to_time, prefix
+        )
 
     ch_client = clickhouse_client(ctx)
     user_name = ch_client.user or ""
@@ -341,8 +346,6 @@ def _clean_object_storage(
     else:
         logging.info("Deleting orphaned objects...")
 
-    deleted = 0
-    total_size = 0
     timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
     query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
     execute_query(
@@ -368,19 +371,29 @@ def _clean_object_storage(
         )
 
     deleted, total_size = 0, 0
+
+    if max_size_to_delete_bytes and max_size_to_delete_fraction:
+        max_size_to_delete = min(
+            max_size_to_delete_bytes,
+            size_of_object_storage * max_size_to_delete_fraction,
+        )
+    elif max_size_to_delete_bytes:
+        max_size_to_delete = max_size_to_delete_bytes
+    elif max_size_to_delete_fraction:
+        max_size_to_delete = size_of_object_storage * max_size_to_delete_fraction
+    else:
+        max_size_to_delete = None
+
     for objects in chunked(orphaned_objects_iterator(), KEYS_BATCH_SIZE):
         batch_size = sum(obj.size for obj in objects)
         is_last_batch = False
 
-        if (
-            max_size_to_delete_bytes
-            and total_size + batch_size > max_size_to_delete_bytes
-        ):
+        if max_size_to_delete and total_size + batch_size > max_size_to_delete:
             # To fit into the size restriction: sort all objects by size
             # And remove elements from the end;
             is_last_batch = True
             objects = sorted(objects, key=lambda obj: obj.size)
-            while total_size + batch_size > max_size_to_delete_bytes:
+            while total_size + batch_size > max_size_to_delete:
                 batch_size -= objects[-1].size
                 objects.pop()
 
@@ -406,17 +419,19 @@ def _traverse_object_storage(
     from_time: Optional[timedelta],
     to_time: timedelta,
     prefix: str,
-) -> None:
+) -> int:
     """
     Traverse S3 disk's bucket and put object names to the ClickHouse table.
     """
     obj_paths_batch: List[ObjListItem] = []
     counter = 0
     now = datetime.now(timezone.utc)
-
+    size_of_all_objects = 0
     for obj in s3_object_storage_iterator(
         ctx.obj["disk_configuration"], object_name_prefix=prefix
     ):
+        size_of_all_objects += obj.size
+        print
         if obj.last_modified > now - to_time:
             continue
         if from_time is not None and obj.last_modified < now - from_time:
@@ -433,6 +448,7 @@ def _traverse_object_storage(
         _insert_listing_batch(ctx, obj_paths_batch, listing_table)
 
     logging.info("Collected {} objects", counter)
+    return size_of_all_objects
 
 
 def _insert_listing_batch(

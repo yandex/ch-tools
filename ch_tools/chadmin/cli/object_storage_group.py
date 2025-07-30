@@ -2,6 +2,8 @@ from datetime import timedelta
 from typing import Any, Optional
 
 from click import Choice, Context, group, option, pass_context
+from cloup import constraint
+from cloup.constraints import mutually_exclusive
 from humanfriendly import format_size
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -135,12 +137,26 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     "--max-size-to-delete-bytes",
     "max_size_to_delete_bytes",
     type=int,
-    default=0,
+    default=None,
     help=(
         "Maximum total size (in bytes) of objects to delete. "
         "If set to 0, no limit is applied. "
         "Deletion will stop once this limit is reached."
     ),
+)
+@option(
+    "--max-size-to-delete-fraction",
+    "max_size_to_delete_fraction",
+    type=float,
+    default=None,
+    help=(
+        "Maximum total size (in bytes) of objects to delete. "
+        "If set to 0, no limit is applied. "
+        "Deletion will stop once this limit is reached."
+    ),
+)
+@constraint(
+    mutually_exclusive, ["max_size_to_delete_fraction", "max_size_to_delete_bytes"]
 )
 @pass_context
 def clean_command(
@@ -156,7 +172,8 @@ def clean_command(
     store_state_local: bool,
     store_state_zk_path: str,
     verify_paths_regex: Optional[str],
-    max_size_to_delete_bytes: int,
+    max_size_to_delete_bytes: Optional[int],
+    max_size_to_delete_fraction: Optional[float],
 ) -> None:
     """
     Clean orphaned S3 objects.
@@ -182,6 +199,7 @@ def clean_command(
             use_saved_list,
             verify_paths_regex,
             max_size_to_delete_bytes,
+            max_size_to_delete_fraction,
         )
     finally:
         state = OrphanedObjectsState(total_size, error_msg)
