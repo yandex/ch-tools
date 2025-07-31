@@ -11,7 +11,11 @@ from ch_tools.chadmin.internal.table_replica import (
     list_table_replicas,
     restart_table_replica,
     restore_replica,
+    system_table_drop_replica_by_zk_path,
 )
+from ch_tools.chadmin.internal.zookeeper import get_table_shared_id
+from ch_tools.chadmin.internal.zookeeper_clean import delete_zero_copy_locks
+from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.clickhouse.config import get_cluster_name
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
@@ -299,3 +303,80 @@ def restore_command(
             )
         )
     execute_tasks_in_parallel(tasks, max_workers=workers, keep_going=keep_going)
+
+
+@replica_group.command("drop")
+@argument("replica", required=True)
+@argument("zookeeper_path", required=True)
+@option(
+    "-t",
+    "--table-uuid",
+    "table_uuid",
+    default=None,
+    help=(
+        "UUID of a table to clean. Will get it from 'table_shared_id' node by default."
+    ),
+)
+@option(
+    "--zero-copy-path",
+    "zero_copy_path",
+    default=None,
+    help=(
+        "Path to zero-copy related data in ZooKeeper."
+        "Will use 'remote_fs_zero_copy_zookeeper_path' value from ClickHouse by default."
+    ),
+)
+@option(
+    "--disk_type",
+    "disk_type",
+    default="s3",
+    help=(
+        "Object storage disk type from ClickHouse."
+        "Examples are s3, hdfs, azure_blob_storage, local_blob_storage..."
+    ),
+)
+@option(
+    "-n",
+    "--dry-run",
+    "dry_run",
+    is_flag=True,
+    default=False,
+    help="Enable dry run mode and do not perform any modifying actions.",
+)
+@pass_context
+def drop_command(
+    ctx: Context,
+    replica: str,
+    zookeeper_path: str,
+    table_uuid: str,
+    zero_copy_path: Optional[str] = None,
+    disk_type: str = "s3",
+    dry_run: bool = False,
+) -> None:
+    """
+    Drop replica and zero-copy locks in ZooKeeper.
+    """
+    try:
+        system_table_drop_replica_by_zk_path(ctx, replica, zookeeper_path, dry_run)
+    except:
+        logging.warning(
+            "Drop replica failed, zero-copy locks are not deleted. "
+            "Retry this command or use 'zookeeper cleanup-zero-copy-locks' instead."
+        )
+        raise
+
+    table_uuid = table_uuid or get_table_shared_id(ctx, zookeeper_path)
+
+    if not table_uuid:
+        logging.info(
+            "Can't find table_shared_id to clean zero-copy locks. Cleaning is skipped."
+        )
+
+    delete_zero_copy_locks(
+        ctx,
+        zero_copy_path=zero_copy_path,
+        disk_type=disk_type,
+        table_uuid=table_uuid,
+        replica_name=replica,
+        dry_run=dry_run,
+    )
