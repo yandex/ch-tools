@@ -140,7 +140,7 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     default=None,
     help=(
         "Maximum total size (in bytes) of objects to delete. "
-        "If set to 0, no limit is applied. "
+        "Must be non-negative."
         "Deletion will stop once this limit is reached."
     ),
 )
@@ -150,8 +150,8 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     type=float,
     default=None,
     help=(
-        "Maximum total size (in bytes) of objects to delete. "
-        "If set to 0, no limit is applied. "
+        "Maximum fraction size of objects to delete."
+        "Must be in range [0.0; 1.0]"
         "Deletion will stop once this limit is reached."
     ),
 )
