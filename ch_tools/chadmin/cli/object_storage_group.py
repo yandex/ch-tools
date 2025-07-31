@@ -1,7 +1,7 @@
 from datetime import timedelta
 from typing import Any, Optional
 
-from click import Choice, Context, group, option, pass_context
+from click import Choice, Context, FloatRange, IntRange, group, option, pass_context
 from humanfriendly import format_size
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -129,8 +129,28 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     "--verify-paths-regex",
     "verify_paths_regex",
     default=None,
+    help=("Verify paths to delete and in system.remote_data_paths with regex."),
+)
+@option(
+    "--max-size-to-delete-bytes",
+    "max_size_to_delete_bytes",
+    type=IntRange(min=0),
+    default=0,
     help=(
-        "Regex for verifying that paths for delete and in system.remote_data_paths are ."
+        "Maximum total size (in bytes) of objects to delete. "
+        "Must be non-negative. If 0 then there are no limit."
+        "Deletion will stop once this limit is reached."
+    ),
+)
+@option(
+    "--max-size-to-delete-fraction",
+    "max_size_to_delete_fraction",
+    type=FloatRange(min=0.0, max=1.0),
+    default=1.0,
+    help=(
+        "Maximum fraction size of objects to delete."
+        "Must be in range [0.0; 1.0]"
+        "Deletion will stop once this limit is reached."
     ),
 )
 @pass_context
@@ -147,6 +167,8 @@ def clean_command(
     store_state_local: bool,
     store_state_zk_path: str,
     verify_paths_regex: Optional[str],
+    max_size_to_delete_bytes: int,
+    max_size_to_delete_fraction: float,
 ) -> None:
     """
     Clean orphaned S3 objects.
@@ -171,6 +193,8 @@ def clean_command(
             keep_paths,
             use_saved_list,
             verify_paths_regex,
+            max_size_to_delete_bytes,
+            max_size_to_delete_fraction,
         )
     finally:
         state = OrphanedObjectsState(total_size, error_msg)

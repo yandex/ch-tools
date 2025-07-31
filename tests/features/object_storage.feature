@@ -237,3 +237,80 @@ Feature: chadmin object-storage commands
     """
     Sanity check not passed
     """
+
+  Scenario: Clean many orphaned objects with size limit bytes
+    When we put 20 objects in S3
+    """
+      bucket: cloud-storage-test
+      path: /data/cluster_id/shard_1/orpaned_object-{}
+      data: '13'
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h
+    """
+    Then we get response contains
+    """
+    - WouldDelete: 20
+      TotalSize: 40
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --max-size-to-delete-bytes 30
+    """
+    Then we get response contains
+    """
+    - Deleted: 15
+      TotalSize: 30
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run
+    """
+    Then we get response contains
+    """
+    - WouldDelete: 5
+      TotalSize: 10
+    """
+
+    Scenario: Clean many orphaned objects with size limit fraction
+    Given clickhouse-tools configuration on clickhouse01,clickhouse02
+    """
+    object_storage:
+      clean:
+        verify: False
+    """
+    When we put 20 objects in S3
+    """
+      bucket: cloud-storage-test
+      path: /data_2/orpaned_object-{}
+      data: '13'
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --prefix "data_2"
+    """
+    Then we get response contains
+    """
+    - WouldDelete: 20
+      TotalSize: 40
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --max-size-to-delete-fraction 0.75 --prefix "data_2"
+    """
+    Then we get response contains
+    """
+    - Deleted: 15
+      TotalSize: 30
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run --prefix "data_2"
+    """
+    Then we get response contains
+    """
+    - WouldDelete: 5
+      TotalSize: 10
+    """
+

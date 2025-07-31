@@ -75,6 +75,8 @@ def clean(
     keep_paths: bool,
     use_saved_list: bool,
     verify_paths_regex: Optional[str] = None,
+    max_size_to_delete_bytes: int = 0,
+    max_size_to_delete_fraction: float = 1.0,
 ) -> Tuple[int, int]:
     """
     Clean orphaned S3 objects.
@@ -126,6 +128,8 @@ def clean(
             orphaned_objects_table,
             use_saved_list,
             verify_paths_regex,
+            max_size_to_delete_bytes,
+            max_size_to_delete_fraction,
         )
     finally:
         if not keep_paths:
@@ -159,7 +163,7 @@ def _sanity_check_before_cleanup(
     ctx: Context,
     orphaned_objects_iterator: Callable,
     ch_client: ClickhouseClient,
-    listing_table: str,
+    listing_size_in_bucket: int,
     remote_data_paths_table: str,
     verify_paths_regex: Optional[str],
     clean_scope: CleanScope,
@@ -223,12 +227,6 @@ def _sanity_check_before_cleanup(
 
     def perform_check_size() -> None:
         ### Total size of objects after cleanup must be very close to sum(bytes) FROM system.remote_data_paths
-        real_size_in_bucket = int(
-            ch_client.query_json_data_first_row(
-                query=f"SELECT sum(obj_size) FROM {listing_table}",
-                compact=True,
-            )[0]
-        )
 
         ch_size_in_bucket = int(
             ch_client.query_json_data_first_row(
@@ -246,13 +244,13 @@ def _sanity_check_before_cleanup(
             size_to_delete += orphaned_object.size
 
         if (
-            abs(real_size_in_bucket - size_to_delete - ch_size_in_bucket)
+            abs(listing_size_in_bucket - size_to_delete - ch_size_in_bucket)
             > size_error_rate_threshold
         ):
             raise RuntimeError(
                 "Sanity check not passed, because after delete size in the bucket will be less than total size of objects known by the clickhouse. Size in CH {} , Total size in bucket {}, would delete {}".format(
                     format_size(ch_size_in_bucket),
-                    format_size(real_size_in_bucket),
+                    format_size(listing_size_in_bucket),
                     format_size(size_to_delete),
                 )
             )
@@ -276,6 +274,8 @@ def _clean_object_storage(
     orphaned_objects_table: str,
     use_saved_list: bool,
     verify_paths_regex: Optional[str] = None,
+    max_size_to_delete_bytes: int = 0,
+    max_size_to_delete_fraction: float = 1.0,
 ) -> Tuple[int, int]:
     """
     Delete orphaned objects from object storage.
@@ -338,8 +338,6 @@ def _clean_object_storage(
     else:
         logging.info("Deleting orphaned objects...")
 
-    deleted = 0
-    total_size = 0
     timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
     query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
     execute_query(
@@ -353,24 +351,51 @@ def _clean_object_storage(
         orphaned_objects_table,
         query_settings,
     )
+    listing_size_in_bucket = int(
+        ch_client.query_json_data_first_row(
+            query=f"SELECT sum(obj_size) FROM {listing_table}",
+            compact=True,
+        )[0]
+    )
+
     if ctx.obj["config"]["object_storage"]["clean"]["verify"]:
         _sanity_check_before_cleanup(
             ctx,
             orphaned_objects_iterator,
             ch_client,
-            listing_table,
+            listing_size_in_bucket,
             remote_data_paths_table,
             verify_paths_regex,
             clean_scope,
         )
 
     deleted, total_size = 0, 0
+
+    max_size_to_delete = listing_size_in_bucket * max_size_to_delete_fraction
+    if max_size_to_delete_bytes:
+        max_size_to_delete = min(max_size_to_delete, max_size_to_delete_bytes)
+
     for objects in chunked(orphaned_objects_iterator(), KEYS_BATCH_SIZE):
+        batch_size = sum(obj.size for obj in objects)
+        is_last_batch = False
+
+        if total_size + batch_size > max_size_to_delete:
+            # To fit into the size restriction: sort all objects by size
+            # And remove elements from the end;
+            is_last_batch = True
+            objects = sorted(objects, key=lambda obj: obj.size)
+            while total_size + batch_size > max_size_to_delete:
+                batch_size -= objects[-1].size
+                objects.pop()
+
         chunk_deleted, chunk_size = cleanup_s3_object_storage(
             disk_conf, iter(objects), dry_run
         )
         deleted += chunk_deleted
         total_size += chunk_size
+
+        if is_last_batch:
+            break
 
     logging.info(
         f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
@@ -392,7 +417,6 @@ def _traverse_object_storage(
     obj_paths_batch: List[ObjListItem] = []
     counter = 0
     now = datetime.now(timezone.utc)
-
     for obj in s3_object_storage_iterator(
         ctx.obj["disk_configuration"], object_name_prefix=prefix
     ):
