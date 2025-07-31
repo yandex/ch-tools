@@ -1,9 +1,7 @@
 from datetime import timedelta
 from typing import Any, Optional
 
-from click import Choice, Context, group, option, pass_context
-from cloup import constraint
-from cloup.constraints import mutually_exclusive
+from click import Choice, Context, FloatRange, IntRange, group, option, pass_context
 from humanfriendly import format_size
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -136,27 +134,24 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
 @option(
     "--max-size-to-delete-bytes",
     "max_size_to_delete_bytes",
-    type=int,
-    default=None,
+    type=IntRange(min=0),
+    default=0,
     help=(
         "Maximum total size (in bytes) of objects to delete. "
-        "Must be non-negative."
+        "Must be non-negative. If 0 then there are no limit."
         "Deletion will stop once this limit is reached."
     ),
 )
 @option(
     "--max-size-to-delete-fraction",
     "max_size_to_delete_fraction",
-    type=float,
-    default=None,
+    type=FloatRange(min=0.0, max=1.0),
+    default=1.0,
     help=(
         "Maximum fraction size of objects to delete."
         "Must be in range [0.0; 1.0]"
         "Deletion will stop once this limit is reached."
     ),
-)
-@constraint(
-    mutually_exclusive, ["max_size_to_delete_fraction", "max_size_to_delete_bytes"]
 )
 @pass_context
 def clean_command(
@@ -172,8 +167,8 @@ def clean_command(
     store_state_local: bool,
     store_state_zk_path: str,
     verify_paths_regex: Optional[str],
-    max_size_to_delete_bytes: Optional[int],
-    max_size_to_delete_fraction: Optional[float],
+    max_size_to_delete_bytes: int,
+    max_size_to_delete_fraction: float,
 ) -> None:
     """
     Clean orphaned S3 objects.
