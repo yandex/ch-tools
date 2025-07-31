@@ -372,7 +372,6 @@ def _clean_object_storage(
     deleted, total_size = 0, 0
 
     max_size_to_delete = listing_size_in_bucket * max_size_to_delete_fraction
-
     if max_size_to_delete_bytes:
         max_size_to_delete = min(max_size_to_delete, max_size_to_delete_bytes)
 
