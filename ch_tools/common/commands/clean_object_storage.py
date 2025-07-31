@@ -169,8 +169,8 @@ def _sanity_check_before_cleanup(
     clean_scope: CleanScope,
 ) -> None:
 
-    size_error_rate_threshold = ctx.obj["config"]["object_storage"]["clean"][
-        "verify_size_error_rate_threshold_bytes"
+    size_error_rate_threshold_fraction = ctx.obj["config"]["object_storage"]["clean"][
+        "verify_size_error_rate_threshold_fraction"
     ]
     if verify_paths_regex:
         paths_regex = verify_paths_regex
@@ -227,29 +227,16 @@ def _sanity_check_before_cleanup(
 
     def perform_check_size() -> None:
         ### Total size of objects after cleanup must be very close to sum(bytes) FROM system.remote_data_paths
-
-        ch_size_in_bucket = int(
-            ch_client.query_json_data_first_row(
-                query=Query(
-                    f"SELECT sum(size) FROM (SELECT DISTINCT remote_path, size FROM {remote_data_paths_table})",
-                    sensitive_args={"user_password": ch_client.password or ""},
-                ),
-                settings=remote_data_paths_query_settings,
-                compact=True,
-            )[0]
-        )
-
         size_to_delete = 0
         for orphaned_object in orphaned_objects_iterator():
             size_to_delete += orphaned_object.size
-
         if (
-            abs(listing_size_in_bucket - size_to_delete - ch_size_in_bucket)
-            > size_error_rate_threshold
+            listing_size_in_bucket * size_error_rate_threshold_fraction
+            <= size_to_delete
         ):
             raise RuntimeError(
-                "Sanity check not passed, because after delete size in the bucket will be less than total size of objects known by the clickhouse. Size in CH {} , Total size in bucket {}, would delete {}".format(
-                    format_size(ch_size_in_bucket),
+                "Potentially dangerous operation: Going to remove more than {}% of bucket content. To remove {}; listing size {}".format(
+                    int(size_error_rate_threshold_fraction * 100),
                     format_size(listing_size_in_bucket),
                     format_size(size_to_delete),
                 )
