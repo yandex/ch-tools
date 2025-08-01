@@ -58,7 +58,7 @@ DEFAULT_CONFIG = {
                 "shard": r"^(\w+)/(\w+)/(\w+)/",
                 "cluster": r"^(\w+)/(\w+)/",
             },
-            "verify_size_error_rate_threshold_bytes": 1024 * 1024 * 1024,  ## 1 GB
+            "verify_size_error_rate_threshold_fraction": 0.9,
         },
     },
     "zookeeper": {

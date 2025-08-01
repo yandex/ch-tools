@@ -314,3 +314,25 @@ Feature: chadmin object-storage commands
       TotalSize: 10
     """
 
+    @require_version_23.3
+    Scenario: Sanity check clean many orphaned objects
+    Given clickhouse-tools configuration on clickhouse01,clickhouse02
+    """
+    object_storage:
+      clean:
+        verify_size_error_rate_threshold_fraction: 0.05
+    """
+    When we put 100 objects in S3
+    """
+      bucket: cloud-storage-test
+      path: /data/cluster_id/shard_1/orpaned_object-{}
+      data: '01234566789'
+    """
+    When we try to execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h
+    """
+    Then it fails with response contains
+    """
+    Potentially dangerous operation: Going to remove more than
+    """
