@@ -149,6 +149,12 @@ def list_command(ctx: Context, **kwargs: Any) -> None:
         help="Filter out replicas to restore by the specified table name pattern."
         " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
     ),
+    option(
+        "--read-only",
+        "is_readonly",
+        is_flag=True,
+        help="Filter in replicas in read-only state only.",
+    ),
     constraint=If(
         AnySet("database_name", "table_name"),
         then=accept_none,
