@@ -7,7 +7,7 @@ from typing import (
 
 from click import Context
 from kazoo.client import KazooClient
-from kazoo.exceptions import NoNodeError, RolledBackError
+from kazoo.exceptions import NodeExistsError, NoNodeError, RolledBackError
 
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.table_replica import get_table_replica
@@ -182,7 +182,10 @@ def _create_zero_copy_locks(
     paths: list[tuple[str, str]],
     dry_run: bool = False,
 ) -> None:
-    @retry(NoNodeError, max_attempts=3, max_interval=1)
+    # Some parent path may be deleted or created concurrently
+    @retry(
+        exception_types=(NoNodeError, NodeExistsError), max_attempts=3, max_interval=1
+    )
     def _create_lock_in_transaction(
         zk: KazooClient, lock_path: str, part_path: str, part_node_version: int
     ) -> None:
