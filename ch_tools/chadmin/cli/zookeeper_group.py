@@ -15,7 +15,7 @@ from cloup.constraints import If, IsSet, RequireAtLeast, require_all
 from kazoo.security import make_digest_acl
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
-from ch_tools.chadmin.internal.table import get_table, list_tables
+from ch_tools.chadmin.internal.table import list_tables
 from ch_tools.chadmin.internal.table_replica import get_table_replica
 from ch_tools.chadmin.internal.zero_copy import create_zero_copy_locks
 from ch_tools.chadmin.internal.zookeeper import (
@@ -549,12 +549,9 @@ def create_zk_locks_command(
     dry_run: bool = False,
 ) -> None:
     """
-    Clean zero copy locks.
+    Create zero copy locks.
     """
-    if database and table:
-        tables = [get_table(ctx, database, table)]
-    else:
-        tables = list_tables(ctx, database_name=database, table_name=table)
+    tables = list_tables(ctx, database_name=database, table_name=table)
 
     if not replica:
         macros = get_macros(ctx)

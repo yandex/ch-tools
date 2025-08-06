@@ -91,13 +91,11 @@ def _get_object_storage_prefix(ctx: Context, part: dict) -> str:
     metadata = _read_metadata(checksums_path)
     blob_path = metadata["keys"][0]["key"]
 
-    object_storage_prefix = execute_query(
+    return execute_query(
         ctx,
         f"SELECT remote_path FROM system.remote_data_paths WHERE remote_path LIKE '%{blob_path}'",
         format_="JSON",
     )["data"][0]["remote_path"].removesuffix(blob_path)
-
-    return object_storage_prefix
 
 
 def _get_zero_copy_lock_path(
@@ -153,7 +151,7 @@ def _get_zero_copy_zookeeper_path(
                 r"remote_fs_zero_copy_zookeeper_path\s*=\s*'([^']+)'", settings[0][0]
             )
             if match:
-                return os.path.join(match.group(1), disk_dir)
+                return os.path.join(match[1], disk_dir)
         else:
             logging.warning(
                 "Table with uuid {} doesn't exist. Will search for locks in default 'remote_fs_zero_copy_zookeeper_path' directory.",
@@ -206,9 +204,10 @@ def _create_zero_copy_locks(
         results = create_transaction.commit()
 
         for result in results:
-            if isinstance(result, Exception):
-                if not isinstance(result, RolledBackError):
-                    raise result
+            if isinstance(result, Exception) and not isinstance(
+                result, RolledBackError
+            ):
+                raise result
 
     with zk_client(ctx) as zk:
         for lock_path, part_path in paths:
