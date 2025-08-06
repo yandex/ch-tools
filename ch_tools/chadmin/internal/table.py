@@ -77,6 +77,7 @@ def list_tables(
             SELECT
                 t.database,
                 t.name,
+                t.uuid,
                 t.metadata_modification_time,
                 t.engine,
                 t.data_paths,
@@ -135,6 +136,7 @@ def list_tables(
         SELECT
             t.database,
             t.name,
+            t.uuid,
             t.engine,
             t.create_table_query,
             t.metadata_modification_time,

@@ -4,7 +4,7 @@ import tenacity
 
 
 def retry(
-    exception_types: Union[Type[BaseException], Tuple[Type[BaseException]]],
+    exception_types: Union[Type[BaseException], Tuple[Type[BaseException], ...]],
     max_attempts: int = 5,
     max_interval: int = 5,
 ) -> Any:
