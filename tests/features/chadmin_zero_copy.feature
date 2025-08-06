@@ -35,7 +35,7 @@ Feature: chadmin zookeeper commands.
     #Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
     When we execute command on clickhouse01
     """
-    chadmin zookeeper create-zero-copy-locks -d test --disk object_storage
+    chadmin zookeeper create-zero-copy-locks -d test --disk object_storage --disk-type s3
     """
     And we execute command on clickhouse01
     """
@@ -62,7 +62,6 @@ Feature: chadmin zookeeper commands.
     /clickhouse01.ch_tools_test
     """
 
-
   Scenario Outline: Create zero-copy lock for part or partition
     When we execute queries on clickhouse01
     """
@@ -80,7 +79,7 @@ Feature: chadmin zookeeper commands.
     """
     And we execute command on clickhouse01
     """
-    chadmin zookeeper create-zero-copy-locks -t table_01 <option> --replica clickhouse02.ch_tools_test --disk object_storage
+    chadmin zookeeper create-zero-copy-locks -t table_01 <option> --replica clickhouse02.ch_tools_test --disk object_storage --disk-type s3
     """
     And we execute command on clickhouse01
     """
@@ -96,7 +95,7 @@ Feature: chadmin zookeeper commands.
     """
     And we execute command on clickhouse01
     """
-    chadmin zookeeper create-zero-copy-locks -t table_01 <option> --disk object_storage
+    chadmin zookeeper create-zero-copy-locks -t table_01 <option> --disk object_storage --disk-type s3
     """
     And we execute command on clickhouse01
     """
@@ -172,6 +171,7 @@ Feature: chadmin zookeeper commands.
     /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/0_0_0_0
     """
 
+
   Scenario: Cleanup all zero-copy locks for replicas with table and part filters
     When we execute command on clickhouse01
     """
@@ -222,6 +222,7 @@ Feature: chadmin zookeeper commands.
     chadmin zookeeper cleanup-zero-copy-locks --table-uuid 10000000-0000-0000-0000-000000000001 --replica replica2
     """
     Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
+
 
   Scenario: Cleanup zero-copy locks without replica filter
     When we execute command on clickhouse01
@@ -310,7 +311,7 @@ Feature: chadmin zookeeper commands.
     """
     Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3/ is empty
 
-  
+
   Scenario: Cleanup zero-copy locks with invalid arguments
     When we try to execute command on clickhouse01
     """

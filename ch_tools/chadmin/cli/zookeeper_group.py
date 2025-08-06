@@ -405,7 +405,7 @@ def remove_hosts_from_table(
     ),
 )
 @option(
-    "--disk_type",
+    "--disk-type",
     "disk_type",
     default="s3",
     help=(
@@ -484,12 +484,25 @@ def clean_zk_locks_command(
 
 
 @zookeeper_group.command("create-zero-copy-locks")
-@option(
-    "--disk",
-    "disk",
-    default=None,
-    required=True,
-    help=("Object storage disk from ClickHouse."),
+@option_group(
+    "Disk selection options",
+    option(
+        "--disk",
+        "disk",
+        default=None,
+        required=True,
+        help=("Object storage disk from ClickHouse."),
+    ),
+    option(
+        "--disk-type",
+        "disk_type",
+        default=None,
+        help=(
+            "Object storage disk type from ClickHouse."
+            "Examples are s3, hdfs, azure_blob_storage, local_blob_storage..."
+            "This option is required for backwards compatibility with ClickHouse older than 24.3."
+        ),
+    ),
 )
 @option_group(
     "Table selection options",
@@ -541,6 +554,7 @@ def clean_zk_locks_command(
 def create_zk_locks_command(
     ctx: Context,
     disk: str,
+    disk_type: Optional[str] = None,
     database: Optional[str] = None,
     table: Optional[str] = None,
     partition_id: Optional[str] = None,
@@ -569,5 +583,5 @@ def create_zk_locks_command(
             table_info["name"],
         )
         create_zero_copy_locks(
-            ctx, disk, table_info, partition_id, part_id, replica, dry_run
+            ctx, disk, disk_type, table_info, partition_id, part_id, replica, dry_run
         )

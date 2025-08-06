@@ -9,6 +9,7 @@ from click import Context
 from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError, RolledBackError
 
+from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.table_replica import get_table_replica
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import zk_client
@@ -21,6 +22,7 @@ CREATE_ZERO_COPY_LOCKS_BATCH_SIZE = 1000
 def create_zero_copy_locks(
     ctx: Context,
     disk: str,
+    disk_type: Optional[str],
     table: dict[str, str],
     partition_id: Optional[str],
     part_name: Optional[str],
@@ -28,15 +30,7 @@ def create_zero_copy_locks(
     dry_run: bool = False,
 ) -> None:
     """Create missing zero-copy locks for given tables."""
-    disk_info = execute_query(
-        ctx,
-        f"SELECT path, object_storage_type FROM system.disks WHERE name = '{disk}'",
-        format_="JSON",
-    )["data"]
-    if not disk_info:
-        raise RuntimeError(f"Disk {disk} doesn't exist")
-    disk_info = disk_info[0]
-    disk_info["object_storage_type"] = disk_info["object_storage_type"].lower()
+    disk_info = _get_disk_info(ctx, disk, disk_type)
 
     zero_copy_path = _get_zero_copy_zookeeper_path(
         ctx, disk_info["object_storage_type"], table["uuid"]
@@ -248,3 +242,29 @@ def _get_parent_paths_to_create(zk: KazooClient, path: str) -> list[str]:
         paths_to_create.append(parent_path)
 
     return paths_to_create
+
+
+def _get_disk_info(ctx: Context, disk: str, disk_type: Optional[str]) -> dict:
+    have_type_column = match_ch_version(ctx, "24.3")
+
+    columns = "path, object_storage_type" if have_type_column else "path"
+    query = f"SELECT {columns} FROM system.disks WHERE name = '{disk}'"
+    disk_info = execute_query(
+        ctx,
+        query,
+        format_="JSON",
+    )["data"]
+    if not disk_info:
+        raise RuntimeError(f"Disk {disk} doesn't exist")
+    disk_info = disk_info[0]
+
+    if disk_type:
+        disk_info["object_storage_type"] = disk_type
+    else:
+        if not have_type_column:
+            raise RuntimeError(
+                "--disk-type option is required for current version of ClickHouse"
+            )
+        disk_info["object_storage_type"] = disk_info["object_storage_type"].lower()
+
+    return disk_info
