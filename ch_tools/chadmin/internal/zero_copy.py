@@ -1,10 +1,8 @@
 import os
 import re
 from typing import (
-    Dict,
-    List,
+    Any,
     Optional,
-    Tuple,
 )
 
 from click import Context
@@ -23,7 +21,7 @@ CREATE_ZERO_COPY_LOCKS_BATCH_SIZE = 1000
 def create_zero_copy_locks(
     ctx: Context,
     disk: str,
-    table: Dict[str, str],
+    table: dict[str, str],
     partition_id: Optional[str],
     part_name: Optional[str],
     replica: str,
@@ -65,11 +63,15 @@ def create_zero_copy_locks(
     )["data"]
 
     zero_copy_lock_paths = []
+    object_storage_prefix = None
     for part in part_info:
+        if not object_storage_prefix:
+            object_storage_prefix = _get_object_storage_prefix(ctx, part)
+
         zero_copy_lock_paths.append(
             (
                 _get_zero_copy_lock_path(
-                    ctx, zero_copy_path, table["uuid"], part, replica
+                    object_storage_prefix, zero_copy_path, table["uuid"], part, replica
                 ),
                 _get_part_path_in_zk(
                     ctx, table["database"], table["name"], part["name"], replica
@@ -84,21 +86,30 @@ def create_zero_copy_locks(
         _create_zero_copy_locks(ctx, zero_copy_lock_paths, dry_run)
 
 
-def _get_zero_copy_lock_path(
-    ctx: Context,
-    zero_copy_path: str,
-    table_uuid: str,
-    part: Dict,
-    replica: str,
-) -> str:
+def _get_object_storage_prefix(ctx: Context, part: dict) -> str:
     checksums_path = os.path.join(part["path"], "checksums.txt")
     metadata = _read_metadata(checksums_path)
     blob_path = metadata["keys"][0]["key"]
+
     object_storage_prefix = execute_query(
         ctx,
         f"SELECT remote_path FROM system.remote_data_paths WHERE remote_path LIKE '%{blob_path}'",
         format_="JSON",
     )["data"][0]["remote_path"].removesuffix(blob_path)
+
+    return object_storage_prefix
+
+
+def _get_zero_copy_lock_path(
+    object_storage_prefix: str,
+    zero_copy_path: str,
+    table_uuid: str,
+    part: dict,
+    replica: str,
+) -> str:
+    checksums_path = os.path.join(part["path"], "checksums.txt")
+    metadata = _read_metadata(checksums_path)
+    blob_path = metadata["keys"][0]["key"]
 
     object_storage_path = os.path.join(object_storage_prefix, blob_path).replace(
         "/", "_"
@@ -155,8 +166,8 @@ def _get_zero_copy_zookeeper_path(
     return os.path.join(base_path, disk_dir)
 
 
-def _read_metadata(path: str) -> Dict:
-    res = {}
+def _read_metadata(path: str) -> dict:
+    res: dict[str, Any] = {}
     with open(path, encoding="utf-8") as f:
         res["version"] = int(f.readline().strip())
         if res["version"] < 1 or res["version"] > 5:
@@ -176,7 +187,7 @@ def _read_metadata(path: str) -> Dict:
 
 def _create_zero_copy_locks(
     ctx: Context,
-    paths: List[Tuple[str, str]],
+    paths: list[tuple[str, str]],
     dry_run: bool = False,
 ) -> None:
     @retry(NoNodeError, max_attempts=3, max_interval=1)
@@ -223,7 +234,7 @@ def _create_zero_copy_locks(
             logging.info("Created zero-copy lock at {}", lock_path)
 
 
-def _get_parent_paths_to_create(zk: KazooClient, path: str) -> List[str]:
+def _get_parent_paths_to_create(zk: KazooClient, path: str) -> list[str]:
     parents = path.split("/")[:-1]
     parent_path = ""
     paths_to_create = []
