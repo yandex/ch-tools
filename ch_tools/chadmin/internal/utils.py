@@ -2,8 +2,9 @@
 Utility functions.
 """
 
+import os
 import re
-import subprocess
+import shutil
 from itertools import islice
 from typing import Any, Iterable, Iterator, Optional
 
@@ -118,11 +119,23 @@ def replace_macros(string: str, macros: dict) -> str:
     )
 
 
-def remove_from_disk(path: str) -> Any:
-    cmd = f"rm -rf {path}"
-    logging.info("Run : {}", cmd)
+def remove_from_disk(path: str) -> None:
+    """
+    Remove file or directory with its all content.
 
-    proc = subprocess.run(
-        cmd, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
-    return (proc.returncode, proc.stderr)
+    Behaviour is similar to 'rm -rf'.
+
+    Args:
+        path: Path to file or directory to remove
+    Raises:
+        OSError: If removal fails due to permissions or other system errors
+    """
+    logging.info("Removing path: {}", path)
+
+    if os.path.isfile(path) or os.path.islink(path):
+        os.remove(path)
+    elif os.path.isdir(path):
+        shutil.rmtree(path)
+    else:
+        # Path doesn't exist, which is equivalent to successful rm -rf
+        pass
