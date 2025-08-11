@@ -130,7 +130,7 @@ def remove_from_disk(path: str) -> None:
     Raises:
         OSError: If removal fails due to permissions or other system errors
     """
-    logging.info("Removing path: {}", path)
+    logging.info(f"Removing path: {path}")
 
     if os.path.isfile(path) or os.path.islink(path):
         os.remove(path)
