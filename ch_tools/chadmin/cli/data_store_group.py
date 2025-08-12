@@ -281,11 +281,7 @@ def cleanup_data_dir(
 def remove_orphaned_sql_object_metadata(data: Dict[str, Any]) -> None:
     path = data["path"]
 
-    retcode, stderr = remove_from_disk(path)
-    if retcode:
-        raise RuntimeError(
-            f"Metadata remove command has failed: retcode {retcode}, stderr: {stderr.decode()}"
-        )
+    remove_from_disk(path)
     data["deleted"] = "Yes"
 
 
