@@ -36,8 +36,8 @@ from ch_tools.chadmin.internal.table_replica import (
     system_table_drop_replica_by_zk_path,
 )
 from ch_tools.chadmin.internal.utils import chunked
+from ch_tools.chadmin.internal.zero_copy import _get_zero_copy_zookeeper_path
 from ch_tools.chadmin.internal.zookeeper import (
-    _get_zero_copy_zookeeper_path,
     delete_recursive,
     delete_zk_nodes,
     escape_for_zookeeper,
