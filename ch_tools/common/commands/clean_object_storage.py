@@ -143,6 +143,7 @@ def _object_list_generator(
     ch_client: ClickhouseClient,
     table_name: str,
     query_settings: Dict[str, Any],
+    timeout: Optional[int] = None,
     chunk_size: int = 10 * 1024 * 1024,
 ) -> Callable:
 
@@ -150,6 +151,7 @@ def _object_list_generator(
         with ch_client.query(
             f"SELECT obj_path, obj_size FROM {table_name}",
             format_="TabSeparated",
+            timeout=timeout,
             settings=query_settings,
             stream=True,
         ) as resp:
@@ -334,9 +336,7 @@ def _clean_object_storage(
         settings=query_settings,
     )
     orphaned_objects_iterator = _object_list_generator(
-        ch_client,
-        orphaned_objects_table,
-        query_settings,
+        ch_client, orphaned_objects_table, query_settings, timeout
     )
     listing_size_in_bucket = int(
         ch_client.query_json_data_first_row(
