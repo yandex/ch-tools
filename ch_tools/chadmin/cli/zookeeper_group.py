@@ -3,6 +3,7 @@ import sys
 from typing import Any, Optional
 
 from cloup import (
+    Choice,
     Context,
     argument,
     constraint,
@@ -11,7 +12,7 @@ from cloup import (
     option_group,
     pass_context,
 )
-from cloup.constraints import If, IsSet, RequireAtLeast, require_all
+from cloup.constraints import If, IsSet, RequireAtLeast, mutually_exclusive, require_all
 from kazoo.security import make_digest_acl
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -37,6 +38,8 @@ from ch_tools.common.cli.formatting import print_json, print_response
 from ch_tools.common.cli.parameters import ListParamType, StringParamType
 from ch_tools.common.clickhouse.config import get_macros
 from ch_tools.common.config import load_config
+
+OBJECT_STORAGE_TYPES = ["s3", "hdfs", "azure_blob_storage", "local_blob_storage", "web"]
 
 
 @group("zookeeper", cls=Chadmin)
@@ -407,7 +410,8 @@ def remove_hosts_from_table(
 @option(
     "--disk-type",
     "disk_type",
-    default="s3",
+    type=Choice(OBJECT_STORAGE_TYPES),
+    default=OBJECT_STORAGE_TYPES[0],
     help=(
         "Object storage disk type from ClickHouse."
         "Examples are s3, hdfs, azure_blob_storage, local_blob_storage..."
@@ -496,6 +500,7 @@ def clean_zk_locks_command(
     option(
         "--disk-type",
         "disk_type",
+        type=Choice(OBJECT_STORAGE_TYPES),
         default=None,
         help=(
             "Object storage disk type from ClickHouse."
@@ -525,6 +530,7 @@ def clean_zk_locks_command(
     option(
         "--partition-id",
         "partition_id",
+        default=None,
         help="Filter in partitions to create zero-copy locks.",
     ),
     option(
@@ -534,6 +540,7 @@ def clean_zk_locks_command(
         default=None,
         help=("Filter in parts to create zero-copy locks."),
     ),
+    constraint=mutually_exclusive,
 )
 @option(
     "-r",
@@ -541,7 +548,8 @@ def clean_zk_locks_command(
     "replica",
     default=None,
     help=(
-        "Create zero-copy locks for specific replica. Note that only local set of parts will be locked."
+        "FQDN of a replica to create zero-copy locks. Note that only local set of parts will be locked."
+        "If replica is not specified, will get the value from macros."
     ),
 )
 @option(

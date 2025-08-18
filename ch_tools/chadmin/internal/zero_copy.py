@@ -1,29 +1,42 @@
 import os
 import re
+from pathlib import Path
 from typing import (
     Any,
     Optional,
+    TypedDict,
 )
 
 from click import Context
 from kazoo.client import KazooClient
 from kazoo.exceptions import NodeExistsError, NoNodeError, RolledBackError
 
+from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
+    S3ObjectLocalMetaData,
+)
+from ch_tools.chadmin.internal.part import list_parts
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.table_replica import get_table_replica
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import zk_client
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.retry import retry
+from ch_tools.common.clickhouse.config import get_clickhouse_config
 
 CREATE_ZERO_COPY_LOCKS_BATCH_SIZE = 1000
+
+
+class TableInfo(TypedDict):
+    database: str
+    name: str
+    uuid: str
 
 
 def create_zero_copy_locks(
     ctx: Context,
     disk: str,
     disk_type: Optional[str],
-    table: dict[str, str],
+    table: TableInfo,
     partition_id: Optional[str],
     part_name: Optional[str],
     replica: str,
@@ -35,26 +48,14 @@ def create_zero_copy_locks(
     zero_copy_path = _get_zero_copy_zookeeper_path(
         ctx, disk_info["object_storage_type"], table["uuid"]
     )
-
-    part_info = execute_query(
+    part_info = list_parts(
         ctx,
-        """SELECT name, path FROM system.parts
-            WHERE disk_name = '{{disk}}' AND table = '{{table_name}}'
-                AND database = '{{database_name}}'
-                {% if partition -%}
-                AND partition_id = '{{partition_id}}'
-                {% endif -%}
-                {% if part -%}
-                AND name = '{{part_name}}'
-                {% endif -%}
-        """,
-        format_="JSON",
-        disk=disk,
-        table_name=table["name"],
-        database_name=table["database"],
+        database=table["database"],
+        table=table["name"],
+        disk_name=disk,
         part_name=part_name,
         partition_id=partition_id,
-    )["data"]
+    )
 
     zero_copy_lock_paths = []
     object_storage_prefix = None
@@ -65,7 +66,11 @@ def create_zero_copy_locks(
         zero_copy_lock_paths.append(
             (
                 _get_zero_copy_lock_path(
-                    object_storage_prefix, zero_copy_path, table["uuid"], part, replica
+                    object_storage_prefix,
+                    zero_copy_path,
+                    table["uuid"],
+                    part,
+                    replica,
                 ),
                 _get_part_path_in_zk(
                     ctx, table["database"], table["name"], part["name"], replica
@@ -81,15 +86,19 @@ def create_zero_copy_locks(
 
 
 def _get_object_storage_prefix(ctx: Context, part: dict) -> str:
-    checksums_path = os.path.join(part["path"], "checksums.txt")
-    metadata = _read_metadata(checksums_path)
-    blob_path = metadata["keys"][0]["key"]
+    storage_config = get_clickhouse_config(
+        ctx
+    ).storage_configuration.s3_disk_configuration(
+        part["disk_name"], ctx.obj["config"]["object_storage"]["bucket_name_prefix"]
+    )
 
-    return execute_query(
-        ctx,
-        f"SELECT remote_path FROM system.remote_data_paths WHERE remote_path LIKE '%{blob_path}'",
-        format_="JSON",
-    )["data"][0]["remote_path"].removesuffix(blob_path)
+    return storage_config.prefix
+
+
+def _get_first_checksums_blob_path(part: dict) -> str:
+    checksums_path = os.path.join(part["path"], "checksums.txt")
+    metadata = S3ObjectLocalMetaData.from_file(Path(checksums_path))
+    return metadata.objects[0].key
 
 
 def _get_zero_copy_lock_path(
@@ -99,10 +108,7 @@ def _get_zero_copy_lock_path(
     part: dict,
     replica: str,
 ) -> str:
-    checksums_path = os.path.join(part["path"], "checksums.txt")
-    metadata = _read_metadata(checksums_path)
-    blob_path = metadata["keys"][0]["key"]
-
+    blob_path = _get_first_checksums_blob_path(part)
     object_storage_path = os.path.join(object_storage_prefix, blob_path).replace(
         "/", "_"
     )
