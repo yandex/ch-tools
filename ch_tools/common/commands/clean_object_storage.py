@@ -1,5 +1,6 @@
 import os
 import re
+import subprocess
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
@@ -21,6 +22,7 @@ from ch_tools.chadmin.internal.utils import (
 )
 from ch_tools.chadmin.internal.zookeeper import has_zk
 from ch_tools.common import logging
+from ch_tools.common.backup import get_missing_chs3_backups
 from ch_tools.common.clickhouse.client.clickhouse_client import (
     ClickhouseClient,
     clickhouse_client,
@@ -77,6 +79,7 @@ def clean(
     verify_paths_regex: Optional[str] = None,
     max_size_to_delete_bytes: int = 0,
     max_size_to_delete_fraction: float = 1.0,
+    ignore_missing_cloud_storage_backups: bool = False,
 ) -> Tuple[int, int]:
     """
     Clean orphaned S3 objects.
@@ -130,6 +133,7 @@ def clean(
             verify_paths_regex,
             max_size_to_delete_bytes,
             max_size_to_delete_fraction,
+            ignore_missing_cloud_storage_backups,
         )
     finally:
         if not keep_paths:
@@ -263,6 +267,7 @@ def _clean_object_storage(
     verify_paths_regex: Optional[str] = None,
     max_size_to_delete_bytes: int = 0,
     max_size_to_delete_fraction: float = 1.0,
+    ignore_missing_cloud_storage_backups: bool = False,
 ) -> Tuple[int, int]:
     """
     Delete orphaned objects from object storage.
@@ -319,6 +324,12 @@ def _clean_object_storage(
         sensitive_args={"user_password": user_password},
     )
     logging.info("Antijoin query: {}", str(antijoin_query))
+
+    if not ignore_missing_cloud_storage_backups:
+        logging.info(
+            "Will download cloud storage metadata from backups to shadow directory if they are missing"
+        )
+        _download_missing_cloud_storage_backups(disk_conf.name)
 
     if dry_run:
         logging.info("Counting orphaned objects...")
@@ -475,3 +486,26 @@ def _get_default_object_name_prefix(
         return cluster_path + ("/" if cluster_path else "")
 
     return disk_conf.prefix
+
+
+def _download_missing_cloud_storage_backups(
+    disk: str,
+) -> None:
+    missing_backups = get_missing_chs3_backups(disk)
+
+    for backup in missing_backups:
+        logging.info(f"Downloading cloud storage metadata from '{backup}'")
+
+        cmd = ["ch-backup", "get-cloud-storage-metadata", "--disk", disk, backup]
+        proc = subprocess.run(
+            cmd,
+            shell=False,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        if proc.returncode:
+            raise RuntimeError(
+                f"Downloading cloud storage metadata command has failed: retcode {proc.returncode}, stderr: {proc.stderr.decode()}"
+            )
