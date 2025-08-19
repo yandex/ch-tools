@@ -1,5 +1,14 @@
-ARG PYTHON_VERSION=3.10
-FROM python:${PYTHON_VERSION}-bullseye
+FROM ubuntu:22.04
+
+# Install python
+ENV PYTHON_VERSION=3.10
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y software-properties-common sudo \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y python${PYTHON_VERSION} python${PYTHON_VERSION}-distutils python${PYTHON_VERSION}-venv python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1
 
 ARG CLICKHOUSE_VERSION=latest
 ENV TZ=Europe/Moscow
@@ -77,6 +86,12 @@ RUN rm -rf /etc/supervisor && \
 
 COPY dist/*.whl /
 RUN pip3 install *.whl
+
+# Install ch-backup
+RUN echo 'deb http://dist.yandex.ru/mdb-jammy-secure stable/$(ARCH)/' | tee /etc/apt/sources.list.d/ch-backup.list && \
+    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys FF5F4D0E27393420 && \
+    apt-get update -qq && \
+    apt-get install ch-backup -y
 
 EXPOSE 8123 8443 9000 9440
 
