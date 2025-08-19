@@ -2,13 +2,16 @@ import json
 import os
 import subprocess
 from datetime import timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import yaml
 
 from ch_tools.common.clickhouse.client.retry import retry
 
-CHS3_BACKUPS_DIRECTORY = "/var/lib/clickhouse/disks/object_storage/shadow/"
+DEFAULT_S3_DISK_NAME = "object_storage"
+DEFAULT_CHS3_BACKUPS_DIRECTORY = (
+    f"/var/lib/clickhouse/disks/{DEFAULT_S3_DISK_NAME}/shadow/"
+)
 
 
 class BackupConfig:
@@ -16,7 +19,7 @@ class BackupConfig:
     Configuration of ch-backup tool.
     """
 
-    def __init__(self, config: Dict[str, Any]) -> None:
+    def __init__(self, config: dict[str, Any]) -> None:
         self._config = config
 
     @property
@@ -36,24 +39,36 @@ class BackupConfig:
 
 
 @retry(json.decoder.JSONDecodeError)
-def get_backups() -> List[Dict[str, Any]]:
+def get_backups() -> list[dict[str, Any]]:
     """
     Get ClickHouse backups.
     """
     return json.loads(run("sudo ch-backup list -a -v --format json"))
 
 
-def get_chs3_backups() -> List[str]:
-    if os.path.exists(CHS3_BACKUPS_DIRECTORY):
-        return os.listdir(CHS3_BACKUPS_DIRECTORY)
+def get_chs3_backups(disk: str) -> set[str]:
+    backups_dir = f"/var/lib/clickhouse/disks/{disk}/shadow/"
+    if os.path.exists(backups_dir):
+        return set(os.listdir(backups_dir))
 
-    return []
+    return set()
 
 
-def get_orphaned_chs3_backups() -> List[str]:
+def get_orphaned_chs3_backups(disk: str) -> list[str]:
     backups = get_backups()
-    chs3_backups = get_chs3_backups()
-    return list(set(chs3_backups) - set(backup["name"] for backup in backups))
+    shadow_chs3_backups = get_chs3_backups(disk)
+    return list(shadow_chs3_backups - set(backup["name"] for backup in backups))
+
+
+def get_missing_chs3_backups(disk: str) -> list[str]:
+    backups = get_backups()
+    shadow_chs3_backups = get_chs3_backups(disk)
+
+    missing_cloud_backups = []
+    for backup in backups:
+        if disk in backup["cloud_disks"] and backup["name"] not in shadow_chs3_backups:
+            missing_cloud_backups.append(backup["name"])
+    return missing_cloud_backups
 
 
 def run(command: str, data: Optional[str] = None) -> str:

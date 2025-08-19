@@ -7,7 +7,8 @@ from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.backup import unfreeze_backup
 from ch_tools.common import logging
 from ch_tools.common.backup import (
-    CHS3_BACKUPS_DIRECTORY,
+    DEFAULT_CHS3_BACKUPS_DIRECTORY,
+    DEFAULT_S3_DISK_NAME,
     get_chs3_backups,
     get_orphaned_chs3_backups,
 )
@@ -24,7 +25,11 @@ def chs3_backup_group() -> None:
 @option("--orphaned", is_flag=True)
 def list_backups(orphaned: bool) -> None:
     """List backups."""
-    backups = get_orphaned_chs3_backups() if orphaned else get_chs3_backups()
+    backups = (
+        get_orphaned_chs3_backups(DEFAULT_S3_DISK_NAME)
+        if orphaned
+        else get_chs3_backups(DEFAULT_S3_DISK_NAME)
+    )
     for backup in backups:
         logging.info(backup)
 
@@ -41,7 +46,7 @@ def list_backups(orphaned: bool) -> None:
 @pass_context
 def delete_backup(ctx: Context, backup: str, dry_run: bool) -> None:
     """Delete backup."""
-    chs3_backups = get_chs3_backups()
+    chs3_backups = get_chs3_backups(DEFAULT_S3_DISK_NAME)
     if backup not in chs3_backups:
         raise ClickException(f"Backup {backup} not found.")
 
@@ -60,7 +65,7 @@ def delete_backup(ctx: Context, backup: str, dry_run: bool) -> None:
 @pass_context
 def cleanup_backups(ctx: Context, dry_run: bool, keep_going: bool) -> None:
     """Removed unnecessary / orphaned backups."""
-    orphaned_chs3_backups = get_orphaned_chs3_backups()
+    orphaned_chs3_backups = get_orphaned_chs3_backups(DEFAULT_S3_DISK_NAME)
     delete_chs3_backups(
         ctx, orphaned_chs3_backups, keep_going=keep_going, dry_run=dry_run
     )
@@ -87,7 +92,9 @@ def delete_chs3_backups(
 
 
 def clear_empty_backup(orphaned_chs3_backup: str) -> None:
-    backup_directory = os.path.join(CHS3_BACKUPS_DIRECTORY, orphaned_chs3_backup)
+    backup_directory = os.path.join(
+        DEFAULT_CHS3_BACKUPS_DIRECTORY, orphaned_chs3_backup
+    )
     try:
         backup_contents = os.listdir(backup_directory)
         clear_empty_directories_recursively(backup_directory)
