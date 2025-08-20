@@ -85,16 +85,6 @@ def create_zero_copy_locks(
         _create_zero_copy_locks(ctx, zero_copy_lock_paths, dry_run)
 
 
-def _get_object_storage_prefix(ctx: Context, part: dict) -> str:
-    storage_config = get_clickhouse_config(
-        ctx
-    ).storage_configuration.s3_disk_configuration(
-        part["disk_name"], ctx.obj["config"]["object_storage"]["bucket_name_prefix"]
-    )
-
-    return storage_config.prefix
-
-
 def _get_first_checksums_blob_path(part: dict) -> str:
     checksums_path = os.path.join(part["path"], "checksums.txt")
     metadata = S3ObjectLocalMetaData.from_file(Path(checksums_path))
@@ -162,25 +152,6 @@ def _get_zero_copy_zookeeper_path(
     base_path = execute_query(ctx, query, format_="JSONCompact")["data"][0][0]
 
     return os.path.join(base_path, disk_dir)
-
-
-def _read_metadata(path: str) -> dict:
-    res: dict[str, Any] = {}
-    with open(path, encoding="utf-8") as f:
-        res["version"] = int(f.readline().strip())
-        if res["version"] < 1 or res["version"] > 5:
-            raise RuntimeError(f"Unknown metadata version: {res['version']}")
-
-        line = f.readline().strip().split("\t")
-        res["keys_count"] = int(line[0])
-        res["total_size"] = int(line[1])
-
-        res["keys"] = []
-        for _ in range(res["keys_count"]):
-            line = f.readline().strip().split("\t")
-            res["keys"].append({"size": int(line[0]), "key": line[1]})
-
-    return res
 
 
 def _create_zero_copy_locks(
@@ -251,29 +222,3 @@ def _get_parent_paths_to_create(zk: KazooClient, path: str) -> list[str]:
         paths_to_create.append(parent_path)
 
     return paths_to_create
-
-
-def _get_disk_info(ctx: Context, disk: str, disk_type: Optional[str]) -> dict:
-    have_type_column = match_ch_version(ctx, "24.3")
-
-    columns = "path, object_storage_type" if have_type_column else "path"
-    query = f"SELECT {columns} FROM system.disks WHERE name = '{disk}'"
-    disk_info = execute_query(
-        ctx,
-        query,
-        format_="JSON",
-    )["data"]
-    if not disk_info:
-        raise RuntimeError(f"Disk {disk} doesn't exist")
-    disk_info = disk_info[0]
-
-    if disk_type:
-        disk_info["object_storage_type"] = disk_type
-    else:
-        if not have_type_column:
-            raise RuntimeError(
-                "--disk-type option is required for current version of ClickHouse"
-            )
-        disk_info["object_storage_type"] = disk_info["object_storage_type"].lower()
-
-    return disk_info
