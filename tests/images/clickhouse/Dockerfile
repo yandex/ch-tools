@@ -12,6 +12,8 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
         ca-certificates \
         locales \
         supervisor \
+        git \
+        sudo \
         tzdata && \
     echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen && \
     locale-gen
