@@ -47,11 +47,6 @@ def create_zero_copy_locks(
         ctx.obj["config"]["object_storage"]["bucket_name_prefix"],
     )
 
-    if not isinstance(storage_config, S3DiskConfiguration):
-        raise RuntimeError(
-            f"Trying to create locks on disk '{disk}', but only S3 type disks are supported."
-        )
-
     zero_copy_path = _get_zero_copy_zookeeper_path(ctx, "s3", table["uuid"])
     part_info = list_parts(
         ctx,
