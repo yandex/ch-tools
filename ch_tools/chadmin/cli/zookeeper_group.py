@@ -37,9 +37,8 @@ from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_json, print_response
 from ch_tools.common.cli.parameters import ListParamType, StringParamType
 from ch_tools.common.clickhouse.config import get_macros
+from ch_tools.common.clickhouse.config.storage_configuration import OBJECT_STORAGE_TYPES
 from ch_tools.common.config import load_config
-
-OBJECT_STORAGE_TYPES = ["s3", "hdfs", "azure_blob_storage", "local_blob_storage", "web"]
 
 
 @group("zookeeper", cls=Chadmin)
@@ -495,18 +494,7 @@ def clean_zk_locks_command(
         "disk",
         default=None,
         required=True,
-        help=("Object storage disk from ClickHouse."),
-    ),
-    option(
-        "--disk-type",
-        "disk_type",
-        type=Choice(OBJECT_STORAGE_TYPES),
-        default=None,
-        help=(
-            "Object storage disk type from ClickHouse."
-            "Examples are s3, hdfs, azure_blob_storage, local_blob_storage..."
-            "This option is required for backwards compatibility with ClickHouse older than 24.3."
-        ),
+        help=("S3 disk from ClickHouse."),
     ),
 )
 @option_group(
@@ -562,7 +550,6 @@ def clean_zk_locks_command(
 def create_zk_locks_command(
     ctx: Context,
     disk: str,
-    disk_type: Optional[str] = None,
     database: Optional[str] = None,
     table: Optional[str] = None,
     partition_id: Optional[str] = None,
@@ -591,5 +578,5 @@ def create_zk_locks_command(
             table_info["name"],
         )
         create_zero_copy_locks(
-            ctx, disk, disk_type, table_info, partition_id, part_id, replica, dry_run
+            ctx, disk, table_info, partition_id, part_id, replica, dry_run
         )
