@@ -381,10 +381,10 @@ def detect_broken_partitions(
 ) -> None:
     ch_config = get_clickhouse_config(ctx)
 
-    disk_conf: S3DiskConfiguration = (
-        ch_config.storage_configuration.s3_disk_configuration(
-            "object_storage", ctx.obj["config"]["object_storage"]["bucket_name_prefix"]
-        )
+    disk_conf = S3DiskConfiguration.from_config(
+        ch_config.storage_configuration,
+        "object_storage",
+        ctx.obj["config"]["object_storage"]["bucket_name_prefix"],
     )
     s3_client = boto3.client(
         "s3",

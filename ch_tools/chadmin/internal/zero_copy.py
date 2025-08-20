@@ -2,7 +2,6 @@ import os
 import re
 from pathlib import Path
 from typing import (
-    Any,
     Optional,
     TypedDict,
 )
@@ -15,13 +14,13 @@ from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
     S3ObjectLocalMetaData,
 )
 from ch_tools.chadmin.internal.part import list_parts
-from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.table_replica import get_table_replica
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import zk_client
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.retry import retry
 from ch_tools.common.clickhouse.config import get_clickhouse_config
+from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 
 CREATE_ZERO_COPY_LOCKS_BATCH_SIZE = 1000
 
@@ -35,7 +34,6 @@ class TableInfo(TypedDict):
 def create_zero_copy_locks(
     ctx: Context,
     disk: str,
-    disk_type: Optional[str],
     table: TableInfo,
     partition_id: Optional[str],
     part_name: Optional[str],
@@ -43,11 +41,18 @@ def create_zero_copy_locks(
     dry_run: bool = False,
 ) -> None:
     """Create missing zero-copy locks for given tables."""
-    disk_info = _get_disk_info(ctx, disk, disk_type)
-
-    zero_copy_path = _get_zero_copy_zookeeper_path(
-        ctx, disk_info["object_storage_type"], table["uuid"]
+    storage_config = S3DiskConfiguration.from_config(
+        get_clickhouse_config(ctx).storage_configuration,
+        disk,
+        ctx.obj["config"]["object_storage"]["bucket_name_prefix"],
     )
+
+    if not isinstance(storage_config, S3DiskConfiguration):
+        raise RuntimeError(
+            f"Trying to create locks on disk '{disk}', but only S3 type disks are supported."
+        )
+
+    zero_copy_path = _get_zero_copy_zookeeper_path(ctx, "s3", table["uuid"])
     part_info = list_parts(
         ctx,
         database=table["database"],
@@ -61,7 +66,7 @@ def create_zero_copy_locks(
     object_storage_prefix = None
     for part in part_info:
         if not object_storage_prefix:
-            object_storage_prefix = _get_object_storage_prefix(ctx, part)
+            object_storage_prefix = storage_config.prefix
 
         zero_copy_lock_paths.append(
             (
