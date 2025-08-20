@@ -186,4 +186,4 @@ class ClickhouseStorageConfiguration:
     def get_disk_config(self, disk: str) -> dict:
         if not self.has_disk(disk):
             raise RuntimeError(f"Disk {disk} is not found in config.")
-        return (self._config.get("disks", {}))["disk"]
+        return (self._config.get("disks", {}))[disk]

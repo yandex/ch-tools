@@ -38,7 +38,7 @@ Feature: chadmin zero-copy related zookeeper commands.
     """
     When we execute command on clickhouse01
     """
-    chadmin zookeeper create-zero-copy-locks -d test --disk object_storage --disk-type s3
+    chadmin zookeeper create-zero-copy-locks -d test --disk object_storage
     """
     And we execute command on clickhouse01
     """
@@ -82,7 +82,7 @@ Feature: chadmin zero-copy related zookeeper commands.
     """
     And we execute command on clickhouse01
     """
-    chadmin zookeeper create-zero-copy-locks -t table_01 <option> --replica clickhouse02.ch_tools_test --disk object_storage --disk-type s3
+    chadmin zookeeper create-zero-copy-locks -t table_01 <option> --replica clickhouse02.ch_tools_test --disk object_storage
     """
     And we execute command on clickhouse01
     """
@@ -98,7 +98,7 @@ Feature: chadmin zero-copy related zookeeper commands.
     """
     And we execute command on clickhouse01
     """
-    chadmin zookeeper create-zero-copy-locks -t table_01 <option> --disk object_storage --disk-type s3
+    chadmin zookeeper create-zero-copy-locks -t table_01 <option> --disk object_storage
     """
     And we execute command on clickhouse01
     """
