@@ -48,27 +48,24 @@ def get_backups() -> list[dict[str, Any]]:
 
 def get_chs3_backups(disk: str) -> set[str]:
     backups_dir = f"/var/lib/clickhouse/disks/{disk}/shadow/"
-    if os.path.exists(backups_dir):
-        return set(os.listdir(backups_dir))
-
-    return set()
+    return set(os.listdir(backups_dir)) if os.path.exists(backups_dir) else set()
 
 
 def get_orphaned_chs3_backups(disk: str) -> list[str]:
     backups = get_backups()
     shadow_chs3_backups = get_chs3_backups(disk)
-    return list(shadow_chs3_backups - set(backup["name"] for backup in backups))
+    return list(shadow_chs3_backups - {backup["name"] for backup in backups})
 
 
 def get_missing_chs3_backups(disk: str) -> list[str]:
     backups = get_backups()
     shadow_chs3_backups = get_chs3_backups(disk)
 
-    missing_cloud_backups = []
-    for backup in backups:
-        if disk in backup["cloud_disks"] and backup["name"] not in shadow_chs3_backups:
-            missing_cloud_backups.append(backup["name"])
-    return missing_cloud_backups
+    return [
+        backup["name"]
+        for backup in backups
+        if disk in backup["cloud_disks"] and backup["name"] not in shadow_chs3_backups
+    ]
 
 
 def run(command: str, data: Optional[str] = None) -> str:
