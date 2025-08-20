@@ -3,7 +3,7 @@ FROM ubuntu:22.04
 # Install python
 ENV PYTHON_VERSION=3.10
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y software-properties-common sudo \
+RUN apt-get update && apt-get install -y software-properties-common sudo git \
     && add-apt-repository ppa:deadsnakes/ppa \
     && apt-get update && apt-get install -y python${PYTHON_VERSION} python${PYTHON_VERSION}-distutils python${PYTHON_VERSION}-venv python3-pip \
     && rm -rf /var/lib/apt/lists/*
@@ -88,10 +88,11 @@ COPY dist/*.whl /
 RUN pip3 install *.whl
 
 # Install ch-backup
-RUN echo 'deb http://dist.yandex.ru/mdb-jammy-secure stable/$(ARCH)/' | tee /etc/apt/sources.list.d/ch-backup.list && \
-    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys FF5F4D0E27393420 && \
-    apt-get update -qq && \
-    apt-get install ch-backup -y
+# version.txt file is required to install ch-backup from pip
+ENV CH_BACKUP_LOCAL_VERSION=2.700.111111111
+RUN git clone https://github.com/yandex/ch-backup && \
+    echo ${CH_BACKUP_LOCAL_VERSION} | tee ch-backup/ch_backup/version.txt && \
+    pip install ./ch-backup
 
 EXPOSE 8123 8443 9000 9440
 
