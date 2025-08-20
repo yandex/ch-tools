@@ -1,4 +1,4 @@
-Feature: chadmin zookeeper commands.
+Feature: chadmin zero-copy related zookeeper commands.
 
   Background:
     Given default configuration
@@ -32,7 +32,10 @@ Feature: chadmin zookeeper commands.
     """
     chadmin zookeeper cleanup-zero-copy-locks --table-uuid 10000000-0000-0000-0000-000000000002
     """
-    #Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is equal to
+    """
+    /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001
+    """
     When we execute command on clickhouse01
     """
     chadmin zookeeper create-zero-copy-locks -d test --disk object_storage --disk-type s3
