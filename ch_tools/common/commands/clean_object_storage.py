@@ -38,7 +38,9 @@ INSERT_BATCH_SIZE = 500
 # And for metadata for which object is not found in S3.
 # These objects are not counted if their last modified time fall in the interval from the moment of starting analyzing.
 DEFAULT_GUARD_INTERVAL = "24h"
-KEYS_BATCH_SIZE = 100_000
+# Batch size for reading from orphaned objects table
+# corresponds to chunk size in s3_cleanup
+KEYS_BATCH_SIZE = 1000
 
 
 class CleanScope(str, Enum):
@@ -144,7 +146,6 @@ def _object_list_generator(
     table_name: str,
     query_settings: Dict[str, Any],
     timeout: Optional[int] = None,
-    chunk_size: int = 10 * 1024 * 1024,
 ) -> Callable:
 
     def obj_list_iterator() -> Iterator[ObjListItem]:
@@ -155,7 +156,7 @@ def _object_list_generator(
             settings=query_settings,
             stream=True,
         ) as resp:
-            for line in resp.iter_lines(chunk_size=chunk_size):
+            for line in resp.iter_lines():
                 yield ObjListItem.from_tab_separated(line.decode().strip())
 
     return obj_list_iterator
