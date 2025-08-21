@@ -38,7 +38,9 @@ INSERT_BATCH_SIZE = 500
 # And for metadata for which object is not found in S3.
 # These objects are not counted if their last modified time fall in the interval from the moment of starting analyzing.
 DEFAULT_GUARD_INTERVAL = "24h"
-KEYS_BATCH_SIZE = 100_000
+# Batch size for reading from orphaned objects table
+# corresponds to chunk size in s3_cleanup
+KEYS_BATCH_SIZE = 1000
 
 
 class CleanScope(str, Enum):
@@ -143,17 +145,18 @@ def _object_list_generator(
     ch_client: ClickhouseClient,
     table_name: str,
     query_settings: Dict[str, Any],
-    chunk_size: int = 10 * 1024 * 1024,
+    timeout: Optional[int] = None,
 ) -> Callable:
 
     def obj_list_iterator() -> Iterator[ObjListItem]:
         with ch_client.query(
             f"SELECT obj_path, obj_size FROM {table_name}",
             format_="TabSeparated",
+            timeout=timeout,
             settings=query_settings,
             stream=True,
         ) as resp:
-            for line in resp.iter_lines(chunk_size=chunk_size):
+            for line in resp.iter_lines():
                 yield ObjListItem.from_tab_separated(line.decode().strip())
 
     return obj_list_iterator
@@ -334,9 +337,7 @@ def _clean_object_storage(
         settings=query_settings,
     )
     orphaned_objects_iterator = _object_list_generator(
-        ch_client,
-        orphaned_objects_table,
-        query_settings,
+        ch_client, orphaned_objects_table, query_settings, timeout
     )
     listing_size_in_bucket = int(
         ch_client.query_json_data_first_row(
