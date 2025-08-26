@@ -20,7 +20,7 @@ from kazoo.client import KazooClient
 from kazoo.exceptions import NoNodeError, NotEmptyError
 from kazoo.protocol.states import ZnodeStat
 
-from ch_tools.chadmin.internal.utils import chunked, execute_query, replace_macros
+from ch_tools.chadmin.internal.utils import chunked, replace_macros
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
 from ch_tools.common.clickhouse.config.clickhouse import ClickhouseConfig
@@ -385,36 +385,3 @@ def _get_zk_client(ctx: Context) -> KazooClient:
         verify_certs=verify_ssl_certs,
         randomize_hosts=zk_randomize_hosts,
     )
-
-
-def _get_zero_copy_zookeeper_path(
-    ctx: Context, disk_type: Optional[str] = "s3", table_uuid: Optional[str] = None
-) -> str:
-    """
-    Returns ZooKeeper path for zero-copy table-independent info.
-
-    '/clickhouse/zero_copy/zero_copy_s3' is default for s3 disk.
-    """
-    disk_dir = f"zero_copy_{disk_type}"
-
-    if table_uuid:
-        get_settings_query = (
-            f"SELECT engine_full FROM system.tables WHERE uuid = '{table_uuid}'"
-        )
-        settings = execute_query(ctx, get_settings_query, format_="JSONCompact")["data"]
-        if settings:
-            match = re.search(
-                r"remote_fs_zero_copy_zookeeper_path\s*=\s*'([^']+)'", settings[0][0]
-            )
-            if match:
-                return os.path.join(match.group(1), disk_dir)
-        else:
-            logging.warning(
-                "Table with uuid {} doesn't exist. Will search for locks in default 'remote_fs_zero_copy_zookeeper_path' directory.",
-                table_uuid,
-            )
-
-    query = "SELECT value FROM system.merge_tree_settings WHERE name = 'remote_fs_zero_copy_zookeeper_path'"
-    base_path = execute_query(ctx, query, format_="JSONCompact")["data"][0][0]
-
-    return os.path.join(base_path, disk_dir)
