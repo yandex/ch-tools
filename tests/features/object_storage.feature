@@ -16,7 +16,7 @@ Feature: chadmin object-storage commands
     """
     CREATE DATABASE IF NOT EXISTS test ON CLUSTER '{cluster}';
 
-    CREATE TABLE IF NOT EXISTS test.table_s3_01 ON CLUSTER '{cluster}' (n Int32)
+    CREATE TABLE IF NOT EXISTS test.table_s3_01 UUID '10000000-0000-0000-0000-000000000001' ON CLUSTER '{cluster}' (n Int32)
     ENGINE = ReplicatedMergeTree('/tables/table_s3_01', '{replica}') ORDER BY n
     SETTINGS storage_policy = 'object_storage';
 
@@ -335,4 +335,84 @@ Feature: chadmin object-storage commands
     Then it fails with response contains
     """
     Potentially dangerous operation: Going to remove more than
+    """
+
+  Scenario: Download of missing backups
+    When we execute command on clickhouse01
+    """
+    ch-backup backup --name test1 --databases test -f &&
+    ch-backup backup --name test2 --databases test -f &&
+    ch-backup backup --name test3 --databases test -f
+    """
+    And we execute command on clickhouse01
+    """
+    ls /var/lib/clickhouse/disks/object_storage/shadow
+    """
+    Then we get response
+    """
+    test1
+    test2
+    test3
+    """
+    When we execute command on clickhouse01
+    """
+    rm -r /var/lib/clickhouse/disks/object_storage/shadow
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin object-storage clean --to-time 0h --dry-run --clean-scope=host
+    """
+    And we execute command on clickhouse01
+    """
+    ls /var/lib/clickhouse/disks/object_storage/shadow
+    """
+    Then we get response
+    """
+    test1
+    test2
+    test3
+    """
+    When we execute command on clickhouse01
+    """
+    ls /var/lib/clickhouse/disks/object_storage/shadow/test1/store/100/10000000-0000-0000-0000-000000000001/
+    """
+    Then we get response
+    """
+    all_0_0_0
+    """
+    When we execute command on clickhouse01
+    """
+    rm -r /var/lib/clickhouse/disks/object_storage/shadow/test2/ &&
+    rm -r /var/lib/clickhouse/disks/object_storage/shadow/test1/
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin object-storage clean --to-time 0h --dry-run --clean-scope=host
+    """
+    And we execute command on clickhouse01
+    """
+    ls /var/lib/clickhouse/disks/object_storage/shadow
+    """
+    Then we get response
+    """
+    test1
+    test2
+    test3
+    """
+    When we execute command on clickhouse01
+    """
+    rm -r /var/lib/clickhouse/disks/object_storage/shadow/test1
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin object-storage clean --to-time 0h --dry-run --clean-scope=host --ignore-missing-cloud-storage-backups
+    """
+    And we execute command on clickhouse01
+    """
+    ls /var/lib/clickhouse/disks/object_storage/shadow
+    """
+    Then we get response
+    """
+    test2
+    test3
     """
