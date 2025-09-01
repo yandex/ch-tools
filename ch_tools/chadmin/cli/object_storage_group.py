@@ -17,10 +17,12 @@ from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
-from ch_tools.common.commands.clean_object_storage import (
+from ch_tools.common.commands.object_storage import (
     DEFAULT_GUARD_INTERVAL,
     CleanScope,
     clean,
+    collect_object_storage_space_usage,
+    get_object_storage_space_usage,
 )
 
 # Use big enough timeout for stream HTTP query
@@ -207,6 +209,76 @@ def clean_command(
             _store_state_local_save(ctx, state)
 
     _print_response(ctx, dry_run, deleted, total_size)
+
+
+@object_storage_group.command("space-usage-collect")
+@option(
+    "-p",
+    "--prefix",
+    "--object_name_prefix",
+    "object_name_prefix",
+    default="",
+    help=(
+        "Prefix of object name used while listing bucket. By default its value is attempted to parse "
+        "from endpoint in clickhouse S3 disk config. If there is no trailing slash it will be added automatically."
+    ),
+)
+@option(
+    "--cluster",
+    "cluster_name",
+    default=DEFAULT_CLUSTER_NAME,
+    help=("Cluster to analyze. Default value is macro."),
+)
+@pass_context
+def space_usage_collect_command(
+    ctx: Context,
+    object_name_prefix: str,
+    cluster_name: str,
+) -> None:
+    """
+    todo
+    """
+    collect_object_storage_space_usage(
+        ctx,
+        object_name_prefix,
+        cluster_name,
+    )
+
+
+@object_storage_group.command("space-usage-get")
+@option(
+    "-p",
+    "--prefix",
+    "--object_name_prefix",
+    "object_name_prefix",
+    default="",
+    help=(
+        "Prefix of object name used while listing bucket. By default its value is attempted to parse "
+        "from endpoint in clickhouse S3 disk config. If there is no trailing slash it will be added automatically."
+    ),
+)
+@option(
+    "--cluster",
+    "cluster_name",
+    default=DEFAULT_CLUSTER_NAME,
+    help=("Cluster to analyze. Default value is macro."),
+)
+@pass_context
+def space_usage_get_command(
+    ctx: Context,
+    object_name_prefix: str,
+    cluster_name: str,
+) -> None:
+    """
+    todo
+    """
+    get_object_storage_space_usage(
+        ctx,
+        object_name_prefix,
+        cluster_name,
+    )
+
+    # _print_response(ctx, dry_run, deleted, total_size)
 
 
 def _store_state_zk_save(ctx: Context, path: str, state: OrphanedObjectsState) -> None:

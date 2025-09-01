@@ -41,6 +41,7 @@ DEFAULT_GUARD_INTERVAL = "24h"
 # Batch size for reading from orphaned objects table
 # corresponds to chunk size in s3_cleanup
 KEYS_BATCH_SIZE = 1000
+REMOTE_DATA_PATHS_TABLE = "system.remote_data_paths"
 
 
 class CleanScope(str, Enum):
@@ -64,6 +65,59 @@ def _create_object_listing_table(
         _drop_table_on_shard(ctx, table_name)
 
     _create_table_on_shard(ctx, table_name, replica_zk_prefix, storage_policy)
+
+
+def _create_space_usage_tables(
+    ctx: Context,
+    blob_state_table_name: str,
+    spase_usage_table_name: str,
+    replica_zk_prefix: str,
+    storage_policy: str,
+    recreate_table: bool,
+) -> None:
+    if not recreate_table:
+        _drop_table_on_shard(ctx, blob_state_table_name)
+        _drop_table_on_shard(ctx, spase_usage_table_name)
+
+    ARGS = "('{replica_zk_prefix}/{{shard}}/{table_name}', '{{replica}}')"
+
+    engine = (
+        "ReplicatedSummingMergeTree"
+        + ARGS.format(
+            replica_zk_prefix=replica_zk_prefix, table_name=blob_state_table_name
+        )
+        if has_zk()
+        else "MergeTree"
+    )
+
+    execute_query_on_shard(
+        ctx,
+        f"""CREATE TABLE IF NOT EXISTS {blob_state_table_name} 
+            (obj_path String, state String, obj_size UInt64, ref_count UInt32) 
+            ENGINE {engine} 
+            ORDER BY (obj_path, state)
+            SETTINGS storage_policy = '{storage_policy}'""",
+        format_=None,
+    )
+
+    engine = (
+        "ReplicatedMergeTree"
+        + ARGS.format(
+            replica_zk_prefix=replica_zk_prefix, table_name=spase_usage_table_name
+        )
+        if has_zk()
+        else "MergeTree"
+    )
+
+    execute_query_on_shard(
+        ctx,
+        f"""CREATE TABLE IF NOT EXISTS {spase_usage_table_name} 
+            (active UInt64, unique_frozen UInt64, unique_detached UInt64) 
+            ENGINE {engine}
+            ORDER BY active
+            SETTINGS storage_policy = '{storage_policy}'""",
+        format_=None,
+    )
 
 
 def clean(
@@ -139,6 +193,154 @@ def clean(
             _drop_table_on_shard(ctx, orphaned_objects_table)
 
     return deleted, total_size
+
+
+def collect_object_storage_space_usage(
+    ctx: Context,
+    object_name_prefix: str,
+    cluster_name: str,
+):
+    disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
+    config = ctx.obj["config"]["object_storage"]["space_usage"]
+    blob_state_table = f"{config['space_usage_table_database']}.{config['blob_state_table_prefix']}{disk_conf.name}"
+    space_usage_table = f"{config['space_usage_table_database']}.{config['space_usage_table_prefix']}{disk_conf.name}"
+    space_usage_table_zk_path_prefix = config["space_usage_table_zk_path_prefix"]
+    # [[5791, 582, 1164]]
+    _create_space_usage_tables(
+        ctx,
+        blob_state_table_name=blob_state_table,
+        spase_usage_table_name=space_usage_table,
+        replica_zk_prefix=space_usage_table_zk_path_prefix,
+        storage_policy=config["storage_policy"],
+        recreate_table=True,
+    )
+
+    # Collect blob state
+    remote_data_paths_table = _get_table_function(
+        ctx, REMOTE_DATA_PATHS_TABLE, CleanScope.SHARD, cluster_name
+    )
+
+    user_password = clickhouse_client(ctx).password or ""
+    blob_state_query = Query(
+        f"""
+            INSERT INTO {blob_state_table}
+                SELECT
+                    remote_path,
+                    multiIf(
+                        position(local_path, 'shadow/') > 0, 'shadow',
+                        position(local_path, 'detached/') > 0, 'detached',
+                        'active'
+                    ) AS status,
+                    size,
+                    1
+                    FROM {remote_data_paths_table}
+                    WHERE disk_name = '{disk_conf.name}'
+                    SETTINGS traverse_shadow_remote_data_paths=1
+        """,
+        sensitive_args={"user_password": user_password},
+    )
+
+    logging.info("Collect blob state query: {}", str(blob_state_query))
+
+    timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
+    query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
+    execute_query(
+        ctx,
+        blob_state_query,
+        timeout=timeout,
+        settings=query_settings,
+    )
+
+    # Collect space usage
+    space_usage_query = Query(
+        f"""
+            WITH active AS
+                (SELECT sum(size / count) as size 
+                    FROM (SELECT sum(obj_size) size, sum(ref_count) count 
+                        FROM {blob_state_table}
+                        WHERE state = 'active'
+                        GROUP BY obj_path)
+                ),
+            unique_frozen AS
+                (SELECT sum(shadow.obj_size / shadow.ref_count) AS size
+                    FROM {blob_state_table} AS shadow
+                    LEFT ANTI JOIN
+                    (
+                        SELECT DISTINCT obj_path
+                        FROM {blob_state_table}
+                        WHERE state = 'active'
+                    ) AS has_other
+                        ON shadow.obj_path = has_other.obj_path
+                        WHERE
+                            shadow.state = 'shadow'
+                ),
+            unique_detached AS
+                (SELECT sum(detached.obj_size / detached.ref_count) AS size
+                    FROM {blob_state_table} AS detached
+                    LEFT ANTI JOIN
+                    (
+                        SELECT DISTINCT obj_path
+                        FROM {blob_state_table}
+                        WHERE state IN ('active', 'shadow')
+                    ) AS has_other
+                        ON detached.obj_path = has_other.obj_path
+                        WHERE
+                            detached.state = 'detached'
+                )
+            INSERT INTO {space_usage_table}
+                SELECT
+                    (SELECT size FROM active)          AS active_size,
+                    (SELECT size FROM unique_frozen)   AS unique_frozen,
+                    (SELECT size FROM unique_detached) AS unique_detached
+        """,
+        sensitive_args={"user_password": user_password},
+    )
+
+    logging.info("Collect space usage query: {}", str(space_usage_query))
+
+    timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
+    query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
+    execute_query(
+        ctx,
+        space_usage_query,
+        timeout=timeout,
+        settings=query_settings,
+    )
+
+    # Collect orphaned objects size
+
+
+def get_object_storage_space_usage(
+    ctx: Context,
+    object_name_prefix: str,
+    cluster_name: str,
+):
+    disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
+    config = ctx.obj["config"]["object_storage"]["space_usage"]
+    space_usage_table = f"{config['space_usage_table_database']}.{config['space_usage_table_prefix']}{disk_conf.name}"
+    space_usage_table_on_cluster = (
+        f"cluster('{cluster_name}', {space_usage_table})"  # _get_table_function
+    )
+
+    parts_usage_query = Query(
+        f"""
+            SELECT * FROM {space_usage_table_on_cluster}
+        """,
+    )
+
+    logging.info("Analyze parts space usage query: {}", str(parts_usage_query))
+
+    timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
+    query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
+    res = execute_query(
+        ctx,
+        parts_usage_query,
+        timeout=timeout,
+        settings=query_settings,
+        format_="JSONCompact",
+    )["data"]
+
+    raise ValueError(res)
 
 
 def _object_list_generator(
@@ -283,28 +485,11 @@ def _clean_object_storage(
         _traverse_object_storage(ctx, listing_table, from_time, to_time, prefix)
 
     ch_client = clickhouse_client(ctx)
-    user_name = ch_client.user or ""
     user_password = ch_client.password or ""
 
-    remote_data_paths_table = "system.remote_data_paths"
-
-    if clean_scope == CleanScope.CLUSTER:
-        remote_data_paths_table = (
-            f"clusterAllReplicas('{cluster_name}', {remote_data_paths_table})"
-        )
-    elif clean_scope == CleanScope.SHARD:
-        #  It is believed that all hosts in shard have the same port set, so check current for tcp port
-        if ch_client.check_port(ClickhousePort.TCP_SECURE):
-            remote_clause = "remoteSecure"
-        elif ch_client.check_port(ClickhousePort.TCP):
-            remote_clause = "remote"
-        else:
-            raise RuntimeError(
-                "For using remote() table function tcp port must be defined"
-            )
-
-        replicas = ",".join(ClickhouseInfo.get_replicas(ctx))
-        remote_data_paths_table = f"{remote_clause}('{replicas}', {remote_data_paths_table}, '{user_name}', '{{user_password}}')"
+    remote_data_paths_table = _get_table_function(
+        ctx, REMOTE_DATA_PATHS_TABLE, clean_scope, cluster_name
+    )
 
     settings = ""
     if match_ch_version(ctx, min_version="24.3"):
@@ -476,3 +661,34 @@ def _get_default_object_name_prefix(
         return cluster_path + ("/" if cluster_path else "")
 
     return disk_conf.prefix
+
+
+def _get_table_function(
+    ctx: Context,
+    table: str,
+    scope: CleanScope,
+    cluster_name: Optional[str] = None,
+) -> str:
+    ch_client = clickhouse_client(ctx)
+    user_name = ch_client.user or ""
+
+    result = table
+
+    if scope == CleanScope.CLUSTER:
+        assert cluster_name
+        result = f"clusterAllReplicas('{cluster_name}', {table})"
+    elif scope == CleanScope.SHARD:
+        #  It is believed that all hosts in shard have the same port set, so check current for tcp port
+        if ch_client.check_port(ClickhousePort.TCP_SECURE):
+            remote_clause = "remoteSecure"
+        elif ch_client.check_port(ClickhousePort.TCP):
+            remote_clause = "remote"
+        else:
+            raise RuntimeError(
+                "For using remote() table function tcp port must be defined"
+            )
+
+        replicas = ",".join(ClickhouseInfo.get_replicas(ctx))
+        result = f"{remote_clause}('{replicas}', {table}, '{user_name}', '{{user_password}}')"
+
+    return result
