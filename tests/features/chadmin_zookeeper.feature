@@ -422,7 +422,7 @@ Feature: chadmin zookeeper commands.
     """
     supervisorctl restart clickhouse-server
     """
-    When we sleep for 10 seconds
+    When we sleep for 15 seconds
     And we execute command on clickhouse01
     """
     ch-monitoring log-errors -n 5
