@@ -238,13 +238,14 @@ def _sanity_check_before_cleanup(
                 )
 
     def perform_check_size() -> None:
+
+        if listing_size_in_bucket == 0:
+            return
+
         ### Total size of objects after cleanup must be very close to sum(bytes) FROM system.remote_data_paths
         size_to_delete = 0
         for orphaned_object in orphaned_objects_iterator():
             size_to_delete += orphaned_object.size
-
-        if listing_size_in_bucket == 0:
-            return
 
         if (
             listing_size_in_bucket * size_error_rate_threshold_fraction
