@@ -6,6 +6,7 @@ from kazoo.exceptions import NodeExistsError
 
 from ch_tools.chadmin.cli import metadata
 from ch_tools.chadmin.cli.database_metadata import (
+    DatabaseEngine,
     parse_database_from_metadata,
     remove_uuid_from_metadata,
 )
@@ -581,6 +582,12 @@ def is_database_exists(ctx: Context, database_name: str) -> bool:
 
 
 def migrate_database_to_replicated(ctx: Context, database: str) -> None:
+    metadata_db = parse_database_from_metadata(database)
+    if metadata_db.database_engine != DatabaseEngine.ATOMIC:
+        raise RuntimeError(
+            f"Database {database} has engine {metadata_db.database_engine}. Migration to Replicated from Atomic only is supported."
+        )
+
     first_replica = True
     try:
         create_database_nodes(ctx, database)
@@ -606,6 +613,10 @@ def migrate_database_to_atomic(
     ctx: Context, database: str, clean_zookeeper: bool
 ) -> None:
     metadata_repl_db = parse_database_from_metadata(database)
+    if metadata_repl_db.database_engine != DatabaseEngine.REPLICATED:
+        raise RuntimeError(
+            f"Database {database} has engine {metadata_repl_db.database_engine}. Migration to Atomic from Replicated only is supported."
+        )
 
     with AttacherContext(ctx, database) as _:
         try:
