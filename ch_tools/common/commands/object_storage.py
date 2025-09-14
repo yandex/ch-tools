@@ -4,7 +4,6 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
-import click
 from click import Context
 from humanfriendly import format_size
 
@@ -42,11 +41,12 @@ DEFAULT_GUARD_INTERVAL = "24h"
 # corresponds to chunk size in s3_cleanup
 KEYS_BATCH_SIZE = 1000
 REMOTE_DATA_PATHS_TABLE = "system.remote_data_paths"
+ZOOKEEPER_ARGS = "('{replica_zk_prefix}/{{shard}}/{table_name}', '{{replica}}')"
 
 
-class CleanScope(str, Enum):
+class Scope(str, Enum):
     """
-    Define a local metadata search scope to clean.
+    Define a local metadata search scope.
     """
 
     HOST = "host"
@@ -54,82 +54,11 @@ class CleanScope(str, Enum):
     CLUSTER = "cluster"
 
 
-def _create_object_listing_table(
-    ctx: Context,
-    table_name: str,
-    replica_zk_prefix: str,
-    storage_policy: str,
-    recreate_table: bool,
-) -> None:
-    if not recreate_table:
-        _drop_table_on_shard(ctx, table_name)
-
-    _create_table_on_shard(ctx, table_name, replica_zk_prefix, storage_policy)
-
-
-def _create_space_usage_tables(
-    ctx: Context,
-    blob_state_table_name: str,
-    spase_usage_table_name: str,
-    replica_zk_prefix: str,
-    storage_policy: str,
-    recreate_table: bool,
-) -> None:
-    if not recreate_table:
-        _drop_table_on_shard(ctx, blob_state_table_name)
-        _drop_table_on_shard(ctx, spase_usage_table_name)
-
-    ARGS = "('{replica_zk_prefix}/{{shard}}/{table_name}', '{{replica}}')"
-
-    engine = (
-        "ReplicatedSummingMergeTree"
-        + ARGS.format(
-            replica_zk_prefix=replica_zk_prefix, table_name=blob_state_table_name
-        )
-        if has_zk()
-        else "MergeTree"
-    )
-
-    execute_query_on_shard(
-        ctx,
-        f"""CREATE TABLE IF NOT EXISTS {blob_state_table_name} 
-            (obj_path String, state String, obj_size UInt64, ref_count UInt32) 
-            ENGINE {engine} 
-            ORDER BY (obj_path, state)
-            SETTINGS storage_policy = '{storage_policy}'""",
-        format_=None,
-    )
-
-    engine = (
-        "ReplicatedMergeTree"
-        + ARGS.format(
-            replica_zk_prefix=replica_zk_prefix, table_name=spase_usage_table_name
-        )
-        if has_zk()
-        else "MergeTree"
-    )
-
-    execute_query_on_shard(
-        ctx,
-        f"""CREATE TABLE IF NOT EXISTS {spase_usage_table_name} 
-            (active UInt64, unique_frozen UInt64, unique_detached UInt64) 
-            ENGINE {engine}
-            ORDER BY active
-            SETTINGS storage_policy = '{storage_policy}'""",
-        format_=None,
-    )
-
-
 def clean(
     ctx: Context,
-    object_name_prefix: str,
-    from_time: Optional[timedelta],
-    to_time: timedelta,
-    clean_scope: CleanScope,
-    cluster_name: str,
+    clean_scope: Scope,
     dry_run: bool,
     keep_paths: bool,
-    use_saved_list: bool,
     verify_paths_regex: Optional[str] = None,
     max_size_to_delete_bytes: int = 0,
     max_size_to_delete_fraction: float = 1.0,
@@ -137,55 +66,24 @@ def clean(
     """
     Clean orphaned S3 objects.
     """
-    if from_time is not None and to_time < from_time:
-        raise click.BadParameter(
-            "'from_time' parameter must be greater than 'to_time'",
-            param_hint="--from-time",
-        )
-
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
     config = ctx.obj["config"]["object_storage"]["clean"]
 
     listing_table = f"{config['listing_table_database']}.{config['listing_table_prefix']}{disk_conf.name}"
-    listing_table_zk_path_prefix = config["listing_table_zk_path_prefix"]
     orphaned_objects_table = f"{config['orphaned_objects_table_database']}.{config['orphaned_objects_table_prefix']}{disk_conf.name}"
-    orphaned_objects_table_zk_path_prefix = config[
-        "orphaned_objects_table_zk_path_prefix"
-    ]
-    storage_policy = config["storage_policy"]
 
     # Create listing table for storing paths from object storage.
     # Create orphaned objects for accumulating the result.
     try:
-        _create_object_listing_table(
-            ctx,
-            listing_table,
-            listing_table_zk_path_prefix,
-            storage_policy,
-            use_saved_list,
-        )
-        _create_object_listing_table(
-            ctx,
-            orphaned_objects_table,
-            orphaned_objects_table_zk_path_prefix,
-            storage_policy,
-            False,
-        )
-
         deleted, total_size = _clean_object_storage(
             ctx,
-            object_name_prefix,
-            from_time,
-            to_time,
-            clean_scope,
-            cluster_name,
-            dry_run,
-            listing_table,
-            orphaned_objects_table,
-            use_saved_list,
-            verify_paths_regex,
-            max_size_to_delete_bytes,
-            max_size_to_delete_fraction,
+            clean_scope=clean_scope,
+            dry_run=dry_run,
+            listing_table=listing_table,
+            orphaned_objects_table=orphaned_objects_table,
+            verify_paths_regex=verify_paths_regex,
+            max_size_to_delete_bytes=max_size_to_delete_bytes,
+            max_size_to_delete_fraction=max_size_to_delete_fraction,
         )
     finally:
         if not keep_paths:
@@ -195,30 +93,78 @@ def clean(
     return deleted, total_size
 
 
-def collect_object_storage_space_usage(
+def collect_object_storage_info(
     ctx: Context,
     object_name_prefix: str,
     cluster_name: str,
-):
-    disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
-    config = ctx.obj["config"]["object_storage"]["space_usage"]
-    blob_state_table = f"{config['space_usage_table_database']}.{config['blob_state_table_prefix']}{disk_conf.name}"
-    space_usage_table = f"{config['space_usage_table_database']}.{config['space_usage_table_prefix']}{disk_conf.name}"
-    space_usage_table_zk_path_prefix = config["space_usage_table_zk_path_prefix"]
-    # [[5791, 582, 1164]]
-    _create_space_usage_tables(
+    from_time: Optional[timedelta],
+    to_time: timedelta,
+    use_saved_list: bool,
+    scope: Scope = Scope.SHARD,
+) -> None:
+    _list_local_blobs(ctx, cluster_name, scope)
+    _collect_space_usage(ctx)
+    _collect_orphaned_objects(
         ctx,
-        blob_state_table_name=blob_state_table,
-        spase_usage_table_name=space_usage_table,
-        replica_zk_prefix=space_usage_table_zk_path_prefix,
-        storage_policy=config["storage_policy"],
-        recreate_table=True,
+        object_name_prefix=object_name_prefix,
+        from_time=from_time,
+        to_time=to_time,
+        clean_scope=scope,
+        use_saved_list=use_saved_list,
     )
 
-    # Collect blob state
-    remote_data_paths_table = _get_table_function(
-        ctx, REMOTE_DATA_PATHS_TABLE, CleanScope.SHARD, cluster_name
+
+def get_object_storage_space_usage(
+    ctx: Context,
+    cluster_name: str,
+) -> dict:
+    disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
+    config = ctx.obj["config"]["object_storage"]["space_usage"]
+    space_usage_table = f"{config['space_usage_table_database']}.{config['space_usage_table_prefix']}{disk_conf.name}"
+    space_usage_table_on_cluster = (
+        f"cluster('{cluster_name}', {space_usage_table})"  # _get_table_function
     )
+
+    parts_usage_query = Query(f"SELECT * FROM {space_usage_table_on_cluster}")
+
+    res = execute_query(
+        ctx,
+        parts_usage_query,
+        format_="JSON",
+    )[
+        "data"
+    ][0]
+
+    return res
+
+
+def _list_local_blobs(
+    ctx: Context,
+    cluster_name: str,
+    scope: Scope,
+) -> None:
+    disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
+    config = ctx.obj["config"]["object_storage"]["space_usage"]
+
+    blob_state_table = f"{config['space_usage_table_database']}.{config['blob_state_table_prefix']}{disk_conf.name}"
+    blob_state_table_zk_path_prefix = config["space_usage_table_zk_path_prefix"]
+    storage_policy = config["storage_policy"]
+
+    _create_local_object_listing_table(
+        ctx,
+        blob_state_table,
+        blob_state_table_zk_path_prefix,
+        storage_policy,
+        recreate_table=False,
+    )
+
+    remote_data_paths_table = _get_table_function(
+        ctx, REMOTE_DATA_PATHS_TABLE, scope, cluster_name
+    )
+
+    settings = ""
+    if match_ch_version(ctx, min_version="24.3"):
+        settings = "SETTINGS traverse_shadow_remote_data_paths=1"
 
     user_password = clickhouse_client(ctx).password or ""
     blob_state_query = Query(
@@ -235,12 +181,10 @@ def collect_object_storage_space_usage(
                     1
                     FROM {remote_data_paths_table}
                     WHERE disk_name = '{disk_conf.name}'
-                    SETTINGS traverse_shadow_remote_data_paths=1
+                    {settings}
         """,
         sensitive_args={"user_password": user_password},
     )
-
-    logging.info("Collect blob state query: {}", str(blob_state_query))
 
     timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
     query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
@@ -251,12 +195,109 @@ def collect_object_storage_space_usage(
         settings=query_settings,
     )
 
-    # Collect space usage
+
+def _collect_orphaned_objects(
+    ctx: Context,
+    object_name_prefix: str,
+    from_time: Optional[timedelta],
+    to_time: timedelta,
+    clean_scope: Scope,
+    use_saved_list: bool,
+) -> None:
+    disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
+
+    config = ctx.obj["config"]["object_storage"]["space_usage"]
+    blob_state_table = f"{config['space_usage_table_database']}.{config['blob_state_table_prefix']}{disk_conf.name}"
+
+    config = ctx.obj["config"]["object_storage"]["clean"]
+    listing_table = f"{config['listing_table_database']}.{config['listing_table_prefix']}{disk_conf.name}"
+    listing_table_zk_path_prefix = config["listing_table_zk_path_prefix"]
+    orphaned_objects_table = f"{config['orphaned_objects_table_database']}.{config['orphaned_objects_table_prefix']}{disk_conf.name}"
+    orphaned_objects_table_zk_path_prefix = config[
+        "orphaned_objects_table_zk_path_prefix"
+    ]
+    storage_policy = config["storage_policy"]
+
+    # Create listing table for storing paths from object storage.
+    # Create orphaned objects for accumulating the result.
+    _create_object_listing_table(
+        ctx,
+        listing_table,
+        listing_table_zk_path_prefix,
+        storage_policy,
+        recreate_table=use_saved_list,
+    )
+    _create_object_listing_table(
+        ctx,
+        orphaned_objects_table,
+        orphaned_objects_table_zk_path_prefix,
+        storage_policy,
+        False,
+    )
+
+    prefix = object_name_prefix or _get_default_object_name_prefix(
+        clean_scope, disk_conf
+    )
+    prefix = os.path.join(prefix, "")
+
+    if not use_saved_list:
+        logging.info(
+            f"Collecting objects... (Disk: '{disk_conf.name}', Endpoint '{disk_conf.endpoint_url}', Bucket: '{disk_conf.bucket_name}', Prefix: '{prefix}')",
+        )
+        _traverse_object_storage(ctx, listing_table, from_time, to_time, prefix)
+
+    ch_client = clickhouse_client(ctx)
+    user_password = ch_client.password or ""
+
+    settings = ""
+    if match_ch_version(ctx, min_version="24.3"):
+        settings = "SETTINGS traverse_shadow_remote_data_paths=1"
+
+    antijoin_query = Query(
+        f"""
+        INSERT INTO {orphaned_objects_table}
+            SELECT obj_path, obj_size FROM {listing_table} AS object_storage
+            LEFT ANTI JOIN {blob_state_table} AS object_table
+            ON object_table.obj_path = object_storage.obj_path
+        {settings}
+    """,
+        sensitive_args={"user_password": user_password},
+    )
+    logging.info("Antijoin query: {}", str(antijoin_query))
+
+    timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
+    query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
+    execute_query(
+        ctx,
+        antijoin_query,
+        timeout=timeout,
+        settings=query_settings,
+    )
+
+
+def _collect_space_usage(
+    ctx: Context,
+) -> None:
+    disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
+    config = ctx.obj["config"]["object_storage"]["space_usage"]
+    blob_state_table = f"{config['space_usage_table_database']}.{config['blob_state_table_prefix']}{disk_conf.name}"
+    space_usage_table = f"{config['space_usage_table_database']}.{config['space_usage_table_prefix']}{disk_conf.name}"
+    space_usage_table_zk_path_prefix = config["space_usage_table_zk_path_prefix"]
+
+    _create_space_usage_table(
+        ctx,
+        spase_usage_table_name=space_usage_table,
+        replica_zk_prefix=space_usage_table_zk_path_prefix,
+        storage_policy=config["storage_policy"],
+        recreate_table=False,
+    )
+
+    user_password = clickhouse_client(ctx).password or ""
     space_usage_query = Query(
         f"""
             WITH active AS
-                (SELECT sum(size / count) as size 
-                    FROM (SELECT sum(obj_size) size, sum(ref_count) count 
+                (SELECT sum(size / count) as size
+                    FROM (SELECT sum(obj_size) size, sum(ref_count) count
                         FROM {blob_state_table}
                         WHERE state = 'active'
                         GROUP BY obj_path)
@@ -296,8 +337,6 @@ def collect_object_storage_space_usage(
         sensitive_args={"user_password": user_password},
     )
 
-    logging.info("Collect space usage query: {}", str(space_usage_query))
-
     timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
     query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
     execute_query(
@@ -306,41 +345,6 @@ def collect_object_storage_space_usage(
         timeout=timeout,
         settings=query_settings,
     )
-
-    # Collect orphaned objects size
-
-
-def get_object_storage_space_usage(
-    ctx: Context,
-    object_name_prefix: str,
-    cluster_name: str,
-):
-    disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
-    config = ctx.obj["config"]["object_storage"]["space_usage"]
-    space_usage_table = f"{config['space_usage_table_database']}.{config['space_usage_table_prefix']}{disk_conf.name}"
-    space_usage_table_on_cluster = (
-        f"cluster('{cluster_name}', {space_usage_table})"  # _get_table_function
-    )
-
-    parts_usage_query = Query(
-        f"""
-            SELECT * FROM {space_usage_table_on_cluster}
-        """,
-    )
-
-    logging.info("Analyze parts space usage query: {}", str(parts_usage_query))
-
-    timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
-    query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
-    res = execute_query(
-        ctx,
-        parts_usage_query,
-        timeout=timeout,
-        settings=query_settings,
-        format_="JSONCompact",
-    )["data"]
-
-    raise ValueError(res)
 
 
 def _object_list_generator(
@@ -369,9 +373,9 @@ def _sanity_check_before_cleanup(
     orphaned_objects_iterator: Callable,
     ch_client: ClickhouseClient,
     listing_size_in_bucket: int,
-    remote_data_paths_table: str,
+    blob_state_table: str,
     verify_paths_regex: Optional[str],
-    clean_scope: CleanScope,
+    clean_scope: Scope,
 ) -> None:
 
     size_error_rate_threshold_fraction = ctx.obj["config"]["object_storage"]["clean"][
@@ -384,22 +388,15 @@ def _sanity_check_before_cleanup(
             "verify_paths_regex"
         ][clean_scope]
 
-    remote_data_paths_query_settings = (
-        {"traverse_shadow_remote_data_paths": 1}
-        if match_ch_version(ctx, min_version="24.3")
-        else {}
-    )
-
     def perform_check_paths() -> None:
         ### Compare path from system.remote_data_path and from list to delete. They must match the regex.
         ### Perform such check to prevent silly mistakes if the paths are completely different.
         ch_objects_cnt = int(
             ch_client.query_json_data_first_row(
                 query=Query(
-                    f"SELECT count() FROM {remote_data_paths_table}",
+                    f"SELECT count() FROM {blob_state_table}",
                     sensitive_args={"user_password": ch_client.password or ""},
                 ),
-                settings=remote_data_paths_query_settings,
                 compact=True,
             )[0]
         )
@@ -408,10 +405,9 @@ def _sanity_check_before_cleanup(
             return
         path_form_ch = ch_client.query_json_data_first_row(
             query=Query(
-                f"SELECT remote_path FROM {remote_data_paths_table} LIMIT 1",
+                f"SELECT remote_path FROM {blob_state_table} LIMIT 1",
                 sensitive_args={"user_password": ch_client.password or ""},
             ),
-            settings=remote_data_paths_query_settings,
             compact=True,
         )[0]
 
@@ -456,15 +452,10 @@ def _sanity_check_before_cleanup(
 
 def _clean_object_storage(
     ctx: Context,
-    object_name_prefix: str,
-    from_time: Optional[timedelta],
-    to_time: timedelta,
-    clean_scope: CleanScope,
-    cluster_name: str,
+    clean_scope: Scope,
     dry_run: bool,
     listing_table: str,
     orphaned_objects_table: str,
-    use_saved_list: bool,
     verify_paths_regex: Optional[str] = None,
     max_size_to_delete_bytes: int = 0,
     max_size_to_delete_fraction: float = 1.0,
@@ -473,40 +464,7 @@ def _clean_object_storage(
     Delete orphaned objects from object storage.
     """
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
-    prefix = object_name_prefix or _get_default_object_name_prefix(
-        clean_scope, disk_conf
-    )
-    prefix = os.path.join(prefix, "")
-
-    if not use_saved_list:
-        logging.info(
-            f"Collecting objects... (Disk: '{disk_conf.name}', Endpoint '{disk_conf.endpoint_url}', Bucket: '{disk_conf.bucket_name}', Prefix: '{prefix}')",
-        )
-        _traverse_object_storage(ctx, listing_table, from_time, to_time, prefix)
-
     ch_client = clickhouse_client(ctx)
-    user_password = ch_client.password or ""
-
-    remote_data_paths_table = _get_table_function(
-        ctx, REMOTE_DATA_PATHS_TABLE, clean_scope, cluster_name
-    )
-
-    settings = ""
-    if match_ch_version(ctx, min_version="24.3"):
-        settings = "SETTINGS traverse_shadow_remote_data_paths=1"
-
-    antijoin_query = Query(
-        f"""
-        INSERT INTO {orphaned_objects_table}
-            SELECT obj_path, obj_size FROM {listing_table} AS object_storage
-            LEFT ANTI JOIN {remote_data_paths_table} AS object_table
-            ON object_table.remote_path = object_storage.obj_path
-                    AND object_table.disk_name = '{disk_conf.name}'
-        {settings}
-    """,
-        sensitive_args={"user_password": user_password},
-    )
-    logging.info("Antijoin query: {}", str(antijoin_query))
 
     if dry_run:
         logging.info("Counting orphaned objects...")
@@ -515,12 +473,6 @@ def _clean_object_storage(
 
     timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
     query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
-    execute_query(
-        ctx,
-        antijoin_query,
-        timeout=timeout,
-        settings=query_settings,
-    )
     orphaned_objects_iterator = _object_list_generator(
         ch_client, orphaned_objects_table, query_settings, timeout
     )
@@ -531,13 +483,16 @@ def _clean_object_storage(
         )[0]
     )
 
+    config = ctx.obj["config"]["object_storage"]["space_usage"]
+    blob_state_table = f"{config['space_usage_table_database']}.{config['blob_state_table_prefix']}{disk_conf.name}"
+
     if ctx.obj["config"]["object_storage"]["clean"]["verify"]:
         _sanity_check_before_cleanup(
             ctx,
             orphaned_objects_iterator,
             ch_client,
             listing_size_in_bucket,
-            remote_data_paths_table,
+            blob_state_table,
             verify_paths_regex,
             clean_scope,
         )
@@ -571,7 +526,7 @@ def _clean_object_storage(
             break
 
     logging.info(
-        f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
+        f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}]",
     )
 
     return deleted, total_size
@@ -629,11 +584,21 @@ def _drop_table_on_shard(ctx: Context, table_name: str) -> None:
     execute_query_on_shard(ctx, f"DROP TABLE IF EXISTS {table_name} SYNC", format_=None)
 
 
-def _create_table_on_shard(
-    ctx: Context, table_name: str, table_zk_path_prefix: str, storage_policy: str
+def _create_object_listing_table(
+    ctx: Context,
+    table_name: str,
+    replica_zk_prefix: str,
+    storage_policy: str,
+    recreate_table: bool,
 ) -> None:
+    if not recreate_table:
+        _drop_table_on_shard(ctx, table_name)
+
     engine = (
-        f"ReplicatedMergeTree('{table_zk_path_prefix}/{{shard}}/{table_name}', '{{replica}}')"
+        "ReplicatedMergeTree"
+        + ZOOKEEPER_ARGS.format(
+            replica_zk_prefix=replica_zk_prefix, table_name=table_name
+        )
         if has_zk()
         else "MergeTree"
     )
@@ -645,15 +610,79 @@ def _create_table_on_shard(
     )
 
 
+def _create_local_object_listing_table(
+    ctx: Context,
+    table_name: str,
+    replica_zk_prefix: str,
+    storage_policy: str,
+    recreate_table: bool,
+) -> None:
+    if not recreate_table:
+        _drop_table_on_shard(ctx, table_name)
+
+    engine = (
+        "ReplicatedSummingMergeTree"
+        + ZOOKEEPER_ARGS.format(
+            replica_zk_prefix=replica_zk_prefix, table_name=table_name
+        )
+        if has_zk()
+        else "MergeTree"
+    )
+
+    execute_query_on_shard(
+        ctx,
+        f"""
+            CREATE TABLE IF NOT EXISTS {table_name}
+                (obj_path String, state String, obj_size UInt64, ref_count UInt32)
+                ENGINE {engine}
+                ORDER BY (obj_path, state)
+                SETTINGS storage_policy = '{storage_policy}'
+        """,
+        format_=None,
+    )
+
+
+def _create_space_usage_table(
+    ctx: Context,
+    spase_usage_table_name: str,
+    replica_zk_prefix: str,
+    storage_policy: str,
+    recreate_table: bool,
+) -> None:
+    if not recreate_table:
+        _drop_table_on_shard(ctx, spase_usage_table_name)
+
+    engine = (
+        "ReplicatedMergeTree"
+        + ZOOKEEPER_ARGS.format(
+            replica_zk_prefix=replica_zk_prefix, table_name=spase_usage_table_name
+        )
+        if has_zk()
+        else "MergeTree"
+    )
+
+    execute_query_on_shard(
+        ctx,
+        f"""
+            CREATE TABLE IF NOT EXISTS {spase_usage_table_name}
+                (active UInt64, unique_frozen UInt64, unique_detached UInt64)
+                ENGINE {engine}
+                ORDER BY active
+                SETTINGS storage_policy = '{storage_policy}'
+        """,
+        format_=None,
+    )
+
+
 def _get_default_object_name_prefix(
-    clean_scope: CleanScope, disk_conf: S3DiskConfiguration
+    clean_scope: Scope, disk_conf: S3DiskConfiguration
 ) -> str:
     """
     Returns default object name prefix for object storage.
 
     Keep trailing '/'.
     """
-    if clean_scope == CleanScope.CLUSTER:
+    if clean_scope == Scope.CLUSTER:
         # NOTE: Ya.Cloud specific code
         # Remove the last "shard" component of the path.
         # In general case define `--object-name-prefix` explicitly
@@ -666,7 +695,7 @@ def _get_default_object_name_prefix(
 def _get_table_function(
     ctx: Context,
     table: str,
-    scope: CleanScope,
+    scope: Scope,
     cluster_name: Optional[str] = None,
 ) -> str:
     ch_client = clickhouse_client(ctx)
@@ -674,10 +703,10 @@ def _get_table_function(
 
     result = table
 
-    if scope == CleanScope.CLUSTER:
+    if scope == Scope.CLUSTER:
         assert cluster_name
         result = f"clusterAllReplicas('{cluster_name}', {table})"
-    elif scope == CleanScope.SHARD:
+    elif scope == Scope.SHARD:
         #  It is believed that all hosts in shard have the same port set, so check current for tcp port
         if ch_client.check_port(ClickhousePort.TCP_SECURE):
             remote_clause = "remoteSecure"

@@ -16,13 +16,41 @@ Feature: chadmin object-storage commands
     """
     CREATE DATABASE IF NOT EXISTS test ON CLUSTER '{cluster}';
 
-    CREATE TABLE IF NOT EXISTS test.table_s3_01 ON CLUSTER '{cluster}' (n Int32)
-    ENGINE = ReplicatedMergeTree('/tables/table_s3_01', '{replica}') ORDER BY n
+    CREATE TABLE IF NOT EXISTS test.table_s3_01 UUID '10000000-0000-0000-0000-000000000001' ON CLUSTER '{cluster}' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_s3_01', '{replica}') ORDER BY n PARTITION BY (n%10)
     SETTINGS storage_policy = 'object_storage';
 
     INSERT INTO test.table_s3_01 (n) SELECT number FROM system.numbers LIMIT 10;
     """
     Then S3 contains greater than 0 objects
+
+  Scenario: Collect info
+    When we execute query on clickhouse01
+    """
+    ALTER TABLE test.table_s3_01 FREEZE
+    """
+    And we execute query on clickhouse01
+    """
+    ALTER TABLE test.table_s3_01 DETACH PARTITION '0';
+    """
+    And we execute command on clickhouse01
+    """
+    rm -r /var/lib/clickhouse/disks/object_storage/store/100/10000000-0000-0000-0000-000000000001/1_0_0_0
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin object-storage collect-info
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage space-usage
+    """
+    Then we get response
+    """
+    active: 11810
+    unique_frozen: 1330
+    unique_detached: 679
+    """
 
   Scenario Outline: Dry-run clean with guard period
     When we execute command on clickhouse01
