@@ -9,8 +9,9 @@ import yaml
 from ch_tools.common.clickhouse.client.retry import retry
 
 DEFAULT_S3_DISK_NAME = "object_storage"
-DEFAULT_CHS3_BACKUPS_DIRECTORY = (
-    f"/var/lib/clickhouse/disks/{DEFAULT_S3_DISK_NAME}/shadow/"
+CHS3_BACKUPS_DIRECTORY = "/var/lib/clickhouse/disks/{disk}/shadow/"
+DEFAULT_CHS3_BACKUPS_DIRECTORY = CHS3_BACKUPS_DIRECTORY.format(
+    disk=DEFAULT_S3_DISK_NAME
 )
 
 
@@ -46,18 +47,27 @@ def get_backups() -> list[dict[str, Any]]:
     return json.loads(run("sudo ch-backup list -a -v --format json"))
 
 
-def get_chs3_backups(disk: str) -> set[str]:
-    backups_dir = f"/var/lib/clickhouse/disks/{disk}/shadow/"
+def get_chs3_backups(disk: str = DEFAULT_S3_DISK_NAME) -> set[str]:
+    """
+    Get backups from the local shadow directory.
+    """
+    backups_dir = CHS3_BACKUPS_DIRECTORY.format(disk=disk)
     return set(os.listdir(backups_dir)) if os.path.exists(backups_dir) else set()
 
 
-def get_orphaned_chs3_backups(disk: str) -> list[str]:
+def get_orphaned_chs3_backups(disk: str = DEFAULT_S3_DISK_NAME) -> list[str]:
+    """
+    Get backups from the local shadow directory for which there is no existing backup.
+    """
     backups = get_backups()
     shadow_chs3_backups = get_chs3_backups(disk)
     return list(shadow_chs3_backups - {backup["name"] for backup in backups})
 
 
-def get_missing_chs3_backups(disk: str) -> list[str]:
+def get_missing_chs3_backups(disk: str = DEFAULT_S3_DISK_NAME) -> list[str]:
+    """
+    Get existing backups that are not present in local shadow directory.
+    """
     backups = get_backups()
     shadow_chs3_backups = get_chs3_backups(disk)
 
