@@ -103,7 +103,6 @@ def collect_object_storage_info(
     scope: Scope = Scope.SHARD,
 ) -> None:
     _list_local_blobs(ctx, cluster_name, scope)
-    _collect_space_usage(ctx)
     _collect_orphaned_objects(
         ctx,
         object_name_prefix=object_name_prefix,
@@ -112,6 +111,7 @@ def collect_object_storage_info(
         clean_scope=scope,
         use_saved_list=use_saved_list,
     )
+    _collect_space_usage(ctx)
 
 
 def get_object_storage_space_usage(
@@ -125,7 +125,16 @@ def get_object_storage_space_usage(
         f"cluster('{cluster_name}', {space_usage_table})"  # _get_table_function
     )
 
-    parts_usage_query = Query(f"SELECT * FROM {space_usage_table_on_cluster}")
+    parts_usage_query = Query(
+        f"""
+            SELECT
+                sum(active) AS active,
+                sum(unique_frozen) AS unique_frozen,
+                sum(unique_detached) AS unique_detached,
+                sum(orphaned) AS orphaned
+            FROM {space_usage_table_on_cluster}
+        """
+    )
 
     res = execute_query(
         ctx,
@@ -249,18 +258,13 @@ def _collect_orphaned_objects(
     ch_client = clickhouse_client(ctx)
     user_password = ch_client.password or ""
 
-    settings = ""
-    if match_ch_version(ctx, min_version="24.3"):
-        settings = "SETTINGS traverse_shadow_remote_data_paths=1"
-
     antijoin_query = Query(
         f"""
         INSERT INTO {orphaned_objects_table}
             SELECT obj_path, obj_size FROM {listing_table} AS object_storage
             LEFT ANTI JOIN {blob_state_table} AS object_table
             ON object_table.obj_path = object_storage.obj_path
-        {settings}
-    """,
+        """,
         sensitive_args={"user_password": user_password},
     )
     logging.info("Antijoin query: {}", str(antijoin_query))
@@ -283,6 +287,9 @@ def _collect_space_usage(
     blob_state_table = f"{config['space_usage_table_database']}.{config['blob_state_table_prefix']}{disk_conf.name}"
     space_usage_table = f"{config['space_usage_table_database']}.{config['space_usage_table_prefix']}{disk_conf.name}"
     space_usage_table_zk_path_prefix = config["space_usage_table_zk_path_prefix"]
+
+    config = ctx.obj["config"]["object_storage"]["clean"]
+    orphaned_objects_table = f"{config['orphaned_objects_table_database']}.{config['orphaned_objects_table_prefix']}{disk_conf.name}"
 
     _create_space_usage_table(
         ctx,
@@ -327,12 +334,18 @@ def _collect_space_usage(
                         ON detached.obj_path = has_other.obj_path
                         WHERE
                             detached.state = 'detached'
+                ),
+            orphaned AS
+                (SELECT sum(obj_size) AS size
+                    FROM {orphaned_objects_table}
                 )
             INSERT INTO {space_usage_table}
                 SELECT
-                    (SELECT size FROM active)          AS active_size,
-                    (SELECT size FROM unique_frozen)   AS unique_frozen,
-                    (SELECT size FROM unique_detached) AS unique_detached
+                    (SELECT size FROM active),
+                    (SELECT size FROM unique_frozen),
+                    (SELECT size FROM unique_detached),
+                    (SELECT size FROM orphaned)
+
         """,
         sensitive_args={"user_password": user_password},
     )
@@ -665,7 +678,7 @@ def _create_space_usage_table(
         ctx,
         f"""
             CREATE TABLE IF NOT EXISTS {spase_usage_table_name}
-                (active UInt64, unique_frozen UInt64, unique_detached UInt64)
+                (active UInt64, unique_frozen UInt64, unique_detached UInt64, orphaned UInt64)
                 ENGINE {engine}
                 ORDER BY active
                 SETTINGS storage_policy = '{storage_policy}'
