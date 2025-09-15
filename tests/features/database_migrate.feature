@@ -1944,3 +1944,31 @@ Feature: chadmin database migrate command
     ('/clickhouse/non_repl_db/replicas/shard1|clickhouse01.ch_tools_test/log_ptr', RuntimeInconsistency())
     ('/clickhouse/non_repl_db/replicas/shard1|clickhouse01.ch_tools_test/max_log_ptr_at_creation', RuntimeInconsistency())
     """
+
+  @require_version_24.8
+  Scenario: Prohibited migration
+    Given we have executed queries on clickhouse01
+    """
+    CREATE DATABASE non_repl_db ON CLUSTER '{cluster}';
+    """
+    When we try to execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db -e Atomic
+    """
+    Then it fails with response contains
+    """
+    Database non_repl_db has engine Atomic. Migration to Atomic from Replicated only is supported.
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db -e Replicated
+    """
+    Then it completes successfully
+    When we try to execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db -e Replicated
+    """
+    Then it fails with response contains
+    """
+    Database non_repl_db has engine Replicated. Migration to Replicated from Atomic only is supported.
+    """
