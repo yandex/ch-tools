@@ -14,7 +14,7 @@ from ch_tools.chadmin.internal.object_storage.obj_list_item import ObjListItem
 from ch_tools.chadmin.internal.object_storage.s3_iterator import (
     s3_object_storage_iterator,
 )
-from ch_tools.chadmin.internal.system import match_ch_version
+from ch_tools.chadmin.internal.system import match_ch_backup_version, match_ch_version
 from ch_tools.chadmin.internal.utils import (
     chunked,
     execute_query,
@@ -343,7 +343,9 @@ def _clean_object_storage(
     )
     logging.info("Antijoin query: {}", str(antijoin_query))
 
-    if not ignore_missing_cloud_storage_backups:
+    if not ignore_missing_cloud_storage_backups and match_ch_backup_version(
+        "2.641.197281242"
+    ):
         logging.info(
             "Will download cloud storage metadata from backups to shadow directory if they are missing"
         )
