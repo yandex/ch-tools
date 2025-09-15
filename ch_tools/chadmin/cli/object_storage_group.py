@@ -16,6 +16,7 @@ from ch_tools.chadmin.internal.zookeeper import (
 from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config import get_clickhouse_config
+from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.common.commands.clean_object_storage import (
     DEFAULT_GUARD_INTERVAL,
     CleanScope,
@@ -42,10 +43,10 @@ DEFAULT_CLUSTER_NAME = "{cluster}"
 def object_storage_group(ctx: Context, disk_name: str) -> None:
     """Commands to manage S3 objects and their metadata."""
     ch_config = get_clickhouse_config(ctx)
-    ctx.obj["disk_configuration"] = (
-        ch_config.storage_configuration.s3_disk_configuration(
-            disk_name, ctx.obj["config"]["object_storage"]["bucket_name_prefix"]
-        )
+    ctx.obj["disk_configuration"] = S3DiskConfiguration.from_config(
+        ch_config.storage_configuration,
+        disk_name,
+        ctx.obj["config"]["object_storage"]["bucket_name_prefix"],
     )
 
 

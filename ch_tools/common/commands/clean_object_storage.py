@@ -40,7 +40,9 @@ INSERT_BATCH_SIZE = 500
 # And for metadata for which object is not found in S3.
 # These objects are not counted if their last modified time fall in the interval from the moment of starting analyzing.
 DEFAULT_GUARD_INTERVAL = "24h"
-KEYS_BATCH_SIZE = 100_000
+# Batch size for reading from orphaned objects table
+# corresponds to chunk size in s3_cleanup
+KEYS_BATCH_SIZE = 1000
 
 
 class CleanScope(str, Enum):
@@ -147,17 +149,18 @@ def _object_list_generator(
     ch_client: ClickhouseClient,
     table_name: str,
     query_settings: Dict[str, Any],
-    chunk_size: int = 10 * 1024 * 1024,
+    timeout: Optional[int] = None,
 ) -> Callable:
 
     def obj_list_iterator() -> Iterator[ObjListItem]:
         with ch_client.query(
             f"SELECT obj_path, obj_size FROM {table_name}",
             format_="TabSeparated",
+            timeout=timeout,
             settings=query_settings,
             stream=True,
         ) as resp:
-            for line in resp.iter_lines(chunk_size=chunk_size):
+            for line in resp.iter_lines():
                 yield ObjListItem.from_tab_separated(line.decode().strip())
 
     return obj_list_iterator
@@ -171,6 +174,7 @@ def _sanity_check_before_cleanup(
     remote_data_paths_table: str,
     verify_paths_regex: Optional[str],
     clean_scope: CleanScope,
+    dry_run: bool,
 ) -> None:
 
     size_error_rate_threshold_fraction = ctx.obj["config"]["object_storage"]["clean"][
@@ -188,6 +192,12 @@ def _sanity_check_before_cleanup(
         if match_ch_version(ctx, min_version="24.3")
         else {}
     )
+
+    def raise_or_warn(dry_run: bool, msg: str) -> None:
+        if not dry_run:
+            raise RuntimeError(msg)
+
+        logging.warning(f"Warning: {msg}")
 
     def perform_check_paths() -> None:
         ### Compare path from system.remote_data_path and from list to delete. They must match the regex.
@@ -215,35 +225,43 @@ def _sanity_check_before_cleanup(
         )[0]
 
         if not re.match(paths_regex, path_form_ch):
-            raise RuntimeError(
+            raise_or_warn(
+                dry_run,
                 "Sanity check not passed, because remote_path({}) doesn't matches the regex({}).".format(
                     path_form_ch, paths_regex
-                )
+                ),
             )
 
         for orphaned_object in orphaned_objects_iterator():
             if not re.match(paths_regex, orphaned_object.path):
-                raise RuntimeError(
+                raise_or_warn(
+                    dry_run,
                     "Sanity check not passed, because orphaned object({}) doesn't matches the regex({}).".format(
                         orphaned_object.path, paths_regex
-                    )
+                    ),
                 )
 
     def perform_check_size() -> None:
+
+        if listing_size_in_bucket == 0:
+            return
+
         ### Total size of objects after cleanup must be very close to sum(bytes) FROM system.remote_data_paths
         size_to_delete = 0
         for orphaned_object in orphaned_objects_iterator():
             size_to_delete += orphaned_object.size
+
         if (
             listing_size_in_bucket * size_error_rate_threshold_fraction
             <= size_to_delete
         ):
-            raise RuntimeError(
+            raise_or_warn(
+                dry_run,
                 "Potentially dangerous operation: Going to remove more than {}% of bucket content. To remove {}; listing size {}".format(
                     int(size_error_rate_threshold_fraction * 100),
                     format_size(listing_size_in_bucket),
                     format_size(size_to_delete),
-                )
+                ),
             )
 
     perform_check_paths()
@@ -345,9 +363,7 @@ def _clean_object_storage(
         settings=query_settings,
     )
     orphaned_objects_iterator = _object_list_generator(
-        ch_client,
-        orphaned_objects_table,
-        query_settings,
+        ch_client, orphaned_objects_table, query_settings, timeout
     )
     listing_size_in_bucket = int(
         ch_client.query_json_data_first_row(
@@ -365,6 +381,7 @@ def _clean_object_storage(
             remote_data_paths_table,
             verify_paths_regex,
             clean_scope,
+            dry_run,
         )
 
     deleted, total_size = 0, 0

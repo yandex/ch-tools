@@ -3,6 +3,7 @@ import sys
 from typing import Any, Optional
 
 from cloup import (
+    Choice,
     Context,
     argument,
     constraint,
@@ -11,11 +12,13 @@ from cloup import (
     option_group,
     pass_context,
 )
-from cloup.constraints import If, IsSet, RequireAtLeast, require_all
+from cloup.constraints import If, IsSet, RequireAtLeast, mutually_exclusive, require_all
 from kazoo.security import make_digest_acl
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
+from ch_tools.chadmin.internal.table import list_tables
 from ch_tools.chadmin.internal.table_replica import get_table_replica
+from ch_tools.chadmin.internal.zero_copy import create_zero_copy_locks
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
     create_zk_nodes,
@@ -33,6 +36,8 @@ from ch_tools.chadmin.internal.zookeeper_clean import (
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_json, print_response
 from ch_tools.common.cli.parameters import ListParamType, StringParamType
+from ch_tools.common.clickhouse.config import get_macros
+from ch_tools.common.clickhouse.config.storage_configuration import OBJECT_STORAGE_TYPES
 from ch_tools.common.config import load_config
 
 
@@ -402,9 +407,10 @@ def remove_hosts_from_table(
     ),
 )
 @option(
-    "--disk_type",
+    "--disk-type",
     "disk_type",
-    default="s3",
+    type=Choice(OBJECT_STORAGE_TYPES),
+    default=OBJECT_STORAGE_TYPES[0],
     help=(
         "Object storage disk type from ClickHouse."
         "Examples are s3, hdfs, azure_blob_storage, local_blob_storage..."
@@ -478,3 +484,99 @@ def clean_zk_locks_command(
         replica,
         dry_run,
     )
+
+
+@zookeeper_group.command("create-zero-copy-locks")
+@option_group(
+    "Disk selection options",
+    option(
+        "--disk",
+        "disk",
+        default=None,
+        required=True,
+        help=("S3 disk from ClickHouse."),
+    ),
+)
+@option_group(
+    "Table selection options",
+    option(
+        "-d",
+        "--database",
+        "database",
+        help="Filter in tables to create zero-copy locks by the specified database name.",
+    ),
+    option(
+        "-t",
+        "--table",
+        "table",
+        help="Filter in tables to create zero-copy locks.",
+    ),
+    constraint=RequireAtLeast(1),
+)
+@option_group(
+    "Part selection options",
+    option(
+        "--partition-id",
+        "partition_id",
+        default=None,
+        help="Filter in partitions to create zero-copy locks.",
+    ),
+    option(
+        "-p",
+        "--part-id",
+        "part_id",
+        default=None,
+        help=("Filter in parts to create zero-copy locks."),
+    ),
+    constraint=mutually_exclusive,
+)
+@option(
+    "-r",
+    "--replica",
+    "replica",
+    default=None,
+    help=(
+        "FQDN of a replica to create zero-copy locks. Note that only local set of parts will be locked."
+        "If replica is not specified, will get the value from macros."
+    ),
+)
+@option(
+    "--dry-run",
+    "dry_run",
+    is_flag=True,
+    help=("Do not create objects."),
+)
+@pass_context
+def create_zk_locks_command(
+    ctx: Context,
+    disk: str,
+    database: Optional[str] = None,
+    table: Optional[str] = None,
+    partition_id: Optional[str] = None,
+    part_id: Optional[str] = None,
+    replica: Optional[str] = None,
+    dry_run: bool = False,
+) -> None:
+    """
+    Create zero copy locks.
+    """
+    tables = list_tables(ctx, database_name=database, table_name=table)
+
+    if not replica:
+        macros = get_macros(ctx)
+        if "replica" in macros:
+            replica = macros["replica"]
+        else:
+            raise RuntimeError(
+                "The macro for replica is missing, specify --replica explicitly."
+            )
+
+    for table_info in tables:
+        logging.info(
+            "Creating zero-copy locks for table '{}'.'{}'",
+            table_info["database"],
+            table_info["name"],
+        )
+        create_zero_copy_locks(
+            ctx, disk, table_info, partition_id, part_id, replica, dry_run
+        )
