@@ -14,7 +14,6 @@ from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
     S3ObjectLocalMetaData,
 )
 from ch_tools.chadmin.internal.part import list_parts
-from ch_tools.chadmin.internal.table_replica import get_table_replica
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import zk_client
 from ch_tools.common import logging
@@ -38,6 +37,7 @@ def create_zero_copy_locks(
     partition_id: Optional[str],
     part_name: Optional[str],
     replica: str,
+    zookeeper_path: str,
     dry_run: bool = False,
 ) -> None:
     """Create missing zero-copy locks for given tables."""
@@ -72,9 +72,7 @@ def create_zero_copy_locks(
                     part,
                     replica,
                 ),
-                _get_part_path_in_zk(
-                    ctx, table["database"], table["name"], part["name"], replica
-                ),
+                _get_part_path_in_zk(part["name"], zookeeper_path, replica),
             )
         )
         if len(zero_copy_lock_paths) == CREATE_ZERO_COPY_LOCKS_BATCH_SIZE:
@@ -109,16 +107,11 @@ def _get_zero_copy_lock_path(
 
 
 def _get_part_path_in_zk(
-    ctx: Context,
-    database: str,
-    table: str,
     part: str,
+    zookeeper_path: str,
     replica: str,
 ) -> str:
-    replica_info = get_table_replica(ctx, database, table)
-    return os.path.join(
-        replica_info["zookeeper_path"], "replicas", replica, "parts", part
-    )
+    return os.path.join(zookeeper_path, "replicas", replica, "parts", part)
 
 
 def _get_zero_copy_zookeeper_path(

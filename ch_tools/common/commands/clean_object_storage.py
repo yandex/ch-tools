@@ -18,6 +18,7 @@ from ch_tools.chadmin.internal.utils import (
     chunked,
     execute_query,
     execute_query_on_shard,
+    get_remote_table_for_hosts,
 )
 from ch_tools.chadmin.internal.zookeeper import has_zk
 from ch_tools.common import logging
@@ -26,7 +27,6 @@ from ch_tools.common.clickhouse.client.clickhouse_client import (
     clickhouse_client,
 )
 from ch_tools.common.clickhouse.client.query import Query
-from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
@@ -283,7 +283,6 @@ def _clean_object_storage(
         _traverse_object_storage(ctx, listing_table, from_time, to_time, prefix)
 
     ch_client = clickhouse_client(ctx)
-    user_name = ch_client.user or ""
     user_password = ch_client.password or ""
 
     remote_data_paths_table = "system.remote_data_paths"
@@ -293,18 +292,9 @@ def _clean_object_storage(
             f"clusterAllReplicas('{cluster_name}', {remote_data_paths_table})"
         )
     elif clean_scope == CleanScope.SHARD:
-        #  It is believed that all hosts in shard have the same port set, so check current for tcp port
-        if ch_client.check_port(ClickhousePort.TCP_SECURE):
-            remote_clause = "remoteSecure"
-        elif ch_client.check_port(ClickhousePort.TCP):
-            remote_clause = "remote"
-        else:
-            raise RuntimeError(
-                "For using remote() table function tcp port must be defined"
-            )
-
-        replicas = ",".join(ClickhouseInfo.get_replicas(ctx))
-        remote_data_paths_table = f"{remote_clause}('{replicas}', {remote_data_paths_table}, '{user_name}', '{{user_password}}')"
+        remote_data_paths_table = get_remote_table_for_hosts(
+            ctx, remote_data_paths_table, ClickhouseInfo.get_replicas(ctx)
+        )
 
     settings = ""
     if match_ch_version(ctx, min_version="24.3"):

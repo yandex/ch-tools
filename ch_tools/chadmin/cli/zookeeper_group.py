@@ -17,7 +17,10 @@ from kazoo.security import make_digest_acl
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.table import list_tables
-from ch_tools.chadmin.internal.table_replica import get_table_replica
+from ch_tools.chadmin.internal.table_replica import (
+    get_table_replica,
+    list_table_replicas,
+)
 from ch_tools.chadmin.internal.zero_copy import create_zero_copy_locks
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
@@ -498,7 +501,7 @@ def clean_zk_locks_command(
     ),
 )
 @option_group(
-    "Table selection options",
+    "Table selection options. If nothing is passed, will create for all replicated tables.",
     option(
         "-d",
         "--database",
@@ -511,7 +514,6 @@ def clean_zk_locks_command(
         "table",
         help="Filter in tables to create zero-copy locks.",
     ),
-    constraint=RequireAtLeast(1),
 )
 @option_group(
     "Part selection options",
@@ -530,15 +532,27 @@ def clean_zk_locks_command(
     ),
     constraint=mutually_exclusive,
 )
-@option(
-    "-r",
-    "--replica",
-    "replica",
-    default=None,
-    help=(
-        "FQDN of a replica to create zero-copy locks. Note that only local set of parts will be locked."
-        "If replica is not specified, will get the value from macros."
+@option_group(
+    "Replica selection options",
+    option(
+        "-r",
+        "--replicas",
+        "replicas",
+        default=None,
+        help=(
+            "Comma-separated list of FQDNs of the replicas to create zero-copy locks."
+            "If replica is not specified, will get the value from macros."
+        ),
     ),
+    option(
+        "--all-replicas",
+        "all_replicas",
+        is_flag=True,
+        help=(
+            "Create zero-copy locks for local replica or use all replicas from system.replicas."
+        ),
+    ),
+    constraint=mutually_exclusive,
 )
 @option(
     "--dry-run",
@@ -554,29 +568,82 @@ def create_zk_locks_command(
     table: Optional[str] = None,
     partition_id: Optional[str] = None,
     part_id: Optional[str] = None,
-    replica: Optional[str] = None,
+    replicas: Optional[str] = None,
+    all_replicas: bool = False,
     dry_run: bool = False,
 ) -> None:
     """
     Create zero copy locks.
     """
-    tables = list_tables(ctx, database_name=database, table_name=table)
+    tables = list_tables(
+        ctx,
+        database_name=database,
+        table_name=table,
+        engine_pattern="Replicated%MergeTree",
+    )
 
-    if not replica:
-        macros = get_macros(ctx)
-        if "replica" in macros:
-            replica = macros["replica"]
-        else:
-            raise RuntimeError(
-                "The macro for replica is missing, specify --replica explicitly."
-            )
+    if not tables:
+        raise RuntimeError("Couldn't find any replicated tables by given filters")
 
     for table_info in tables:
-        logging.info(
-            "Creating zero-copy locks for table '{}'.'{}'",
-            table_info["database"],
-            table_info["name"],
+        zk_path, replicas_to_lock = _get_replicas_and_zk_path(
+            ctx, table_info, replicas, all_replicas
         )
-        create_zero_copy_locks(
-            ctx, disk, table_info, partition_id, part_id, replica, dry_run
-        )
+        if not replicas_to_lock:
+            logging.warning(
+                "Couldn't find any replicas for table '{}'.'{}'",
+                table_info["database"],
+                table_info["name"],
+            )
+        for replica in replicas_to_lock:
+            logging.info(
+                "Creating zero-copy locks for table '{}'.'{}', replica '{}'",
+                table_info["database"],
+                table_info["name"],
+                replica,
+            )
+            create_zero_copy_locks(
+                ctx, disk, table_info, partition_id, part_id, replica, zk_path, dry_run
+            )
+
+
+def _get_replicas_and_zk_path(
+    ctx: Context,
+    table: dict,
+    replicas: Optional[str],
+    all_replicas: bool,
+) -> tuple[str, list[str]]:
+    """
+    Get table's zookeeper path and list of replicas. Also check that all required replicas are present.
+    """
+    replica_description = list_table_replicas(
+        ctx,
+        database_name=table["database"],
+        table_name=table["name"],
+        verbose=True,
+    )
+
+    if not replica_description:
+        return "", []
+
+    replicas_list = list(replica_description[0]["replica_is_active"].keys())
+    zookeeper_path: str = replica_description[0]["zookeeper_path"]
+
+    if all_replicas:
+        return zookeeper_path, replicas_list
+
+    if not replicas:
+        macros = get_macros(ctx)
+        if "replica" in macros:
+            replicas = macros["replica"]
+        else:
+            raise RuntimeError(
+                "The macro for replica is missing, specify --replicas explicitly."
+            )
+
+    replicas_ = replicas.split(",")
+    for replica in replicas_:
+        if replica not in replicas_list:
+            raise RuntimeError(f"Replica {replica} is not present at system.replicas")
+
+    return zookeeper_path, replicas_
