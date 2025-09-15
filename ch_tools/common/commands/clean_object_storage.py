@@ -511,7 +511,6 @@ def _download_missing_cloud_storage_backups(
     disk: str,
 ) -> None:
     missing_backups = get_missing_chs3_backups(disk)
-    # TODO: after latest ch-backup release, add version check
 
     for backup in missing_backups:
         logging.info(f"Downloading cloud storage metadata from '{backup}'")
