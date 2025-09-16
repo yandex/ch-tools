@@ -275,17 +275,27 @@ def _collect_space_usage(
     config = ctx.obj["config"]["object_storage"]["space_usage"]
     blob_state_table = f"{config['space_usage_table_database']}.{config['blob_state_table_prefix']}{disk_conf.name}"
     space_usage_table = f"{config['space_usage_table_database']}.{config['space_usage_table_prefix']}{disk_conf.name}"
+    space_usage_table_new = f"{space_usage_table}_new"
     space_usage_table_zk_path_prefix = config["space_usage_table_zk_path_prefix"]
 
     config = ctx.obj["config"]["object_storage"]["clean"]
     orphaned_objects_table = f"{config['orphaned_objects_table_database']}.{config['orphaned_objects_table_prefix']}{disk_conf.name}"
 
+    # This table will store the actual space usage data after the query
+    _create_space_usage_table(
+        ctx,
+        spase_usage_table_name=space_usage_table_new,
+        replica_zk_prefix=space_usage_table_zk_path_prefix,
+        storage_policy=config["storage_policy"],
+        recreate_table=False,
+    )
+    # This table should always exist and store data from the previous run
     _create_space_usage_table(
         ctx,
         spase_usage_table_name=space_usage_table,
         replica_zk_prefix=space_usage_table_zk_path_prefix,
         storage_policy=config["storage_policy"],
-        recreate_table=False,
+        recreate_table=True,
     )
 
     user_password = clickhouse_client(ctx).password or ""
@@ -328,7 +338,7 @@ def _collect_space_usage(
                 (SELECT sum(obj_size) AS size
                     FROM {orphaned_objects_table}
                 )
-            INSERT INTO {space_usage_table}
+            INSERT INTO {space_usage_table_new}
                 SELECT
                     (SELECT size FROM active),
                     (SELECT size FROM unique_frozen),
@@ -339,6 +349,7 @@ def _collect_space_usage(
         sensitive_args={"user_password": user_password},
     )
 
+    # TODO: should probably use different setting for timeout
     timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
     query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
     execute_query(
@@ -347,6 +358,12 @@ def _collect_space_usage(
         timeout=timeout,
         settings=query_settings,
     )
+
+    execute_query(ctx, f"TRUNCATE TABLE {space_usage_table} SYNC")
+    execute_query(
+        ctx, f"INSERT INTO {space_usage_table} SELECT * FROM {space_usage_table_new}"
+    )
+    _drop_table_on_shard(ctx, space_usage_table_new)
 
 
 def _object_list_generator(
@@ -414,7 +431,7 @@ def _sanity_check_before_cleanup(
 
         if not re.match(paths_regex, path_form_ch):
             raise RuntimeError(
-                "Sanity check not passed, because obj_path({}) doesn't matches the regex({}).".format(
+                "Sanity check not passed, because obj_path({}) doesn't match the regex({}).".format(
                     path_form_ch, paths_regex
                 )
             )
@@ -422,7 +439,7 @@ def _sanity_check_before_cleanup(
         for orphaned_object in orphaned_objects_iterator():
             if not re.match(paths_regex, orphaned_object.path):
                 raise RuntimeError(
-                    "Sanity check not passed, because orphaned object({}) doesn't matches the regex({}).".format(
+                    "Sanity check not passed, because orphaned object({}) doesn't match the regex({}).".format(
                         orphaned_object.path, paths_regex
                     )
                 )
