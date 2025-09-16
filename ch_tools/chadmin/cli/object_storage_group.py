@@ -167,7 +167,7 @@ def clean_command(
 @object_storage_group.command("collect-info")
 @option(
     "-p",
-    "--prefix",
+    "--prefix", # TODO: maybe add this option to clean command
     "--object_name_prefix",
     "object_name_prefix",
     default="",

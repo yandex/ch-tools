@@ -121,6 +121,7 @@ def get_object_storage_space_usage(
         ctx, space_usage_table, Scope.CLUSTER, cluster_name
     )
 
+    # TODO: skip_unavailable_shards ?
     parts_usage_query = Query(
         f"""
             SELECT
@@ -409,7 +410,7 @@ def _sanity_check_before_cleanup(
             return
         path_form_ch = ch_client.query_json_data_first_row(
             query=Query(
-                f"SELECT remote_path FROM {blob_state_table} LIMIT 1",
+                f"SELECT obj_path FROM {blob_state_table} LIMIT 1",
                 sensitive_args={"user_password": ch_client.password or ""},
             ),
             compact=True,
@@ -417,7 +418,7 @@ def _sanity_check_before_cleanup(
 
         if not re.match(paths_regex, path_form_ch):
             raise RuntimeError(
-                "Sanity check not passed, because remote_path({}) doesn't matches the regex({}).".format(
+                "Sanity check not passed, because obj_path({}) doesn't matches the regex({}).".format(
                     path_form_ch, paths_regex
                 )
             )
