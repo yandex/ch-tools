@@ -52,23 +52,18 @@ Feature: chadmin object-storage commands
     unique_detached: 679
     """
 
-  Scenario Outline: Dry-run clean with guard period
+  Scenario: Dry-run clean with guard period
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --to-time 0h --dry-run --clean-scope=<scope>
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run
     """
-    Then we get response matches
+    Then we get response contains
     """
-    - WouldDelete: <WouldDelete>
-      TotalSize: <TotalSize>
+    - WouldDelete: 0
+      TotalSize: 0
     """  
-  Examples:
-    | scope   | WouldDelete | TotalSize   |
-    | host    | [1-9][0-9]* | [1-9][0-9]* |
-    | shard   | 0           | 0           |
-    | cluster | 0           | 0           |
 
-  Scenario Outline: Clean orphaned objects
+  Scenario: Clean orphaned objects
     When we put object in S3
     """
       bucket: cloud-storage-test
@@ -77,31 +72,27 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --dry-run --to-time 0h --clean-scope=<scope>
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h
     """
     Then we get response contains
     """
-    - WouldDelete: <WouldDelete>
-      TotalSize: <TotalSize>
+    - WouldDelete: 1
+      TotalSize: 1
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --to-time 0h --clean-scope=<scope>
+    chadmin --format yaml object-storage clean --to-time 0h
     """
     Then we get response contains
     """
-    - Deleted: <Deleted>
-      TotalSize: <TotalSize>
+    - Deleted: 1
+      TotalSize: 1
     """
     And path does not exist in S3
     """
       bucket: cloud-storage-test
       path: /data/orpaned_object.tsv
     """
-  Examples:
-    | scope   | WouldDelete | TotalSize   | Deleted |
-    | shard   | 1           | 1           | 1       |
-    | cluster | 1           | 1           | 1       |
   
   Scenario: Clean many orphaned objects
     When we put 100 objects in S3

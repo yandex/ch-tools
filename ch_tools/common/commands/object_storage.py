@@ -56,7 +56,6 @@ class Scope(str, Enum):
 
 def clean(
     ctx: Context,
-    clean_scope: Scope,
     dry_run: bool,
     keep_paths: bool,
     verify_paths_regex: Optional[str] = None,
@@ -77,7 +76,6 @@ def clean(
     try:
         deleted, total_size = _clean_object_storage(
             ctx,
-            clean_scope=clean_scope,
             dry_run=dry_run,
             listing_table=listing_table,
             orphaned_objects_table=orphaned_objects_table,
@@ -100,15 +98,13 @@ def collect_object_storage_info(
     from_time: Optional[timedelta],
     to_time: timedelta,
     use_saved_list: bool,
-    scope: Scope = Scope.SHARD,
 ) -> None:
-    _list_local_blobs(ctx, cluster_name, scope)
+    _list_local_blobs(ctx, cluster_name)
     _collect_orphaned_objects(
         ctx,
         object_name_prefix=object_name_prefix,
         from_time=from_time,
         to_time=to_time,
-        clean_scope=scope,
         use_saved_list=use_saved_list,
     )
     _collect_space_usage(ctx)
@@ -121,8 +117,8 @@ def get_object_storage_space_usage(
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
     config = ctx.obj["config"]["object_storage"]["space_usage"]
     space_usage_table = f"{config['space_usage_table_database']}.{config['space_usage_table_prefix']}{disk_conf.name}"
-    space_usage_table_on_cluster = (
-        f"cluster('{cluster_name}', {space_usage_table})"  # _get_table_function
+    space_usage_table_on_cluster = _get_table_function(
+        ctx, space_usage_table, Scope.CLUSTER, cluster_name
     )
 
     parts_usage_query = Query(
@@ -150,7 +146,6 @@ def get_object_storage_space_usage(
 def _list_local_blobs(
     ctx: Context,
     cluster_name: str,
-    scope: Scope,
 ) -> None:
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
     config = ctx.obj["config"]["object_storage"]["space_usage"]
@@ -168,7 +163,7 @@ def _list_local_blobs(
     )
 
     remote_data_paths_table = _get_table_function(
-        ctx, REMOTE_DATA_PATHS_TABLE, scope, cluster_name
+        ctx, REMOTE_DATA_PATHS_TABLE, Scope.SHARD, cluster_name
     )
 
     settings = ""
@@ -210,7 +205,6 @@ def _collect_orphaned_objects(
     object_name_prefix: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
-    clean_scope: Scope,
     use_saved_list: bool,
 ) -> None:
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
@@ -244,9 +238,7 @@ def _collect_orphaned_objects(
         False,
     )
 
-    prefix = object_name_prefix or _get_default_object_name_prefix(
-        clean_scope, disk_conf
-    )
+    prefix = object_name_prefix or disk_conf.prefix
     prefix = os.path.join(prefix, "")
 
     if not use_saved_list:
@@ -388,7 +380,6 @@ def _sanity_check_before_cleanup(
     listing_size_in_bucket: int,
     blob_state_table: str,
     verify_paths_regex: Optional[str],
-    clean_scope: Scope,
 ) -> None:
 
     size_error_rate_threshold_fraction = ctx.obj["config"]["object_storage"]["clean"][
@@ -399,7 +390,7 @@ def _sanity_check_before_cleanup(
     else:
         paths_regex = ctx.obj["config"]["object_storage"]["clean"][
             "verify_paths_regex"
-        ][clean_scope]
+        ]["shard"]
 
     def perform_check_paths() -> None:
         ### Compare path from system.remote_data_path and from list to delete. They must match the regex.
@@ -465,7 +456,6 @@ def _sanity_check_before_cleanup(
 
 def _clean_object_storage(
     ctx: Context,
-    clean_scope: Scope,
     dry_run: bool,
     listing_table: str,
     orphaned_objects_table: str,
@@ -507,7 +497,6 @@ def _clean_object_storage(
             listing_size_in_bucket,
             blob_state_table,
             verify_paths_regex,
-            clean_scope,
         )
 
     deleted, total_size = 0, 0
@@ -687,24 +676,6 @@ def _create_space_usage_table(
     )
 
 
-def _get_default_object_name_prefix(
-    clean_scope: Scope, disk_conf: S3DiskConfiguration
-) -> str:
-    """
-    Returns default object name prefix for object storage.
-
-    Keep trailing '/'.
-    """
-    if clean_scope == Scope.CLUSTER:
-        # NOTE: Ya.Cloud specific code
-        # Remove the last "shard" component of the path.
-        # In general case define `--object-name-prefix` explicitly
-        cluster_path = os.path.split(disk_conf.prefix.rstrip("/"))[0]
-        return cluster_path + ("/" if cluster_path else "")
-
-    return disk_conf.prefix
-
-
 def _get_table_function(
     ctx: Context,
     table: str,
@@ -718,7 +689,7 @@ def _get_table_function(
 
     if scope == Scope.CLUSTER:
         assert cluster_name
-        result = f"clusterAllReplicas('{cluster_name}', {table})"
+        result = f"cluster('{cluster_name}', {table})"
     elif scope == Scope.SHARD:
         #  It is believed that all hosts in shard have the same port set, so check current for tcp port
         if ch_client.check_port(ClickhousePort.TCP_SECURE):

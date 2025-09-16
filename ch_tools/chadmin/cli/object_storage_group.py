@@ -3,7 +3,6 @@ from typing import Any, Optional
 
 from click import (
     BadParameter,
-    Choice,
     Context,
     FloatRange,
     IntRange,
@@ -28,7 +27,6 @@ from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.common.commands.object_storage import (
     DEFAULT_GUARD_INTERVAL,
-    Scope,
     clean,
     collect_object_storage_info,
     get_object_storage_space_usage,
@@ -62,13 +60,6 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
 
 
 @object_storage_group.command("clean")
-@option(
-    "--clean-scope",
-    "clean_scope",
-    default="shard",
-    type=Choice(["host", "shard", "cluster"]),
-    help="Cleaning scope.",
-)
 @option(
     "--cluster",
     "cluster_name",
@@ -132,7 +123,6 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
 @pass_context
 def clean_command(
     ctx: Context,
-    clean_scope: str,
     cluster_name: str,
     dry_run: bool,
     keep_paths: bool,
@@ -156,7 +146,6 @@ def clean_command(
     try:
         deleted, total_size = clean(
             ctx,
-            clean_scope=Scope(clean_scope),
             dry_run=dry_run,
             keep_paths=keep_paths,
             verify_paths_regex=verify_paths_regex,
@@ -243,7 +232,6 @@ def collect_info_command(
         from_time=from_time,
         to_time=to_time,
         use_saved_list=use_saved_list,
-        scope=Scope.SHARD,  # TODO: custom scope
     )
 
 
