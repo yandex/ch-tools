@@ -97,7 +97,6 @@ def collect_object_storage_info(
     cluster_name: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
-    use_saved_list: bool,
 ) -> None:
     _list_local_blobs(ctx, cluster_name)
     _collect_orphaned_objects(
@@ -105,7 +104,6 @@ def collect_object_storage_info(
         object_name_prefix=object_name_prefix,
         from_time=from_time,
         to_time=to_time,
-        use_saved_list=use_saved_list,
     )
     _collect_space_usage(ctx)
 
@@ -206,7 +204,6 @@ def _collect_orphaned_objects(
     object_name_prefix: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
-    use_saved_list: bool,
 ) -> None:
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
 
@@ -229,24 +226,23 @@ def _collect_orphaned_objects(
         listing_table,
         listing_table_zk_path_prefix,
         storage_policy,
-        recreate_table=use_saved_list,
+        recreate_table=False,
     )
     _create_object_listing_table(
         ctx,
         orphaned_objects_table,
         orphaned_objects_table_zk_path_prefix,
         storage_policy,
-        False,
+        recreate_table=False,
     )
 
     prefix = object_name_prefix or disk_conf.prefix
     prefix = os.path.join(prefix, "")
 
-    if not use_saved_list:
-        logging.info(
-            f"Collecting objects... (Disk: '{disk_conf.name}', Endpoint '{disk_conf.endpoint_url}', Bucket: '{disk_conf.bucket_name}', Prefix: '{prefix}')",
-        )
-        _traverse_object_storage(ctx, listing_table, from_time, to_time, prefix)
+    logging.info(
+        f"Collecting objects... (Disk: '{disk_conf.name}', Endpoint '{disk_conf.endpoint_url}', Bucket: '{disk_conf.bucket_name}', Prefix: '{prefix}')",
+    )
+    _traverse_object_storage(ctx, listing_table, from_time, to_time, prefix)
 
     ch_client = clickhouse_client(ctx)
     user_password = ch_client.password or ""

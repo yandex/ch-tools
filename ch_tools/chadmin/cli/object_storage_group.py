@@ -134,6 +134,7 @@ def clean_command(
 ) -> None:
     """
     Clean orphaned S3 objects.
+    Orphaned objects are taken from the tables filled with collect-info command.
     """
     deleted = 0
     total_size = 0
@@ -167,7 +168,7 @@ def clean_command(
 @object_storage_group.command("collect-info")
 @option(
     "-p",
-    "--prefix", # TODO: maybe add this option to clean command
+    "--prefix",  # TODO: maybe add this option to clean command
     "--object_name_prefix",
     "object_name_prefix",
     default="",
@@ -201,12 +202,6 @@ def clean_command(
     type=TimeSpanParamType(),
     help=("End of inspecting interval in human-friendly format."),
 )
-@option(
-    "--use-saved-list",
-    "use_saved_list",
-    is_flag=True,
-    help=("Use saved object list without traversing object storage again."),
-)
 @pass_context
 def collect_info_command(
     ctx: Context,
@@ -214,10 +209,10 @@ def collect_info_command(
     cluster_name: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
-    use_saved_list: bool,
 ) -> None:
     """
-    todo
+    Collect info about object storage memory usage and orphaned objects.
+    Save the result to the corresponding tables.
     """
     if from_time is not None and to_time < from_time:
         raise BadParameter(
@@ -231,7 +226,6 @@ def collect_info_command(
         cluster_name=cluster_name,
         from_time=from_time,
         to_time=to_time,
-        use_saved_list=use_saved_list,
     )
 
 
@@ -248,7 +242,7 @@ def space_usage_command(
     cluster_name: str,
 ) -> None:
     """
-    todo
+    Return object storage memory usage info from cluster.
     """
     result = get_object_storage_space_usage(ctx, cluster_name)
 
