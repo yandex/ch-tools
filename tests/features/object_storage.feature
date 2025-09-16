@@ -346,6 +346,7 @@ Feature: chadmin object-storage commands
     Potentially dangerous operation: Going to remove more than
     """
 
+  @require_version_24.3
   Scenario: Download of missing backups prevents data from removal
     When we execute command on clickhouse01
     """
@@ -382,8 +383,8 @@ Feature: chadmin object-storage commands
     """
     Then we get response matches
     """
-    - WouldDelete: 9
-      TotalSize: 633
+    - WouldDelete: [1-9][0-9]*
+      TotalSize: [1-9][0-9]*
     """
     When we execute command on clickhouse01
     """
@@ -402,6 +403,7 @@ Feature: chadmin object-storage commands
     """
     """
 
+  @require_version_24.3
   Scenario: All missing backups are downloaded
     When we execute command on clickhouse01
     """

@@ -345,8 +345,10 @@ def _clean_object_storage(
     logging.info("Antijoin query: {}", str(antijoin_query))
 
     downloaded_backups = []
-    if not ignore_missing_cloud_storage_backups and match_ch_backup_version(
-        "2.641.197281242"
+    if (
+        not ignore_missing_cloud_storage_backups
+        and match_ch_backup_version("2.641.197281242")
+        and match_ch_version(ctx, min_version="24.3")
     ):
         logging.info(
             "Will download cloud storage metadata from backups to shadow directory if they are missing"
