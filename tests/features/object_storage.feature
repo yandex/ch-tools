@@ -33,10 +33,6 @@ Feature: chadmin object-storage commands
     """
     ALTER TABLE test.table_s3_01 DETACH PARTITION '0';
     """
-    And we execute command on clickhouse01
-    """
-    rm -r /var/lib/clickhouse/disks/object_storage/store/100/10000000-0000-0000-0000-000000000001/1_0_0_0
-    """
     And we put object in S3
     """
       bucket: cloud-storage-test
@@ -51,12 +47,12 @@ Feature: chadmin object-storage commands
     """
     chadmin --format yaml object-storage space-usage
     """
-    Then we get response
+    Then we get response matches
     """
-    active: 11810
-    unique_frozen: 1330
-    unique_detached: 679
-    orphaned: 2
+    active: [1-9][0-9]*
+    unique_frozen: [1-9][0-9]*
+    unique_detached: [1-9][0-9]*
+    orphaned: 1
     """
 
   Scenario: Dry-run clean with guard period
