@@ -84,7 +84,7 @@ def clean(
             max_size_to_delete_fraction=max_size_to_delete_fraction,
         )
     finally:
-        if not keep_paths:
+        if not keep_paths and not dry_run:
             _drop_table_on_shard(ctx, listing_table)
             _drop_table_on_shard(ctx, orphaned_objects_table)
 
