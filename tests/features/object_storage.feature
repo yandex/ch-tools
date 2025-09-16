@@ -346,7 +346,63 @@ Feature: chadmin object-storage commands
     Potentially dangerous operation: Going to remove more than
     """
 
-  Scenario: Download of missing backups
+  Scenario: Download of missing backups prevents data from removal
+    When we execute command on clickhouse01
+    """
+    ch-backup backup --name test1 --databases test -f
+    """
+    And we execute command on clickhouse01
+    """
+    ls /var/lib/clickhouse/disks/object_storage/shadow
+    """
+    Then we get response
+    """
+    test1
+    """
+    When we execute query on clickhouse01
+    """
+    DROP TABLE test.table_s3_01 SYNC
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run
+    """
+    Then we get response matches
+    """
+    - WouldDelete: 0
+      TotalSize: 0
+    """
+    When we execute command on clickhouse01
+    """
+    rm -r /var/lib/clickhouse/disks/object_storage/shadow
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run --ignore-missing-cloud-storage-backups
+    """
+    Then we get response matches
+    """
+    - WouldDelete: 9
+      TotalSize: 633
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run
+    """
+    Then we get response matches
+    """
+    - WouldDelete: 0
+      TotalSize: 0
+    """
+    When we execute command on clickhouse01
+    """
+    ls /var/lib/clickhouse/disks/object_storage/shadow
+    """
+    Then we get response
+    """
+    """
+
+  Scenario: All missing backups are downloaded
     When we execute command on clickhouse01
     """
     ch-backup backup --name test1 --databases test -f &&
@@ -365,65 +421,31 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
+    rm -r /var/lib/clickhouse/disks/object_storage/shadow/test3
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin object-storage clean --to-time 0h --dry-run
+    """
+    Then we get response contains
+    """
+    Downloading cloud storage metadata from 'test3'
+    Counting orphaned objects
+    """
+    When we execute command on clickhouse01
+    """
     rm -r /var/lib/clickhouse/disks/object_storage/shadow
     """
     And we execute command on clickhouse01
     """
-    chadmin object-storage clean --to-time 0h --dry-run --clean-scope=host
+    chadmin object-storage clean --to-time 0h --dry-run
     """
-    And we execute command on clickhouse01
+    Then we get response contains
     """
-    ls /var/lib/clickhouse/disks/object_storage/shadow
-    """
-    Then we get response
-    """
-    test1
-    test2
-    test3
-    """
-    When we execute command on clickhouse01
-    """
-    ls /var/lib/clickhouse/disks/object_storage/shadow/test1/store/100/10000000-0000-0000-0000-000000000001/
-    """
-    Then we get response
-    """
-    all_0_0_0
-    """
-    When we execute command on clickhouse01
-    """
-    rm -r /var/lib/clickhouse/disks/object_storage/shadow/test2/ &&
-    rm -r /var/lib/clickhouse/disks/object_storage/shadow/test1/
-    """
-    And we execute command on clickhouse01
-    """
-    chadmin object-storage clean --to-time 0h --dry-run --clean-scope=host
-    """
-    And we execute command on clickhouse01
-    """
-    ls /var/lib/clickhouse/disks/object_storage/shadow
-    """
-    Then we get response
-    """
-    test1
-    test2
-    test3
-    """
-    When we execute command on clickhouse01
-    """
-    rm -r /var/lib/clickhouse/disks/object_storage/shadow/test1
-    """
-    And we execute command on clickhouse01
-    """
-    chadmin object-storage clean --to-time 0h --dry-run --clean-scope=host --ignore-missing-cloud-storage-backups
-    """
-    And we execute command on clickhouse01
-    """
-    ls /var/lib/clickhouse/disks/object_storage/shadow
-    """
-    Then we get response
-    """
-    test2
-    test3
+    Downloading cloud storage metadata from 'test3'
+    Downloading cloud storage metadata from 'test2'
+    Downloading cloud storage metadata from 'test1'
+    Counting orphaned objects
     """
 
   Scenario: Sanity check when no objects in CH
