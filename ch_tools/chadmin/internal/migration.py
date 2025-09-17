@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple
+from typing import Any, List, Literal, Optional, Tuple
 
 from click import ClickException, Context
 from kazoo.client import KazooClient, TransactionRequest
@@ -6,6 +6,7 @@ from kazoo.exceptions import NodeExistsError
 
 from ch_tools.chadmin.cli import metadata
 from ch_tools.chadmin.cli.database_metadata import (
+    DatabaseEngine,
     parse_database_from_metadata,
     remove_uuid_from_metadata,
 )
@@ -30,6 +31,71 @@ from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 
 
+class AttacherContext:
+    ctx: Context
+    database: str
+
+    def __init__(self, ctx: Context, database: str):
+        self.ctx = ctx
+        self.database = database
+
+    def __enter__(self) -> None:
+        _detach_dbs(self.ctx, dbs=[self.database])
+
+    def __exit__(
+        self,
+        exc_type: Optional[type],
+        exc_value: Optional[Exception],
+        traceback: Optional[Any],
+    ) -> Literal[False]:
+        _attach_dbs(self.ctx, dbs=[self.database])
+        if exc_type is not None:
+            logging.error(
+                f"An exception occurred in AttacherContext: {exc_type.__name__}: {exc_value}"
+            )
+        return False
+
+
+class ZKTransactionBuilder:
+    ctx: Context
+    txn: TransactionRequest
+
+    path_to_nodes: List[str]
+
+    def __init__(self, ctx: Context, zk: KazooClient) -> None:
+        self.ctx = ctx
+        self.txn = zk.transaction()
+        self.path_to_nodes = []
+
+    def create_node(self, path: str, value: str = "") -> None:
+        self.path_to_nodes.append(path)
+        self.txn.create(path=format_path(self.ctx, path), value=value.encode())
+
+    def delete_node(self, path: str) -> None:
+        self.path_to_nodes.append(path)
+        self.txn.delete(path=format_path(self.ctx, path))
+
+    def commit(self) -> None:
+        result = self.txn.commit()
+
+        for status in zip(self.path_to_nodes, result):
+            logging.info(f"{status}")
+
+        self.path_to_nodes = []
+        ZKTransactionBuilder._check_result_txn(result)
+
+    @staticmethod
+    def _check_result_txn(results: List) -> None:
+        for result in results:
+            if isinstance(result, NodeExistsError):
+                logging.debug("result contains NodeExistsError.")
+                raise NodeExistsError()
+            if isinstance(result, Exception):
+                logging.error("result contains ex={}, type={}.", result, type(result))
+                raise result
+            logging.debug("check_result_txn: result={}, continue.", result)
+
+
 def create_temp_db(ctx: Context, migrating_database: str, temp_db: str) -> None:
     query = f"""
         CREATE DATABASE {temp_db} ON CLUSTER '{{cluster}}' ENGINE = Replicated('/clickhouse/{migrating_database}', '{{shard}}', '{{replica}}')
@@ -44,17 +110,13 @@ def create_temp_db(ctx: Context, migrating_database: str, temp_db: str) -> None:
 
 
 def _update_local_metadata_first_replica(ctx: Context, migrating_database: str) -> None:
-    _detach_dbs(ctx, dbs=[migrating_database])
-
-    try:
-        metadata_non_repl_db = parse_database_from_metadata(migrating_database)
-        metadata_non_repl_db.set_replicated()
-    except Exception as ex:
-        logging.error("Failed _update_local_metadata_first_replica with ex={}", ex)
-        _attach_dbs(ctx, dbs=[migrating_database])
-        raise ex
-
-    _attach_dbs(ctx, dbs=[migrating_database])
+    with AttacherContext(ctx, migrating_database) as _:
+        try:
+            metadata_non_repl_db = parse_database_from_metadata(migrating_database)
+            metadata_non_repl_db.set_replicated()
+        except Exception as ex:
+            logging.error("Failed _update_local_metadata_first_replica with ex={}", ex)
+            raise ex
 
 
 def _check_tables_consistent(
@@ -108,17 +170,6 @@ def _generate_counter(ctx: Context, zk: KazooClient, db_zk_path: str) -> str:
     return counter
 
 
-def _check_result_txn(results: List) -> None:
-    for result in results:
-        if isinstance(result, NodeExistsError):
-            logging.debug("result contains NodeExistsError.")
-            raise NodeExistsError()
-        if isinstance(result, Exception):
-            logging.error("result contains ex={}, type=P{}.", result, type(result))
-            raise result
-        logging.debug("check_result_txn: result={}, continue.", result)
-
-
 def get_shard_and_replica_from_macros(ctx: Context) -> Tuple[str, str]:
     macros = get_macros(ctx)
 
@@ -155,30 +206,26 @@ def restore_replica(
 
     with zk_client(ctx) as zk:
         counter = _generate_counter(ctx, zk, prefix_db_zk_path)
-        txn = zk.transaction()
+        builder = ZKTransactionBuilder(ctx, zk)
 
         if first_replica:
             _create_first_replica_database_name(
-                ctx,
-                txn,
+                builder,
                 prefix_db_zk_path=prefix_db_zk_path,
                 migrating_database=database_name,
             )
-        _create_query_node(ctx, txn, prefix_db_zk_path, counter)
-        _create_database_replica(ctx, txn, database_name, prefix_db_zk_path)
+        _create_query_node(ctx, builder, prefix_db_zk_path, counter)
+        _create_database_replica(ctx, builder, database_name, prefix_db_zk_path)
 
         if first_replica:
             _create_database_metadata_nodes(
                 ctx,
-                txn,
+                builder,
                 database_name,
                 prefix_db_zk_path,
             )
 
-        result = txn.commit()
-        logging.debug("Txn was committed. Result {}", result)
-
-        _check_result_txn(result)
+        builder.commit()
 
 
 def migrate_as_non_first_replica(ctx: Context, migrating_database: str) -> None:
@@ -189,12 +236,12 @@ def migrate_as_non_first_replica(ctx: Context, migrating_database: str) -> None:
     with zk_client(ctx) as zk:
         counter = _generate_counter(ctx, zk, prefix_db_zk_path)
 
-        txn = zk.transaction()
+        builder = ZKTransactionBuilder(ctx, zk)
 
-        _create_query_node(ctx, txn, prefix_db_zk_path, counter)
+        _create_query_node(ctx, builder, prefix_db_zk_path, counter)
         _create_database_replica(
             ctx,
-            txn,
+            builder,
             migrating_database,
             prefix_db_zk_path=prefix_db_zk_path,
         )
@@ -203,13 +250,9 @@ def migrate_as_non_first_replica(ctx: Context, migrating_database: str) -> None:
         tables_info = _get_tables_info_and_detach(ctx, migrating_database)
 
         _detach_dbs(ctx, dbs=[migrating_database])
-
         _check_tables_consistent(ctx, migrating_database, tables_info)
 
-        result = txn.commit()
-        logging.debug("Txn was committed. Result {}", result)
-
-        _check_result_txn(result)
+        builder.commit()
 
     metadata_non_repl_db.set_replicated()
     was_changed = _change_tables_uuid(ctx, tables_info, migrating_database)
@@ -264,59 +307,44 @@ def create_database_nodes(
             if not zk.exists(format_path(ctx, "/clickhouse")):
                 zk.create(format_path(ctx, "/clickhouse"), makepath=True)
 
-        txn = zk.transaction()
+        builder = ZKTransactionBuilder(ctx, zk)
 
-        txn.create(
-            path=format_path(ctx, prefix_db_zk_path),
-            value="DatabaseReplicated".encode(),
-        )
+        builder.create_node(path=prefix_db_zk_path, value="DatabaseReplicated")
+        builder.create_node(path=f"{prefix_db_zk_path}/log")
+        builder.create_node(path=f"{prefix_db_zk_path}/replicas")
+        builder.create_node(path=f"{prefix_db_zk_path}/counter")
+        builder.create_node(path=f"{prefix_db_zk_path}/counter/cnt-")
 
-        txn.create(path=format_path(ctx, f"{prefix_db_zk_path}/log"))
-        txn.create(path=format_path(ctx, f"{prefix_db_zk_path}/replicas"))
+        builder.delete_node(path=f"{prefix_db_zk_path}/counter/cnt-")
 
-        txn.create(path=format_path(ctx, f"{prefix_db_zk_path}/counter"))
-
-        txn.create(path=format_path(ctx, f"{prefix_db_zk_path}/counter/cnt-"))
-        txn.delete(path=format_path(ctx, f"{prefix_db_zk_path}/counter/cnt-"))
-
-        txn.create(path=format_path(ctx, f"{prefix_db_zk_path}/metadata"))
+        builder.create_node(path=f"{prefix_db_zk_path}/metadata")
 
         max_log_ptr = "1"
-        txn.create(
-            path=format_path(ctx, f"{prefix_db_zk_path}/max_log_ptr"),
-            value=max_log_ptr.encode(),
-        )
+        builder.create_node(path=f"{prefix_db_zk_path}/max_log_ptr", value=max_log_ptr)
 
         data_logs_to_keep = "1000"
-        txn.create(
-            path=format_path(ctx, f"{prefix_db_zk_path}/logs_to_keep"),
-            value=data_logs_to_keep.encode(),
+        builder.create_node(
+            path=f"{prefix_db_zk_path}/logs_to_keep", value=data_logs_to_keep
         )
 
-        result = txn.commit()
-        logging.debug("Txn was committed. Result {}", result)
-
-        _check_result_txn(result)
-
-        logging.debug("result does not contain NodeExistsError.")
+        builder.commit()
 
 
 def _create_first_replica_database_name(
-    ctx: Context,
-    txn: TransactionRequest,
+    builder: ZKTransactionBuilder,
     prefix_db_zk_path: str,
     migrating_database: str,
 ) -> None:
     logging.debug("call create_first_replica_database_name.")
 
-    txn.create(
-        path=format_path(ctx, f"{prefix_db_zk_path}/first_replica_database_name"),
-        value=migrating_database.encode(),
+    builder.create_node(
+        path=f"{prefix_db_zk_path}/first_replica_database_name",
+        value=migrating_database,
     )
 
 
 def _create_query_node(
-    ctx: Context, txn: TransactionRequest, prefix_db_zk_path: str, counter: str
+    ctx: Context, builder: ZKTransactionBuilder, prefix_db_zk_path: str, counter: str
 ) -> None:
     """
     Create queue nodes for Replicated database.
@@ -330,33 +358,23 @@ hosts: []
 initiator: 
 """  # noqa: W291
 
-    txn.create(
-        path=format_path(ctx, f"{prefix_db_zk_path}/log/query-{counter}"),
-        value=data_log_queue.encode(),
+    builder.create_node(
+        path=f"{prefix_db_zk_path}/log/query-{counter}", value=data_log_queue
     )
 
     shard, replica = get_shard_and_replica_from_macros(ctx)
-    txn.create(
-        path=format_path(ctx, f"{prefix_db_zk_path}/log/query-{counter}/committed"),
-        value=f"{shard}|{replica}".encode(),
+    builder.create_node(
+        path=f"{prefix_db_zk_path}/log/query-{counter}/committed",
+        value=f"{shard}|{replica}",
     )
-
-    txn.create(
-        path=format_path(ctx, f"{prefix_db_zk_path}/log/query-{counter}/active"),
-    )
-
-    txn.create(
-        path=format_path(ctx, f"{prefix_db_zk_path}/log/query-{counter}/finished"),
-    )
-
-    txn.create(
-        path=format_path(ctx, f"{prefix_db_zk_path}/log/query-{counter}/synced"),
-    )
+    builder.create_node(path=f"{prefix_db_zk_path}/log/query-{counter}/active")
+    builder.create_node(path=f"{prefix_db_zk_path}/log/query-{counter}/finished")
+    builder.create_node(path=f"{prefix_db_zk_path}/log/query-{counter}/synced")
 
 
 def _create_database_replica(
     ctx: Context,
-    txn: TransactionRequest,
+    builder: ZKTransactionBuilder,
     migrating_database: str,
     prefix_db_zk_path: str,
 ) -> None:
@@ -368,19 +386,14 @@ def _create_database_replica(
 
     shard, replica = get_shard_and_replica_from_macros(ctx)
 
-    txn.create(
-        path=format_path(
-            ctx,
-            f"{prefix_db_zk_path}/log/query-0000000001/finished/{shard}|{replica}",
-        ),
-        value="0".encode(),
+    builder.create_node(
+        path=f"{prefix_db_zk_path}/log/query-0000000001/finished/{shard}|{replica}",
+        value="0",
     )
 
     replica_node = f"{prefix_db_zk_path}/replicas/{shard}|{replica}"
-
-    txn.create(
-        path=format_path(ctx, replica_node),
-        value=_get_host_id(ctx, migrating_database, replica).encode(),
+    builder.create_node(
+        path=replica_node, value=_get_host_id(ctx, migrating_database, replica)
     )
 
     query = """
@@ -390,30 +403,15 @@ def _create_database_replica(
     server_uuid = rows["data"][0]["id"]
     logging.debug("rows={}, server_uuid={}", rows, server_uuid)
 
-    txn.create(
-        path=format_path(ctx, replica_node + "/active"),
-        value=server_uuid.encode(),
-    )
-
-    txn.create(
-        path=format_path(ctx, replica_node + "/digest"),
-        value="0".encode(),
-    )
-
-    txn.create(
-        path=format_path(ctx, replica_node + "/log_ptr"),
-        value="0".encode(),
-    )
-
-    txn.create(
-        path=format_path(ctx, replica_node + "/max_log_ptr_at_creation"),
-        value="1".encode(),
-    )
+    builder.create_node(path=f"{replica_node}/active", value=server_uuid)
+    builder.create_node(path=f"{replica_node}/digest", value="0")
+    builder.create_node(path=f"{replica_node}/log_ptr", value="0")
+    builder.create_node(path=f"{replica_node}/max_log_ptr_at_creation", value="1")
 
 
 def _create_database_metadata_nodes(
     ctx: Context,
-    txn: TransactionRequest,
+    builder: ZKTransactionBuilder,
     migrating_database: str,
     prefix_db_zk_path: str,
 ) -> None:
@@ -432,9 +430,9 @@ def _create_database_metadata_nodes(
         with open(metadata_path, "r", encoding="utf-8") as metadata_file:
             local_table_metadata = metadata_file.read()
 
-            txn.create(
-                path=format_path(ctx, f"{prefix_db_zk_path}/metadata/{table_name}"),
-                value=local_table_metadata.encode(),
+            builder.create_node(
+                path=f"{prefix_db_zk_path}/metadata/{table_name}",
+                value=local_table_metadata,
             )
 
             logging.debug(
@@ -584,6 +582,12 @@ def is_database_exists(ctx: Context, database_name: str) -> bool:
 
 
 def migrate_database_to_replicated(ctx: Context, database: str) -> None:
+    metadata_db = parse_database_from_metadata(database)
+    if metadata_db.database_engine != DatabaseEngine.ATOMIC:
+        raise RuntimeError(
+            f"Database {database} has engine {metadata_db.database_engine}. Migration to Replicated from Atomic only is supported."
+        )
+
     first_replica = True
     try:
         create_database_nodes(ctx, database)
@@ -609,23 +613,26 @@ def migrate_database_to_atomic(
     ctx: Context, database: str, clean_zookeeper: bool
 ) -> None:
     metadata_repl_db = parse_database_from_metadata(database)
-    _detach_dbs(ctx, dbs=[database])
-    try:
-        replica_path = metadata_repl_db.replica_path
-        metadata_repl_db.set_atomic()
+    if metadata_repl_db.database_engine != DatabaseEngine.REPLICATED:
+        raise RuntimeError(
+            f"Database {database} has engine {metadata_repl_db.database_engine}. Migration to Atomic from Replicated only is supported."
+        )
 
-        if clean_zookeeper:
-            logging.debug(
-                "Set clean_zookeeper - delete zookeeper nodes {}",
-                replica_path,
-            )
-            if replica_path:
-                delete_zk_node(ctx, replica_path)
+    with AttacherContext(ctx, database) as _:
+        try:
+            replica_path = metadata_repl_db.replica_path
+            metadata_repl_db.set_atomic()
 
-    except Exception as ex:
-        logging.error("Failed set atomic in metadata: {}", ex)
-        _attach_dbs(ctx, dbs=[database])
-        raise ex
+            if clean_zookeeper:
+                logging.debug(
+                    "Set clean_zookeeper - delete zookeeper nodes {}",
+                    replica_path,
+                )
+                if replica_path:
+                    delete_zk_node(ctx, replica_path)
 
-    logging.info("Metadata {} was updated to Atomic", database)
-    _attach_dbs(ctx, dbs=[database])
+        except Exception as ex:
+            logging.error("Failed set atomic in metadata: {}", ex)
+            raise ex
+
+        logging.info("Metadata {} was updated to Atomic", database)

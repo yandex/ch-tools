@@ -390,6 +390,7 @@ def _sanity_check_before_cleanup(
     listing_size_in_bucket: int,
     blob_state_table: str,
     verify_paths_regex: Optional[str],
+    dry_run: bool,
 ) -> None:
 
     size_error_rate_threshold_fraction = ctx.obj["config"]["object_storage"]["clean"][
@@ -401,6 +402,12 @@ def _sanity_check_before_cleanup(
         paths_regex = ctx.obj["config"]["object_storage"]["clean"][
             "verify_paths_regex"
         ]["shard"]
+
+    def raise_or_warn(dry_run: bool, msg: str) -> None:
+        if not dry_run:
+            raise RuntimeError(msg)
+
+        logging.warning(f"Warning: {msg}")
 
     def perform_check_paths() -> None:
         ### Compare path from system.remote_data_path and from list to delete. They must match the regex.
@@ -426,35 +433,43 @@ def _sanity_check_before_cleanup(
         )[0]
 
         if not re.match(paths_regex, path_form_ch):
-            raise RuntimeError(
-                "Sanity check not passed, because obj_path({}) doesn't match the regex({}).".format(
+            raise_or_warn(
+                dry_run,
+                "Sanity check not passed, because obj_path({}) doesn't matches the regex({}).".format(
                     path_form_ch, paths_regex
-                )
+                ),
             )
 
         for orphaned_object in orphaned_objects_iterator():
             if not re.match(paths_regex, orphaned_object.path):
-                raise RuntimeError(
-                    "Sanity check not passed, because orphaned object({}) doesn't match the regex({}).".format(
+                raise_or_warn(
+                    dry_run,
+                    "Sanity check not passed, because orphaned object({}) doesn't matches the regex({}).".format(
                         orphaned_object.path, paths_regex
-                    )
+                    ),
                 )
 
     def perform_check_size() -> None:
+
+        if listing_size_in_bucket == 0:
+            return
+
         ### Total size of objects after cleanup must be very close to sum(bytes) FROM system.remote_data_paths
         size_to_delete = 0
         for orphaned_object in orphaned_objects_iterator():
             size_to_delete += orphaned_object.size
+
         if (
             listing_size_in_bucket * size_error_rate_threshold_fraction
             <= size_to_delete
         ):
-            raise RuntimeError(
+            raise_or_warn(
+                dry_run,
                 "Potentially dangerous operation: Going to remove more than {}% of bucket content. To remove {}; listing size {}".format(
                     int(size_error_rate_threshold_fraction * 100),
                     format_size(listing_size_in_bucket),
                     format_size(size_to_delete),
-                )
+                ),
             )
 
     perform_check_paths()
@@ -507,6 +522,7 @@ def _clean_object_storage(
             listing_size_in_bucket,
             blob_state_table,
             verify_paths_regex,
+            dry_run,
         )
 
     deleted, total_size = 0, 0

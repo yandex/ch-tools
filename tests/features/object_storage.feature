@@ -307,7 +307,7 @@ Feature: chadmin object-storage commands
       TotalSize: 10
     """
 
-    Scenario: Clean many orphaned objects with size limit fraction
+  Scenario: Clean many orphaned objects with size limit fraction
     Given clickhouse-tools configuration on clickhouse01,clickhouse02
     """
     object_storage:
@@ -350,8 +350,8 @@ Feature: chadmin object-storage commands
       TotalSize: 10
     """
 
-    @require_version_23.3
-    Scenario: Sanity check clean many orphaned objects
+  @require_version_23.3
+  Scenario: Sanity check clean many orphaned objects
     Given clickhouse-tools configuration on clickhouse01,clickhouse02
     """
     object_storage:
@@ -369,7 +369,32 @@ Feature: chadmin object-storage commands
     chadmin object-storage collect-info --to-time 0h && \
     chadmin --format yaml object-storage clean --dry-run
     """
+    Then we get response contains
+    """
+    - WouldDelete: 100
+      TotalSize: 1100
+    """
+    When we try to execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean
+    """
     Then it fails with response contains
     """
     Potentially dangerous operation: Going to remove more than
+    """
+
+  Scenario: Sanity check when no objects in CH
+    Given we have executed queries on clickhouse01
+    """
+    DROP TABLE test.table_s3_01 ON CLUSTER '{cluster}' SYNC;
+    """
+    When we try to execute command on clickhouse01
+    """
+    chadmin object-storage collect-info --to-time 0h && \
+    chadmin --format yaml object-storage clean --dry-run
+    """
+    Then we get response contains
+    """
+    - WouldDelete: 0
+      TotalSize: 0
     """
