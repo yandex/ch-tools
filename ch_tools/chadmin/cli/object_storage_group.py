@@ -178,12 +178,6 @@ def clean_command(
     ),
 )
 @option(
-    "--cluster",
-    "cluster_name",
-    default=DEFAULT_CLUSTER_NAME,
-    help=("Cluster to analyze. Default value is macro."),
-)
-@option(
     "--from-time",
     "from_time",
     default=None,
@@ -194,7 +188,7 @@ def clean_command(
     ),
 )
 @option(
-    "-g",
+    "-g",  # TODO: maybe add this option to clean command
     "--guard-interval",
     "--to-time",
     "to_time",
@@ -206,7 +200,6 @@ def clean_command(
 def collect_info_command(
     ctx: Context,
     object_name_prefix: str,
-    cluster_name: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
 ) -> None:
@@ -223,7 +216,6 @@ def collect_info_command(
     collect_object_storage_info(
         ctx,
         object_name_prefix=object_name_prefix,
-        cluster_name=cluster_name,
         from_time=from_time,
         to_time=to_time,
     )

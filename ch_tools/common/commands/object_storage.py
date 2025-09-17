@@ -71,8 +71,6 @@ def clean(
     listing_table = f"{config['listing_table_database']}.{config['listing_table_prefix']}{disk_conf.name}"
     orphaned_objects_table = f"{config['orphaned_objects_table_database']}.{config['orphaned_objects_table_prefix']}{disk_conf.name}"
 
-    # Create listing table for storing paths from object storage.
-    # Create orphaned objects for accumulating the result.
     try:
         deleted, total_size = _clean_object_storage(
             ctx,
@@ -94,11 +92,10 @@ def clean(
 def collect_object_storage_info(
     ctx: Context,
     object_name_prefix: str,
-    cluster_name: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
 ) -> None:
-    _list_local_blobs(ctx, cluster_name)
+    _list_local_blobs(ctx)
     _collect_orphaned_objects(
         ctx,
         object_name_prefix=object_name_prefix,
@@ -144,7 +141,6 @@ def get_object_storage_space_usage(
 
 def _list_local_blobs(
     ctx: Context,
-    cluster_name: str,
 ) -> None:
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
     config = ctx.obj["config"]["object_storage"]["space_usage"]
@@ -162,7 +158,7 @@ def _list_local_blobs(
     )
 
     remote_data_paths_table = _get_table_function(
-        ctx, REMOTE_DATA_PATHS_TABLE, Scope.SHARD, cluster_name
+        ctx, REMOTE_DATA_PATHS_TABLE, Scope.SHARD, cluster_name=None
     )
 
     settings = ""
@@ -284,7 +280,7 @@ def _collect_space_usage(
     # This table will store the actual space usage data after the query
     _create_space_usage_table(
         ctx,
-        spase_usage_table_name=space_usage_table_new,
+        space_usage_table_name=space_usage_table_new,
         replica_zk_prefix=space_usage_table_zk_path_prefix,
         storage_policy=config["storage_policy"],
         recreate_table=False,
@@ -292,7 +288,7 @@ def _collect_space_usage(
     # This table should always exist and store data from the previous run
     _create_space_usage_table(
         ctx,
-        spase_usage_table_name=space_usage_table,
+        space_usage_table_name=space_usage_table,
         replica_zk_prefix=space_usage_table_zk_path_prefix,
         storage_policy=config["storage_policy"],
         recreate_table=True,
@@ -660,18 +656,18 @@ def _create_local_object_listing_table(
 
 def _create_space_usage_table(
     ctx: Context,
-    spase_usage_table_name: str,
+    space_usage_table_name: str,
     replica_zk_prefix: str,
     storage_policy: str,
     recreate_table: bool,
 ) -> None:
     if not recreate_table:
-        _drop_table_on_shard(ctx, spase_usage_table_name)
+        _drop_table_on_shard(ctx, space_usage_table_name)
 
     engine = (
         "ReplicatedMergeTree"
         + ZOOKEEPER_ARGS.format(
-            replica_zk_prefix=replica_zk_prefix, table_name=spase_usage_table_name
+            replica_zk_prefix=replica_zk_prefix, table_name=space_usage_table_name
         )
         if has_zk()
         else "MergeTree"
@@ -680,7 +676,7 @@ def _create_space_usage_table(
     execute_query_on_shard(
         ctx,
         f"""
-            CREATE TABLE IF NOT EXISTS {spase_usage_table_name}
+            CREATE TABLE IF NOT EXISTS {space_usage_table_name}
                 (active UInt64, unique_frozen UInt64, unique_detached UInt64, orphaned UInt64)
                 ENGINE {engine}
                 ORDER BY active
