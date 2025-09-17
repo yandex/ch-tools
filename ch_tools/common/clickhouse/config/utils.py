@@ -50,7 +50,7 @@ def dump_config(
 
 def _load_config(config_path: str) -> Any:
     with open(config_path, "r", encoding="utf-8") as file:
-        return xmltodict.parse(file.read())
+        return xmltodict.parse(file.read(), disable_entities=False)
 
 
 def _merge_configs(main_config: Any, additional_config: Any) -> None:
