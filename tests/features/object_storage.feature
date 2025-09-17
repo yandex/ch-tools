@@ -16,7 +16,7 @@ Feature: chadmin object-storage commands
     """
     CREATE DATABASE IF NOT EXISTS test ON CLUSTER '{cluster}';
 
-    CREATE TABLE IF NOT EXISTS test.table_s3_01 UUID '10000000-0000-0000-0000-000000000001' ON CLUSTER '{cluster}' (n Int32)
+    CREATE TABLE IF NOT EXISTS test.table_s3_01 ON CLUSTER '{cluster}' (n Int32)
     ENGINE = ReplicatedMergeTree('/tables/table_s3_01', '{replica}') ORDER BY n PARTITION BY (n%10)
     SETTINGS storage_policy = 'object_storage';
 
