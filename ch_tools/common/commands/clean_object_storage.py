@@ -345,6 +345,8 @@ def _clean_object_storage(
     logging.info("Antijoin query: {}", str(antijoin_query))
 
     downloaded_backups = []
+    # Setting traverse_shadow_remote_data_paths is available since ClickHouse 24.3
+    # Download metadata command is available since ch-backup 2.641.197281242
     if (
         not ignore_missing_cloud_storage_backups
         and match_ch_backup_version("2.641.197281242")

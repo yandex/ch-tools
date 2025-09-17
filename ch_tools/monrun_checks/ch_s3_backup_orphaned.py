@@ -1,6 +1,6 @@
 import click
 
-from ch_tools.common.backup import DEFAULT_S3_DISK_NAME, get_orphaned_chs3_backups
+from ch_tools.common.backup import get_orphaned_chs3_backups
 from ch_tools.common.result import OK, WARNING, Result
 
 
@@ -9,7 +9,7 @@ def orphaned_backups_command() -> Result:
     """
     Check for orphaned backups.
     """
-    orphaned_backups = get_orphaned_chs3_backups(DEFAULT_S3_DISK_NAME)
+    orphaned_backups = get_orphaned_chs3_backups()
     if not orphaned_backups:
         return Result(OK)
 
