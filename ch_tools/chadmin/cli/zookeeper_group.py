@@ -641,7 +641,7 @@ def _get_replicas_and_zk_path(
                 "The macro for replica is missing, specify --replicas explicitly."
             )
 
-    replicas_ = replicas.split(",")
+    replicas_ = [r.strip() for r in replicas.split(",")]
     for replica in replicas_:
         if replica not in replicas_list:
             raise RuntimeError(f"Replica {replica} is not present at system.replicas")
