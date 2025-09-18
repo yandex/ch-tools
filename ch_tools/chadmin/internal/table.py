@@ -521,6 +521,29 @@ def get_table_uuids_from_cluster(ctx: Context, database: str, table: str) -> lis
     return list(set(row["uuid"] for row in rows))
 
 
+def get_table_schema_from_cluster(
+    ctx: Context, database: str, tables: list[str]
+) -> Dict:
+    result = {}
+    for table in tables:
+        query = f"""
+            SELECT
+                table,
+                groupArray(create_table_query) as create_table_queries
+            FROM (
+                SELECT DISTINCT
+                    table,
+                    create_table_query
+                FROM clusterAllReplicas('{{cluster}}', system.tables)
+                WHERE database='{database}' AND table='{table}'
+            )
+            GROUP BY table
+        """
+        rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)["data"]
+        result[table] = rows[0]["create_table_queries"]
+    return result
+
+
 def _verify_possible_change_uuid(
     ctx: Context, table_local_metadata_path: str, dst_uuid: str
 ) -> None:

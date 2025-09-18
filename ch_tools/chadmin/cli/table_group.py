@@ -26,6 +26,7 @@ from ch_tools.chadmin.internal.table import (
     detach_table,
     get_info_from_system_tables,
     get_table,
+    get_table_schema_from_cluster,
     get_table_uuids_from_cluster,
     get_tables_names_from_system_tables,
     list_table_columns,
@@ -967,3 +968,27 @@ def check_uuid_equal(ctx: Context, database: str, table: str) -> None:
 
     if len(uuids) > 1:
         raise RuntimeError(f"Table {table} has different uuid in cluster")
+
+
+@table_group.command("check-schema-equal")
+@option("-d", "--database", required=True)
+@option("-a", "--all", "_all", is_flag=True, help="Check all tables in database.")
+@option("-t", "--table")
+@constraint(require_one, ["table", "_all"])
+@pass_context
+def check_schema_equal(ctx: Context, database: str, _all: bool, table: str) -> None:
+    tables = []
+    if _all:
+        tables = get_tables_names_from_system_tables(ctx, database)
+    else:
+        tables = [table]
+
+    for table_name, create_table_queries in get_table_schema_from_cluster(
+        ctx, database, tables
+    ).items():
+        logging.info(f"Table {table_name} has schemas: {create_table_queries}")
+
+        if len(create_table_queries) > 1:
+            raise RuntimeError(
+                f"Table {table} has different schema in cluster",
+            )
