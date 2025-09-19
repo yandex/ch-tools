@@ -10,6 +10,7 @@ from tenacity import (
     retry_if_not_exception_message,
     stop_after_attempt,
     stop_after_delay,
+    wait_random_exponential,
 )
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -136,6 +137,7 @@ def wait_replication_sync_command(
         # Sync tables in cycle
         for replica in list_table_replicas(ctx):
             full_name = f"`{replica['database']}`.`{replica['table']}`"
+            time_left = deadline - time.time()
 
             query = f"SYSTEM SYNC REPLICA {full_name} LIGHTWEIGHT"
             if not lightweight:
@@ -150,8 +152,9 @@ def wait_replication_sync_command(
                 ),
                 stop=(
                     stop_after_attempt(sync_query_max_retries)
-                    | stop_after_delay(deadline)
+                    | stop_after_delay(time_left)
                 ),
+                wait=wait_random_exponential(multiplier=0.5, max=time_left),
                 reraise=True,
             )
             retry_decorator(execute_query)(
