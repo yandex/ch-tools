@@ -137,7 +137,7 @@ def wait_replication_sync_command(
         # Sync tables in cycle
         for replica in list_table_replicas(ctx):
             full_name = f"`{replica['database']}`.`{replica['table']}`"
-            time_left = deadline - time.time()
+            time_left = max(deadline - time.time(), 1)
 
             query = f"SYSTEM SYNC REPLICA {full_name} LIGHTWEIGHT"
             if not lightweight:

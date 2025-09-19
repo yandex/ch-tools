@@ -43,7 +43,7 @@ def execute_query(
     settings_upd: Dict[str, Any] = dict(settings) if settings else {}
 
     if receive_timeout_deadline:
-        deadline_timeout = receive_timeout_deadline - time.time()
+        deadline_timeout = max(receive_timeout_deadline - time.time(), 1)
         if deadline_timeout <= 0:
             raise RuntimeError(f"Deadline reached for query {query}")
 
