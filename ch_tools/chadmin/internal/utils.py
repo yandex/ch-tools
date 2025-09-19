@@ -5,8 +5,9 @@ Utility functions.
 import os
 import re
 import shutil
+import time
 from itertools import islice
-from typing import Any, Iterable, Iterator, Optional
+from typing import Any, Dict, Iterable, Iterator, Optional
 
 from click import Context
 
@@ -25,6 +26,7 @@ def execute_query(
     stream: bool = False,
     settings: Optional[Any] = None,
     replica: Optional[str] = None,
+    deadline: Optional[float] = None,
     **kwargs: Any,
 ) -> Any:
     """
@@ -38,6 +40,20 @@ def execute_query(
     if replica is not None:
         ch_client.host = replica
 
+    settings_upd: Dict[str, Any] = dict(settings) if settings else {}
+
+    if deadline:
+        deadline_timeout = time.time() - deadline
+        if deadline_timeout <= 0:
+            raise RuntimeError(f"Deadline reached for query {query}")
+
+        if settings and "receive_timeout" in settings:
+            settings_upd["receive_timeout"] = min(
+                settings["receive_timeout"], deadline_timeout
+            )
+        else:
+            settings_upd["receive_timeout"] = deadline_timeout
+
     return ch_client.query(
         query=query,
         query_args=kwargs,
@@ -46,7 +62,7 @@ def execute_query(
         echo=echo,
         dry_run=dry_run,
         stream=stream,
-        settings=settings,
+        settings=settings_upd,
     )
 
 
