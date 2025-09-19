@@ -26,7 +26,7 @@ def execute_query(
     stream: bool = False,
     settings: Optional[Any] = None,
     replica: Optional[str] = None,
-    deadline: Optional[float] = None,
+    receive_timeout_deadline: Optional[float] = None,
     **kwargs: Any,
 ) -> Any:
     """
@@ -42,8 +42,8 @@ def execute_query(
 
     settings_upd: Dict[str, Any] = dict(settings) if settings else {}
 
-    if deadline:
-        deadline_timeout = time.time() - deadline
+    if receive_timeout_deadline:
+        deadline_timeout = receive_timeout_deadline - time.time()
         if deadline_timeout <= 0:
             raise RuntimeError(f"Deadline reached for query {query}")
 

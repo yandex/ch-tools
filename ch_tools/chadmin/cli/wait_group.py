@@ -136,7 +136,6 @@ def wait_replication_sync_command(
         # Sync tables in cycle
         for replica in list_table_replicas(ctx):
             full_name = f"`{replica['database']}`.`{replica['table']}`"
-            time_left = deadline - time.time()
 
             query = f"SYSTEM SYNC REPLICA {full_name} LIGHTWEIGHT"
             if not lightweight:
@@ -160,7 +159,7 @@ def wait_replication_sync_command(
                 query,
                 format_=None,
                 timeout=replica_timeout.total_seconds(),
-                settings={"receive_timeout": time_left},
+                receive_timeout_deadline=deadline,
             )
     except requests.exceptions.ReadTimeout:
         raise ConnectionError("Read timeout while running query.")
