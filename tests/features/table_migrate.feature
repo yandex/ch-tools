@@ -636,3 +636,86 @@ Feature: chadmin table change and check-uuid-equal
     """
     Don't need to update current table uuid
     """
+
+  @require_version_24.8
+  Scenario: Check equal table schema
+    When we execute query on clickhouse01
+    """
+    CREATE DATABASE test_db ON CLUSTER '{cluster}';
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE test_db.test_table_1
+    ON CLUSTER '{cluster}'
+    (
+        `a` Int
+    )
+    ENGINE = MergeTree
+    ORDER BY a
+    """
+
+    And we execute command on clickhouse01
+    """
+    chadmin table check-schema-equal -d test_db -t test_table_1
+    """
+    Then it completes successfully
+
+    When we execute command on clickhouse01
+    """
+    chadmin table check-schema-equal -d test_db --all
+    """
+    Then it completes successfully
+
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE test_db.test_table_2
+    ON CLUSTER '{cluster}'
+    (
+        `a` Int
+    )
+    ENGINE = MergeTree
+    ORDER BY a
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin table check-schema-equal -d test_db --all
+    """
+    Then it completes successfully
+
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE test_db.test_table_3
+    (
+        `a` Int
+    )
+    ENGINE = MergeTree
+    ORDER BY a
+    """
+    When we execute query on clickhouse02
+    """
+    CREATE TABLE test_db.test_table_3
+    (
+        `b` Int
+    )
+    ENGINE = MergeTree
+    ORDER BY b
+    """
+    And we try to execute command on clickhouse01
+    """
+    chadmin table check-schema-equal -d test_db -t test_table_3
+    """
+    Then it fails with response contains
+    """
+    Table test_table_3 has schemas: ['CREATE TABLE test_db.test_table_3 (`a` Int32) ENGINE = MergeTree ORDER BY a SETTINGS index_granularity = 8192', 'CREATE TABLE test_db.test_table_3 (`b` Int32) ENGINE = MergeTree ORDER BY b SETTINGS index_granularity = 8192']
+    """
+
+    When we try to execute command on clickhouse01
+    """
+    chadmin table check-schema-equal -d test_db --all
+    """
+    Then it fails with response contains
+    """
+    Table test_table_3 has schemas: ['CREATE TABLE test_db.test_table_3 (`a` Int32) ENGINE = MergeTree ORDER BY a SETTINGS index_granularity = 8192', 'CREATE TABLE test_db.test_table_3 (`b` Int32) ENGINE = MergeTree ORDER BY b SETTINGS index_granularity = 8192']
+    """
+
+    
