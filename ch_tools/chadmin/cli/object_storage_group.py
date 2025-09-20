@@ -1,7 +1,15 @@
 from datetime import timedelta
 from typing import Any, Optional
 
-from click import Choice, Context, FloatRange, IntRange, group, option, pass_context
+from click import (
+    BadParameter,
+    Context,
+    FloatRange,
+    IntRange,
+    group,
+    option,
+    pass_context,
+)
 from humanfriendly import format_size
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -17,10 +25,11 @@ from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
-from ch_tools.common.commands.clean_object_storage import (
+from ch_tools.common.commands.object_storage import (
     DEFAULT_GUARD_INTERVAL,
-    CleanScope,
     clean,
+    collect_object_storage_info,
+    get_object_storage_space_usage,
 )
 
 # Use big enough timeout for stream HTTP query
@@ -52,43 +61,6 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
 
 @object_storage_group.command("clean")
 @option(
-    "-p",
-    "--prefix",
-    "--object_name_prefix",
-    "object_name_prefix",
-    default="",
-    help=(
-        "Prefix of object name used while listing bucket. By default its value is attempted to parse "
-        "from endpoint in clickhouse S3 disk config. If there is no trailing slash it will be added automatically."
-    ),
-)
-@option(
-    "--from-time",
-    "from_time",
-    default=None,
-    type=TimeSpanParamType(),
-    help=(
-        "Begin of inspecting interval in human-friendly format. "
-        "Objects with a modification time falling interval [now - from_time, now - to_time] are considered."
-    ),
-)
-@option(
-    "-g",
-    "--guard-interval",
-    "--to-time",
-    "to_time",
-    default=DEFAULT_GUARD_INTERVAL,
-    type=TimeSpanParamType(),
-    help=("End of inspecting interval in human-friendly format."),
-)
-@option(
-    "--clean-scope",
-    "clean_scope",
-    default="shard",
-    type=Choice(["host", "shard", "cluster"]),
-    help="Cleaning scope.",
-)
-@option(
     "--cluster",
     "cluster_name",
     default=DEFAULT_CLUSTER_NAME,
@@ -107,12 +79,6 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     help=(
         "Do not delete the collected paths from the local table, when the command completes."
     ),
-)
-@option(
-    "--use-saved-list",
-    "use_saved_list",
-    is_flag=True,
-    help=("Use saved object list without traversing object storage again."),
 )
 @option(
     "--store-state-local",
@@ -157,14 +123,9 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
 @pass_context
 def clean_command(
     ctx: Context,
-    object_name_prefix: str,
-    from_time: Optional[timedelta],
-    to_time: timedelta,
-    clean_scope: str,
     cluster_name: str,
     dry_run: bool,
     keep_paths: bool,
-    use_saved_list: bool,
     store_state_local: bool,
     store_state_zk_path: str,
     verify_paths_regex: Optional[str],
@@ -173,6 +134,7 @@ def clean_command(
 ) -> None:
     """
     Clean orphaned S3 objects.
+    Orphaned objects are taken from the tables filled with collect-info command.
     """
     deleted = 0
     total_size = 0
@@ -185,17 +147,11 @@ def clean_command(
     try:
         deleted, total_size = clean(
             ctx,
-            object_name_prefix,
-            from_time,
-            to_time,
-            CleanScope(clean_scope),
-            cluster_name,
-            dry_run,
-            keep_paths,
-            use_saved_list,
-            verify_paths_regex,
-            max_size_to_delete_bytes,
-            max_size_to_delete_fraction,
+            dry_run=dry_run,
+            keep_paths=keep_paths,
+            verify_paths_regex=verify_paths_regex,
+            max_size_to_delete_bytes=max_size_to_delete_bytes,
+            max_size_to_delete_fraction=max_size_to_delete_fraction,
         )
     finally:
         state = OrphanedObjectsState(total_size, error_msg)
@@ -207,6 +163,82 @@ def clean_command(
             _store_state_local_save(ctx, state)
 
     _print_response(ctx, dry_run, deleted, total_size)
+
+
+@object_storage_group.command("collect-info")
+@option(
+    "-p",
+    "--prefix",  # TODO: maybe add this option to clean command
+    "--object_name_prefix",
+    "object_name_prefix",
+    default="",
+    help=(
+        "Prefix of object name used while listing bucket. By default its value is attempted to parse "
+        "from endpoint in clickhouse S3 disk config. If there is no trailing slash it will be added automatically."
+    ),
+)
+@option(
+    "--from-time",
+    "from_time",
+    default=None,
+    type=TimeSpanParamType(),
+    help=(
+        "Begin of inspecting interval in human-friendly format. "
+        "Objects with a modification time falling interval [now - from_time, now - to_time] are considered."
+    ),
+)
+@option(
+    "-g",  # TODO: maybe add this option to clean command
+    "--guard-interval",
+    "--to-time",
+    "to_time",
+    default=DEFAULT_GUARD_INTERVAL,
+    type=TimeSpanParamType(),
+    help=("End of inspecting interval in human-friendly format."),
+)
+@pass_context
+def collect_info_command(
+    ctx: Context,
+    object_name_prefix: str,
+    from_time: Optional[timedelta],
+    to_time: timedelta,
+) -> None:
+    """
+    Collect info about object storage memory usage and orphaned objects.
+    Save the result to the corresponding tables.
+    """
+    if from_time is not None and to_time < from_time:
+        raise BadParameter(
+            "'from_time' parameter must be greater than 'to_time'",
+            param_hint="--from-time",
+        )
+
+    collect_object_storage_info(
+        ctx,
+        object_name_prefix=object_name_prefix,
+        from_time=from_time,
+        to_time=to_time,
+    )
+
+
+@object_storage_group.command("space-usage")
+@option(
+    "--cluster",
+    "cluster_name",
+    default=DEFAULT_CLUSTER_NAME,
+    help=("Cluster to analyze. Default value is macro."),
+)
+@pass_context
+def space_usage_command(
+    ctx: Context,
+    cluster_name: str,
+) -> None:
+    """
+    Return object storage memory usage info from cluster.
+    """
+    result = get_object_storage_space_usage(ctx, cluster_name)
+
+    print_response(ctx, result)
 
 
 def _store_state_zk_save(ctx: Context, path: str, state: OrphanedObjectsState) -> None:

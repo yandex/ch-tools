@@ -60,6 +60,13 @@ DEFAULT_CONFIG = {
             },
             "verify_size_error_rate_threshold_fraction": 0.9,
         },
+        "space_usage": {
+            "space_usage_table_prefix": "space_usage_from_",
+            "blob_state_table_prefix": "blob_state_from_",
+            "space_usage_table_database": "default",
+            "space_usage_table_zk_path_prefix": "/_system/tables",
+            "storage_policy": "default",
+        },
     },
     "zookeeper": {
         "randomize_hosts": True,

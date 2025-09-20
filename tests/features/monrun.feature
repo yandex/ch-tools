@@ -398,7 +398,8 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --dry-run --to-time 0h --keep-paths --store-state-zk-path /tmp/shard_1
+    chadmin object-storage collect-info --to-time 0h && \
+    chadmin object-storage clean --dry-run --keep-paths --store-state-zk-path /tmp/shard_1
     """
     When we execute command on clickhouse01
     """
@@ -416,7 +417,8 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --dry-run --to-time 0h --keep-paths --store-state-zk-path /tmp/shard_1
+    chadmin object-storage collect-info --to-time 0h && \
+    chadmin object-storage clean --dry-run --keep-paths --store-state-zk-path /tmp/shard_1
     """
     When we execute command on clickhouse01
     """
@@ -452,7 +454,8 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --dry-run --to-time 0h --keep-paths --store-state-local
+    chadmin object-storage collect-info --to-time 0h && \
+    chadmin object-storage clean --dry-run --keep-paths --store-state-local
     """
     When we execute command on clickhouse01
     """
@@ -470,7 +473,8 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage clean --dry-run --to-time 0h --keep-paths --store-state-local
+    chadmin object-storage collect-info --to-time 0h && \
+    chadmin object-storage clean --dry-run --keep-paths --store-state-local
     """
     When we execute command on clickhouse01
     """
