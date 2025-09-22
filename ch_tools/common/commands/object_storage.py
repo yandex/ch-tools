@@ -59,8 +59,12 @@ class Scope(str, Enum):
 
 def clean(
     ctx: Context,
+    object_name_prefix: str,
+    from_time: Optional[timedelta],
+    to_time: timedelta,
     dry_run: bool,
     keep_paths: bool,
+    use_saved_list: bool,
     verify_paths_regex: Optional[str] = None,
     max_size_to_delete_bytes: int = 0,
     max_size_to_delete_fraction: float = 1.0,
@@ -78,7 +82,11 @@ def clean(
     try:
         deleted, total_size = _clean_object_storage(
             ctx,
+            object_name_prefix,
+            from_time,
+            to_time,
             dry_run,
+            use_saved_list,
             listing_table,
             orphaned_objects_table,
             verify_paths_regex,
@@ -486,7 +494,11 @@ def _sanity_check_before_cleanup(
 
 def _clean_object_storage(
     ctx: Context,
+    object_name_prefix: str,
+    from_time: Optional[timedelta],
+    to_time: timedelta,
     dry_run: bool,
+    use_saved_list: bool,
     listing_table: str,
     orphaned_objects_table: str,
     verify_paths_regex: Optional[str] = None,
@@ -512,6 +524,11 @@ def _clean_object_storage(
             "Will download cloud storage metadata from backups to shadow directory if they are missing"
         )
         downloaded_backups = _download_missing_cloud_storage_backups(disk_conf.name)
+
+    if use_saved_list:
+        _list_local_blobs(ctx)
+    else:
+        collect_object_storage_info(ctx, object_name_prefix, from_time, to_time)
 
     if dry_run:
         logging.info("Counting orphaned objects...")

@@ -58,8 +58,7 @@ Feature: chadmin object-storage commands
   Scenario: Dry-run clean with guard period
     When we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h && \
-    chadmin --format yaml object-storage clean --dry-run
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run
     """
     Then we get response contains
     """
@@ -76,8 +75,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h && \
-    chadmin --format yaml object-storage clean --dry-run
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h
     """
     Then we get response contains
     """
@@ -86,7 +84,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean
+    chadmin --format yaml object-storage clean --to-time 0h
     """
     Then we get response contains
     """
@@ -108,8 +106,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h && \
-    chadmin --format yaml object-storage clean --dry-run
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h
     """
     Then we get response contains
     """
@@ -118,7 +115,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean
+    chadmin --format yaml object-storage clean --to-time 0h
     """
     Then we get response contains
     """
@@ -127,8 +124,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h && \
-    chadmin --format yaml object-storage clean --dry-run
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run
     """
     Then we get response contains
     """
@@ -157,8 +153,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h --prefix "data_1" && \
-    chadmin --format yaml object-storage clean --dry-run
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --prefix "data_1"
     """
     Then we get response contains
     """
@@ -167,7 +162,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean
+    chadmin --format yaml object-storage clean --to-time 0h --prefix "data_1"
     """
     Then we get response contains
     """
@@ -181,8 +176,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h --prefix "data_2" && \
-    chadmin --format yaml object-storage clean --dry-run
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --prefix "data_2"
     """
     Then we get response contains
     """
@@ -193,8 +187,7 @@ Feature: chadmin object-storage commands
   Scenario: Clean with store-state-zk-path works
     When we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h && \
-    chadmin --format yaml object-storage clean --dry-run --store-state-zk-path /tmp/shard_1
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths --store-state-zk-path /tmp/shard_1
     """
     Then we get zookeeper node with "/tmp/shard_1" path
     """
@@ -211,7 +204,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --dry-run --store-state-zk-path /tmp/shard_1
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths --store-state-zk-path /tmp/shard_1
     """
     Then we get zookeeper node with "/tmp/shard_1" path
     """
@@ -224,8 +217,7 @@ Feature: chadmin object-storage commands
   Scenario: Clean with store-state-local works
     When we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h && \
-    chadmin --format yaml object-storage clean --dry-run --store-state-local
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths --store-state-local
     """
     Then we get file /tmp/object_storage_cleanup_state.json
     """
@@ -242,8 +234,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h && \
-    chadmin --format yaml object-storage clean --dry-run --store-state-local
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths --store-state-local
     """
     Then we get file /tmp/object_storage_cleanup_state.json
     """
@@ -262,8 +253,7 @@ Feature: chadmin object-storage commands
     """
     When we try to execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h --prefix "unrelated_path" && \
-    chadmin --format yaml object-storage clean --dry-run
+    chadmin --format yaml object-storage clean --to-time 0h --prefix "unrelated_path"
     """
     Then we get response contains
     """
@@ -279,8 +269,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h && \
-    chadmin --format yaml object-storage clean --dry-run
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h
     """
     Then we get response contains
     """
@@ -289,7 +278,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --max-size-to-delete-bytes 30
+    chadmin --format yaml object-storage clean --to-time 0h --max-size-to-delete-bytes 30
     """
     Then we get response contains
     """
@@ -298,8 +287,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h && \
-    chadmin --format yaml object-storage clean --dry-run
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run
     """
     Then we get response contains
     """
@@ -322,8 +310,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h --prefix "data_2" && \
-    chadmin --format yaml object-storage clean --dry-run
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --prefix "data_2"
     """
     Then we get response contains
     """
@@ -332,7 +319,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --max-size-to-delete-fraction 0.75
+    chadmin --format yaml object-storage clean --to-time 0h --max-size-to-delete-fraction 0.75 --prefix "data_2"
     """
     Then we get response contains
     """
@@ -341,8 +328,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h --prefix "data_2" && \
-    chadmin --format yaml object-storage clean --dry-run
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run --prefix "data_2"
     """
     Then we get response contains
     """
@@ -366,8 +352,7 @@ Feature: chadmin object-storage commands
     """
     When we try to execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h && \
-    chadmin --format yaml object-storage clean --dry-run
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h
     """
     Then we get response contains
     """
@@ -376,7 +361,7 @@ Feature: chadmin object-storage commands
     """
     When we try to execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean
+    chadmin --format yaml object-storage clean --to-time 0h
     """
     Then it fails with response contains
     """
@@ -403,8 +388,7 @@ Feature: chadmin object-storage commands
     """
     And we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h && \
-    chadmin --format yaml object-storage clean --dry-run
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run
     """
     Then we get response matches
     """
@@ -417,8 +401,7 @@ Feature: chadmin object-storage commands
     """
     And we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h && \
-    chadmin --format yaml object-storage clean --dry-run --ignore-missing-cloud-storage-backups
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run --ignore-missing-cloud-storage-backups
     """
     Then we get response matches
     """
@@ -427,8 +410,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h && \
-    chadmin --format yaml object-storage clean --dry-run
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run
     """
     Then we get response matches
     """
@@ -467,13 +449,12 @@ Feature: chadmin object-storage commands
     """
     And we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h && \
-    chadmin object-storage clean --dry-run
+    chadmin object-storage clean --to-time 0h --dry-run
     """
     Then we get response contains
     """
     Downloading cloud storage metadata from 'test3'
-    Counting orphaned objects
+    Collecting objects...
     """
     When we execute command on clickhouse01
     """
@@ -481,15 +462,14 @@ Feature: chadmin object-storage commands
     """
     And we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h && \
-    chadmin object-storage clean --dry-run
+    chadmin object-storage clean --to-time 0h --dry-run
     """
     Then we get response contains
     """
     Downloading cloud storage metadata from 'test3'
     Downloading cloud storage metadata from 'test2'
     Downloading cloud storage metadata from 'test1'
-    Counting orphaned objects
+    Collecting objects...
     """
 
   Scenario: Sanity check when no objects in CH
@@ -499,8 +479,7 @@ Feature: chadmin object-storage commands
     """
     When we try to execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h && \
-    chadmin --format yaml object-storage clean --dry-run
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h
     """
     Then we get response contains
     """

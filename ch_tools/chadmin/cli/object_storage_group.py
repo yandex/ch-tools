@@ -61,6 +61,36 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
 
 @object_storage_group.command("clean")
 @option(
+    "-p",
+    "--prefix",
+    "--object_name_prefix",
+    "object_name_prefix",
+    default="",
+    help=(
+        "Prefix of object name used while listing bucket. By default its value is attempted to parse "
+        "from endpoint in clickhouse S3 disk config. If there is no trailing slash it will be added automatically."
+    ),
+)
+@option(
+    "--from-time",
+    "from_time",
+    default=None,
+    type=TimeSpanParamType(),
+    help=(
+        "Begin of inspecting interval in human-friendly format. "
+        "Objects with a modification time falling interval [now - from_time, now - to_time] are considered."
+    ),
+)
+@option(
+    "-g",
+    "--guard-interval",
+    "--to-time",
+    "to_time",
+    default=DEFAULT_GUARD_INTERVAL,
+    type=TimeSpanParamType(),
+    help=("End of inspecting interval in human-friendly format."),
+)
+@option(
     "--cluster",
     "cluster_name",
     default=DEFAULT_CLUSTER_NAME,
@@ -79,6 +109,12 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     help=(
         "Do not delete the collected paths from the local table, when the command completes."
     ),
+)
+@option(
+    "--use-saved-list",
+    "use_saved_list",
+    is_flag=True,
+    help=("Use saved object list without traversing object storage again."),
 )
 @option(
     "--store-state-local",
@@ -132,9 +168,13 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
 @pass_context
 def clean_command(
     ctx: Context,
+    object_name_prefix: str,
+    from_time: Optional[timedelta],
+    to_time: timedelta,
     cluster_name: str,
     dry_run: bool,
     keep_paths: bool,
+    use_saved_list: bool,
     store_state_local: bool,
     store_state_zk_path: str,
     verify_paths_regex: Optional[str],
@@ -144,7 +184,6 @@ def clean_command(
 ) -> None:
     """
     Clean orphaned S3 objects.
-    Orphaned objects are taken from the tables filled with collect-info command.
     """
     deleted = 0
     total_size = 0
@@ -157,8 +196,12 @@ def clean_command(
     try:
         deleted, total_size = clean(
             ctx,
+            object_name_prefix,
+            from_time,
+            to_time,
             dry_run,
             keep_paths,
+            use_saved_list,
             verify_paths_regex,
             max_size_to_delete_bytes,
             max_size_to_delete_fraction,
