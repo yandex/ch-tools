@@ -120,6 +120,15 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
         "Deletion will stop once this limit is reached."
     ),
 )
+@option(
+    "--ignore-missing-cloud-storage-backups",
+    "ignore_missing_cloud_storage_backups",
+    is_flag=True,
+    help=(
+        "Do not download cloud storage backups if they are not present in shadow directory."
+        "This may cause backup corruption."
+    ),
+)
 @pass_context
 def clean_command(
     ctx: Context,
@@ -131,6 +140,7 @@ def clean_command(
     verify_paths_regex: Optional[str],
     max_size_to_delete_bytes: int,
     max_size_to_delete_fraction: float,
+    ignore_missing_cloud_storage_backups: bool,
 ) -> None:
     """
     Clean orphaned S3 objects.
@@ -147,11 +157,12 @@ def clean_command(
     try:
         deleted, total_size = clean(
             ctx,
-            dry_run=dry_run,
-            keep_paths=keep_paths,
-            verify_paths_regex=verify_paths_regex,
-            max_size_to_delete_bytes=max_size_to_delete_bytes,
-            max_size_to_delete_fraction=max_size_to_delete_fraction,
+            dry_run,
+            keep_paths,
+            verify_paths_regex,
+            max_size_to_delete_bytes,
+            max_size_to_delete_fraction,
+            ignore_missing_cloud_storage_backups,
         )
     finally:
         state = OrphanedObjectsState(total_size, error_msg)

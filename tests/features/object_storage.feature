@@ -16,7 +16,7 @@ Feature: chadmin object-storage commands
     """
     CREATE DATABASE IF NOT EXISTS test ON CLUSTER '{cluster}';
 
-    CREATE TABLE IF NOT EXISTS test.table_s3_01 ON CLUSTER '{cluster}' (n Int32)
+    CREATE TABLE IF NOT EXISTS test.table_s3_01 UUID '10000000-0000-0000-0000-000000000001' ON CLUSTER '{cluster}' (n Int32)
     ENGINE = ReplicatedMergeTree('/tables/table_s3_01', '{replica}') ORDER BY n PARTITION BY (n%10)
     SETTINGS storage_policy = 'object_storage';
 
@@ -381,6 +381,110 @@ Feature: chadmin object-storage commands
     Then it fails with response contains
     """
     Potentially dangerous operation: Going to remove more than
+    """
+
+  @require_version_24.3
+  Scenario: Download of missing backups prevents data from removal
+    When we execute command on clickhouse01
+    """
+    ch-backup backup --name test1 --databases test -f
+    """
+    And we execute command on clickhouse01
+    """
+    ls /var/lib/clickhouse/disks/object_storage/shadow
+    """
+    Then we get response
+    """
+    test1
+    """
+    When we execute query on clickhouse01
+    """
+    DROP TABLE test.table_s3_01 SYNC
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run
+    """
+    Then we get response matches
+    """
+    - WouldDelete: 0
+      TotalSize: 0
+    """
+    When we execute command on clickhouse01
+    """
+    rm -r /var/lib/clickhouse/disks/object_storage/shadow
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run --ignore-missing-cloud-storage-backups
+    """
+    Then we get response matches
+    """
+    - WouldDelete: [1-9][0-9]*
+      TotalSize: [1-9][0-9]*
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run
+    """
+    Then we get response matches
+    """
+    - WouldDelete: 0
+      TotalSize: 0
+    """
+    When we execute command on clickhouse01
+    """
+    ls /var/lib/clickhouse/disks/object_storage/shadow
+    """
+    Then we get response
+    """
+    """
+
+  @require_version_24.3
+  Scenario: All missing backups are downloaded
+    When we execute command on clickhouse01
+    """
+    ch-backup backup --name test1 --databases test -f &&
+    ch-backup backup --name test2 --databases test -f &&
+    ch-backup backup --name test3 --databases test -f
+    """
+    And we execute command on clickhouse01
+    """
+    ls /var/lib/clickhouse/disks/object_storage/shadow
+    """
+    Then we get response
+    """
+    test1
+    test2
+    test3
+    """
+    When we execute command on clickhouse01
+    """
+    rm -r /var/lib/clickhouse/disks/object_storage/shadow/test3
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin object-storage clean --to-time 0h --dry-run
+    """
+    Then we get response contains
+    """
+    Downloading cloud storage metadata from 'test3'
+    Counting orphaned objects
+    """
+    When we execute command on clickhouse01
+    """
+    rm -r /var/lib/clickhouse/disks/object_storage/shadow
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin object-storage clean --to-time 0h --dry-run
+    """
+    Then we get response contains
+    """
+    Downloading cloud storage metadata from 'test3'
+    Downloading cloud storage metadata from 'test2'
+    Downloading cloud storage metadata from 'test1'
+    Counting orphaned objects
     """
 
   Scenario: Sanity check when no objects in CH

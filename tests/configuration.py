@@ -67,7 +67,7 @@ def create() -> dict:
         "network_name": network_name,
         "s3": s3,
         "ch_backup": {
-            "encrypt_key": "test_encrypt",
+            "encrypt_key": "keyshouldbe32byteskeyshouldbe32b",
         },
         "services": services,
         "dbaas_conf": _dbaas_conf(services, network_name),

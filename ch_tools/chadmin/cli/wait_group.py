@@ -4,6 +4,15 @@ from typing import Any, Optional
 
 import requests
 from click import Context, FloatRange, group, option, pass_context
+from tenacity import (
+    RetryCallState,
+    retry,
+    retry_if_exception_type,
+    retry_if_not_exception_message,
+    stop_after_attempt,
+    stop_after_delay,
+    wait_random_exponential,
+)
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.clickhouse_disks import S3_METADATA_STORE_PATH
@@ -20,6 +29,8 @@ from ch_tools.common.utils import execute
 BASE_TIMEOUT = 600
 LOCAL_PART_LOAD_SPEED = 10  # in data parts per second
 S3_PART_LOAD_SPEED = 0.5  # in data parts per second
+CLICKHOUSE_TIMEOUT_EXCEEDED_MSG = "TIMEOUT_EXCEEDED"
+MAX_SYNC_REPLICA_BACKOFF = 5
 
 
 @group("wait", cls=Chadmin)
@@ -88,6 +99,13 @@ def wait_group() -> None:
     default=True,
     help="Use SYNC REPLICA with LIGHTWEIGHT option and skip replication lag check.",
 )
+@option(
+    "--sync-query-max-retries",
+    "sync_query_max_retries",
+    type=int,
+    default=5,
+    help="Max number of retries for system sync replica queries.",
+)
 @pass_context
 def wait_replication_sync_command(
     ctx: Context,
@@ -101,6 +119,7 @@ def wait_replication_sync_command(
     mwarn: float,
     mcrit: float,
     lightweight: bool,
+    sync_query_max_retries: int,
 ) -> None:
     """Wait for ClickHouse server to sync replication with other replicas."""
     # Lightweight sync is added in 23.4
@@ -120,18 +139,45 @@ def wait_replication_sync_command(
         # Sync tables in cycle
         for replica in list_table_replicas(ctx):
             full_name = f"`{replica['database']}`.`{replica['table']}`"
-            time_left = deadline - time.time()
+            time_left = max(deadline - time.time(), 1)
 
             query = f"SYSTEM SYNC REPLICA {full_name} LIGHTWEIGHT"
             if not lightweight:
                 query = f"SYSTEM SYNC REPLICA {full_name}"
 
-            execute_query(
+            # 'SYSTEM SYNC REPLICA' timeout is configured via the 'receive_timeout' setting.
+            settings = {"receive_timeout": time_left}
+
+            # Retry logic
+            def adjust_settings_after_attempt(_: RetryCallState) -> None:
+                settings["receive_timeout"] = max(  # pylint: disable=cell-var-from-loop
+                    deadline - time.time(), 1
+                )
+
+            retry_decorator = retry(
+                retry=(
+                    retry_if_exception_type(ClickhouseError)
+                    & retry_if_not_exception_message(
+                        match=rf".*{CLICKHOUSE_TIMEOUT_EXCEEDED_MSG}.*"
+                    )
+                ),
+                stop=(
+                    stop_after_attempt(sync_query_max_retries)
+                    | stop_after_delay(time_left)
+                ),
+                wait=wait_random_exponential(
+                    multiplier=0.5, max=MAX_SYNC_REPLICA_BACKOFF
+                ),
+                after=adjust_settings_after_attempt,
+                reraise=True,
+            )
+
+            retry_decorator(execute_query)(
                 ctx,
                 query,
                 format_=None,
                 timeout=replica_timeout.total_seconds(),
-                settings={"receive_timeout": time_left},
+                settings=settings,
             )
     except requests.exceptions.ReadTimeout:
         raise ConnectionError("Read timeout while running query.")
@@ -139,7 +185,7 @@ def wait_replication_sync_command(
         raise ConnectionError("Connection error while running query.")
     except ClickhouseError as e:
 
-        if "TIMEOUT_EXCEEDED" in str(e):
+        if CLICKHOUSE_TIMEOUT_EXCEEDED_MSG in str(e):
             error_msg = "Timeout while running query."
         else:
             error_msg = f"Clickhouse error while running query: {e}"
