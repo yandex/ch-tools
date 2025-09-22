@@ -403,7 +403,8 @@ Feature: chadmin object-storage commands
     """
     And we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --to-time 0h --dry-run
+    chadmin object-storage collect-info --to-time 0h && \
+    chadmin --format yaml object-storage clean --dry-run
     """
     Then we get response matches
     """
@@ -416,7 +417,8 @@ Feature: chadmin object-storage commands
     """
     And we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --to-time 0h --dry-run --ignore-missing-cloud-storage-backups
+    chadmin object-storage collect-info --to-time 0h && \
+    chadmin --format yaml object-storage clean --dry-run --ignore-missing-cloud-storage-backups
     """
     Then we get response matches
     """
@@ -425,7 +427,8 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --to-time 0h --dry-run
+    chadmin object-storage collect-info --to-time 0h && \
+    chadmin --format yaml object-storage clean --dry-run
     """
     Then we get response matches
     """
@@ -464,7 +467,8 @@ Feature: chadmin object-storage commands
     """
     And we execute command on clickhouse01
     """
-    chadmin object-storage clean --to-time 0h --dry-run
+    chadmin object-storage collect-info --to-time 0h && \
+    chadmin object-storage clean --dry-run
     """
     Then we get response contains
     """
@@ -477,7 +481,8 @@ Feature: chadmin object-storage commands
     """
     And we execute command on clickhouse01
     """
-    chadmin object-storage clean --to-time 0h --dry-run
+    chadmin object-storage collect-info --to-time 0h && \
+    chadmin object-storage clean --dry-run
     """
     Then we get response contains
     """

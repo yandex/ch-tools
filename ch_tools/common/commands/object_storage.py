@@ -159,7 +159,7 @@ def _list_local_blobs(
         blob_state_table,
         blob_state_table_zk_path_prefix,
         storage_policy,
-        recreate_table=False,
+        drop_existing_table=True,
     )
 
     remote_data_paths_table = _get_table_function(
@@ -181,8 +181,8 @@ def _list_local_blobs(
                         position(local_path, 'detached/') > 0, 'detached',
                         'active'
                     ) AS status,
-                    size,
-                    1
+                    size AS obj_size,
+                    1 AS ref_count
                     FROM {remote_data_paths_table}
                     WHERE disk_name = '{disk_conf.name}'
                     {settings}
@@ -227,14 +227,14 @@ def _collect_orphaned_objects(
         listing_table,
         listing_table_zk_path_prefix,
         storage_policy,
-        recreate_table=False,
+        drop_existing_table=True,
     )
     _create_object_listing_table(
         ctx,
         orphaned_objects_table,
         orphaned_objects_table_zk_path_prefix,
         storage_policy,
-        recreate_table=False,
+        drop_existing_table=True,
     )
 
     prefix = object_name_prefix or disk_conf.prefix
@@ -288,7 +288,7 @@ def _collect_space_usage(
         space_usage_table_name=space_usage_table_new,
         replica_zk_prefix=space_usage_table_zk_path_prefix,
         storage_policy=config["storage_policy"],
-        recreate_table=False,
+        drop_existing_table=True,
     )
     # This table should always exist and store data from the previous run
     _create_space_usage_table(
@@ -296,7 +296,7 @@ def _collect_space_usage(
         space_usage_table_name=space_usage_table,
         replica_zk_prefix=space_usage_table_zk_path_prefix,
         storage_policy=config["storage_policy"],
-        recreate_table=True,
+        drop_existing_table=False,
     )
 
     user_password = clickhouse_client(ctx).password or ""
@@ -543,7 +543,7 @@ def _clean_object_storage(
                 blob_state_table,
                 verify_paths_regex,
                 dry_run,
-        )
+            )
 
         deleted, total_size = 0, 0
 
@@ -640,9 +640,9 @@ def _create_object_listing_table(
     table_name: str,
     replica_zk_prefix: str,
     storage_policy: str,
-    recreate_table: bool,
+    drop_existing_table: bool,
 ) -> None:
-    if not recreate_table:
+    if drop_existing_table:
         _drop_table_on_shard(ctx, table_name)
 
     engine = (
@@ -666,9 +666,9 @@ def _create_local_object_listing_table(
     table_name: str,
     replica_zk_prefix: str,
     storage_policy: str,
-    recreate_table: bool,
+    drop_existing_table: bool,
 ) -> None:
-    if not recreate_table:
+    if drop_existing_table:
         _drop_table_on_shard(ctx, table_name)
 
     engine = (
@@ -698,9 +698,9 @@ def _create_space_usage_table(
     space_usage_table_name: str,
     replica_zk_prefix: str,
     storage_policy: str,
-    recreate_table: bool,
+    drop_existing_table: bool,
 ) -> None:
-    if not recreate_table:
+    if drop_existing_table:
         _drop_table_on_shard(ctx, space_usage_table_name)
 
     engine = (
