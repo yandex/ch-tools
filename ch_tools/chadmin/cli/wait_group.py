@@ -5,11 +5,13 @@ from typing import Any, Optional
 import requests
 from click import Context, FloatRange, group, option, pass_context
 from tenacity import (
+    RetryCallState,
     retry,
     retry_if_exception_type,
     retry_if_not_exception_message,
     stop_after_attempt,
     stop_after_delay,
+    wait_random_exponential,
 )
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -28,6 +30,7 @@ BASE_TIMEOUT = 600
 LOCAL_PART_LOAD_SPEED = 10  # in data parts per second
 S3_PART_LOAD_SPEED = 0.5  # in data parts per second
 CLICKHOUSE_TIMEOUT_EXCEEDED_MSG = "TIMEOUT_EXCEEDED"
+MAX_SYNC_REPLICA_BACKOFF = 5
 
 
 @group("wait", cls=Chadmin)
@@ -136,10 +139,20 @@ def wait_replication_sync_command(
         # Sync tables in cycle
         for replica in list_table_replicas(ctx):
             full_name = f"`{replica['database']}`.`{replica['table']}`"
+            time_left = max(deadline - time.time(), 1)
 
             query = f"SYSTEM SYNC REPLICA {full_name} LIGHTWEIGHT"
             if not lightweight:
                 query = f"SYSTEM SYNC REPLICA {full_name}"
+
+            # 'SYSTEM SYNC REPLICA' timeout is configured via the 'receive_timeout' setting.
+            settings = {"receive_timeout": time_left}
+
+            # Retry logic
+            def adjust_settings_after_attempt(_: RetryCallState) -> None:
+                settings["receive_timeout"] = max(  # pylint: disable=cell-var-from-loop
+                    deadline - time.time(), 1
+                )
 
             retry_decorator = retry(
                 retry=(
@@ -150,16 +163,21 @@ def wait_replication_sync_command(
                 ),
                 stop=(
                     stop_after_attempt(sync_query_max_retries)
-                    | stop_after_delay(deadline)
+                    | stop_after_delay(time_left)
                 ),
+                wait=wait_random_exponential(
+                    multiplier=0.5, max=MAX_SYNC_REPLICA_BACKOFF
+                ),
+                after=adjust_settings_after_attempt,
                 reraise=True,
             )
+
             retry_decorator(execute_query)(
                 ctx,
                 query,
                 format_=None,
                 timeout=replica_timeout.total_seconds(),
-                receive_timeout_deadline=deadline,
+                settings=settings,
             )
     except requests.exceptions.ReadTimeout:
         raise ConnectionError("Read timeout while running query.")
