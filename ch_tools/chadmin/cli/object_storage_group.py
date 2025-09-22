@@ -222,7 +222,7 @@ def clean_command(
 @object_storage_group.command("collect-info")
 @option(
     "-p",
-    "--prefix",  # TODO: maybe add this option to clean command
+    "--prefix",
     "--object_name_prefix",
     "object_name_prefix",
     default="",
@@ -242,7 +242,7 @@ def clean_command(
     ),
 )
 @option(
-    "-g",  # TODO: maybe add this option to clean command
+    "-g",
     "--guard-interval",
     "--to-time",
     "to_time",
