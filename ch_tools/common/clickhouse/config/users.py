@@ -1,6 +1,7 @@
+import os.path
 from typing import Any
 
-from .path import CLICKHOUSE_USERS_CONFIG_PATH
+from .path import CLICKHOUSE_USERS_XML_CONFIG_PATH, CLICKHOUSE_USERS_YAML_CONFIG_PATH
 from .utils import dump_config, load_config
 
 
@@ -20,6 +21,16 @@ class ClickhouseUsersConfig:
 
     @staticmethod
     def load() -> "ClickhouseUsersConfig":
-        return ClickhouseUsersConfig(
-            load_config(CLICKHOUSE_USERS_CONFIG_PATH, "users.d")
-        )
+        config_path = None
+        for path in (
+            CLICKHOUSE_USERS_XML_CONFIG_PATH,
+            CLICKHOUSE_USERS_YAML_CONFIG_PATH,
+        ):
+            if os.path.exists(path):
+                config_path = path
+                break
+
+        if not config_path:
+            raise RuntimeError("Users configuration file not found")
+
+        return ClickhouseUsersConfig(load_config(config_path, "users.d"))
