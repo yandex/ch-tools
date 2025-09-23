@@ -3,6 +3,7 @@ from copy import deepcopy
 from typing import Any, MutableMapping
 
 import xmltodict
+import yaml
 
 from ch_tools.common.utils import first_value
 
@@ -50,7 +51,9 @@ def dump_config(
 
 def _load_config(config_path: str) -> Any:
     with open(config_path, "r", encoding="utf-8") as file:
-        return xmltodict.parse(file.read(), disable_entities=False)
+        if config_path.endswith(".xml"):
+            return xmltodict.parse(file.read(), disable_entities=False)
+        return yaml.safe_load(file)
 
 
 def _merge_configs(main_config: Any, additional_config: Any) -> None:
