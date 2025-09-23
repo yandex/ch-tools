@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 import os
 from collections import OrderedDict
 from typing import Any
@@ -974,9 +975,17 @@ def check_uuid_equal(ctx: Context, database: str, table: str) -> None:
 @option("-d", "--database", required=True)
 @option("-a", "--all", "_all", is_flag=True, help="Check all tables in database.")
 @option("-t", "--table")
+@option(
+    "--keep-going",
+    is_flag=True,
+    default=False,
+    help="Keep going checking schemas despite on errors.",
+)
 @constraint(require_one, ["table", "_all"])
 @pass_context
-def check_schema_equal(ctx: Context, database: str, _all: bool, table: str) -> None:
+def check_schema_equal(
+    ctx: Context, database: str, _all: bool, table: str, keep_going: bool
+) -> None:
     tables = []
     if _all:
         tables = get_tables_names_from_system_tables(ctx, database)
@@ -989,6 +998,8 @@ def check_schema_equal(ctx: Context, database: str, _all: bool, table: str) -> N
         logging.info(f"Table {table_name} has schemas: {create_table_queries}")
 
         if len(create_table_queries) > 1:
-            raise RuntimeError(
-                f"Table {table} has different schema in cluster",
-            )
+            msg = f"Table {table} has different schema in cluster"
+            if keep_going:
+                logging.error(msg)
+            else:
+                raise RuntimeError(msg)
