@@ -49,9 +49,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response matches
     """
-    active: [1-9][0-9]*
-    unique_frozen: [1-9][0-9]*
-    unique_detached: [1-9][0-9]*
+    active: '?([1-9][0-9]*)'?
+    unique_frozen: '?([1-9][0-9]*)'?
+    unique_detached: '?([1-9][0-9]*)'?
     orphaned: 1
     """
 
@@ -405,8 +405,8 @@ Feature: chadmin object-storage commands
     """
     Then we get response matches
     """
-    - WouldDelete: [1-9][0-9]*
-      TotalSize: [1-9][0-9]*
+    - WouldDelete: '?([1-9][0-9]*)'?
+      TotalSize: '?([1-9][0-9]*)'?
     """
     When we execute command on clickhouse01
     """
