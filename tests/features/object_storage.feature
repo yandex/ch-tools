@@ -27,6 +27,34 @@ Feature: chadmin object-storage commands
   Scenario: Collect info
     When we execute query on clickhouse01
     """
+    ALTER TABLE test.table_s3_01 DETACH PARTITION '0';
+    """
+    And we put object in S3
+    """
+      bucket: cloud-storage-test
+      path: /data/cluster_id/shard_1/orpaned_object.tsv
+      data: '1'
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin object-storage collect-info --to-time 0h
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage space-usage
+    """
+    Then we get response matches
+    """
+    active: '?([1-9][0-9]*)'?
+    unique_frozen: '?(0)'?
+    unique_detached: '?([1-9][0-9]*)'?
+    orphaned: '?(1)'?
+    """
+
+  @require_version_24.3
+  Scenario: Collect info with frozen parts
+    When we execute query on clickhouse01
+    """
     ALTER TABLE test.table_s3_01 FREEZE
     """
     And we execute query on clickhouse01
