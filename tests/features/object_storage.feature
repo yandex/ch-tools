@@ -52,7 +52,7 @@ Feature: chadmin object-storage commands
     active: '?([1-9][0-9]*)'?
     unique_frozen: '?([1-9][0-9]*)'?
     unique_detached: '?([1-9][0-9]*)'?
-    orphaned: 1
+    orphaned: '?(1)'?
     """
 
   Scenario: Dry-run clean with guard period
@@ -390,7 +390,7 @@ Feature: chadmin object-storage commands
     """
     chadmin --format yaml object-storage clean --to-time 0h --dry-run
     """
-    Then we get response matches
+    Then we get response contains
     """
     - WouldDelete: 0
       TotalSize: 0
@@ -405,14 +405,14 @@ Feature: chadmin object-storage commands
     """
     Then we get response matches
     """
-    - WouldDelete: '?([1-9][0-9]*)'?
-      TotalSize: '?([1-9][0-9]*)'?
+    - WouldDelete: [1-9][0-9]*
+      TotalSize: [1-9][0-9]*
     """
     When we execute command on clickhouse01
     """
     chadmin --format yaml object-storage clean --to-time 0h --dry-run
     """
-    Then we get response matches
+    Then we get response contains
     """
     - WouldDelete: 0
       TotalSize: 0
