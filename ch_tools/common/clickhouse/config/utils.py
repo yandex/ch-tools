@@ -53,7 +53,7 @@ def _load_config(config_path: str) -> Any:
     with open(config_path, "r", encoding="utf-8") as file:
         if config_path.endswith(".xml"):
             return xmltodict.parse(file.read(), disable_entities=False)
-        return yaml.safe_load(file)
+        return {"clickhouse": yaml.safe_load(file)}
 
 
 def _merge_configs(main_config: Any, additional_config: Any) -> None:
