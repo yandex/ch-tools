@@ -307,55 +307,8 @@ def _collect_space_usage(
         drop_existing_table=False,
     )
 
-    user_password = clickhouse_client(ctx).password or ""
-    space_usage_query = Query(
-        f"""
-            WITH active AS
-                (SELECT sum(size / count) as size
-                    FROM (SELECT sum(obj_size) size, sum(ref_count) count
-                        FROM {blob_state_table}
-                        WHERE state = 'active'
-                        GROUP BY obj_path)
-                ),
-            unique_frozen AS
-                (SELECT sum(shadow.obj_size / shadow.ref_count) AS size
-                    FROM {blob_state_table} AS shadow
-                    LEFT ANTI JOIN
-                    (
-                        SELECT DISTINCT obj_path
-                        FROM {blob_state_table}
-                        WHERE state = 'active'
-                    ) AS has_other
-                        ON shadow.obj_path = has_other.obj_path
-                        WHERE
-                            shadow.state = 'shadow'
-                ),
-            unique_detached AS
-                (SELECT sum(detached.obj_size / detached.ref_count) AS size
-                    FROM {blob_state_table} AS detached
-                    LEFT ANTI JOIN
-                    (
-                        SELECT DISTINCT obj_path
-                        FROM {blob_state_table}
-                        WHERE state IN ('active', 'shadow')
-                    ) AS has_other
-                        ON detached.obj_path = has_other.obj_path
-                        WHERE
-                            detached.state = 'detached'
-                ),
-            orphaned AS
-                (SELECT sum(obj_size) AS size
-                    FROM {orphaned_objects_table}
-                )
-            INSERT INTO {space_usage_table_new}
-                SELECT
-                    (SELECT size FROM active),
-                    (SELECT size FROM unique_frozen),
-                    (SELECT size FROM unique_detached),
-                    (SELECT size FROM orphaned)
-
-        """,
-        sensitive_args={"user_password": user_password},
+    space_usage_query = _get_fill_space_usage_query(
+        ctx, blob_state_table, orphaned_objects_table, space_usage_table_new
     )
 
     # TODO: should probably use different setting for timeout
@@ -812,3 +765,103 @@ def _remove_backups_from_disk(
     backups_path = CHS3_BACKUPS_DIRECTORY.format(disk=disk)
     for backup in backups:
         remove_from_disk(os.path.join(backups_path, backup))
+
+
+def _get_fill_space_usage_query(
+    ctx: Context,
+    blob_state_table: str,
+    orphaned_objects_table: str,
+    space_usage_table_new: str,
+) -> Query:
+    """
+    CTE with INSERT supported since 25.3.
+    """
+    user_password = clickhouse_client(ctx).password or ""
+
+    if match_ch_version(ctx, "26.3"):
+        query = f"""
+            WITH active AS
+                (SELECT sum(size / count) as size
+                    FROM (SELECT sum(obj_size) size, sum(ref_count) count
+                        FROM {blob_state_table}
+                        WHERE state = 'active'
+                        GROUP BY obj_path)
+                ),
+            unique_frozen AS
+                (SELECT sum(shadow.obj_size / shadow.ref_count) AS size
+                    FROM {blob_state_table} AS shadow
+                    LEFT ANTI JOIN
+                    (
+                        SELECT DISTINCT obj_path
+                        FROM {blob_state_table}
+                        WHERE state = 'active'
+                    ) AS has_other
+                        ON shadow.obj_path = has_other.obj_path
+                        WHERE
+                            shadow.state = 'shadow'
+                ),
+            unique_detached AS
+                (SELECT sum(detached.obj_size / detached.ref_count) AS size
+                    FROM {blob_state_table} AS detached
+                    LEFT ANTI JOIN
+                    (
+                        SELECT DISTINCT obj_path
+                        FROM {blob_state_table}
+                        WHERE state IN ('active', 'shadow')
+                    ) AS has_other
+                        ON detached.obj_path = has_other.obj_path
+                        WHERE
+                            detached.state = 'detached'
+                ),
+            orphaned AS
+                (SELECT sum(obj_size) AS size
+                    FROM {orphaned_objects_table}
+                )
+            INSERT INTO {space_usage_table_new}
+                SELECT
+                    (SELECT size FROM active),
+                    (SELECT size FROM unique_frozen),
+                    (SELECT size FROM unique_detached),
+                    (SELECT size FROM orphaned)
+        """
+    else:
+        query = f"""
+            INSERT INTO {space_usage_table_new}
+                SELECT
+                    (SELECT sum(size / count)
+                        FROM (SELECT sum(obj_size) size, sum(ref_count) count
+                            FROM {blob_state_table}
+                            WHERE state = 'active'
+                            GROUP BY obj_path)
+                    ) AS active,
+                    (SELECT sum(shadow.obj_size / shadow.ref_count)
+                        FROM {blob_state_table} AS shadow
+                        LEFT ANTI JOIN
+                        (
+                            SELECT DISTINCT obj_path
+                            FROM {blob_state_table}
+                            WHERE state = 'active'
+                        ) AS has_other
+                            ON shadow.obj_path = has_other.obj_path
+                            WHERE
+                                shadow.state = 'shadow'
+                    ) AS unique_frozen,
+                    (SELECT sum(detached.obj_size / detached.ref_count)
+                        FROM {blob_state_table} AS detached
+                        LEFT ANTI JOIN
+                        (
+                            SELECT DISTINCT obj_path
+                            FROM {blob_state_table}
+                            WHERE state IN ('active', 'shadow')
+                        ) AS has_other
+                            ON detached.obj_path = has_other.obj_path
+                            WHERE
+                                detached.state = 'detached'
+                    ) AS unique_detached,
+                    (SELECT sum(obj_size)FROM {orphaned_objects_table}) AS orphaned
+        """
+
+    return Query(
+        query,
+        sensitive_args={"user_password": user_password},
+    )
