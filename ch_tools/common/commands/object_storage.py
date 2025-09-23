@@ -174,28 +174,8 @@ def _list_local_blobs(
         ctx, REMOTE_DATA_PATHS_TABLE, Scope.SHARD, cluster_name=None
     )
 
-    settings = ""
-    if match_ch_version(ctx, min_version="24.3"):
-        settings = "SETTINGS traverse_shadow_remote_data_paths=1"
-
-    user_password = clickhouse_client(ctx).password or ""
-    blob_state_query = Query(
-        f"""
-            INSERT INTO {blob_state_table}
-                SELECT
-                    remote_path,
-                    multiIf(
-                        position(local_path, 'shadow/') > 0, 'shadow',
-                        position(local_path, 'detached/') > 0, 'detached',
-                        'active'
-                    ) AS status,
-                    size AS obj_size,
-                    1 AS ref_count
-                    FROM {remote_data_paths_table}
-                    WHERE disk_name = '{disk_conf.name}'
-                    {settings}
-        """,
-        sensitive_args={"user_password": user_password},
+    blob_state_query = _get_fill_blob_state_query(
+        ctx, blob_state_table, remote_data_paths_table, disk_conf.name
     )
 
     timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
@@ -765,6 +745,44 @@ def _remove_backups_from_disk(
     backups_path = CHS3_BACKUPS_DIRECTORY.format(disk=disk)
     for backup in backups:
         remove_from_disk(os.path.join(backups_path, backup))
+
+
+def _get_fill_blob_state_query(
+    ctx: Context,
+    blob_state_table: str,
+    remote_data_paths_table: str,
+    disk_name: str,
+) -> Query:
+    """
+    Column 'size' in remote_data_paths is supported since 23.3.
+    """
+    settings = ""
+    if match_ch_version(ctx, "24.3"):
+        settings = "SETTINGS traverse_shadow_remote_data_paths=1"
+
+    size = "size"
+    if not match_ch_version(ctx, "23.3"):
+        size = "0"
+
+    user_password = clickhouse_client(ctx).password or ""
+
+    query = f"""
+        INSERT INTO {blob_state_table}
+            SELECT
+                remote_path,
+                multiIf(
+                    position(local_path, 'shadow/') > 0, 'shadow',
+                    position(local_path, 'detached/') > 0, 'detached',
+                    'active'
+                ) AS status,
+                {size} AS obj_size,
+                1 AS ref_count
+                FROM {remote_data_paths_table}
+                WHERE disk_name = '{disk_name}'
+                {settings}
+    """
+
+    return Query(query, sensitive_args={"user_password": user_password})
 
 
 def _get_fill_space_usage_query(

@@ -24,6 +24,7 @@ Feature: chadmin object-storage commands
     """
     Then S3 contains greater than 0 objects
 
+  @require_version_23.3
   Scenario: Collect info
     When we execute query on clickhouse01
     """
