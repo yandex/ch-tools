@@ -3,6 +3,7 @@ from typing import Any, Optional
 
 from click import (
     BadParameter,
+    Choice,
     Context,
     FloatRange,
     IntRange,
@@ -16,6 +17,7 @@ from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.object_storage.orphaned_objects_state import (
     OrphanedObjectsState,
 )
+from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
     create_zk_nodes,
@@ -27,6 +29,7 @@ from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.common.commands.object_storage import (
     DEFAULT_GUARD_INTERVAL,
+    Scope,
     clean,
     collect_object_storage_info,
     get_object_storage_space_usage,
@@ -267,6 +270,9 @@ def collect_info_command(
             param_hint="--from-time",
         )
 
+    if not match_ch_version(ctx, "23.3"):
+        raise RuntimeError("This command requires version 23.3 of ClickHouse")
+
     collect_object_storage_info(
         ctx,
         object_name_prefix=object_name_prefix,
@@ -282,15 +288,23 @@ def collect_info_command(
     default=DEFAULT_CLUSTER_NAME,
     help=("Cluster to analyze. Default value is macro."),
 )
+@option(
+    "--scope",
+    "scope",
+    default="cluster",
+    type=Choice(["shard", "cluster"]),
+    help="Get info for shard or cluster.",
+)
 @pass_context
 def space_usage_command(
     ctx: Context,
     cluster_name: str,
+    scope: str,
 ) -> None:
     """
     Return object storage memory usage info from cluster.
     """
-    result = get_object_storage_space_usage(ctx, cluster_name)
+    result = get_object_storage_space_usage(ctx, cluster_name, Scope(scope))
 
     print_response(ctx, result)
 
