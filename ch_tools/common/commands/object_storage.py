@@ -121,13 +121,16 @@ def collect_object_storage_info(
 def get_object_storage_space_usage(
     ctx: Context,
     cluster_name: str,
+    scope: Scope,
 ) -> dict:
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
     config = ctx.obj["config"]["object_storage"]["space_usage"]
     space_usage_table = f"{config['space_usage_table_database']}.{config['space_usage_table_prefix']}{disk_conf.name}"
-    space_usage_table_on_cluster = _get_table_function(
-        ctx, space_usage_table, Scope.CLUSTER, cluster_name
-    )
+
+    # Table is replicated
+    if scope == Scope.SHARD:
+        scope = Scope.HOST
+    space_usage_table = _get_table_function(ctx, space_usage_table, scope, cluster_name)
 
     parts_usage_query = Query(
         f"""
@@ -136,7 +139,7 @@ def get_object_storage_space_usage(
                 sum(unique_frozen) AS unique_frozen,
                 sum(unique_detached) AS unique_detached,
                 sum(orphaned) AS orphaned
-            FROM {space_usage_table_on_cluster}
+            FROM {space_usage_table}
         """
     )
 
@@ -795,7 +798,7 @@ def _get_fill_space_usage_query(
     """
     user_password = clickhouse_client(ctx).password or ""
 
-    if match_ch_version(ctx, "26.3"):
+    if match_ch_version(ctx, "25.3"):
         query = f"""
             WITH active AS
                 (SELECT sum(size / count) as size
