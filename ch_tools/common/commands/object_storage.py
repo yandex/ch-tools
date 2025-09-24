@@ -129,7 +129,6 @@ def get_object_storage_space_usage(
         ctx, space_usage_table, Scope.CLUSTER, cluster_name
     )
 
-    # TODO: skip_unavailable_shards ?
     parts_usage_query = Query(
         f"""
             SELECT
