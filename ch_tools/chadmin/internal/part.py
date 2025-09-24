@@ -6,7 +6,9 @@ from click import Context
 
 from ch_tools.chadmin.internal.clickhouse_disks import remove_from_ch_disk
 from ch_tools.chadmin.internal.system import get_version
-from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.chadmin.internal.utils import execute_query, get_remote_table_for_hosts
+from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
+from ch_tools.common.clickhouse.client.query import Query
 
 
 def list_parts(
@@ -28,6 +30,7 @@ def list_parts(
     order_by: Optional[str] = None,
     limit: Optional[int] = None,
     use_part_list_from_json: Optional[str] = None,
+    remote_replica: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     List data parts.
@@ -41,7 +44,15 @@ def list_parts(
         None: "database, table, name",
     }[order_by]
 
-    query = """
+    parts_table = "system.parts"
+    sensitive_args = {}
+    if remote_replica:
+        parts_table = get_remote_table_for_hosts(ctx, parts_table, [remote_replica])
+        ch_client = clickhouse_client(ctx)
+        sensitive_args = {"user_password": ch_client.password or ""}
+
+    query = Query(
+        """
         SELECT
             database,
             table,
@@ -73,7 +84,7 @@ def list_parts(
             rows_where_ttl_info.min,
             rows_where_ttl_info.max,
             projections
-        FROM system.parts
+        FROM {{ parts_table }}
         {% if database -%}
         WHERE database {{ format_str_match(database) }}
         {% else -%}
@@ -119,12 +130,15 @@ def list_parts(
         {% if limit -%}
         LIMIT {{ limit }}
         {% endif -%}
-        """
+        """,
+        sensitive_args=sensitive_args,
+    )
     return execute_query(
         ctx,
         query,
         database=database,
         table=table,
+        parts_table=parts_table,
         partition_id=partition_id,
         min_partition_id=min_partition_id,
         max_partition_id=max_partition_id,
