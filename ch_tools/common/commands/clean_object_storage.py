@@ -1,5 +1,6 @@
 import os
 import re
+import subprocess
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
@@ -13,15 +14,17 @@ from ch_tools.chadmin.internal.object_storage.obj_list_item import ObjListItem
 from ch_tools.chadmin.internal.object_storage.s3_iterator import (
     s3_object_storage_iterator,
 )
-from ch_tools.chadmin.internal.system import match_ch_version
+from ch_tools.chadmin.internal.system import match_ch_backup_version, match_ch_version
 from ch_tools.chadmin.internal.utils import (
     chunked,
     execute_query,
     execute_query_on_shard,
     get_remote_table_for_hosts,
+    remove_from_disk,
 )
 from ch_tools.chadmin.internal.zookeeper import has_zk
 from ch_tools.common import logging
+from ch_tools.common.backup import CHS3_BACKUPS_DIRECTORY, get_missing_chs3_backups
 from ch_tools.common.clickhouse.client.clickhouse_client import (
     ClickhouseClient,
     clickhouse_client,
@@ -79,6 +82,7 @@ def clean(
     verify_paths_regex: Optional[str] = None,
     max_size_to_delete_bytes: int = 0,
     max_size_to_delete_fraction: float = 1.0,
+    ignore_missing_cloud_storage_backups: bool = False,
 ) -> Tuple[int, int]:
     """
     Clean orphaned S3 objects.
@@ -132,6 +136,7 @@ def clean(
             verify_paths_regex,
             max_size_to_delete_bytes,
             max_size_to_delete_fraction,
+            ignore_missing_cloud_storage_backups,
         )
     finally:
         if not keep_paths:
@@ -170,6 +175,7 @@ def _sanity_check_before_cleanup(
     remote_data_paths_table: str,
     verify_paths_regex: Optional[str],
     clean_scope: CleanScope,
+    dry_run: bool,
 ) -> None:
 
     size_error_rate_threshold_fraction = ctx.obj["config"]["object_storage"]["clean"][
@@ -187,6 +193,12 @@ def _sanity_check_before_cleanup(
         if match_ch_version(ctx, min_version="24.3")
         else {}
     )
+
+    def raise_or_warn(dry_run: bool, msg: str) -> None:
+        if not dry_run:
+            raise RuntimeError(msg)
+
+        logging.warning(f"Warning: {msg}")
 
     def perform_check_paths() -> None:
         ### Compare path from system.remote_data_path and from list to delete. They must match the regex.
@@ -214,35 +226,43 @@ def _sanity_check_before_cleanup(
         )[0]
 
         if not re.match(paths_regex, path_form_ch):
-            raise RuntimeError(
+            raise_or_warn(
+                dry_run,
                 "Sanity check not passed, because remote_path({}) doesn't matches the regex({}).".format(
                     path_form_ch, paths_regex
-                )
+                ),
             )
 
         for orphaned_object in orphaned_objects_iterator():
             if not re.match(paths_regex, orphaned_object.path):
-                raise RuntimeError(
+                raise_or_warn(
+                    dry_run,
                     "Sanity check not passed, because orphaned object({}) doesn't matches the regex({}).".format(
                         orphaned_object.path, paths_regex
-                    )
+                    ),
                 )
 
     def perform_check_size() -> None:
+
+        if listing_size_in_bucket == 0:
+            return
+
         ### Total size of objects after cleanup must be very close to sum(bytes) FROM system.remote_data_paths
         size_to_delete = 0
         for orphaned_object in orphaned_objects_iterator():
             size_to_delete += orphaned_object.size
+
         if (
             listing_size_in_bucket * size_error_rate_threshold_fraction
             <= size_to_delete
         ):
-            raise RuntimeError(
+            raise_or_warn(
+                dry_run,
                 "Potentially dangerous operation: Going to remove more than {}% of bucket content. To remove {}; listing size {}".format(
                     int(size_error_rate_threshold_fraction * 100),
                     format_size(listing_size_in_bucket),
                     format_size(size_to_delete),
-                )
+                ),
             )
 
     perform_check_paths()
@@ -266,6 +286,7 @@ def _clean_object_storage(
     verify_paths_regex: Optional[str] = None,
     max_size_to_delete_bytes: int = 0,
     max_size_to_delete_fraction: float = 1.0,
+    ignore_missing_cloud_storage_backups: bool = False,
 ) -> Tuple[int, int]:
     """
     Delete orphaned objects from object storage.
@@ -313,71 +334,88 @@ def _clean_object_storage(
     )
     logging.info("Antijoin query: {}", str(antijoin_query))
 
+    downloaded_backups = []
+    # Setting traverse_shadow_remote_data_paths is available since ClickHouse 24.3
+    # Download metadata command is available since ch-backup 2.641.197281242
+    if (
+        not ignore_missing_cloud_storage_backups
+        and match_ch_backup_version("2.641.197281242")
+        and match_ch_version(ctx, min_version="24.3")
+    ):
+        logging.info(
+            "Will download cloud storage metadata from backups to shadow directory if they are missing"
+        )
+        downloaded_backups = _download_missing_cloud_storage_backups(disk_conf.name)
+
     if dry_run:
         logging.info("Counting orphaned objects...")
     else:
         logging.info("Deleting orphaned objects...")
 
-    timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
-    query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
-    execute_query(
-        ctx,
-        antijoin_query,
-        timeout=timeout,
-        settings=query_settings,
-    )
-    orphaned_objects_iterator = _object_list_generator(
-        ch_client, orphaned_objects_table, query_settings, timeout
-    )
-    listing_size_in_bucket = int(
-        ch_client.query_json_data_first_row(
-            query=f"SELECT sum(obj_size) FROM {listing_table}",
-            compact=True,
-        )[0]
-    )
-
-    if ctx.obj["config"]["object_storage"]["clean"]["verify"]:
-        _sanity_check_before_cleanup(
+    try:
+        timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
+        query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
+        execute_query(
             ctx,
-            orphaned_objects_iterator,
-            ch_client,
-            listing_size_in_bucket,
-            remote_data_paths_table,
-            verify_paths_regex,
-            clean_scope,
+            antijoin_query,
+            timeout=timeout,
+            settings=query_settings,
+        )
+        orphaned_objects_iterator = _object_list_generator(
+            ch_client, orphaned_objects_table, query_settings, timeout
+        )
+        listing_size_in_bucket = int(
+            ch_client.query_json_data_first_row(
+                query=f"SELECT sum(obj_size) FROM {listing_table}",
+                compact=True,
+            )[0]
         )
 
-    deleted, total_size = 0, 0
+        if ctx.obj["config"]["object_storage"]["clean"]["verify"]:
+            _sanity_check_before_cleanup(
+                ctx,
+                orphaned_objects_iterator,
+                ch_client,
+                listing_size_in_bucket,
+                remote_data_paths_table,
+                verify_paths_regex,
+                clean_scope,
+                dry_run,
+            )
 
-    max_size_to_delete = listing_size_in_bucket * max_size_to_delete_fraction
-    if max_size_to_delete_bytes:
-        max_size_to_delete = min(max_size_to_delete, max_size_to_delete_bytes)
+        deleted, total_size = 0, 0
 
-    for objects in chunked(orphaned_objects_iterator(), KEYS_BATCH_SIZE):
-        batch_size = sum(obj.size for obj in objects)
-        is_last_batch = False
+        max_size_to_delete = listing_size_in_bucket * max_size_to_delete_fraction
+        if max_size_to_delete_bytes:
+            max_size_to_delete = min(max_size_to_delete, max_size_to_delete_bytes)
 
-        if total_size + batch_size > max_size_to_delete:
-            # To fit into the size restriction: sort all objects by size
-            # And remove elements from the end;
-            is_last_batch = True
-            objects = sorted(objects, key=lambda obj: obj.size)
-            while total_size + batch_size > max_size_to_delete:
-                batch_size -= objects[-1].size
-                objects.pop()
+        for objects in chunked(orphaned_objects_iterator(), KEYS_BATCH_SIZE):
+            batch_size = sum(obj.size for obj in objects)
+            is_last_batch = False
 
-        chunk_deleted, chunk_size = cleanup_s3_object_storage(
-            disk_conf, iter(objects), dry_run
+            if total_size + batch_size > max_size_to_delete:
+                # To fit into the size restriction: sort all objects by size
+                # And remove elements from the end;
+                is_last_batch = True
+                objects = sorted(objects, key=lambda obj: obj.size)
+                while total_size + batch_size > max_size_to_delete:
+                    batch_size -= objects[-1].size
+                    objects.pop()
+
+            chunk_deleted, chunk_size = cleanup_s3_object_storage(
+                disk_conf, iter(objects), dry_run
+            )
+            deleted += chunk_deleted
+            total_size += chunk_size
+
+            if is_last_batch:
+                break
+
+        logging.info(
+            f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
         )
-        deleted += chunk_deleted
-        total_size += chunk_size
-
-        if is_last_batch:
-            break
-
-    logging.info(
-        f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}] with prefix {prefix}",
-    )
+    finally:
+        _remove_backups_from_disk(disk_conf.name, downloaded_backups)
 
     return deleted, total_size
 
@@ -466,3 +504,44 @@ def _get_default_object_name_prefix(
         return cluster_path + ("/" if cluster_path else "")
 
     return disk_conf.prefix
+
+
+def _download_missing_cloud_storage_backups(
+    disk: str,
+) -> list[str]:
+    """
+    Downloads created cloud storage backups if they are missing in shadow directory.
+    """
+    missing_backups = get_missing_chs3_backups(disk)
+
+    for backup in missing_backups:
+        logging.info(f"Downloading cloud storage metadata from '{backup}'")
+
+        cmd = ["ch-backup", "get-cloud-storage-metadata", "--disk", disk, backup]
+        proc = subprocess.run(
+            cmd,
+            shell=False,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        if proc.returncode:
+            _remove_backups_from_disk(disk, missing_backups)
+            raise RuntimeError(
+                f"Downloading cloud storage metadata command has failed: retcode {proc.returncode}, stderr: {proc.stderr.decode()}"
+            )
+
+    return missing_backups
+
+
+def _remove_backups_from_disk(
+    disk: str,
+    backups: list[str],
+) -> None:
+    """
+    Removes backups from disk. Should be used to clean missing cloud storage backups after deleting orphaned objects.
+    """
+    backups_path = CHS3_BACKUPS_DIRECTORY.format(disk=disk)
+    for backup in backups:
+        remove_from_disk(os.path.join(backups_path, backup))

@@ -1,5 +1,6 @@
 import operator
 import re
+import subprocess
 
 from click import Context
 from packaging.version import parse as parse_version
@@ -8,7 +9,7 @@ from ch_tools.chadmin.internal.utils import clickhouse_client
 
 
 def validate_version(version: str) -> None:
-    pattern = r"^\d+\.\d+\.\d+\.\d+(.+)?$"
+    pattern = r"^\d+\.\d+\.\d+(?:\.\d+)?(.*)?$"
 
     assert re.match(pattern, version), f"version={version} has broken format"
 
@@ -37,6 +38,27 @@ def match_ch_version(ctx: Context, min_version: str) -> bool:
     Returns True if ClickHouse version >= min_version.
     """
     return match_str_ch_version(get_version(ctx), min_version)
+
+
+def match_ch_backup_version(min_version: str) -> bool:
+    """
+    Returns True if ClickHouse version >= min_version.
+    """
+    cmd = ["ch-backup", "version"]
+    proc = subprocess.run(
+        cmd,
+        shell=False,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    if proc.returncode:
+        raise RuntimeError(
+            f"Failed to get ch-backup version: retcode {proc.returncode}, stderr: {proc.stderr.decode()}"
+        )
+
+    return match_str_ch_version(proc.stdout.decode(), min_version)
 
 
 def match_str_ch_version(version: str, min_version: str) -> bool:

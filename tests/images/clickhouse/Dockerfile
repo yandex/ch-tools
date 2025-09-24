@@ -12,6 +12,8 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
         ca-certificates \
         locales \
         supervisor \
+        git \
+        sudo \
         tzdata && \
     echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen && \
     locale-gen
@@ -77,6 +79,13 @@ RUN rm -rf /etc/supervisor && \
 
 COPY dist/*.whl /
 RUN pip3 install *.whl
+
+# Install ch-backup
+# version.txt file is required to install ch-backup from pip
+ENV CH_BACKUP_LOCAL_VERSION=2.700.111111111
+RUN git clone https://github.com/yandex/ch-backup && \
+    echo ${CH_BACKUP_LOCAL_VERSION} | tee ch-backup/ch_backup/version.txt && \
+    pip install ./ch-backup
 
 EXPOSE 8123 8443 9000 9440
 

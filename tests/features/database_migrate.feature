@@ -1889,3 +1889,86 @@ Feature: chadmin database migrate command
     """
     (42),(43)
     """
+
+  @require_version_24.8
+  Scenario: Double migration
+    Given we have executed queries on clickhouse01
+    """
+    CREATE DATABASE non_repl_db ON CLUSTER '{cluster}';
+    CREATE TABLE non_repl_db.test_table1
+    ON CLUSTER '{cluster}'
+    (
+        `a` Int
+    )
+    ENGINE = ReplicatedMergeTree('/clickhouse/test_table1/{shard}', '{replica}')
+    ORDER BY a;
+    INSERT INTO non_repl_db.test_table1 VALUES (42);
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db -e Replicated
+    """
+    Then it completes successfully
+    When we execute command on clickhouse02
+    """
+    chadmin database migrate -d non_repl_db -e Replicated
+    """
+    Then it completes successfully
+
+    When we execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db -e Atomic
+    """
+    Then it completes successfully
+    When we execute command on clickhouse02
+    """
+    chadmin database migrate -d non_repl_db -e Atomic
+    """
+    Then it completes successfully
+
+    When we try to execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db -e Replicated
+    """
+    Then it fails with response contains
+    """
+    ('/clickhouse/non_repl_db/log/query-0000000003', RolledBackError())
+    ('/clickhouse/non_repl_db/log/query-0000000003/committed', RolledBackError())
+    ('/clickhouse/non_repl_db/log/query-0000000003/active', RolledBackError())
+    ('/clickhouse/non_repl_db/log/query-0000000003/finished', RolledBackError())
+    ('/clickhouse/non_repl_db/log/query-0000000003/synced', RolledBackError())
+    ('/clickhouse/non_repl_db/log/query-0000000001/finished/shard1|clickhouse01.ch_tools_test', NodeExistsError())
+    ('/clickhouse/non_repl_db/replicas/shard1|clickhouse01.ch_tools_test', RuntimeInconsistency())
+    ('/clickhouse/non_repl_db/replicas/shard1|clickhouse01.ch_tools_test/active', RuntimeInconsistency())
+    ('/clickhouse/non_repl_db/replicas/shard1|clickhouse01.ch_tools_test/digest', RuntimeInconsistency())
+    ('/clickhouse/non_repl_db/replicas/shard1|clickhouse01.ch_tools_test/log_ptr', RuntimeInconsistency())
+    ('/clickhouse/non_repl_db/replicas/shard1|clickhouse01.ch_tools_test/max_log_ptr_at_creation', RuntimeInconsistency())
+    """
+
+  @require_version_24.8
+  Scenario: Prohibited migration
+    Given we have executed queries on clickhouse01
+    """
+    CREATE DATABASE non_repl_db ON CLUSTER '{cluster}';
+    """
+    When we try to execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db -e Atomic
+    """
+    Then it fails with response contains
+    """
+    Database non_repl_db has engine Atomic. Migration to Atomic from Replicated only is supported.
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db -e Replicated
+    """
+    Then it completes successfully
+    When we try to execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db -e Replicated
+    """
+    Then it fails with response contains
+    """
+    Database non_repl_db has engine Replicated. Migration to Replicated from Atomic only is supported.
+    """

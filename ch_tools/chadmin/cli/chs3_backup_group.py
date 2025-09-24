@@ -7,7 +7,7 @@ from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.backup import unfreeze_backup
 from ch_tools.common import logging
 from ch_tools.common.backup import (
-    CHS3_BACKUPS_DIRECTORY,
+    DEFAULT_CHS3_BACKUPS_DIRECTORY,
     get_chs3_backups,
     get_orphaned_chs3_backups,
 )
@@ -87,7 +87,9 @@ def delete_chs3_backups(
 
 
 def clear_empty_backup(orphaned_chs3_backup: str) -> None:
-    backup_directory = os.path.join(CHS3_BACKUPS_DIRECTORY, orphaned_chs3_backup)
+    backup_directory = os.path.join(
+        DEFAULT_CHS3_BACKUPS_DIRECTORY, orphaned_chs3_backup
+    )
     try:
         backup_contents = os.listdir(backup_directory)
         clear_empty_directories_recursively(backup_directory)
