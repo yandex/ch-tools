@@ -339,6 +339,7 @@ def _sanity_check_before_cleanup(
     blob_state_table: str,
     verify_paths_regex: Optional[str],
     dry_run: bool,
+    max_size_to_delete: float,
 ) -> None:
 
     size_error_rate_threshold_fraction = ctx.obj["config"]["object_storage"]["clean"][
@@ -407,16 +408,16 @@ def _sanity_check_before_cleanup(
         for orphaned_object in orphaned_objects_iterator():
             size_to_delete += orphaned_object.size
 
-        if (
-            listing_size_in_bucket * size_error_rate_threshold_fraction
-            <= size_to_delete
+        if listing_size_in_bucket * size_error_rate_threshold_fraction <= min(
+            size_to_delete, max_size_to_delete
         ):
             raise_or_warn(
                 dry_run,
-                "Potentially dangerous operation: Going to remove more than {}% of bucket content. To remove {}; listing size {}".format(
+                "Potentially dangerous operation: Going to remove more than {}% of bucket content. To remove {} with max size limit: {}; listing size {}".format(
                     int(size_error_rate_threshold_fraction * 100),
-                    format_size(listing_size_in_bucket),
                     format_size(size_to_delete),
+                    max_size_to_delete,
+                    format_size(listing_size_in_bucket),
                 ),
             )
 
@@ -486,6 +487,10 @@ def _clean_object_storage(
         config = ctx.obj["config"]["object_storage"]["space_usage"]
         blob_state_table = f"{config['space_usage_table_database']}.{config['blob_state_table_prefix']}{disk_conf.name}"
 
+        max_size_to_delete = listing_size_in_bucket * max_size_to_delete_fraction
+        if max_size_to_delete_bytes:
+            max_size_to_delete = min(max_size_to_delete, max_size_to_delete_bytes)
+
         if ctx.obj["config"]["object_storage"]["clean"]["verify"]:
             _sanity_check_before_cleanup(
                 ctx,
@@ -495,13 +500,10 @@ def _clean_object_storage(
                 blob_state_table,
                 verify_paths_regex,
                 dry_run,
+                max_size_to_delete,
             )
 
         deleted, total_size = 0, 0
-
-        max_size_to_delete = listing_size_in_bucket * max_size_to_delete_fraction
-        if max_size_to_delete_bytes:
-            max_size_to_delete = min(max_size_to_delete, max_size_to_delete_bytes)
 
         for objects in chunked(orphaned_objects_iterator(), KEYS_BATCH_SIZE):
             batch_size = sum(obj.size for obj in objects)
