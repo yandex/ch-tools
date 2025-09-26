@@ -377,7 +377,7 @@ Feature: chadmin object-storage commands
     """
       bucket: cloud-storage-test
       path: /data/cluster_id/shard_1/orpaned_object-{}
-      data: '01234566789'
+      data: '01234567890'
     """
     When we try to execute command on clickhouse01
     """
@@ -395,6 +395,24 @@ Feature: chadmin object-storage commands
     Then it fails with response contains
     """
     Potentially dangerous operation: Going to remove more than
+    """
+    When we try to execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --max-size-to-delete-bytes 110
+    """
+    Then we get response contains
+    """
+    - Deleted: 10
+      TotalSize: 110
+    """
+    When we try to execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --max-size-to-delete-fraction 0
+    """
+    Then we get response contains
+    """
+    - Deleted: 0
+      TotalSize: 0
     """
 
   @require_version_24.3
