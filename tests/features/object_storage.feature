@@ -377,7 +377,7 @@ Feature: chadmin object-storage commands
     """
       bucket: cloud-storage-test
       path: /data/cluster_id/shard_1/orpaned_object-{}
-      data: '01234566789'
+      data: '01234567890'
     """
     When we try to execute command on clickhouse01
     """
