@@ -415,8 +415,8 @@ def _sanity_check_before_cleanup(
                 dry_run,
                 "Potentially dangerous operation: Going to remove more than {}% of bucket content. To remove {}; listing size {}".format(
                     int(size_error_rate_threshold_fraction * 100),
-                    format_size(listing_size_in_bucket),
                     format_size(size_to_delete),
+                    format_size(listing_size_in_bucket),
                 ),
             )
 
