@@ -9,7 +9,10 @@ from click import Context
 from humanfriendly import format_size
 
 from ch_tools.chadmin.internal.object_storage import cleanup_s3_object_storage
-from ch_tools.chadmin.internal.object_storage.obj_list_item import ObjListItem
+from ch_tools.chadmin.internal.object_storage.obj_list_item import (
+    DATETIME_FORMAT,
+    ObjListItem,
+)
 from ch_tools.chadmin.internal.object_storage.s3_iterator import (
     s3_object_storage_iterator,
 )
@@ -241,7 +244,7 @@ def _collect_orphaned_objects(
     antijoin_query = Query(
         f"""
         INSERT INTO {orphaned_objects_table}
-            SELECT obj_path, obj_size FROM {listing_table} AS object_storage
+            SELECT last_modified, obj_path, obj_size FROM {listing_table} AS object_storage
             LEFT ANTI JOIN {blob_state_table} AS object_table
             ON object_table.obj_path = object_storage.obj_path
         """,
@@ -311,19 +314,44 @@ def _collect_space_usage(
 
 
 def _object_list_generator(
-    ch_client: ClickhouseClient,
+    ctx: Context,
     table_name: str,
+    from_time: Optional[timedelta],
+    to_time: Optional[timedelta],
     query_settings: Dict[str, Any],
     timeout: Optional[int] = None,
 ) -> Callable:
+    now = datetime.now(timezone.utc)
+    logging.warning(from_time)
+    from_time_cond = (
+        (now - from_time).strftime(DATETIME_FORMAT) if from_time is not None else None
+    )
+    to_time_cond = (
+        (now - to_time).strftime(DATETIME_FORMAT) if to_time is not None else None
+    )
+
+    query = """
+        SELECT last_modified, obj_path, obj_size FROM {{ table_name }}
+        WHERE 1
+        {% if from_time_cond %}
+            AND last_modified >= toDateTime('{{ from_time_cond }}')
+        {% endif %}
+        {% if to_time_cond %}
+            AND last_modified <= toDateTime('{{ to_time_cond }}')
+        {% endif %}
+        """
 
     def obj_list_iterator() -> Iterator[ObjListItem]:
-        with ch_client.query(
-            f"SELECT obj_path, obj_size FROM {table_name}",
+        with execute_query(
+            ctx,
+            query,
             format_="TabSeparated",
             timeout=timeout,
             settings=query_settings,
             stream=True,
+            table_name=table_name,
+            from_time_cond=from_time_cond,
+            to_time_cond=to_time_cond,
         ) as resp:
             for line in resp.iter_lines():
                 yield ObjListItem.from_tab_separated(line.decode().strip())
@@ -474,7 +502,12 @@ def _clean_object_storage(
         timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
         query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
         orphaned_objects_iterator = _object_list_generator(
-            ch_client, orphaned_objects_table, query_settings, timeout
+            ctx,
+            orphaned_objects_table,
+            from_time=from_time if use_saved_list else None,
+            to_time=to_time if use_saved_list else None,
+            query_settings=query_settings,
+            timeout=timeout,
         )
         listing_size_in_bucket = int(
             ch_client.query_json_data_first_row(
@@ -556,7 +589,7 @@ def _traverse_object_storage(
         if from_time is not None and obj.last_modified < now - from_time:
             continue
 
-        obj_paths_batch.append(ObjListItem(obj.key, obj.size))
+        obj_paths_batch.append(ObjListItem(obj.last_modified, obj.key, obj.size))
         counter += 1
         if len(obj_paths_batch) >= INSERT_BATCH_SIZE:
             _insert_listing_batch(ctx, obj_paths_batch, listing_table)
@@ -575,10 +608,13 @@ def _insert_listing_batch(
     """
     Insert batch of object names to the listing table.
     """
-    batch_values = ",".join(f"('{item.path}',{item.size})" for item in obj_paths_batch)
+    batch_values = ",".join(
+        f"('{item.time.strftime('%Y-%m-%d %H:%M:%S')}','{item.path}',{item.size})"
+        for item in obj_paths_batch
+    )
     execute_query(
         ctx,
-        f"INSERT INTO {listing_table} (obj_path, obj_size) VALUES {batch_values}",
+        f"INSERT INTO {listing_table} (last_modified, obj_path, obj_size) VALUES {batch_values}",
         format_=None,
     )
 
@@ -608,7 +644,13 @@ def _create_object_listing_table(
 
     execute_query_on_shard(
         ctx,
-        f"CREATE TABLE IF NOT EXISTS {table_name} (obj_path String, obj_size UInt64) ENGINE {engine} ORDER BY obj_path SETTINGS storage_policy = '{storage_policy}'",
+        f"""
+        CREATE TABLE IF NOT EXISTS {table_name}
+            (last_modified DateTime, obj_path String, obj_size UInt64)
+            ENGINE {engine}
+            ORDER BY (last_modified, obj_path)
+            SETTINGS storage_policy = '{storage_policy}'
+        """,
         format_=None,
     )
 

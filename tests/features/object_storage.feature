@@ -515,3 +515,38 @@ Feature: chadmin object-storage commands
     - WouldDelete: 0
       TotalSize: 0
     """
+
+  @require_version_23.3
+  Scenario: Clean with use-saved-list option
+    When we execute query on clickhouse01
+    """
+    ALTER TABLE test.table_s3_01 DETACH PARTITION '0';
+    """
+    And we put object in S3
+    """
+      bucket: cloud-storage-test
+      path: /data/cluster_id/shard_1/orpaned_object.tsv
+      data: '1'
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin object-storage collect-info --to-time 0h
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --from-time 0h --to-time 0h --dry-run --use-saved-list
+    """
+    Then we get response contains
+    """
+    - WouldDelete: 0
+      TotalSize: 0
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --from-time 1h --to-time 0h --dry-run --use-saved-list
+    """
+    Then we get response contains
+    """
+    - WouldDelete: 1
+      TotalSize: 1
+    """
