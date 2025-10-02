@@ -86,6 +86,8 @@ DEFAULT_CONFIG = {
                 "warn": 300,
                 "mcrit": 90.0,
                 "mwarn": 50.0,
+                "sync_query_max_retries": 10,
+                "sync_query_max_backoff": 10,
             },
         },
         "zookeeper": {
