@@ -32,6 +32,7 @@ from ch_tools.chadmin.internal.zookeeper import (
 from ch_tools.chadmin.internal.zookeeper_clean import (
     clean_zk_metadata_for_hosts,
     delete_zero_copy_locks,
+    find_dead_zc_locks,
 )
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_json, print_response
@@ -580,3 +581,17 @@ def create_zk_locks_command(
         create_zero_copy_locks(
             ctx, disk, table_info, partition_id, part_id, replica, dry_run
         )
+
+
+@zookeeper_group.command(
+    name="find-dead-zero-copy-locks",
+    help="Remove hosts from table metadata in the Zookeeper.",
+)
+@argument("zookeeper-table-path")
+@argument("shard-name")
+@argument("fqdn", type=ListParamType())
+@pass_context
+def remove_hosts_from_table(
+    ctx: Context, zookeeper_table_path: str, shard_name:str, fqdn: list,
+) -> None:
+    find_dead_zc_locks(ctx, zookeeper_table_path, shard_name, fqdn)
