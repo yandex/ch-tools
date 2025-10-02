@@ -30,7 +30,6 @@ BASE_TIMEOUT = 600
 LOCAL_PART_LOAD_SPEED = 10  # in data parts per second
 S3_PART_LOAD_SPEED = 0.5  # in data parts per second
 CLICKHOUSE_TIMEOUT_EXCEEDED_MSG = "TIMEOUT_EXCEEDED"
-MAX_SYNC_REPLICA_BACKOFF = 5
 
 
 @group("wait", cls=Chadmin)
@@ -103,8 +102,15 @@ def wait_group() -> None:
     "--sync-query-max-retries",
     "sync_query_max_retries",
     type=int,
-    default=5,
+    default=10,
     help="Max number of retries for system sync replica queries.",
+)
+@option(
+    "--sync-query-max-backoff",
+    "sync_query_max_backoff",
+    type=int,
+    default=10,
+    help="Max backoff interval for sync query retry in seconds.",
 )
 @pass_context
 def wait_replication_sync_command(
@@ -120,6 +126,7 @@ def wait_replication_sync_command(
     mcrit: float,
     lightweight: bool,
     sync_query_max_retries: int,
+    sync_query_max_backoff: int,
 ) -> None:
     """Wait for ClickHouse server to sync replication with other replicas."""
     # Lightweight sync is added in 23.4
@@ -165,9 +172,7 @@ def wait_replication_sync_command(
                     stop_after_attempt(sync_query_max_retries)
                     | stop_after_delay(time_left)
                 ),
-                wait=wait_random_exponential(
-                    multiplier=0.5, max=MAX_SYNC_REPLICA_BACKOFF
-                ),
+                wait=wait_random_exponential(max=sync_query_max_backoff),
                 after=adjust_settings_after_attempt,
                 reraise=True,
             )
