@@ -23,6 +23,8 @@ from pygments.token import Token
 from tabulate import tabulate
 from termcolor import colored
 
+from ch_tools.chadmin.internal.utils import DATETIME_FORMAT
+
 from ..yaml import dump_yaml
 from .utils import get_timezone
 
@@ -282,7 +284,7 @@ def format_timestamp(ctx: Context, value: datetime) -> str:
     Format timestamp value.
     """
     value = value.astimezone(get_timezone(ctx))
-    result = value.strftime("%Y-%m-%d %H:%M:%S")
+    result = value.strftime(DATETIME_FORMAT)
     result += f".{int(value.microsecond / 1000):03d}"
     return result
 

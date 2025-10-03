@@ -17,6 +17,10 @@ from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.object_storage.orphaned_objects_state import (
     OrphanedObjectsState,
 )
+from ch_tools.chadmin.internal.object_storage.s3_cleanup import (
+    ResultStatDict,
+    StatisticsPartitioning,
+)
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
@@ -168,6 +172,13 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
         "This may cause backup corruption."
     ),
 )
+@option(
+    "--stat-partitioning",
+    "stat_partitioning",
+    type=Choice(["all", "month", "day"]),
+    default=StatisticsPartitioning.ALL,
+    help=("Partition output stats by months or days, or return only total stats."),
+)
 @pass_context
 def clean_command(
     ctx: Context,
@@ -184,12 +195,12 @@ def clean_command(
     max_size_to_delete_bytes: int,
     max_size_to_delete_fraction: float,
     ignore_missing_cloud_storage_backups: bool,
+    stat_partitioning: StatisticsPartitioning,
 ) -> None:
     """
     Clean orphaned S3 objects.
     """
-    deleted = 0
-    total_size = 0
+    result_stat = {}
     error_msg = ""
 
     # Need for correctly call format in Query
@@ -197,7 +208,7 @@ def clean_command(
         cluster_name = "{" + cluster_name + "}"
 
     try:
-        deleted, total_size = clean(
+        result_stat = clean(
             ctx,
             object_name_prefix,
             from_time,
@@ -209,8 +220,10 @@ def clean_command(
             max_size_to_delete_bytes,
             max_size_to_delete_fraction,
             ignore_missing_cloud_storage_backups,
+            stat_partitioning,
         )
     finally:
+        total_size = result_stat.get("Total", {}).get("total_size", 0)
         state = OrphanedObjectsState(total_size, error_msg)
 
         if store_state_zk_path:
@@ -219,7 +232,7 @@ def clean_command(
         if store_state_local:
             _store_state_local_save(ctx, state)
 
-    _print_response(ctx, dry_run, deleted, total_size)
+    _print_response(ctx, dry_run, result_stat)
 
 
 @object_storage_group.command("collect-info")
@@ -321,22 +334,26 @@ def _store_state_local_save(_: Context, state: OrphanedObjectsState) -> None:
         file.write(state.to_json())
 
 
-def _print_response(ctx: Context, dry_run: bool, deleted: int, total_size: int) -> None:
+def _print_response(ctx: Context, dry_run: bool, result_stat: ResultStatDict) -> None:
     """
     Outputs result of cleaning.
     """
     # List of dicts for print_response()
-    clean_stats = [
-        {"WouldDelete" if dry_run else "Deleted": deleted, "TotalSize": total_size}
-    ]
+    clean_stats = {
+        partition: {
+            "WouldDelete" if dry_run else "Deleted": values["deleted"],
+            "TotalSize": values["total_size"],
+        }
+        for partition, values in result_stat.items()
+    }
 
     def _table_formatter(stats: Any) -> dict[str, Any]:
         result = {}
 
         if "Deleted" in stats:
             result["Deleted"] = stats["Deleted"]
-        if "WouldDeleted" in stats:
-            result["WouldDeleted"] = stats["WouldDeleted"]
+        if "WouldDelete" in stats:
+            result["WouldDelete"] = stats["WouldDelete"]
         result["TotalSize"] = format_size(stats["TotalSize"], binary=True)
 
         return result

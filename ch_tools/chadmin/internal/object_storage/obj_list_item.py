@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+from ch_tools.chadmin.internal.utils import DATETIME_FORMAT
 
 
 @dataclass

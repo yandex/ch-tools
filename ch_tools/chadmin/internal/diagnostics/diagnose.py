@@ -13,12 +13,12 @@ from ch_tools.common.clickhouse.config import (
     ClickhouseUsersConfig,
 )
 
-from ..utils import clickhouse_client
+from ..utils import DATETIME_FORMAT, clickhouse_client
 from .data import DiagnosticsData, add_command, add_query, execute_query
 
 
 def diagnose(ctx: Context, output_format: str, normalize_queries: bool) -> None:
-    timestamp = datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")
+    timestamp = datetime.strftime(datetime.now(), DATETIME_FORMAT)
     client = clickhouse_client(ctx)
     hostname = socket.getfqdn()
     ch_config = ClickhouseConfig.load(try_preprocessed=True)

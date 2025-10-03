@@ -3,21 +3,24 @@ import re
 import subprocess
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional
 
 from click import Context
 from humanfriendly import format_size
 
 from ch_tools.chadmin.internal.object_storage import cleanup_s3_object_storage
-from ch_tools.chadmin.internal.object_storage.obj_list_item import (
-    DATETIME_FORMAT,
-    ObjListItem,
+from ch_tools.chadmin.internal.object_storage.obj_list_item import ObjListItem
+from ch_tools.chadmin.internal.object_storage.s3_cleanup import (
+    ResultStatDict,
+    StatisticsPartitioning,
+    _init_key_in_stat,
 )
 from ch_tools.chadmin.internal.object_storage.s3_iterator import (
     s3_object_storage_iterator,
 )
 from ch_tools.chadmin.internal.system import match_ch_backup_version, match_ch_version
 from ch_tools.chadmin.internal.utils import (
+    DATETIME_FORMAT,
     chunked,
     execute_query,
     execute_query_on_shard,
@@ -72,7 +75,8 @@ def clean(
     max_size_to_delete_bytes: int = 0,
     max_size_to_delete_fraction: float = 1.0,
     ignore_missing_cloud_storage_backups: bool = False,
-) -> Tuple[int, int]:
+    stat_partitioning: StatisticsPartitioning = StatisticsPartitioning.ALL,
+) -> ResultStatDict:
     """
     Clean orphaned S3 objects.
     """
@@ -82,8 +86,11 @@ def clean(
     listing_table = f"{config['listing_table_database']}.{config['listing_table_prefix']}{disk_conf.name}"
     orphaned_objects_table = f"{config['orphaned_objects_table_database']}.{config['orphaned_objects_table_prefix']}{disk_conf.name}"
 
+    result_stat: ResultStatDict = {}
+    _init_key_in_stat(result_stat, "Total")
+
     try:
-        deleted, total_size = _clean_object_storage(
+        result_stat = _clean_object_storage(
             ctx,
             object_name_prefix,
             from_time,
@@ -96,13 +103,14 @@ def clean(
             max_size_to_delete_bytes,
             max_size_to_delete_fraction,
             ignore_missing_cloud_storage_backups,
+            stat_partitioning,
         )
     finally:
         if not keep_paths and not dry_run:
             _drop_table_on_shard(ctx, listing_table)
             _drop_table_on_shard(ctx, orphaned_objects_table)
 
-    return deleted, total_size
+    return result_stat
 
 
 def collect_object_storage_info(
@@ -339,6 +347,7 @@ def _object_list_generator(
         {% if to_time_cond %}
             AND last_modified <= toDateTime('{{ to_time_cond }}')
         {% endif %}
+        ORDER BY last_modified
         """
 
     def obj_list_iterator() -> Iterator[ObjListItem]:
@@ -468,10 +477,14 @@ def _clean_object_storage(
     max_size_to_delete_bytes: int = 0,
     max_size_to_delete_fraction: float = 1.0,
     ignore_missing_cloud_storage_backups: bool = False,
-) -> Tuple[int, int]:
+    stat_partitioning: StatisticsPartitioning = StatisticsPartitioning.ALL,
+) -> ResultStatDict:
     """
     Delete orphaned objects from object storage.
     """
+    result_stat: ResultStatDict = {}
+    _init_key_in_stat(result_stat, "Total")
+
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
     ch_client = clickhouse_client(ctx)
 
@@ -530,8 +543,6 @@ def _clean_object_storage(
                 dry_run,
             )
 
-        deleted, total_size = 0, 0
-
         max_size_to_delete = listing_size_in_bucket * max_size_to_delete_fraction
         if max_size_to_delete_bytes:
             max_size_to_delete = min(max_size_to_delete, max_size_to_delete_bytes)
@@ -540,32 +551,34 @@ def _clean_object_storage(
             batch_size = sum(obj.size for obj in objects)
             is_last_batch = False
 
-            if total_size + batch_size > max_size_to_delete:
+            if result_stat["Total"]["total_size"] + batch_size > max_size_to_delete:
                 # To fit into the size restriction: sort all objects by size
                 # And remove elements from the end;
                 is_last_batch = True
                 objects = sorted(objects, key=lambda obj: obj.size)
-                while total_size + batch_size > max_size_to_delete:
+                while (
+                    result_stat["Total"]["total_size"] + batch_size > max_size_to_delete
+                ):
                     batch_size -= objects[-1].size
                     objects.pop()
 
-            chunk_deleted, chunk_size = cleanup_s3_object_storage(
-                disk_conf, iter(objects), dry_run
+            cleanup_s3_object_storage(
+                disk_conf, iter(objects), result_stat, stat_partitioning, dry_run
             )
-            deleted += chunk_deleted
-            total_size += chunk_size
 
             if is_last_batch:
                 break
 
+        deleted = result_stat["Total"]["deleted"]
+        total_size = format_size(result_stat["Total"]["total_size"], binary=True)
         logging.info(
-            f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}]",
+            f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {total_size} from bucket [{disk_conf.bucket_name}]",
         )
 
     finally:
         _remove_backups_from_disk(disk_conf.name, downloaded_backups)
 
-    return deleted, total_size
+    return result_stat
 
 
 def _traverse_object_storage(
