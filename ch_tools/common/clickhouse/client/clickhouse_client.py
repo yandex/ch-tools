@@ -262,7 +262,7 @@ class ClickhouseClient:
         return self.query_json_data(**kwargs)[0]
 
     def render_query(self, query: str, **kwargs: Any) -> str:
-        env = Environment()
+        env = Environment(trim_blocks=True, lstrip_blocks=True)
 
         env.globals["version_ge"] = lambda version: version_ge(
             self.get_clickhouse_version(), version
