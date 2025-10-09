@@ -190,6 +190,11 @@ DEFAULT_CONFIG = {
                 "No space left on device",
             ],
         },
+        "system-metrics": {
+            "@disabled": False,
+            "crit": 10000,
+            "warn": 100,
+        },
     },
     # Configuration of keeper-monitoring tool commands and options.
     "keeper-monitoring": {

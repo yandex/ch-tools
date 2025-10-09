@@ -37,6 +37,7 @@ from ch_tools.monrun_checks.ch_s3_backup_orphaned import orphaned_backups_comman
 from ch_tools.monrun_checks.ch_s3_credentials_config import (
     s3_credentials_configs_command,
 )
+from ch_tools.monrun_checks.ch_system_metrics import system_metrics_command
 from ch_tools.monrun_checks.ch_system_queues import system_queues_command
 from ch_tools.monrun_checks.ch_tls import tls_command
 from ch_tools.monrun_checks.dns import dns_command
@@ -171,6 +172,7 @@ CLI_COMMANDS = [
     keeper_command,
     dns_command,
     orphaned_objects_command,
+    system_metrics_command,
 ]
 
 cli.add_command(status_command(CLI_COMMANDS))
