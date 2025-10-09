@@ -536,3 +536,13 @@ Feature: ch-monitoring tool
     """
     2;Code: 27. DB::Exception: ... (CANNOT_PARSE_INPUT_ASSERTION_FAILED) (version 24.8.5.115 (official build))
     """
+
+  Scenario: Check clickhouse system metrics with critical threshold
+    When we execute command on clickhouse01
+    """
+    ch-monitoring system-metrics -n versioninteger -w 1 -c 21001001
+    """
+    Then we get response
+    """
+    2;"VersionInteger" metric's value is greater than critical threshold
+    """
