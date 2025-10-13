@@ -21,6 +21,8 @@ def system_metrics_command(
     """
     try:
         metric = _get_metric(ctx, name)
+    except IndexError:
+        return Result(CRIT, "Metric not available")
     except requests.exceptions.HTTPError as exc:
         return Result(CRIT, repr(exc))
 
