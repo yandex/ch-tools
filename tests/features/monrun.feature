@@ -546,3 +546,14 @@ Feature: ch-monitoring tool
     """
     2;"VersionInteger" metric's value is greater than critical threshold
     """
+
+  @test
+  Scenario: Check clickhouse system metrics with unknown metric
+    When we execute command on clickhouse01
+    """
+    ch-monitoring system-metrics -n unknownmetric -w 1 -c 1
+    """
+    Then we get response
+    """
+    2;Metric not available
+    """
