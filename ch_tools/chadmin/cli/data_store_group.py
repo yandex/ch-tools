@@ -30,6 +30,7 @@ from ch_tools.common.clickhouse.client import OutputFormat
 from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
+from ch_tools.chadmin.internal.utils import chunked
 
 ATTACH_DETTACH_TIMEOUT = 5000
 ATTACH_DETACH_QUERY_RETRY = 10
@@ -558,3 +559,69 @@ def attach_partition(ctx: Context, table_partition: TablePartition) -> bool:
         timeout=ATTACH_DETTACH_TIMEOUT,
         retries=2 * ATTACH_DETACH_QUERY_RETRY,
     )
+
+
+@data_store_group.command("attach-broken-parts")
+@option(
+    "--file-path",
+    "file_path",
+    default=None,
+    help="Use generated file as: ` SELECT database,table,partition_id, path FROM system.detached_parts WHERE ...`> file",
+)
+@option(
+    "--max-workers",
+    default=4,
+    help="Max workers for removing.",
+)
+@pass_context
+def detect_broken_partitions(
+    ctx: Context, file_path: str, max_workers: int
+) -> None:
+
+    partition_to_attach = []
+    paths_to_move = []
+    with open(file_path, 'r') as file_path:
+        for line in file_path:
+            line = line.strip()
+            database,table, partition_id, path = line.split()
+            partition_to_attach.append(TablePartition(table=f"`{database}`.`{table}`", partition=partition_id))
+
+            path_splitted = path.split('/')
+            prefix = 'broken-on-start_'
+            if path_splitted[-1].startswith(prefix):
+                path_splitted[-1] = path_splitted[-1][len(prefix):]
+            else:
+                raise RuntimeError(f"Unexpected prefix {path}")
+
+            paths_to_move.append((path, os.path.join('/', *path_splitted)))
+    partition_to_attach = list(set(partition_to_attach))
+    logging.info(f"Total parts to move {len(paths_to_move)}")
+    logging.info(f"Total {len(partition_to_attach)} to attach")
+
+    logging.debug("Start moves")
+    for from_path, to_path in paths_to_move:
+        logging.debug(f"move from {from_path} to {to_path}")
+        if not os.path.exists(from_path):
+            ## fine , assuming that we already moved this dir
+            continue
+    
+        os.rename(from_path, to_path)
+    logging.debug("Finished moves")
+    
+    logging.debug("Start partitions attach")
+    chunk_size = 1000
+    for chunk in chunked(partition_to_attach,chunk_size):
+        tasks = []
+        for table_partition in chunk:
+            task = WorkerTask(
+                f"{table_partition.table}.{table_partition.partition}",
+                attach_partition,
+                {
+                    "ctx": ctx,
+                    "table_partition": table_partition,
+                }
+            )
+            tasks.append(task)
+        
+        execute_tasks_in_parallel(tasks, max_workers=max_workers, keep_going=False)
+        print(f"attached {chunk_size} partitions")
