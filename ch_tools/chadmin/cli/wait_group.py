@@ -54,7 +54,8 @@ def wait_group() -> None:
     help="Max amount of time to wait.",
 )
 @option(
-    "--sync-databases",
+    "--sync-databases/--no-sync-databases",
+    "sync_databases",
     is_flag=True,
     default=True,
     help="Sync replicated database replicas",

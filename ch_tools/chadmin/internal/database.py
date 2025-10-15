@@ -12,7 +12,7 @@ def list_databases(
     engine_pattern: Optional[str] = None,
     exclude_engine_pattern: Optional[str] = None,
     active_parts: Optional[bool] = None,
-    format_: Optional[str] = "JSON",
+    format_: str = "JSON",
 ) -> Union[Any, dict]:
     query = """
         SELECT
@@ -90,3 +90,4 @@ def list_databases(
     if format_ == "JSON":
         return res["data"]
     return res
+
