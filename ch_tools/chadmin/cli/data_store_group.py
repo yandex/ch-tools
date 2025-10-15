@@ -34,6 +34,7 @@ from ch_tools.chadmin.internal.utils import chunked
 
 ATTACH_DETTACH_TIMEOUT = 5000
 ATTACH_DETACH_QUERY_RETRY = 10
+ATTACH_PARTITION_CHUNK_SIZE = 1000
 
 
 class TablePartition(NamedTuple):
@@ -561,56 +562,80 @@ def attach_partition(ctx: Context, table_partition: TablePartition) -> bool:
     )
 
 
-@data_store_group.command("attach-broken-parts")
+@data_store_group.command("attach-parts-with-prefix")
 @option(
     "--file-path",
     "file_path",
     default=None,
-    help="Use generated file as: ` SELECT database,table,partition_id, path FROM system.detached_parts WHERE ...`> file",
+    help="Use generated file as: ` SELECT database,table,partition_id, path FROM system.detached_parts WHERE ...`> file. If none the query to get list of parts will be executed in script runtime.",
 )
 @option(
     "--max-workers",
     default=4,
     help="Max workers for removing.",
 )
+@option(
+    "--parts_prefix",
+    default="broken-on-start_",
+    help="Max workers for removing.",
+)
+@option(
+    "--keep-going",
+    default=False,
+    help="Max workers for removing.",
+)
 @pass_context
 def detect_broken_partitions(
-    ctx: Context, file_path: str, max_workers: int
+    ctx: Context, file_path: str, max_workers: int, parts_prefix: str, keep_going: bool
 ) -> None:
 
     partition_to_attach = []
     paths_to_move = []
-    with open(file_path, 'r') as file_path:
-        for line in file_path:
-            line = line.strip()
-            database,table, partition_id, path = line.split()
-            partition_to_attach.append(TablePartition(table=f"`{database}`.`{table}`", partition=partition_id))
 
-            path_splitted = path.split('/')
-            prefix = 'broken-on-start_'
-            if path_splitted[-1].startswith(prefix):
-                path_splitted[-1] = path_splitted[-1][len(prefix):]
-            else:
-                raise RuntimeError(f"Unexpected prefix {path}")
+    def add_part_in_internal_structure(database, table, partition_id, part_path):
+        partition_to_attach.append(TablePartition(table=f"`{database}`.`{table}`", partition=partition_id))
 
-            paths_to_move.append((path, os.path.join('/', *path_splitted)))
+        path_splitted = path.split('/')
+        if path_splitted[-1].startswith(parts_prefix):
+            path_splitted[-1] = path_splitted[-1][len(parts_prefix):]
+        else:
+            raise RuntimeError(f"Unexpected prefix {path}")
+        paths_to_move.append((path, os.path.join('/', *path_splitted)))
+
+    if file_path:
+        with open(file_path, 'r') as file_path:
+            for line in file_path:
+                line = line.strip()
+                database,table, partition_id, path = line.split()
+                add_part_in_internal_structure(database, table, partition_id, path)
+    else:
+        qeury_detached_parts = f"SELECT database, table, partition_id, path FROM `system`.`detached_parts` WHERE path ILIKE '{parts_prefix}%'"
+        for row in execute_query(ctx, query=qeury_detached_parts, format_=OutputFormat.JSON)["data"]:
+            database = row["database"]
+            table = row["table"]
+            partition_id = row["partition_id"]
+            path = row["path"]
+            add_part_in_internal_structure(database, table, partition_id, path)
+
+
     partition_to_attach = list(set(partition_to_attach))
     logging.info(f"Total parts to move {len(paths_to_move)}")
     logging.info(f"Total {len(partition_to_attach)} to attach")
 
-    logging.debug("Start moves")
+    logging.info("Start moves")
     for from_path, to_path in paths_to_move:
-        logging.debug(f"move from {from_path} to {to_path}")
+        logging.debug(f"Move from {from_path} to {to_path}")
         if not os.path.exists(from_path):
             ## fine , assuming that we already moved this dir
             continue
     
         os.rename(from_path, to_path)
-    logging.debug("Finished moves")
-    
-    logging.debug("Start partitions attach")
-    chunk_size = 1000
-    for chunk in chunked(partition_to_attach,chunk_size):
+
+    logging.info("Finished moves. Start partitions attach")
+    chunk_size = ATTACH_PARTITION_CHUNK_SIZE
+    total_attached_partitions = 0
+    ## Number of partitions could be large(50k for example). Maybe without chunking also fine.
+    for chunk in chunked(partition_to_attach, chunk_size):
         tasks = []
         for table_partition in chunk:
             task = WorkerTask(
@@ -623,5 +648,6 @@ def detect_broken_partitions(
             )
             tasks.append(task)
         
-        execute_tasks_in_parallel(tasks, max_workers=max_workers, keep_going=False)
-        print(f"attached {chunk_size} partitions")
+        execute_tasks_in_parallel(tasks, max_workers=max_workers, keep_going=keep_going)
+        total_attached_partitions += len(chunk)
+        logging.info(f"attached {total_attached_partitions} partitions")
