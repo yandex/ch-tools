@@ -87,7 +87,4 @@ def list_databases(
         active_parts=active_parts,
         format_=format_,
     )
-    if format_ == "JSON":
-        return res["data"]
-    return res
-
+    return res["data"] if format_ == "JSON" else res
