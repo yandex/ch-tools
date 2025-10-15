@@ -176,3 +176,40 @@ Feature: chadmin commands.
       |                     |
       | --lightweight       |
       | --full              |
+
+ 
+  Scenario: Check wait replication sync for replicated database
+    Given we have executed queries on clickhouse01
+    """
+    CREATE DATABASE testdb ON CLUSTER 'cluster' ENGINE  = Replicated('/clickhouse/databases/test', 'shard1', '{replica}');
+    """
+    When we execute query on clickhouse02
+    """
+    CREATE TABLE IF NOT EXISTS testdb.table_01 (n Int32) ENGINE = MergeTree() ORDER BY n
+    """
+    When we execute command on clickhouse01
+    """
+    supervisorctl stop clickhouse-server
+    """
+    When we try to execute command on clickhouse01
+    """
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4
+    """
+    Then it fails with response contains
+    """
+    Connection error
+    """
+    When we execute command on clickhouse01
+    """
+    supervisorctl start clickhouse-server
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4 --sync-databases
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * from testdb.table_01
+    """
+    
+
