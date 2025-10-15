@@ -703,3 +703,31 @@ def delete_zero_copy_locks(
             _clean_zero_copy_locks_for_table_and_part(
                 zk, zero_copy_path, table_uuid, part_id, dry_run
             )
+
+
+def find_dead_zc_locks(ctx, zc_root_path, shard_name, fqdn):
+    print(zc_root_path, fqdn)
+    with zk_client(ctx) as zk:
+# /clickhouse/zero_copy/zero_copy_s3/
+        for children in get_children(zk, zc_root_path):
+            table_path = os.path.join(zc_root_path, children)
+# /clickhouse/zero_copy/zero_copy_s3/ff211b1b-378e-403d-a520-ba0a4adfd194
+
+            for ch in get_children(zk, table_path):
+#/clickhouse/zero_copy/zero_copy_s3/ff211b1b-378e-403d-a520-ba0a4adfd194/all_0_0_0
+                part_path  = os.path.join(table_path, ch)
+
+                for ch in get_children(zk, part_path):
+#/clickhouse/zero_copy/zero_copy_s3/ff211b1b-378e-403d-a520-ba0a4adfd194/all_0_0_0/cloud_storage_<cid>_<shard>_<checksums_block>/
+                    if shard_name not in ch:
+                        continue
+                    is_lost = False
+                    lock_path = os.path.join(part_path, ch)
+                    # print(f'Check lock {lock_path}')
+
+                    for host in get_children(zk, lock_path):
+                        # print(f'Check host {lock_path}')
+                        if host in fqdn:
+                            is_lost = True
+                    if not is_lost:
+                        print(lock_path)
