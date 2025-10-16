@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 from click import Context
 from cloup import argument, group, option, option_group, pass_context
@@ -10,6 +10,7 @@ from ch_tools.chadmin.cli.database_metadata import (
     DatabaseEngine,
     parse_database_from_metadata,
 )
+from ch_tools.chadmin.internal.database import list_databases
 from ch_tools.chadmin.internal.migration import (
     create_database_nodes,
     is_database_exists,
@@ -40,7 +41,7 @@ def database_group() -> None:
 @pass_context
 def get_database_command(ctx: Context, database: str, active_parts: bool) -> None:
     logging.info(
-        get_databases(
+        list_databases(
             ctx, database=database, active_parts=active_parts, format_="Vertical"
         )
     )
@@ -58,7 +59,7 @@ def get_database_command(ctx: Context, database: str, active_parts: bool) -> Non
 )
 @pass_context
 def list_databases_command(ctx: Context, **kwargs: Any) -> None:
-    logging.info(get_databases(ctx, **kwargs, format_="PrettyCompact"))
+    logging.info(list_databases(ctx, **kwargs, format_="PrettyCompact"))
 
 
 @database_group.command("delete")
@@ -94,9 +95,11 @@ def delete_databases_command(
 ) -> None:
     cluster = get_cluster_name(ctx) if on_cluster else None
 
-    for d in get_databases(
-        ctx, database=database, exclude_database=exclude_database, format_="JSON"
-    )["data"]:
+    for d in list_databases(
+        ctx,
+        database=database,
+        exclude_database=exclude_database,
+    ):
         query = """
             DROP DATABASE `{{ database }}`
             {% if cluster %}
@@ -111,80 +114,6 @@ def delete_databases_command(
             echo=True,
             dry_run=dry_run,
         )
-
-
-def get_databases(
-    ctx: Context,
-    database: Optional[str] = None,
-    exclude_database: Optional[str] = None,
-    active_parts: Optional[bool] = None,
-    format_: Optional[str] = None,
-) -> Any:
-    query = """
-        SELECT
-            database,
-            engine,
-            tables,
-            formatReadableSize(bytes_on_disk) "disk_size",
-            partitions,
-            parts,
-            rows
-        FROM (
-            SELECT
-                name "database",
-                engine
-            FROM system.databases
-        ) q1
-        ALL LEFT JOIN (
-            SELECT
-                database,
-                count() "tables",
-                sum(bytes_on_disk) "bytes_on_disk",
-                sum(partitions) "partitions",
-                sum(parts) "parts",
-                sum(rows) "rows"
-            FROM (
-                SELECT
-                    database,
-                    name "table"
-                FROM system.tables
-            ) q2_1
-            ALL LEFT JOIN (
-                SELECT
-                    database,
-                    table,
-                    uniq(partition) "partitions",
-                    count() "parts",
-                    sum(rows) "rows",
-                    sum(bytes_on_disk) "bytes_on_disk"
-                FROM system.parts
-        {% if active_parts %}
-                WHERE active
-        {% endif %}
-                GROUP BY database, table
-            ) q2_2
-            USING database, table
-            GROUP BY database
-        ) q2
-        USING database
-        {% if database %}
-        WHERE database {{ format_str_match(database) }}
-        {% else %}
-        WHERE database NOT IN ('system', 'information_schema', 'INFORMATION_SCHEMA')
-        {% endif %}
-        {% if exclude_database %}
-          AND database != '{{ exclude_database }}'
-        {% endif %}
-        ORDER BY database
-        """
-    return execute_query(
-        ctx,
-        query,
-        database=database,
-        exclude_database=exclude_database,
-        active_parts=active_parts,
-        format_=format_,
-    )
 
 
 @database_group.command("migrate")

@@ -188,6 +188,11 @@ Feature: chadmin database migrate command
     """
     When we sleep for 10 seconds
     
+    When we execute query on clickhouse02
+    """
+    SYSTEM SYNC DATABASE REPLICA non_repl_db
+    """
+    
     And we execute query on clickhouse02
     """
     SELECT engine FROM system.databases WHERE database='non_repl_db'
@@ -293,6 +298,11 @@ Feature: chadmin database migrate command
     supervisorctl restart clickhouse-server
     """
     When we sleep for 10 seconds
+
+    When we execute query on clickhouse02
+    """
+    SYSTEM SYNC DATABASE REPLICA non_repl_db
+    """
 
     When we execute query on clickhouse02
     """
@@ -479,6 +489,11 @@ Feature: chadmin database migrate command
 
     When we execute query on clickhouse02
     """
+    SYSTEM SYNC DATABASE REPLICA non_repl_db
+    """
+
+    When we execute query on clickhouse02
+    """
     SELECT name FROM system.databases ORDER BY name FORMAT Values
     """
     Then we get response
@@ -618,6 +633,11 @@ Feature: chadmin database migrate command
     When we execute command on clickhouse02
     """
     chadmin database migrate -d non_repl_db -e Replicated
+    """
+
+    When we execute query on clickhouse02
+    """
+    SYSTEM SYNC DATABASE REPLICA non_repl_db
     """
 
     When we execute query on clickhouse02
@@ -875,6 +895,11 @@ Feature: chadmin database migrate command
 
     When we execute query on clickhouse02
     """
+    SYSTEM SYNC DATABASE REPLICA non_repl_db
+    """
+
+    When we execute query on clickhouse02
+    """
     SELECT name FROM system.databases ORDER BY name FORMAT Values
     """
     Then we get response
@@ -1014,6 +1039,12 @@ Feature: chadmin database migrate command
     supervisorctl restart clickhouse-server
     """
     When we sleep for 10 seconds
+    
+    When we execute query on clickhouse02
+    """
+    SYSTEM SYNC DATABASE REPLICA non_repl_db
+    """
+    
     When we execute query on clickhouse02
     """
     SELECT * FROM non_repl_db.foo
@@ -1074,6 +1105,12 @@ Feature: chadmin database migrate command
     supervisorctl restart clickhouse-server
     """
     When we sleep for 10 seconds
+    
+    When we execute query on clickhouse02
+    """
+    SYSTEM SYNC DATABASE REPLICA non_repl_db
+    """
+    
     When we execute query on clickhouse02
     """
     SELECT * FROM non_repl_db.foo
@@ -1209,6 +1246,11 @@ Feature: chadmin database migrate command
 
     When we execute query on clickhouse02
     """
+    SYSTEM SYNC DATABASE REPLICA non_repl_db
+    """
+
+    When we execute query on clickhouse02
+    """
     SELECT name FROM system.databases ORDER BY name FORMAT Values
     """
     Then we get response
@@ -1301,6 +1343,11 @@ Feature: chadmin database migrate command
     When we execute command on clickhouse02
     """
     chadmin database migrate -d non_repl_db -e Replicated
+    """
+
+    When we execute query on clickhouse02
+    """
+    SYSTEM SYNC DATABASE REPLICA non_repl_db
     """
 
     When we execute query on clickhouse02
@@ -1467,6 +1514,12 @@ Feature: chadmin database migrate command
     supervisorctl restart clickhouse-server
     """
     When we sleep for 10 seconds
+    
+    When we execute query on clickhouse02
+    """
+    SYSTEM SYNC DATABASE REPLICA non_repl_db
+    """
+    
     When we execute query on clickhouse01
     """
     SELECT * FROM non_repl_db.foo FORMAT Values

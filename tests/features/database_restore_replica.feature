@@ -55,6 +55,10 @@ Feature: chadmin database restore-replica command
     """
     When we execute query on clickhouse02
     """
+    SYSTEM SYNC DATABASE REPLICA repl_db
+    """
+    When we execute query on clickhouse02
+    """
     DETACH DATABASE repl_db
     """
     When we execute query on clickhouse02
@@ -164,6 +168,10 @@ Feature: chadmin database restore-replica command
     chadmin database restore-replica -d repl_db
     """
     Then it completes successfully
+    When we execute query on clickhouse02
+    """
+    SYSTEM SYNC DATABASE REPLICA repl_db
+    """
     When we execute query on clickhouse02
     """
     DETACH DATABASE repl_db
