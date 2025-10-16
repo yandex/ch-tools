@@ -177,7 +177,6 @@ Feature: chadmin commands.
       | --lightweight       |
       | --full              |
 
- 
   Scenario: Check wait replication sync for replicated database
     Given we have executed queries on clickhouse01
     """
@@ -191,8 +190,8 @@ Feature: chadmin commands.
     """
     chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4 --sync-databases
     """
-    When we execute query on clickhouse01
+    And we execute query on clickhouse01
     """
     SELECT * from testdb.table_01
     """
-    Then we get response code 200
+    Then query was completed successfully

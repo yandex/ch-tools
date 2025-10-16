@@ -33,6 +33,11 @@ def step_clickhouse_query(context: ContextT, node: str) -> None:
     context.ret_code, context.response = get_response(context, node, context.text)
 
 
+@then("query was completed successfully")
+def step_query_successful(context: ContextT) -> None:
+    assert context.ret_code == 200
+
+
 @given("we have executed queries on {node:w}")
 @when("we execute queries on {node:w}")
 def step_clickhouse_queries(context: ContextT, node: str) -> None:
