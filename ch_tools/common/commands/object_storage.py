@@ -340,12 +340,12 @@ def _object_list_generator(
     query = """
         SELECT last_modified, obj_path, obj_size FROM {{ table_name }}
         WHERE 1
-        {% if from_time_cond %}
+        {%- if from_time_cond %}
             AND last_modified >= toDateTime('{{ from_time_cond }}')
-        {% endif %}
-        {% if to_time_cond %}
+        {%- endif %}
+        {%- if to_time_cond %}
             AND last_modified <= toDateTime('{{ to_time_cond }}')
-        {% endif %}
+        {%- endif %}
         ORDER BY last_modified
         """
 
