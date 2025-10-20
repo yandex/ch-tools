@@ -2,6 +2,8 @@
 Steps for interacting with ClickHouse DBMS.
 """
 
+from http import HTTPStatus
+
 from behave import given, then, when
 from hamcrest import assert_that, equal_to
 from modules.clickhouse import (
@@ -35,7 +37,7 @@ def step_clickhouse_query(context: ContextT, node: str) -> None:
 
 @then("query was completed successfully")
 def step_query_successful(context: ContextT) -> None:
-    assert context.ret_code == 200
+    assert context.ret_code == HTTPStatus.OK
 
 
 @given("we have executed queries on {node:w}")
