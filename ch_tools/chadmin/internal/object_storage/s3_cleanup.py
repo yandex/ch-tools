@@ -64,7 +64,7 @@ def _update_stat(
     stat["Total"]["total_size"] += item.size
 
     key = _get_stat_key_by_partitioning(
-        stat_partitioning, item.time.strftime(DATETIME_FORMAT)
+        stat_partitioning, item.last_modified.strftime(DATETIME_FORMAT)
     )
     if key != "Total":
         _init_key_in_stat(stat, key)
@@ -87,6 +87,4 @@ def _get_stat_key_by_partitioning(
 
 def _init_key_in_stat(stat: ResultStatDict, key: str) -> None:
     if key not in stat:
-        stat[key] = {}
-        stat[key]["deleted"] = 0
-        stat[key]["total_size"] = 0
+        stat[key] = {"deleted": 0, "total_size": 0}

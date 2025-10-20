@@ -330,7 +330,6 @@ def _object_list_generator(
     timeout: Optional[int] = None,
 ) -> Callable:
     now = datetime.now(timezone.utc)
-    logging.warning(from_time)
     from_time_cond = (
         (now - from_time).strftime(DATETIME_FORMAT) if from_time is not None else None
     )
@@ -622,7 +621,7 @@ def _insert_listing_batch(
     Insert batch of object names to the listing table.
     """
     batch_values = ",".join(
-        f"('{item.time.strftime('%Y-%m-%d %H:%M:%S')}','{item.path}',{item.size})"
+        f"('{item.last_modified.strftime(DATETIME_FORMAT)}','{item.path}',{item.size})"
         for item in obj_paths_batch
     )
     execute_query(
