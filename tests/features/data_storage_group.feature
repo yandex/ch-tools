@@ -218,3 +218,24 @@ Feature: chadmin data-store commands
     Examples:
     | additional_table_settings                               |
     |                                                         |
+
+  Scenario: Attach broken partitions.
+    When we execute queries on clickhouse01
+    """
+    CREATE DATABASE test;
+    CREATE TABLE test.table(a UInt32, b UInt32) ENGINE=MergeTree() ORDER BY a PARTITION BY b;
+    INSERT INTO test.table SELECT number, number FROM numbers(3);
+    """
+    When we move parts as broken_on_start for table test.table on clickhouse01
+    And we execute command on clickhouse01
+    """
+    chadmin data-store attach-parts-with-prefix > /dev/null
+    """
+    And we execute query on clickhouse01
+    """
+    SELECT count() FROM test.table
+    """
+    Then we get response
+    """
+    3
+    """

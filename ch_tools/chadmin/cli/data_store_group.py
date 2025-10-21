@@ -23,14 +23,13 @@ from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
     S3ObjectLocalMetaData,
 )
 from ch_tools.chadmin.internal.system import get_version
-from ch_tools.chadmin.internal.utils import execute_query, remove_from_disk
+from ch_tools.chadmin.internal.utils import chunked, execute_query, remove_from_disk
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.clickhouse.client import OutputFormat
 from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
-from ch_tools.chadmin.internal.utils import chunked
 
 ATTACH_DETTACH_TIMEOUT = 5000
 ATTACH_DETACH_QUERY_RETRY = 10
@@ -585,38 +584,44 @@ def attach_partition(ctx: Context, table_partition: TablePartition) -> bool:
     help="Max workers for removing.",
 )
 @pass_context
-def detect_broken_partitions(
+def attach_parts_with_prefix(
     ctx: Context, file_path: str, max_workers: int, parts_prefix: str, keep_going: bool
 ) -> None:
 
     partition_to_attach = []
     paths_to_move = []
 
-    def add_part_in_internal_structure(database, table, partition_id, part_path):
-        partition_to_attach.append(TablePartition(table=f"`{database}`.`{table}`", partition=partition_id))
+    def add_part_in_internal_structure(
+        database: str, table: str, partition_id: str, part_path: str
+    ) -> None:
+        partition_to_attach.append(
+            TablePartition(table=f"`{database}`.`{table}`", partition=partition_id)
+        )
 
-        path_splitted = path.split('/')
+        path_splitted = part_path.split("/")
         if path_splitted[-1].startswith(parts_prefix):
-            path_splitted[-1] = path_splitted[-1][len(parts_prefix):]
+            path_splitted[-1] = path_splitted[-1][len(parts_prefix) :]
         else:
-            raise RuntimeError(f"Unexpected prefix {path}")
-        paths_to_move.append((path, os.path.join('/', *path_splitted)))
+            raise RuntimeError(f"Unexpected prefix {part_path}")
+        paths_to_move.append((part_path, os.path.join("/", *path_splitted)))
 
     if file_path:
-        with open(file_path, 'r') as file_path:
-            for line in file_path:
+        with open(file_path, "r", encoding="utf-8") as file:
+            for line in file:
                 line = line.strip()
-                database,table, partition_id, path = line.split()
+                database, table, partition_id, path = line.split()
                 add_part_in_internal_structure(database, table, partition_id, path)
     else:
-        qeury_detached_parts = f"SELECT database, table, partition_id, path FROM `system`.`detached_parts` WHERE path ILIKE '{parts_prefix}%'"
-        for row in execute_query(ctx, query=qeury_detached_parts, format_=OutputFormat.JSON)["data"]:
+        qeury_detached_parts = f"SELECT database, table, partition_id, path FROM `system`.`detached_parts` WHERE path ILIKE '%{parts_prefix}%'"
+        for row in execute_query(
+            ctx, query=qeury_detached_parts, format_=OutputFormat.JSON
+        )["data"]:
             database = row["database"]
             table = row["table"]
             partition_id = row["partition_id"]
             path = row["path"]
+            print(row, partition_id)
             add_part_in_internal_structure(database, table, partition_id, path)
-
 
     partition_to_attach = list(set(partition_to_attach))
     logging.info(f"Total parts to move {len(paths_to_move)}")
@@ -628,7 +633,7 @@ def detect_broken_partitions(
         if not os.path.exists(from_path):
             ## fine , assuming that we already moved this dir
             continue
-    
+
         os.rename(from_path, to_path)
 
     logging.info("Finished moves. Start partitions attach")
@@ -644,10 +649,10 @@ def detect_broken_partitions(
                 {
                     "ctx": ctx,
                     "table_partition": table_partition,
-                }
+                },
             )
             tasks.append(task)
-        
+
         execute_tasks_in_parallel(tasks, max_workers=max_workers, keep_going=keep_going)
         total_attached_partitions += len(chunk)
         logging.info(f"attached {total_attached_partitions} partitions")
