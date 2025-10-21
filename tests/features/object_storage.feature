@@ -579,7 +579,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response matches
     """
-    '\d{4}-\d{2}':
+    \d{4}-\d{2}:
       WouldDelete: 1
       TotalSize: 1
     """
