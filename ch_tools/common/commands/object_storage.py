@@ -683,29 +683,13 @@ def _get_table_function(
     scope: Scope,
     cluster_name: Optional[str] = None,
 ) -> str:
-    ch_client = clickhouse_client(ctx)
-    user_name = ch_client.user or ""
-
-    result = table
-
     if scope == Scope.CLUSTER:
         assert cluster_name
-        result = f"cluster('{cluster_name}', {table})"
+        return f"cluster('{cluster_name}', {table})"
     elif scope == Scope.SHARD:
-        #  It is believed that all hosts in shard have the same port set, so check current for tcp port
-        if ch_client.check_port(ClickhousePort.TCP_SECURE):
-            remote_clause = "remoteSecure"
-        elif ch_client.check_port(ClickhousePort.TCP):
-            remote_clause = "remote"
-        else:
-            raise RuntimeError(
-                "For using remote() table function tcp port must be defined"
-            )
+        return get_remote_table_for_hosts(ctx, table, ClickhouseInfo.get_replicas(ctx))
 
-        replicas = ",".join(ClickhouseInfo.get_replicas(ctx))
-        result = f"{remote_clause}('{replicas}', {table}, '{user_name}', '{{user_password}}')"
-
-    return result
+    return table
 
 
 def _download_missing_cloud_storage_backups(
