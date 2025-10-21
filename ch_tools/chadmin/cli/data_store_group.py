@@ -612,9 +612,9 @@ def attach_parts_with_prefix(
                 database, table, partition_id, path = line.split()
                 add_part_in_internal_structure(database, table, partition_id, path)
     else:
-        qeury_detached_parts = f"SELECT database, table, partition_id, path FROM `system`.`detached_parts` WHERE path ILIKE '%{parts_prefix}%'"
+        query_detached_parts = f"SELECT database, table, partition_id, path FROM `system`.`detached_parts` WHERE path ILIKE '%{parts_prefix}%'"
         for row in execute_query(
-            ctx, query=qeury_detached_parts, format_=OutputFormat.JSON
+            ctx, query=query_detached_parts, format_=OutputFormat.JSON
         )["data"]:
             database = row["database"]
             table = row["table"]
@@ -632,6 +632,7 @@ def attach_parts_with_prefix(
         logging.debug(f"Move from {from_path} to {to_path}")
         if not os.path.exists(from_path):
             ## fine , assuming that we already moved this dir
+            logging.warning(f"Source path missing during move: {from_path} (expected to move to {to_path})")
             continue
 
         os.rename(from_path, to_path)
