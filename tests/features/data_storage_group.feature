@@ -219,6 +219,7 @@ Feature: chadmin data-store commands
     | additional_table_settings                               |
     |                                                         |
 
+  @require_version_23.3
   Scenario: Attach broken partitions.
     When we execute queries on clickhouse01
     """
