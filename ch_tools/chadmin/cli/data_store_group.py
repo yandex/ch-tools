@@ -632,7 +632,9 @@ def attach_parts_with_prefix(
         logging.debug(f"Move from {from_path} to {to_path}")
         if not os.path.exists(from_path):
             ## fine , assuming that we already moved this dir
-            logging.warning(f"Source path missing during move: {from_path} (expected to move to {to_path})")
+            logging.warning(
+                f"Source path missing during move: {from_path} (expected to move to {to_path})"
+            )
             continue
 
         os.rename(from_path, to_path)
