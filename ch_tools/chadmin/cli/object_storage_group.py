@@ -1,13 +1,23 @@
 from datetime import timedelta
 from typing import Any, Optional
 
-from click import Choice, Context, FloatRange, IntRange, group, option, pass_context
+from click import (
+    BadParameter,
+    Choice,
+    Context,
+    FloatRange,
+    IntRange,
+    group,
+    option,
+    pass_context,
+)
 from humanfriendly import format_size
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.object_storage.orphaned_objects_state import (
     OrphanedObjectsState,
 )
+from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
     create_zk_nodes,
@@ -17,10 +27,12 @@ from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
-from ch_tools.common.commands.clean_object_storage import (
+from ch_tools.common.commands.object_storage import (
     DEFAULT_GUARD_INTERVAL,
-    CleanScope,
+    Scope,
     clean,
+    collect_object_storage_info,
+    get_object_storage_space_usage,
 )
 
 # Use big enough timeout for stream HTTP query
@@ -80,13 +92,6 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     default=DEFAULT_GUARD_INTERVAL,
     type=TimeSpanParamType(),
     help=("End of inspecting interval in human-friendly format."),
-)
-@option(
-    "--clean-scope",
-    "clean_scope",
-    default="shard",
-    type=Choice(["host", "shard", "cluster"]),
-    help="Cleaning scope.",
 )
 @option(
     "--cluster",
@@ -169,7 +174,6 @@ def clean_command(
     object_name_prefix: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
-    clean_scope: str,
     cluster_name: str,
     dry_run: bool,
     keep_paths: bool,
@@ -198,8 +202,6 @@ def clean_command(
             object_name_prefix,
             from_time,
             to_time,
-            CleanScope(clean_scope),
-            cluster_name,
             dry_run,
             keep_paths,
             use_saved_list,
@@ -218,6 +220,93 @@ def clean_command(
             _store_state_local_save(ctx, state)
 
     _print_response(ctx, dry_run, deleted, total_size)
+
+
+@object_storage_group.command("collect-info")
+@option(
+    "-p",
+    "--prefix",
+    "--object_name_prefix",
+    "object_name_prefix",
+    default="",
+    help=(
+        "Prefix of object name used while listing bucket. By default its value is attempted to parse "
+        "from endpoint in clickhouse S3 disk config. If there is no trailing slash it will be added automatically."
+    ),
+)
+@option(
+    "--from-time",
+    "from_time",
+    default=None,
+    type=TimeSpanParamType(),
+    help=(
+        "Begin of inspecting interval in human-friendly format. "
+        "Objects with a modification time falling interval [now - from_time, now - to_time] are considered."
+    ),
+)
+@option(
+    "-g",
+    "--guard-interval",
+    "--to-time",
+    "to_time",
+    default=DEFAULT_GUARD_INTERVAL,
+    type=TimeSpanParamType(),
+    help=("End of inspecting interval in human-friendly format."),
+)
+@pass_context
+def collect_info_command(
+    ctx: Context,
+    object_name_prefix: str,
+    from_time: Optional[timedelta],
+    to_time: timedelta,
+) -> None:
+    """
+    Collect info about object storage memory usage and orphaned objects.
+    Save the result to the corresponding tables.
+    """
+    if from_time is not None and to_time < from_time:
+        raise BadParameter(
+            "'from_time' parameter must be greater than 'to_time'",
+            param_hint="--from-time",
+        )
+
+    if not match_ch_version(ctx, "23.3"):
+        raise RuntimeError("This command requires version 23.3 of ClickHouse")
+
+    collect_object_storage_info(
+        ctx,
+        object_name_prefix=object_name_prefix,
+        from_time=from_time,
+        to_time=to_time,
+    )
+
+
+@object_storage_group.command("space-usage")
+@option(
+    "--cluster",
+    "cluster_name",
+    default=DEFAULT_CLUSTER_NAME,
+    help=("Cluster to analyze. Default value is macro."),
+)
+@option(
+    "--scope",
+    "scope",
+    default="cluster",
+    type=Choice(["shard", "cluster"]),
+    help="Get info for shard or cluster.",
+)
+@pass_context
+def space_usage_command(
+    ctx: Context,
+    cluster_name: str,
+    scope: str,
+) -> None:
+    """
+    Return object storage memory usage info from cluster.
+    """
+    result = get_object_storage_space_usage(ctx, cluster_name, Scope(scope))
+
+    print_response(ctx, result)
 
 
 def _store_state_zk_save(ctx: Context, path: str, state: OrphanedObjectsState) -> None:

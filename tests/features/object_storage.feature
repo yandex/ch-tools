@@ -17,30 +17,85 @@ Feature: chadmin object-storage commands
     CREATE DATABASE IF NOT EXISTS test ON CLUSTER '{cluster}';
 
     CREATE TABLE IF NOT EXISTS test.table_s3_01 UUID '10000000-0000-0000-0000-000000000001' ON CLUSTER '{cluster}' (n Int32)
-    ENGINE = ReplicatedMergeTree('/tables/table_s3_01', '{replica}') ORDER BY n
+    ENGINE = ReplicatedMergeTree('/tables/table_s3_01', '{replica}') ORDER BY n PARTITION BY (n%10)
     SETTINGS storage_policy = 'object_storage';
 
     INSERT INTO test.table_s3_01 (n) SELECT number FROM system.numbers LIMIT 10;
     """
     Then S3 contains greater than 0 objects
 
-  Scenario Outline: Dry-run clean with guard period
-    When we execute command on clickhouse01
+  @require_version_23.3
+  Scenario: Collect info
+    When we execute query on clickhouse01
     """
-    chadmin --format yaml object-storage clean --to-time 0h --dry-run --clean-scope=<scope>
+    ALTER TABLE test.table_s3_01 DETACH PARTITION '0';
+    """
+    And we put object in S3
+    """
+      bucket: cloud-storage-test
+      path: /data/cluster_id/shard_1/orpaned_object.tsv
+      data: '1'
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin object-storage collect-info --to-time 0h
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage space-usage
     """
     Then we get response matches
     """
-    - WouldDelete: <WouldDelete>
-      TotalSize: <TotalSize>
-    """  
-  Examples:
-    | scope   | WouldDelete | TotalSize   |
-    | host    | [1-9][0-9]* | [1-9][0-9]* |
-    | shard   | 0           | 0           |
-    | cluster | 0           | 0           |
+    active: '?([1-9][0-9]*)'?
+    unique_frozen: '?(0)'?
+    unique_detached: '?([1-9][0-9]*)'?
+    orphaned: '?(1)'?
+    """
 
-  Scenario Outline: Clean orphaned objects
+  @require_version_24.3
+  Scenario: Collect info with frozen parts
+    When we execute query on clickhouse01
+    """
+    ALTER TABLE test.table_s3_01 FREEZE
+    """
+    And we execute query on clickhouse01
+    """
+    ALTER TABLE test.table_s3_01 DETACH PARTITION '0';
+    """
+    And we put object in S3
+    """
+      bucket: cloud-storage-test
+      path: /data/cluster_id/shard_1/orpaned_object.tsv
+      data: '1'
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin object-storage collect-info --to-time 0h
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage space-usage
+    """
+    Then we get response matches
+    """
+    active: '?([1-9][0-9]*)'?
+    unique_frozen: '?([1-9][0-9]*)'?
+    unique_detached: '?([1-9][0-9]*)'?
+    orphaned: '?(1)'?
+    """
+
+  Scenario: Dry-run clean with guard period
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run
+    """
+    Then we get response contains
+    """
+    - WouldDelete: 0
+      TotalSize: 0
+    """  
+
+  Scenario: Clean orphaned objects
     When we put object in S3
     """
       bucket: cloud-storage-test
@@ -49,31 +104,27 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --dry-run --to-time 0h --clean-scope=<scope>
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h
     """
     Then we get response contains
     """
-    - WouldDelete: <WouldDelete>
-      TotalSize: <TotalSize>
+    - WouldDelete: 1
+      TotalSize: 1
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --to-time 0h --clean-scope=<scope>
+    chadmin --format yaml object-storage clean --to-time 0h
     """
     Then we get response contains
     """
-    - Deleted: <Deleted>
-      TotalSize: <TotalSize>
+    - Deleted: 1
+      TotalSize: 1
     """
     And path does not exist in S3
     """
       bucket: cloud-storage-test
       path: /data/orpaned_object.tsv
     """
-  Examples:
-    | scope   | WouldDelete | TotalSize   | Deleted |
-    | shard   | 1           | 1           | 1       |
-    | cluster | 1           | 1           | 1       |
   
   Scenario: Clean many orphaned objects
     When we put 100 objects in S3
@@ -326,7 +377,7 @@ Feature: chadmin object-storage commands
     """
       bucket: cloud-storage-test
       path: /data/cluster_id/shard_1/orpaned_object-{}
-      data: '01234566789'
+      data: '01234567890'
     """
     When we try to execute command on clickhouse01
     """
@@ -368,7 +419,7 @@ Feature: chadmin object-storage commands
     """
     chadmin --format yaml object-storage clean --to-time 0h --dry-run
     """
-    Then we get response matches
+    Then we get response contains
     """
     - WouldDelete: 0
       TotalSize: 0
@@ -390,7 +441,7 @@ Feature: chadmin object-storage commands
     """
     chadmin --format yaml object-storage clean --to-time 0h --dry-run
     """
-    Then we get response matches
+    Then we get response contains
     """
     - WouldDelete: 0
       TotalSize: 0
@@ -432,7 +483,7 @@ Feature: chadmin object-storage commands
     Then we get response contains
     """
     Downloading cloud storage metadata from 'test3'
-    Counting orphaned objects
+    Collecting objects...
     """
     When we execute command on clickhouse01
     """
@@ -447,7 +498,7 @@ Feature: chadmin object-storage commands
     Downloading cloud storage metadata from 'test3'
     Downloading cloud storage metadata from 'test2'
     Downloading cloud storage metadata from 'test1'
-    Counting orphaned objects
+    Collecting objects...
     """
 
   Scenario: Sanity check when no objects in CH
