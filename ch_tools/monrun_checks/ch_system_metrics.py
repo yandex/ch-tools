@@ -23,18 +23,16 @@ def system_metrics_command(
         metric = _get_metric(ctx, name)
     except IndexError:
         return Result(CRIT, "Metric not available")
-    except requests.exceptions.HTTPError as exc:
-        return Result(CRIT, repr(exc))
+    except requests.exceptions.HTTPError:
+        return Result(CRIT, "Failed to get metric")
 
     metric_name, value = metric[0], int(metric[1])
     if value > crit:
-        return Result(
-            CRIT, f'"{metric_name}" metric\'s value is greater than critical threshold'
-        )
+        return Result(CRIT, f'"{metric_name}", crit = {crit}, count = {value}')
     if value > warn:
         return Result(
             WARNING,
-            f'"{metric_name}" metric\'s value is greater than warning threshold',
+            f'"{metric_name}", warn = {warn}, count = {value}',
         )
 
     return Result(OK)
