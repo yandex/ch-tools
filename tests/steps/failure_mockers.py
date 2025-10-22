@@ -5,14 +5,18 @@ Steps for interacting with ClickHouse DBMS.
 import os
 
 from behave import when
+from hamcrest import assert_that, equal_to
 from modules import s3
 from modules.clickhouse import execute_query
+from modules.docker import get_container
 from modules.steps import get_step_data
 from modules.typing import ContextT
 
 
 @when("we remove key from s3 for partitions database {database} on {node:w}")
-def step_check_number_ro_replicas(context: ContextT, database: str, node: str) -> None:
+def step_remove_keys_from_s3_for_partition(
+    context: ContextT, database: str, node: str
+) -> None:
     data = get_step_data(context)
     keys_to_remove = []
 
@@ -35,3 +39,32 @@ def step_check_number_ro_replicas(context: ContextT, database: str, node: str) -
     s3_client = s3.S3Client(context)
     for key in keys_to_remove:
         s3_client.delete_data(key)
+
+
+@when("we move parts as broken_on_start for table {database}.{table} on {node:w}")
+def step_mark_parts_as_broken_on_start(
+    context: ContextT, database: str, table: str, node: str
+) -> None:
+    part_list_query = f"SELECT name FROM system.parts WHERE database='{database}' and table='{table}' and active"
+
+    for resp in execute_query(context, node, part_list_query, format_="JSONCompact")[
+        "data"
+    ]:
+        detach_part = f"ALTER TABLE {database}.{table} DETACH PART '{resp[0]}'"
+        execute_query(context, node, detach_part)
+
+    broken_prefix = "broken-on-start_"
+    detached_part_list_query = f"SELECT path FROM system.detached_parts WHERE database='{database}' and table='{table}'"
+    container = get_container(context, node)
+
+    for resp in execute_query(
+        context, node, detached_part_list_query, format_="JSONCompact"
+    )["data"]:
+        path = resp[0]
+        broken_path = path.split("/")
+        broken_path[-1] = broken_prefix + broken_path[-1]
+        broken_path = os.path.join("/", *broken_path)
+        result = container.exec_run(
+            ["bash", "-c", f"mv {path} {broken_path}"], user="root"
+        )
+        assert_that(result.exit_code, equal_to(0))
