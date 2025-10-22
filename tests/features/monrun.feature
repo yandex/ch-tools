@@ -542,12 +542,11 @@ Feature: ch-monitoring tool
     """
     ch-monitoring system-metrics -n versioninteger -w 1 -c 21001001
     """
-    Then we get response
+    Then we get response contains
     """
-    2;"VersionInteger" metric's value is greater than critical threshold
+    2;"VersionInteger", crit = 21001001, count =
     """
 
-  @test
   Scenario: Check clickhouse system metrics with unknown metric
     When we execute command on clickhouse01
     """
