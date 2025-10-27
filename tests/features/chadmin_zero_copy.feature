@@ -8,6 +8,66 @@ Feature: chadmin zero-copy related zookeeper commands.
     And a working clickhouse on clickhouse02
 
 
+  Scenario Outline: Create zero-copy locks for all tables
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS test ON CLUSTER 'cluster'; 
+    CREATE DATABASE test ON CLUSTER 'cluster';
+    DROP DATABASE IF EXISTS test1 ON CLUSTER 'cluster'; 
+    CREATE DATABASE test1 ON CLUSTER 'cluster';
+
+    CREATE TABLE test.table_01 UUID '10000000-0000-0000-0000-000000000001' ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n
+    SETTINGS storage_policy='object_storage',allow_remote_fs_zero_copy_replication=1;
+    INSERT INTO test.table_01 SELECT number FROM numbers(2);
+
+    CREATE TABLE test1.table_02 UUID '10000000-0000-0000-0000-000000000002' ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_02', '{replica}') PARTITION BY n ORDER BY n
+    SETTINGS storage_policy='object_storage',allow_remote_fs_zero_copy_replication=1;
+    INSERT INTO test1.table_02 SELECT number FROM numbers(2);
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid 10000000-0000-0000-0000-000000000001 && \
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid 10000000-0000-0000-0000-000000000002
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper create-zero-copy-locks --disk object_storage <replicas>
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper list $(chadmin zookeeper list /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/0_0_0_0/)
+    """
+    Then we get response contains
+    """
+    <result1>
+    """
+    Then we get response contains
+    """
+    <result2>
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper list $(chadmin zookeeper list /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000002/0_0_0_0/)
+    """
+    Then we get response contains
+    """
+    <result1>
+    """
+    Then we get response contains
+    """
+    <result2>
+    """
+  Examples:
+      | replicas                                                            | result1                     | result2                    |
+      | --replicas clickhouse01.ch_tools_test,clickhouse02.ch_tools_test    | clickhouse01.ch_tools_test  | clickhouse02.ch_tools_test |
+      | --replicas clickhouse02.ch_tools_test                               | clickhouse02.ch_tools_test  | clickhouse02.ch_tools_test |
+      | --all-replicas                                                      | clickhouse01.ch_tools_test  | clickhouse02.ch_tools_test |
+      |                                                                     | clickhouse01.ch_tools_test  | clickhouse01.ch_tools_test |
+
+
   Scenario: Create zero-copy lock options for all tables in database
     When we execute queries on clickhouse01
     """
@@ -23,6 +83,11 @@ Feature: chadmin zero-copy related zookeeper commands.
     ENGINE = ReplicatedMergeTree('/tables/table_02', '{replica}') PARTITION BY n ORDER BY n
     SETTINGS storage_policy='object_storage',allow_remote_fs_zero_copy_replication=1;
     INSERT INTO test.table_02 SELECT number FROM numbers(2);
+
+    CREATE TABLE test.table_03 ON CLUSTER 'cluster' (n Int32)
+    ENGINE = MergeTree ORDER BY n
+    SETTINGS storage_policy='object_storage';
+    INSERT INTO test.table_03 SELECT number FROM numbers(2);
     """
     And we execute command on clickhouse01
     """
@@ -82,7 +147,7 @@ Feature: chadmin zero-copy related zookeeper commands.
     """
     And we execute command on clickhouse01
     """
-    chadmin zookeeper create-zero-copy-locks -t table_01 <option> --replica clickhouse02.ch_tools_test --disk object_storage
+    chadmin zookeeper create-zero-copy-locks -t table_01 <option> --replicas clickhouse02.ch_tools_test --disk object_storage
     """
     And we execute command on clickhouse01
     """
