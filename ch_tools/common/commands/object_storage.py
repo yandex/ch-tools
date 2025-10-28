@@ -62,6 +62,8 @@ UNIQUE_TABLE_TIMESTAMP_PATTERN = r"\d{8}_\d{6}"
 UNIQUE_TABLE_SUFFIX_PATTERN = (
     f"_{UNIQUE_TABLE_UUID_PATTERN}_({UNIQUE_TABLE_TIMESTAMP_PATTERN})"
 )
+# Precompiled regex patterns for better performance
+UNIQUE_TABLE_SUFFIX_REGEX = re.compile(UNIQUE_TABLE_SUFFIX_PATTERN)
 # Timestamp format for parsing table timestamps
 TIMESTAMP_FORMAT = "%Y%m%d_%H%M%S"
 
@@ -318,7 +320,7 @@ def _cleanup_old_service_tables(ctx: Context) -> None:
 
     # Get retention period from config (default to 7 days if not specified)
     retention_days = config.get("service_tables_retention_days", 7)
-    retention_threshold = datetime.now() - timedelta(days=retention_days)
+    retention_threshold = datetime.now(timezone.utc) - timedelta(days=retention_days)
 
     # Table prefixes to clean up
     table_prefixes = [
@@ -342,7 +344,7 @@ def _cleanup_old_service_tables(ctx: Context) -> None:
             for table_info in tables:
                 table_name = table_info["name"]
 
-                if match := re.search(UNIQUE_TABLE_SUFFIX_PATTERN, table_name):
+                if match := UNIQUE_TABLE_SUFFIX_REGEX.search(table_name):
                     table_timestamp_str = match.group(1)
                     try:
                         table_timestamp = datetime.strptime(
@@ -383,12 +385,12 @@ def _get_table_name(ctx: Context, table_prefix: str, unique_name: bool = False) 
 
     base_name = f"{config['database']}.{table_prefix}{disk_conf.name}"
 
-    if unique_name:
-        table_uuid = str(uuid.uuid4()).replace("-", "_")
-        timestamp = datetime.now().strftime(TIMESTAMP_FORMAT)
-        return f"{base_name}_{table_uuid}_{timestamp}"
-    else:
+    if not unique_name:
         return base_name
+
+    table_uuid = str(uuid.uuid4()).replace("-", "_")
+    timestamp = datetime.now(timezone.utc).strftime(TIMESTAMP_FORMAT)
+    return f"{base_name}_{table_uuid}_{timestamp}"
 
 
 @contextmanager
@@ -659,6 +661,9 @@ def _sanity_check_before_cleanup(
             "verify_paths_regex"
         ]["shard"]
 
+    # Compile regex pattern for better performance
+    paths_regex_compiled = re.compile(paths_regex)
+
     def raise_or_warn(dry_run: bool, msg: str) -> None:
         if not dry_run:
             raise RuntimeError(msg)
@@ -695,7 +700,7 @@ def _sanity_check_before_cleanup(
         )[0]
 
         # Validate sample path against regex
-        if not re.match(paths_regex, sample_path):
+        if not paths_regex_compiled.match(sample_path):
             raise_or_warn(
                 dry_run,
                 f"Path validation failed: sample path '{sample_path}' doesn't match regex '{paths_regex}'",
@@ -703,7 +708,7 @@ def _sanity_check_before_cleanup(
 
         # Validate all paths from iterator
         for orphaned_object in orphaned_objects_iterator():
-            if not re.match(paths_regex, orphaned_object.path):
+            if not paths_regex_compiled.match(orphaned_object.path):
                 raise_or_warn(
                     dry_run,
                     f"Path validation failed: object path '{orphaned_object.path}' doesn't match regex '{paths_regex}'",
