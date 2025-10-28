@@ -15,6 +15,7 @@ Feature: chadmin object-storage commands
     And we have executed queries on clickhouse01
     """
     CREATE DATABASE IF NOT EXISTS test ON CLUSTER '{cluster}';
+    CREATE DATABASE IF NOT EXISTS _system ON CLUSTER '{cluster}';
 
     CREATE TABLE IF NOT EXISTS test.table_s3_01 UUID '10000000-0000-0000-0000-000000000001' ON CLUSTER '{cluster}' (n Int32)
     ENGINE = ReplicatedMergeTree('/tables/table_s3_01', '{replica}') ORDER BY n PARTITION BY (n%10)
@@ -286,7 +287,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    Sanity check not passed
+    Path validation failed
     """
 
   Scenario: Clean many orphaned objects with size limit bytes
@@ -394,7 +395,7 @@ Feature: chadmin object-storage commands
     """
     Then it fails with response contains
     """
-    Potentially dangerous operation: Going to remove more than
+    Size validation failed
     """
 
   @require_version_24.3
@@ -483,7 +484,6 @@ Feature: chadmin object-storage commands
     Then we get response contains
     """
     Downloading cloud storage metadata from 'test3'
-    Collecting objects...
     """
     When we execute command on clickhouse01
     """
@@ -498,7 +498,6 @@ Feature: chadmin object-storage commands
     Downloading cloud storage metadata from 'test3'
     Downloading cloud storage metadata from 'test2'
     Downloading cloud storage metadata from 'test1'
-    Collecting objects...
     """
 
   Scenario: Sanity check when no objects in CH
@@ -514,4 +513,149 @@ Feature: chadmin object-storage commands
     """
     - WouldDelete: 0
       TotalSize: 0
+    """
+
+  @require_version_23.3
+  Scenario Outline: Service tables cleanup - old tables are removed with retention_days = 0
+    Given clickhouse-tools configuration on clickhouse01,clickhouse02
+    """
+    object_storage:
+      space_usage:
+        service_tables_retention_days: 0        
+        local_blobs_table_prefix: "local_objects_"
+        remote_blobs_table_prefix: "listing_objects_from_"
+        orphaned_blobs_table_prefix: "orphaned_objects_"
+    """
+    # First, create some service tables by running collect-info
+    When we execute command on clickhouse01
+    """
+    chadmin object-storage collect-info --to-time 0h
+    """
+    # Check that service tables were created (should be 3: remote_blobs, local_blobs, orphaned_blobs)
+    When we execute query on clickhouse01
+    """
+    SELECT count() FROM system.tables
+    WHERE database = '_system'
+    AND (name LIKE '%local_objects_object_storage%'
+         OR name LIKE '%orphaned_objects_object_storage%'
+         OR name LIKE '%listing_objects_from_object_storage%')
+    """
+    Then we get response
+    """
+    3
+    """
+    # Run <command> - this should clean up old unique tables and create new ones
+    When we execute command on clickhouse01
+    """
+    <command>
+    """
+    # Should still have 3 service tables (cleanup old, create new)
+    When we execute query on clickhouse01
+    """
+    SELECT count() FROM system.tables
+    WHERE database = '_system'
+    AND (name LIKE '%local_objects_object_storage%'
+         OR name LIKE '%orphaned_objects_object_storage%'
+         OR name LIKE '%listing_objects_from_object_storage%')
+    """
+    Then we get response
+    """
+    3
+    """
+
+    Examples:
+      | command                                                    |
+      | chadmin object-storage collect-info --to-time 0h          |
+      | chadmin object-storage clean --to-time 0h --dry-run       |
+
+  @require_version_23.3
+  Scenario: Service tables cleanup - retention period works correctly
+    Given clickhouse-tools configuration on clickhouse01,clickhouse02
+    """
+    object_storage:
+      space_usage:
+        service_tables_retention_days: 1
+        local_blobs_table_prefix: "local_objects_"
+        remote_blobs_table_prefix: "listing_objects_from_"
+        orphaned_blobs_table_prefix: "orphaned_objects_"
+    """
+    # Create one old table (older than 1 day) and one recent table (newer than 1 day)
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE _system.local_objects_object_storage_old_11111111_1111_1111_1111_111111111111_20240101_120000 (
+        obj_path String,
+        state String,
+        obj_size UInt64,
+        ref_count UInt32
+    ) ENGINE MergeTree ORDER BY obj_path;
+    
+    CREATE TABLE _system.local_objects_object_storage_new_22222222_2222_2222_2222_222222222222_20991231_120000 (
+        obj_path String,
+        state String,
+        obj_size UInt64,
+        ref_count UInt32
+    ) ENGINE MergeTree ORDER BY obj_path
+    """
+    # Run collect-info - should remove old table but keep recent one
+    When we execute command on clickhouse01
+    """
+    chadmin object-storage collect-info --to-time 0h
+    """
+    # Verify old table was removed
+    When we execute query on clickhouse01
+    """
+    SELECT count() FROM system.tables
+    WHERE database = '_system'
+    AND name = 'local_objects_object_storage_old_11111111_1111_1111_1111_111111111111_20240101_120000'
+    """
+    Then we get response
+    """
+    0
+    """
+    # Verify recent table was kept
+    When we execute query on clickhouse01
+    """
+    SELECT count() FROM system.tables
+    WHERE database = '_system'
+    AND name = 'local_objects_object_storage_new_22222222_2222_2222_2222_222222222222_20991231_120000'
+    """
+    Then we get response
+    """
+    1
+    """
+
+  @require_version_23.3
+  Scenario: Service tables cleanup - only unique tables are removed
+    Given clickhouse-tools configuration on clickhouse01,clickhouse02
+    """
+    object_storage:
+      space_usage:
+        service_tables_retention_days: 0
+        local_blobs_table_prefix: "local_blobs_"
+    """
+    # Create a non-unique service table (simulating base table without UUID/timestamp)
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE _system.local_blobs_object_storage (
+        obj_path String,
+        state String,
+        obj_size UInt64,
+        ref_count UInt32
+    ) ENGINE MergeTree ORDER BY obj_path
+    """
+    # Run collect-info - should not touch non-unique tables
+    When we execute command on clickhouse01
+    """
+    chadmin object-storage collect-info --to-time 0h
+    """
+    # Verify base table still exists
+    When we execute query on clickhouse01
+    """
+    SELECT count() FROM system.tables
+    WHERE database = '_system'
+    AND name = 'local_blobs_object_storage'
+    """
+    Then we get response
+    """
+    1
     """

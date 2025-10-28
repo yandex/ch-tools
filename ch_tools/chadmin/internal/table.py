@@ -22,13 +22,31 @@ from ch_tools.chadmin.internal.table_metadata import (
     parse_table_metadata,
     update_uuid_table_metadata_file,
 )
-from ch_tools.chadmin.internal.utils import execute_query, remove_from_disk
+from ch_tools.chadmin.internal.utils import (
+    execute_query,
+    execute_query_on_shard,
+    remove_from_disk,
+)
 from ch_tools.chadmin.internal.zookeeper_clean import clean_zk_metadata_for_hosts
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 
 DISK_LOCAL_KEY = "local"
 DISK_OBJECT_STORAGE_KEY = "object_storage"
+
+
+def table_exists(
+    ctx: Context,
+    database_name: str,
+    table_name: str,
+) -> bool:
+    tables = list_tables(
+        ctx,
+        database_name=database_name,
+        table_name=table_name,
+    )
+
+    return bool(tables)
 
 
 def get_table(
@@ -304,6 +322,16 @@ def delete_table(
         dry_run=dry_run,
         format_=None,
     )
+
+
+def drop_table(ctx: Context, table_name: str) -> None:
+    """Удаляет таблицу локально (для не реплицированных таблиц)"""
+    execute_query(ctx, f"DROP TABLE IF EXISTS {table_name} SYNC", format_=None)
+
+
+def drop_table_on_shard(ctx: Context, table_name: str) -> None:
+    """Удаляет таблицу на всем шарде (для реплицированных таблиц)"""
+    execute_query_on_shard(ctx, f"DROP TABLE IF EXISTS {table_name} SYNC", format_=None)
 
 
 def check_table_dettached(ctx: Context, database_name: str, table_name: str) -> None:
