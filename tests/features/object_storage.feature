@@ -7,6 +7,12 @@ Feature: chadmin object-storage commands
     clickhouse:
         user: "_admin"
         password: ""
+    object_storage:
+      space_usage:
+        database: test
+        local_blobs_table_prefix: "local_objects_"
+        remote_blobs_table_prefix: "listing_objects_from_"
+        orphaned_blobs_table_prefix: "orphaned_objects_"
     """
     And a working s3
     And a working zookeeper
@@ -15,7 +21,6 @@ Feature: chadmin object-storage commands
     And we have executed queries on clickhouse01
     """
     CREATE DATABASE IF NOT EXISTS test ON CLUSTER '{cluster}';
-    CREATE DATABASE IF NOT EXISTS _system ON CLUSTER '{cluster}';
 
     CREATE TABLE IF NOT EXISTS test.table_s3_01 UUID '10000000-0000-0000-0000-000000000001' ON CLUSTER '{cluster}' (n Int32)
     ENGINE = ReplicatedMergeTree('/tables/table_s3_01', '{replica}') ORDER BY n PARTITION BY (n%10)
@@ -39,7 +44,7 @@ Feature: chadmin object-storage commands
     """
     And we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h
+    chadmin object-storage collect-info --to-time 0h --traverse-remote
     """
     And we execute command on clickhouse01
     """
@@ -71,7 +76,7 @@ Feature: chadmin object-storage commands
     """
     And we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h
+    chadmin object-storage collect-info --to-time 0h --traverse-remote
     """
     And we execute command on clickhouse01
     """
@@ -163,7 +168,7 @@ Feature: chadmin object-storage commands
     """
  
   Scenario: Clean orphaned objects with prefix
-    Given clickhouse-tools configuration on clickhouse01,clickhouse02
+    Given merged clickhouse-tools configuration on clickhouse01,clickhouse02
     """
     object_storage:
       clean:
@@ -326,7 +331,7 @@ Feature: chadmin object-storage commands
     """
 
   Scenario: Clean many orphaned objects with size limit fraction
-    Given clickhouse-tools configuration on clickhouse01,clickhouse02
+    Given merged clickhouse-tools configuration on clickhouse01,clickhouse02
     """
     object_storage:
       clean:
@@ -368,7 +373,7 @@ Feature: chadmin object-storage commands
 
   @require_version_23.3
   Scenario: Sanity check clean many orphaned objects
-    Given clickhouse-tools configuration on clickhouse01,clickhouse02
+    Given merged clickhouse-tools configuration on clickhouse01,clickhouse02
     """
     object_storage:
       clean:
@@ -517,19 +522,16 @@ Feature: chadmin object-storage commands
 
   @require_version_23.3
   Scenario Outline: Service tables cleanup - old tables are removed with retention_days = 0
-    Given clickhouse-tools configuration on clickhouse01,clickhouse02
+    Given merged clickhouse-tools configuration on clickhouse01,clickhouse02
     """
     object_storage:
       space_usage:
         service_tables_retention_days: 0        
-        local_blobs_table_prefix: "local_objects_"
-        remote_blobs_table_prefix: "listing_objects_from_"
-        orphaned_blobs_table_prefix: "orphaned_objects_"
     """
     # First, create some service tables by running collect-info
     When we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h
+    chadmin object-storage collect-info --to-time 0h --traverse-remote
     """
     # Check that service tables were created (should be 3: remote_blobs, local_blobs, orphaned_blobs)
     When we execute query on clickhouse01
@@ -564,13 +566,13 @@ Feature: chadmin object-storage commands
     """
 
     Examples:
-      | command                                                    |
-      | chadmin object-storage collect-info --to-time 0h          |
-      | chadmin object-storage clean --to-time 0h --dry-run       |
+      | command                                                            |
+      | chadmin object-storage collect-info --to-time 0h --traverse-remote |
+      | chadmin object-storage clean --to-time 0h --dry-run                |
 
   @require_version_23.3
   Scenario: Service tables cleanup - retention period works correctly
-    Given clickhouse-tools configuration on clickhouse01,clickhouse02
+    Given merged clickhouse-tools configuration on clickhouse01,clickhouse02
     """
     object_storage:
       space_usage:
@@ -599,7 +601,7 @@ Feature: chadmin object-storage commands
     # Run collect-info - should remove old table but keep recent one
     When we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h
+    chadmin object-storage collect-info --to-time 0h  --traverse-remote
     """
     # Verify old table was removed
     When we execute query on clickhouse01
@@ -626,7 +628,7 @@ Feature: chadmin object-storage commands
 
   @require_version_23.3
   Scenario: Service tables cleanup - only unique tables are removed
-    Given clickhouse-tools configuration on clickhouse01,clickhouse02
+    Given merged clickhouse-tools configuration on clickhouse01,clickhouse02
     """
     object_storage:
       space_usage:
@@ -646,7 +648,7 @@ Feature: chadmin object-storage commands
     # Run collect-info - should not touch non-unique tables
     When we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h
+    chadmin object-storage collect-info --to-time 0h --traverse-remote
     """
     # Verify base table still exists
     When we execute query on clickhouse01
