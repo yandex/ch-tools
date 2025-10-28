@@ -96,7 +96,6 @@ def clean(
     config = ctx.obj["config"]["object_storage"]["space_usage"]
     ch_client = clickhouse_client(ctx)
 
-    # Clean up old service tables from previous runs
     _cleanup_old_service_tables(ctx)
 
     downloaded_backups = _download_backups_on_disk(
@@ -174,7 +173,6 @@ def collect_object_storage_info(
     Collects object storage usage information.
     Uses temporary unique tables for all blob tables with automatic deletion.
     """
-    # Clean up old service tables from previous runs
     _cleanup_old_service_tables(ctx)
 
     with (

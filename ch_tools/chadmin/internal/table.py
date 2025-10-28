@@ -325,12 +325,10 @@ def delete_table(
 
 
 def drop_table(ctx: Context, table_name: str) -> None:
-    """Удаляет таблицу локально (для не реплицированных таблиц)"""
     execute_query(ctx, f"DROP TABLE IF EXISTS {table_name} SYNC", format_=None)
 
 
 def drop_table_on_shard(ctx: Context, table_name: str) -> None:
-    """Удаляет таблицу на всем шарде (для реплицированных таблиц)"""
     execute_query_on_shard(ctx, f"DROP TABLE IF EXISTS {table_name} SYNC", format_=None)
 
 
