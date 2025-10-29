@@ -46,7 +46,7 @@ def table_exists(
         table_name=table_name,
     )
 
-    return bool(tables)
+    return len(tables) > 0
 
 
 def get_table(

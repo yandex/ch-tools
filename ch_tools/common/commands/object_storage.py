@@ -1,7 +1,6 @@
 import os
 import re
 import subprocess
-import traceback
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -101,7 +100,8 @@ def clean(
 
     _cleanup_old_service_tables(ctx)
 
-    downloaded_backups = _download_backups_on_disk(
+    # Download cloud storage backups to include their blobs when collecting local blobs
+    downloaded_backups = _download_missing_cloud_storage_backups(
         ctx, disk_conf.name, ignore_missing_cloud_storage_backups
     )
 
@@ -373,11 +373,9 @@ def _cleanup_old_service_tables(ctx: Context) -> None:
                         )
                         continue
 
-        except Exception as e:
-            err_tb = traceback.format_exc()
-            logging.warning(
-                f"Error cleaning up old {table_prefix} tables: {e}\n{err_tb}"
-            )
+        except:
+            logging.exception(f"Error cleaning up old {table_prefix} tables:")
+            raise
 
 
 def _get_table_name(ctx: Context, table_prefix: str, unique_name: bool = False) -> str:
@@ -527,6 +525,8 @@ def _remote_blobs_table(
                 remote_blobs_table,
                 config["zk_path_prefix"],
                 config["storage_policy"],
+                replicated=has_zk()
+                and not unique_name,  # Table with unique name is supposed to be temporary and should not be replicated
                 drop_existing_table=True,
             )
             _collect_remote_blobs(
@@ -813,6 +813,7 @@ def _create_remote_blobs_table(
     table_name: str,
     replica_zk_prefix: str,
     storage_policy: str,
+    replicated: bool,
     drop_existing_table: bool = False,
 ) -> None:
     if drop_existing_table:
@@ -823,7 +824,7 @@ def _create_remote_blobs_table(
         + ZOOKEEPER_ARGS.format(
             replica_zk_prefix=replica_zk_prefix, table_name=table_name
         )
-        if has_zk()
+        if replicated
         else "MergeTree"
     )
 
@@ -945,11 +946,33 @@ def _get_table_function(
 
 
 def _download_missing_cloud_storage_backups(
+    ctx: Context,
     disk: str,
+    ignore: bool,
 ) -> list[str]:
     """
     Downloads created cloud storage backups if they are missing in shadow directory.
     """
+    missing_backups = []
+    skip_cause = ""
+
+    if ignore:
+        skip_cause = "Ignore downloading missing cloud storage backups"
+    elif not match_ch_backup_version("2.641.197281242"):
+        skip_cause = (
+            "Download metadata command is available since ch-backup 2.641.197281242"
+        )
+    elif not match_ch_version(ctx, min_version="24.3"):
+        skip_cause = "Setting traverse_shadow_remote_data_paths is available since ClickHouse 24.3"
+
+    if skip_cause:
+        logging.warning(f"Skip downloading missing backups. Reason: {skip_cause}")
+        return []
+
+    logging.info(
+        "Will download cloud storage metadata from backups to shadow directory if they are missing"
+    )
+
     missing_backups = get_missing_chs3_backups(disk)
 
     for backup in missing_backups:
@@ -971,28 +994,6 @@ def _download_missing_cloud_storage_backups(
             )
 
     return missing_backups
-
-
-def _download_backups_on_disk(
-    ctx: Context, disk_name: str, ignore_missing_cloud_storage_backups: bool
-) -> List[str]:
-    """
-    Prepares cloud storage backups by downloading missing metadata.
-    """
-    downloaded_backups = []
-    # Setting traverse_shadow_remote_data_paths is available since ClickHouse 24.3
-    # Download metadata command is available since ch-backup 2.641.197281242
-    if (
-        not ignore_missing_cloud_storage_backups
-        and match_ch_backup_version("2.641.197281242")
-        and match_ch_version(ctx, min_version="24.3")
-    ):
-        logging.info(
-            "Will download cloud storage metadata from backups to shadow directory if they are missing"
-        )
-        downloaded_backups = _download_missing_cloud_storage_backups(disk_name)
-
-    return downloaded_backups
 
 
 def _remove_backups_from_disk(

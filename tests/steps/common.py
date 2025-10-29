@@ -159,7 +159,6 @@ def merged_clickhouse_tools_configuration(context: ContextT, nodes: str) -> None
         container = docker.get_container(context, node)
         container.exec_run(["bash", "-c", "mkdir -p /etc/clickhouse-tools"])
 
-        # Читаем существующую конфигурацию
         result = container.exec_run(
             [
                 "bash",
@@ -169,7 +168,6 @@ def merged_clickhouse_tools_configuration(context: ContextT, nodes: str) -> None
         )
         existing_conf = yaml.load(result.output.decode(), yaml.SafeLoader) or {}
 
-        # Мержим конфигурации
         merged_conf = merge(existing_conf, new_conf)
         merged_yaml = yaml.dump(merged_conf)
 
