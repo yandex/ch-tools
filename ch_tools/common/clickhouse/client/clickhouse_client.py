@@ -77,10 +77,11 @@ class ClickhouseClient:
         timeout: Optional[int],
         stream: bool,
         per_query_settings: Dict[str, Any],
+        host: str,
         port: ClickhousePort,
     ) -> Any:
         schema = "https" if port == ClickhousePort.HTTPS else "http"
-        url = f"{schema}://{self.host}:{self.ports[port]}"
+        url = f"{schema}://{host}:{self.ports[port]}"
         headers = {}
         if self.user:
             headers["X-ClickHouse-User"] = self.user
@@ -128,13 +129,14 @@ class ClickhouseClient:
         self,
         query: Optional[Query],
         format_: Optional[str],
+        host: str,
         port: ClickhousePort,
     ) -> Any:
         # Private method, we are sure that port is tcps or tcp and presents in config
         cmd = [
             "clickhouse-client",
             "--host",
-            self.host,
+            host,
             "--port",
             str(self.ports[port]),
         ]
@@ -178,6 +180,7 @@ class ClickhouseClient:
         dry_run: bool = False,
         stream: bool = False,
         settings: Optional[dict] = None,
+        host: Optional[str] = None,
         port: Optional[ClickhousePort] = None,
     ) -> Any:
         """
@@ -212,7 +215,8 @@ class ClickhouseClient:
             if port is None:
                 raise UserWarning(2, "Can't find any port in clickhouse-server config")
 
-        logging.debug("Executing query: {}", str(query))
+        host = host or self.host
+        logging.debug(f"Executing query: {query}\n on the host: {host}")
         if port in [ClickhousePort.HTTPS, ClickhousePort.HTTP]:
             return self._execute_http(
                 query,
@@ -221,9 +225,10 @@ class ClickhouseClient:
                 timeout,
                 stream,
                 per_query_settings,
+                host,
                 port,
             )
-        return self._execute_tcp(query, format_, port)
+        return self._execute_tcp(query, format_, host, port)
 
     def query_json_data(
         self: Self,
@@ -236,6 +241,7 @@ class ClickhouseClient:
         dry_run: bool = False,
         stream: bool = False,
         settings: Optional[dict] = None,
+        host: Optional[str] = None,
         port: Optional[ClickhousePort] = None,
     ) -> Any:
         """
@@ -255,6 +261,7 @@ class ClickhouseClient:
             dry_run=dry_run,
             stream=stream,
             settings=settings,
+            host=host,
             port=port,
         )["data"]
 

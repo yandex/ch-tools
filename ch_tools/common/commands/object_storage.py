@@ -1,6 +1,7 @@
 import os
 import re
 import subprocess
+import traceback
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -350,6 +351,7 @@ def _cleanup_old_service_tables(ctx: Context) -> None:
                         table_timestamp = datetime.strptime(
                             table_timestamp_str, TIMESTAMP_FORMAT
                         )
+                        table_timestamp = table_timestamp.replace(tzinfo=timezone.utc)
 
                         # Delete table if it's older than retention period
                         if table_timestamp < retention_threshold:
@@ -372,8 +374,10 @@ def _cleanup_old_service_tables(ctx: Context) -> None:
                         continue
 
         except Exception as e:
-            # Log error but don't fail the entire operation
-            logging.warning(f"Error cleaning up old {table_prefix} tables: {e}")
+            err_tb = traceback.format_exc()
+            logging.warning(
+                f"Error cleaning up old {table_prefix} tables: {e}\n{err_tb}"
+            )
 
 
 def _get_table_name(ctx: Context, table_prefix: str, unique_name: bool = False) -> str:

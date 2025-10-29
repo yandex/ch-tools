@@ -533,11 +533,10 @@ Feature: chadmin object-storage commands
     """
     chadmin object-storage collect-info --to-time 0h --traverse-remote
     """
-    # Check that service tables were created (should be 3: remote_blobs, local_blobs, orphaned_blobs)
     When we execute query on clickhouse01
     """
     SELECT count() FROM system.tables
-    WHERE database = '_system'
+    WHERE database = 'test'
     AND (name LIKE '%local_objects_object_storage%'
          OR name LIKE '%orphaned_objects_object_storage%'
          OR name LIKE '%listing_objects_from_object_storage%')
@@ -555,7 +554,7 @@ Feature: chadmin object-storage commands
     When we execute query on clickhouse01
     """
     SELECT count() FROM system.tables
-    WHERE database = '_system'
+    WHERE database = 'test'
     AND (name LIKE '%local_objects_object_storage%'
          OR name LIKE '%orphaned_objects_object_storage%'
          OR name LIKE '%listing_objects_from_object_storage%')
@@ -577,21 +576,20 @@ Feature: chadmin object-storage commands
     object_storage:
       space_usage:
         service_tables_retention_days: 1
-        local_blobs_table_prefix: "local_objects_"
-        remote_blobs_table_prefix: "listing_objects_from_"
-        orphaned_blobs_table_prefix: "orphaned_objects_"
     """
     # Create one old table (older than 1 day) and one recent table (newer than 1 day)
     When we execute query on clickhouse01
     """
-    CREATE TABLE _system.local_objects_object_storage_old_11111111_1111_1111_1111_111111111111_20240101_120000 (
+    CREATE TABLE test.local_objects_object_storage_old_11111111_1111_1111_1111_111111111111_20240101_120000 (
         obj_path String,
         state String,
         obj_size UInt64,
         ref_count UInt32
     ) ENGINE MergeTree ORDER BY obj_path;
-    
-    CREATE TABLE _system.local_objects_object_storage_new_22222222_2222_2222_2222_222222222222_20991231_120000 (
+    """
+    And we execute query on clickhouse01
+    """
+    CREATE TABLE test.local_objects_object_storage_new_22222222_2222_2222_2222_222222222222_20991231_120000 (
         obj_path String,
         state String,
         obj_size UInt64,
@@ -607,7 +605,7 @@ Feature: chadmin object-storage commands
     When we execute query on clickhouse01
     """
     SELECT count() FROM system.tables
-    WHERE database = '_system'
+    WHERE database = 'test'
     AND name = 'local_objects_object_storage_old_11111111_1111_1111_1111_111111111111_20240101_120000'
     """
     Then we get response
@@ -618,7 +616,7 @@ Feature: chadmin object-storage commands
     When we execute query on clickhouse01
     """
     SELECT count() FROM system.tables
-    WHERE database = '_system'
+    WHERE database = 'test'
     AND name = 'local_objects_object_storage_new_22222222_2222_2222_2222_222222222222_20991231_120000'
     """
     Then we get response
@@ -638,7 +636,7 @@ Feature: chadmin object-storage commands
     # Create a non-unique service table (simulating base table without UUID/timestamp)
     When we execute query on clickhouse01
     """
-    CREATE TABLE _system.local_blobs_object_storage (
+    CREATE TABLE test.local_blobs_object_storage (
         obj_path String,
         state String,
         obj_size UInt64,
@@ -654,7 +652,7 @@ Feature: chadmin object-storage commands
     When we execute query on clickhouse01
     """
     SELECT count() FROM system.tables
-    WHERE database = '_system'
+    WHERE database = 'test'
     AND name = 'local_blobs_object_storage'
     """
     Then we get response

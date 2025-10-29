@@ -59,7 +59,7 @@ DEFAULT_CONFIG = {
             "remote_blobs_table_prefix": "listing_objects_from_",
             "orphaned_blobs_table_prefix": "orphaned_objects_",
             "antijoin_timeout": 24 * 60 * 60,
-            "database": "_system",
+            "database": "default",
             "zk_path_prefix": "/_system/tables",
             "storage_policy": "default",
         },

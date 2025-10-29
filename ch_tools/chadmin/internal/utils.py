@@ -35,9 +35,6 @@ def execute_query(
 
     ch_client = clickhouse_client(ctx)
 
-    if replica is not None:
-        ch_client.host = replica
-
     return ch_client.query(
         query=query,
         query_args=kwargs,
@@ -47,6 +44,7 @@ def execute_query(
         dry_run=dry_run,
         stream=stream,
         settings=settings,
+        host=replica,
     )
 
 
