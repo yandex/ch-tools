@@ -110,21 +110,15 @@ def clean(
         logging.info("Deleting orphaned objects...")
 
     try:
-        with (
-            _remote_blobs_table(
-                ctx,
-                object_name_prefix,
-                from_time,
-                to_time,
-                unique_name=not keep_paths,
-                keep_table=keep_paths,
-                use_saved=use_saved_list,
-            ) as remote_blobs_table,
-            _local_blobs_table(ctx) as local_blobs_table,
-            _orphaned_blobs_table(
-                ctx, local_blobs_table, remote_blobs_table
-            ) as orphaned_blobs_table,
-        ):
+        with _get_blobs_tables(
+            ctx,
+            object_name_prefix,
+            from_time,
+            to_time,
+            unique_name=not keep_paths,
+            keep_table=keep_paths,
+            use_saved=use_saved_list,
+        ) as (remote_blobs_table, local_blobs_table, orphaned_blobs_table):
             timeout = config["antijoin_timeout"]
             query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
             orphaned_objects_iterator = _object_list_generator(
@@ -177,21 +171,15 @@ def collect_object_storage_info(
     """
     _cleanup_old_service_tables(ctx)
 
-    with (
-        _remote_blobs_table(
-            ctx,
-            object_name_prefix,
-            from_time,
-            to_time,
-            unique_name=False,
-            keep_table=True,
-            use_saved=use_saved,
-        ) as remote_blobs_table,
-        _local_blobs_table(ctx, unique_name=True) as local_blobs_table,
-        _orphaned_blobs_table(
-            ctx, local_blobs_table, remote_blobs_table, unique_name=True
-        ) as orphaned_blobs_table,
-    ):
+    with _get_blobs_tables(
+        ctx,
+        object_name_prefix,
+        from_time,
+        to_time,
+        unique_name=False,
+        keep_table=True,
+        use_saved=use_saved,
+    ) as (remote_blobs_table, local_blobs_table, orphaned_blobs_table):
         _collect_space_usage(ctx, local_blobs_table, orphaned_blobs_table)
 
 
@@ -377,6 +365,37 @@ def _get_table_name(ctx: Context, table_prefix: str, unique_name: bool = False) 
     table_uuid = str(uuid.uuid4()).replace("-", "_")
     timestamp = datetime.now(timezone.utc).strftime(TIMESTAMP_FORMAT)
     return f"{base_name}_{table_uuid}_{timestamp}"
+
+
+@contextmanager
+def _get_blobs_tables(
+    ctx: Context,
+    object_name_prefix: str,
+    from_time: Optional[timedelta],
+    to_time: timedelta,
+    unique_name: bool = False,
+    keep_table: bool = True,
+    use_saved: bool = False,
+) -> Generator[Tuple[str, str, str], None, None]:
+    """
+    Returns tuple: (remote_blobs_table, local_blobs_table, orphaned_blobs_table)
+    """
+    with (
+        _remote_blobs_table(
+            ctx,
+            object_name_prefix,
+            from_time,
+            to_time,
+            unique_name=unique_name,
+            keep_table=keep_table,
+            use_saved=use_saved,
+        ) as remote_blobs_table,
+        _local_blobs_table(ctx) as local_blobs_table,
+        _orphaned_blobs_table(
+            ctx, local_blobs_table, remote_blobs_table
+        ) as orphaned_blobs_table,
+    ):
+        yield remote_blobs_table, local_blobs_table, orphaned_blobs_table
 
 
 @contextmanager

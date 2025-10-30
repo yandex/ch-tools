@@ -306,7 +306,7 @@ def delete_table(
     logging.info("Deleting table `{}`.`{}`", database_name, table_name)
     timeout = ctx.obj["config"]["clickhouse"]["drop_table_timeout"]
     query = """
-        DROP TABLE `{{ database_name }}`.`{{ table_name }}`
+        DROP TABLE IF EXISTS `{{ database_name }}`.`{{ table_name }}`
         {%- if cluster %}
         ON CLUSTER '{{ cluster }}'
         {%- endif %}
