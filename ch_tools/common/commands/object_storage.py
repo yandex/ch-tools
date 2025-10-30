@@ -99,61 +99,53 @@ def clean(
 
     _cleanup_old_service_tables(ctx)
 
-    # Download cloud storage backups to include their blobs when collecting local blobs
-    downloaded_backups = _download_missing_cloud_storage_backups(
-        ctx, disk_conf.name, ignore_missing_cloud_storage_backups
-    )
-
     if dry_run:
         logging.info("Counting orphaned objects...")
     else:
         logging.info("Deleting orphaned objects...")
 
-    try:
-        with _get_blobs_tables(
-            ctx,
-            object_name_prefix,
-            from_time,
-            to_time,
-            unique_name=not keep_paths,
-            keep_table=keep_paths,
-            use_saved=use_saved_list,
-        ) as (remote_blobs_table, local_blobs_table, orphaned_blobs_table):
-            timeout = config["antijoin_timeout"]
-            query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
-            orphaned_objects_iterator = _object_list_generator(
-                ch_client, orphaned_blobs_table, query_settings, timeout
-            )
-            listing_size_in_bucket = int(
-                ch_client.query_json_data_first_row(
-                    query=f"SELECT sum(obj_size) FROM {remote_blobs_table}",
-                    compact=True,
-                )[0]
-            )
+    with _get_blobs_tables(
+        ctx,
+        object_name_prefix,
+        from_time,
+        to_time,
+        unique_name=not keep_paths,
+        keep_table=keep_paths,
+        use_saved=use_saved_list,
+        ignore_missing_cloud_storage_backups=ignore_missing_cloud_storage_backups,
+    ) as (remote_blobs_table, local_blobs_table, orphaned_blobs_table):
+        timeout = config["antijoin_timeout"]
+        query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
+        orphaned_objects_iterator = _object_list_generator(
+            ch_client, orphaned_blobs_table, query_settings, timeout
+        )
+        listing_size_in_bucket = int(
+            ch_client.query_json_data_first_row(
+                query=f"SELECT sum(obj_size) FROM {remote_blobs_table}",
+                compact=True,
+            )[0]
+        )
 
-            # Safety checks
-            if ctx.obj["config"]["object_storage"]["clean"]["verify"]:
-                _sanity_check_before_cleanup(
-                    ctx,
-                    orphaned_objects_iterator,
-                    ch_client,
-                    listing_size_in_bucket,
-                    orphaned_blobs_table,
-                    verify_paths_regex,
-                    dry_run,
-                )
-
-            deleted, total_size = _cleanup_orphaned_objects(
+        # Safety checks
+        if ctx.obj["config"]["object_storage"]["clean"]["verify"]:
+            _sanity_check_before_cleanup(
+                ctx,
                 orphaned_objects_iterator,
-                disk_conf,
+                ch_client,
                 listing_size_in_bucket,
-                max_size_to_delete_bytes,
-                max_size_to_delete_fraction,
+                orphaned_blobs_table,
+                verify_paths_regex,
                 dry_run,
             )
 
-    finally:
-        _remove_backups_from_disk(disk_conf.name, downloaded_backups)
+        deleted, total_size = _cleanup_orphaned_objects(
+            orphaned_objects_iterator,
+            disk_conf,
+            listing_size_in_bucket,
+            max_size_to_delete_bytes,
+            max_size_to_delete_fraction,
+            dry_run,
+        )
 
     return deleted, total_size
 
@@ -376,11 +368,18 @@ def _get_blobs_tables(
     unique_name: bool = False,
     keep_table: bool = True,
     use_saved: bool = False,
+    ignore_missing_cloud_storage_backups: bool = False,
 ) -> Generator[Tuple[str, str, str], None, None]:
     """
     Returns tuple: (remote_blobs_table, local_blobs_table, orphaned_blobs_table)
+    Manages cloud storage backups automatically.
     """
+    disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
+
     with (
+        _download_cloud_storage_backups(
+            ctx, disk_conf.name, ignore_missing_cloud_storage_backups
+        ),
         _remote_blobs_table(
             ctx,
             object_name_prefix,
@@ -948,6 +947,22 @@ def _get_table_function(
     return result
 
 
+@contextmanager
+def _download_cloud_storage_backups(
+    ctx: Context,
+    disk: str,
+    ignore: bool = False,
+) -> Generator[list[str], None, None]:
+    """
+    Context manager for downloading and cleaning up cloud storage backups.
+    """
+    downloaded_backups = _download_missing_cloud_storage_backups(ctx, disk, ignore)
+    try:
+        yield downloaded_backups
+    finally:
+        _remove_backups_from_disk(disk, downloaded_backups)
+
+
 def _download_missing_cloud_storage_backups(
     ctx: Context,
     disk: str,
@@ -991,7 +1006,6 @@ def _download_missing_cloud_storage_backups(
         )
 
         if proc.returncode:
-            _remove_backups_from_disk(disk, missing_backups)
             raise RuntimeError(
                 f"Downloading cloud storage metadata command has failed: retcode {proc.returncode}, stderr: {proc.stderr.decode()}"
             )
