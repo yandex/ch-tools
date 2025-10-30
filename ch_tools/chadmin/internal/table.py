@@ -291,14 +291,18 @@ def delete_table(
     database_name: str,
     table_name: str,
     *,
-    cluster: Optional[bool] = None,
-    echo: Optional[bool] = False,
-    sync_mode: Optional[bool] = True,
-    dry_run: Optional[bool] = False,
+    cluster: Optional[str] = None,
+    shard: bool = False,
+    echo: bool = False,
+    sync_mode: bool = True,
+    dry_run: bool = False,
 ) -> None:
     """
     Perform "DROP TABLE" for the specified table.
     """
+    if cluster and shard:
+        raise ValueError("`cluster` and `shard` cannot be set both")
+
     logging.info("Deleting table `{}`.`{}`", database_name, table_name)
     timeout = ctx.obj["config"]["clickhouse"]["drop_table_timeout"]
     query = """
@@ -310,7 +314,7 @@ def delete_table(
         NO DELAY
         {%- endif %}
         """
-    execute_query(
+    (execute_query if not shard else execute_query_on_shard)(
         ctx,
         query,
         timeout=timeout,
@@ -324,12 +328,14 @@ def delete_table(
     )
 
 
-def drop_table(ctx: Context, table_name: str) -> None:
-    execute_query(ctx, f"DROP TABLE IF EXISTS {table_name} SYNC", format_=None)
-
-
-def drop_table_on_shard(ctx: Context, table_name: str) -> None:
-    execute_query_on_shard(ctx, f"DROP TABLE IF EXISTS {table_name} SYNC", format_=None)
+def delete_table_by_full_name(
+    ctx: Context, full_table_name: str, **kwargs: Any
+) -> None:
+    """
+    Delete table by full name (database.table).
+    """
+    database_name, table_name = full_table_name.split(".", 1)
+    delete_table(ctx, database_name, table_name, **kwargs)
 
 
 def check_table_dettached(ctx: Context, database_name: str, table_name: str) -> None:

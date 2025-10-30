@@ -17,8 +17,7 @@ from ch_tools.chadmin.internal.object_storage.s3_iterator import (
 )
 from ch_tools.chadmin.internal.system import match_ch_backup_version, match_ch_version
 from ch_tools.chadmin.internal.table import (
-    drop_table,
-    drop_table_on_shard,
+    delete_table_by_full_name,
     list_tables,
     table_exists,
 )
@@ -319,11 +318,9 @@ def _cleanup_old_service_tables(ctx: Context) -> None:
     config = ctx.obj["config"]["object_storage"]["space_usage"]
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
 
-    # Get retention period from config (default to 7 days if not specified)
     retention_days = config.get("service_tables_retention_days", 7)
     retention_threshold = datetime.now(timezone.utc) - timedelta(days=retention_days)
 
-    # Table prefixes to clean up
     table_prefixes = [
         config["local_blobs_table_prefix"],
         config["orphaned_blobs_table_prefix"],
@@ -337,7 +334,6 @@ def _cleanup_old_service_tables(ctx: Context) -> None:
             base_name = f"{table_prefix}{disk_conf.name}"
             table_pattern = f"{base_name}_%"
 
-            # Get tables matching the prefix pattern
             tables = list_tables(
                 ctx, database_name=database, table_pattern=table_pattern
             )
@@ -347,32 +343,20 @@ def _cleanup_old_service_tables(ctx: Context) -> None:
 
                 if match := UNIQUE_TABLE_SUFFIX_REGEX.search(table_name):
                     table_timestamp_str = match.group(1)
-                    try:
-                        table_timestamp = datetime.strptime(
-                            table_timestamp_str, TIMESTAMP_FORMAT
-                        )
-                        table_timestamp = table_timestamp.replace(tzinfo=timezone.utc)
+                    table_timestamp = datetime.strptime(
+                        table_timestamp_str, TIMESTAMP_FORMAT
+                    )
+                    table_timestamp = table_timestamp.replace(tzinfo=timezone.utc)
 
-                        # Delete table if it's older than retention period
-                        if table_timestamp < retention_threshold:
-                            full_table_name = f"{database}.{table_name}"
-                            logging.info(
-                                f"Removing old service table: {full_table_name}"
-                            )
+                    # Delete table if it's older than retention period
+                    if table_timestamp < retention_threshold:
+                        full_table_name = f"{database}.{table_name}"
+                        logging.info(f"Removing old service table: {full_table_name}")
 
-                            # Use appropriate drop method based on table type
-                            if table_prefix == config["remote_blobs_table_prefix"]:
-                                drop_table_on_shard(ctx, full_table_name)
-                            else:
-                                drop_table(ctx, full_table_name)
-
-                    except ValueError:
-                        # Skip tables with invalid timestamp format
-                        logging.warning(
-                            f"Skipping table with invalid timestamp format: {table_name}"
-                        )
-                        continue
-
+                        if table_prefix == config["remote_blobs_table_prefix"]:
+                            delete_table_by_full_name(ctx, full_table_name, shard=True)
+                        else:
+                            delete_table_by_full_name(ctx, full_table_name)
         except:
             logging.exception(f"Error cleaning up old {table_prefix} tables:")
             raise
@@ -447,7 +431,7 @@ def _local_blobs_table(
         yield local_blobs_table
     finally:
         if not keep_table:
-            drop_table(ctx, local_blobs_table)
+            delete_table_by_full_name(ctx, local_blobs_table)
 
 
 @contextmanager
@@ -490,7 +474,7 @@ def _orphaned_blobs_table(
         yield orphaned_blobs_table
     finally:
         if not keep_table:
-            drop_table(ctx, orphaned_blobs_table)
+            delete_table_by_full_name(ctx, orphaned_blobs_table)
 
 
 @contextmanager
@@ -536,7 +520,7 @@ def _remote_blobs_table(
         yield remote_blobs_table
     finally:
         if not keep_table:
-            drop_table_on_shard(ctx, remote_blobs_table)
+            delete_table_by_full_name(ctx, remote_blobs_table, shard=True)
 
 
 def _collect_orphaned_blobs(
@@ -618,7 +602,7 @@ def _collect_space_usage(
     execute_query(
         ctx, f"INSERT INTO {space_usage_table} SELECT * FROM {space_usage_table_new}"
     )
-    drop_table_on_shard(ctx, space_usage_table_new)
+    delete_table_by_full_name(ctx, space_usage_table_new, shard=True)
 
 
 def _object_list_generator(
@@ -817,7 +801,7 @@ def _create_remote_blobs_table(
     drop_existing_table: bool = False,
 ) -> None:
     if drop_existing_table:
-        drop_table_on_shard(ctx, table_name)
+        delete_table_by_full_name(ctx, table_name, shard=True)
 
     engine = (
         "ReplicatedMergeTree"
@@ -845,7 +829,7 @@ def _create_local_blobs_table(
     drop_existing_table: bool,
 ) -> None:
     if drop_existing_table:
-        drop_table(ctx, table_name)
+        delete_table_by_full_name(ctx, table_name)
 
     execute_query(
         ctx,
@@ -867,7 +851,7 @@ def _create_orphaned_blobs_table(
     drop_existing_table: bool,
 ) -> None:
     if drop_existing_table:
-        drop_table(ctx, table_name)
+        delete_table_by_full_name(ctx, table_name)
 
     execute_query(
         ctx,
@@ -890,7 +874,7 @@ def _create_space_usage_table(
     drop_existing_table: bool = True,
 ) -> None:
     if drop_existing_table:
-        drop_table_on_shard(ctx, space_usage_table_name)
+        delete_table_by_full_name(ctx, space_usage_table_name, shard=True)
 
     engine = (
         "ReplicatedMergeTree"
