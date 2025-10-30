@@ -667,7 +667,6 @@ def _sanity_check_before_cleanup(
             "verify_paths_regex"
         ]["shard"]
 
-    # Compile regex pattern for better performance
     paths_regex_compiled = re.compile(paths_regex)
 
     def raise_or_warn(dry_run: bool, msg: str) -> None:
@@ -681,7 +680,6 @@ def _sanity_check_before_cleanup(
         Validate that object paths match expected regex pattern.
         This prevents accidental deletion of objects with unexpected paths.
         """
-        # Get count of orphaned objects to validate
         orphaned_objects_count = int(
             ch_client.query_json_data_first_row(
                 query=Query(
@@ -705,14 +703,12 @@ def _sanity_check_before_cleanup(
             compact=True,
         )[0]
 
-        # Validate sample path against regex
         if not paths_regex_compiled.match(sample_path):
             raise_or_warn(
                 dry_run,
                 f"Path validation failed: sample path '{sample_path}' doesn't match regex '{paths_regex}'",
             )
 
-        # Validate all paths from iterator
         for orphaned_object in orphaned_objects_iterator():
             if not paths_regex_compiled.match(orphaned_object.path):
                 raise_or_warn(
@@ -745,7 +741,6 @@ def _sanity_check_before_cleanup(
                 f"which is more than {threshold_percentage}% of total bucket size {format_size(listing_size_in_bucket)}",
             )
 
-    # Execute validation checks
     perform_check_paths()
 
     # Size validation is only available in ClickHouse 23.3+ (when 'size' column exists in system.remote_data_paths)
