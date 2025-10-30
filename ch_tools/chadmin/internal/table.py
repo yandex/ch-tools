@@ -22,13 +22,31 @@ from ch_tools.chadmin.internal.table_metadata import (
     parse_table_metadata,
     update_uuid_table_metadata_file,
 )
-from ch_tools.chadmin.internal.utils import execute_query, remove_from_disk
+from ch_tools.chadmin.internal.utils import (
+    execute_query,
+    execute_query_on_shard,
+    remove_from_disk,
+)
 from ch_tools.chadmin.internal.zookeeper_clean import clean_zk_metadata_for_hosts
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 
 DISK_LOCAL_KEY = "local"
 DISK_OBJECT_STORAGE_KEY = "object_storage"
+
+
+def table_exists(
+    ctx: Context,
+    database_name: str,
+    table_name: str,
+) -> bool:
+    tables = list_tables(
+        ctx,
+        database_name=database_name,
+        table_name=table_name,
+    )
+
+    return len(tables) > 0
 
 
 def get_table(
@@ -273,18 +291,22 @@ def delete_table(
     database_name: str,
     table_name: str,
     *,
-    cluster: Optional[bool] = None,
-    echo: Optional[bool] = False,
-    sync_mode: Optional[bool] = True,
-    dry_run: Optional[bool] = False,
+    cluster: Optional[str] = None,
+    shard: bool = False,
+    echo: bool = False,
+    sync_mode: bool = True,
+    dry_run: bool = False,
 ) -> None:
     """
     Perform "DROP TABLE" for the specified table.
     """
+    if cluster and shard:
+        raise ValueError("`cluster` and `shard` cannot be set both")
+
     logging.info("Deleting table `{}`.`{}`", database_name, table_name)
     timeout = ctx.obj["config"]["clickhouse"]["drop_table_timeout"]
     query = """
-        DROP TABLE `{{ database_name }}`.`{{ table_name }}`
+        DROP TABLE IF EXISTS `{{ database_name }}`.`{{ table_name }}`
         {%- if cluster %}
         ON CLUSTER '{{ cluster }}'
         {%- endif %}
@@ -292,7 +314,7 @@ def delete_table(
         NO DELAY
         {%- endif %}
         """
-    execute_query(
+    (execute_query if not shard else execute_query_on_shard)(
         ctx,
         query,
         timeout=timeout,
@@ -304,6 +326,16 @@ def delete_table(
         dry_run=dry_run,
         format_=None,
     )
+
+
+def delete_table_by_full_name(
+    ctx: Context, full_table_name: str, **kwargs: Any
+) -> None:
+    """
+    Delete table by full name (database.table).
+    """
+    database_name, table_name = full_table_name.split(".", 1)
+    delete_table(ctx, database_name, table_name, **kwargs)
 
 
 def check_table_dettached(ctx: Context, database_name: str, table_name: str) -> None:
