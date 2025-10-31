@@ -230,7 +230,8 @@ Feature: chadmin data-store commands
     When we move parts as broken_on_start for table test.table on clickhouse01
     And we execute command on clickhouse01
     """
-    chadmin data-store attach-parts-with-prefix > /dev/null
+    chadmin part remove-detached-part-prefix --reason broken-on-start --all
+    chadmin partition attach --all
     """
     And we execute query on clickhouse01
     """

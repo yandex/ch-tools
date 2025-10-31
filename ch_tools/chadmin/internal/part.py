@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from typing import Any, Dict, List, Optional
 
@@ -7,6 +8,7 @@ from click import Context
 from ch_tools.chadmin.internal.clickhouse_disks import remove_from_ch_disk
 from ch_tools.chadmin.internal.system import get_version
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
 
 
 def list_parts(
@@ -158,12 +160,15 @@ def list_detached_parts(
     reason: Optional[str] = None,
     limit: Optional[int] = None,
     use_part_list_from_json: Optional[str] = None,
+    use_part_list_required_columns_list: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """
     List detached data parts.
     """
     if use_part_list_from_json:
-        return read_and_validate_parts_from_json(use_part_list_from_json)["data"]
+        return read_and_validate_parts_from_json(
+            use_part_list_from_json, use_part_list_required_columns_list
+        )["data"]
 
     query = """
         SELECT
@@ -359,6 +364,30 @@ def drop_detached_part_from_disk(
     remove_from_ch_disk(disk["name"], path_on_disk, get_version(ctx), dry_run=dry_run)
 
 
+def remove_detached_part_prefix_on_disk(
+    part_path: str,
+    part_prefix: str,
+    dry_run: bool = False,
+) -> None:
+    path_splitted = part_path.split("/")
+    if path_splitted[-1].startswith(part_prefix):
+        path_splitted[-1] = path_splitted[-1][len(part_prefix) :]
+    else:
+        raise RuntimeError(f"Unexpected prefix {part_path}")
+    from_path = part_path
+    to_path = os.path.join("/", *path_splitted)
+
+    logging.debug(f"Move from {from_path} to {to_path}")
+
+    if not os.path.exists(from_path):
+        ## fine , assuming that we already moved this dir
+        logging.warning(
+            f"Source path missing during move: {from_path} (expected to move to {to_path})"
+        )
+    if not dry_run:
+        os.rename(from_path, to_path)
+
+
 def list_part_log(
     ctx: Context,
     cluster: Optional[str] = None,
@@ -481,8 +510,13 @@ def list_part_log(
     )["data"]
 
 
-def read_and_validate_parts_from_json(json_path: str) -> Dict[str, Any]:
+def read_and_validate_parts_from_json(
+    json_path: str, required_columns_: Optional[List[str]] = None
+) -> Dict[str, Any]:
     base_exception_str = "Incorrect json file, there are no {corrupted_section}. Use the JSON format for ch query to get correct format."
+    required_columns = (
+        ["database", "table", "name"] if not required_columns_ else required_columns_
+    )
     with open(json_path, "r", encoding="utf-8") as json_file:
         json_obj = json.load(json_file)
         if "data" not in json_obj:
@@ -490,12 +524,9 @@ def read_and_validate_parts_from_json(json_path: str) -> Dict[str, Any]:
 
         part_list = json_obj["data"]
         for p in part_list:
-            if "database" not in p:
-                raise ValueError(base_exception_str.format("database"))
-            if "table" not in p:
-                raise ValueError(base_exception_str.format("table"))
-            if "name" not in p:
-                raise ValueError(base_exception_str.format("name"))
+            for column in required_columns:
+                if column not in p:
+                    raise ValueError(base_exception_str.format(column))
     return json_obj
 
 
