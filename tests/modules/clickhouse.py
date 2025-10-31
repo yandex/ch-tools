@@ -2,6 +2,7 @@
 ClickHouse client.
 """
 
+from http import HTTPStatus
 from typing import Any, Optional, Sequence, Tuple
 
 from hamcrest import assert_that
@@ -54,7 +55,7 @@ def get_response(context: ContextT, node: str, query: str) -> Tuple[int, str]:
     Execute arbitrary query and return result
     """
     try:
-        return 200, str(execute_query(context, node, query=query))
+        return HTTPStatus.OK, str(execute_query(context, node, query=query))
     except HTTPError as e:
         return e.response.status_code, e.response.text
     except ClickhouseError as e:
@@ -62,7 +63,7 @@ def get_response(context: ContextT, node: str, query: str) -> Tuple[int, str]:
     except ChunkedEncodingError as ex:
         # Related PR: https://github.com/ClickHouse/ClickHouse/pull/68800
         logging.warning(f"query={query} was caused the exception from server {ex}")
-        return 500, "Workaround for in-progress op"
+        return HTTPStatus.INTERNAL_SERVER_ERROR, "Workaround for in-progress op"
 
 
 def get_version(context: ContextT, node: str) -> dict:

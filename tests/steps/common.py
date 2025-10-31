@@ -148,3 +148,29 @@ def clickhouse_tools_configuration(context: ContextT, nodes: str) -> None:
         container.exec_run(
             ["bash", "-c", f"echo '{conf}' > /etc/clickhouse-tools/config.yaml"]
         )
+
+
+@given("merged clickhouse-tools configuration on {nodes}")
+def merged_clickhouse_tools_configuration(context: ContextT, nodes: str) -> None:
+    nodes_list = nodes.split(",")
+    new_conf = yaml.load(context.text, yaml.SafeLoader) or {}
+
+    for node in nodes_list:
+        container = docker.get_container(context, node)
+        container.exec_run(["bash", "-c", "mkdir -p /etc/clickhouse-tools"])
+
+        result = container.exec_run(
+            [
+                "bash",
+                "-c",
+                "cat /etc/clickhouse-tools/config.yaml 2>/dev/null || echo '{}'",
+            ]
+        )
+        existing_conf = yaml.load(result.output.decode(), yaml.SafeLoader) or {}
+
+        merged_conf = merge(existing_conf, new_conf)
+        merged_yaml = yaml.dump(merged_conf)
+
+        container.exec_run(
+            ["bash", "-c", f"echo '{merged_yaml}' > /etc/clickhouse-tools/config.yaml"]
+        )

@@ -18,9 +18,10 @@ It provides monitoring for:
 - Replication lag between replicas
 - Re-setup state
 - Read-only replicas
-- System metrics
+- System queues
 - TLS certificate validity
 - Size of S3 orphaned objects
+- System metrics
 
 Each monitoring check outputs in following format:
 ```

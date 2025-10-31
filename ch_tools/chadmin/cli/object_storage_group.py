@@ -27,7 +27,7 @@ from ch_tools.chadmin.internal.zookeeper import (
     create_zk_nodes,
     update_zk_nodes,
 )
-from ch_tools.common.cli.formatting import print_response
+from ch_tools.common.cli.formatting import format_bytes, print_response
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
@@ -266,12 +266,19 @@ def clean_command(
     type=TimeSpanParamType(),
     help=("End of inspecting interval in human-friendly format."),
 )
+@option(
+    "--use-saved-list/--traverse-remote",
+    "use_saved_list",
+    default=True,
+    help=("Use saved remote blobs list without traversing object storage again."),
+)
 @pass_context
 def collect_info_command(
     ctx: Context,
     object_name_prefix: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
+    use_saved_list: bool,
 ) -> None:
     """
     Collect info about object storage memory usage and orphaned objects.
@@ -291,6 +298,7 @@ def collect_info_command(
         object_name_prefix=object_name_prefix,
         from_time=from_time,
         to_time=to_time,
+        use_saved=use_saved_list,
     )
 
 
@@ -308,18 +316,32 @@ def collect_info_command(
     type=Choice(["shard", "cluster"]),
     help="Get info for shard or cluster.",
 )
+@option(
+    "--human-readable",
+    "human_readable",
+    is_flag=True,
+    default=False,
+    help="Output size in human readable format",
+)
 @pass_context
 def space_usage_command(
-    ctx: Context,
-    cluster_name: str,
-    scope: str,
+    ctx: Context, cluster_name: str, scope: str, human_readable: bool
 ) -> None:
     """
     Return object storage memory usage info from cluster.
     """
     result = get_object_storage_space_usage(ctx, cluster_name, Scope(scope))
 
-    print_response(ctx, result)
+    field_formatters = {
+        "active": format_bytes,
+        "unique_frozen": format_bytes,
+        "unique_detached": format_bytes,
+        "orphaned": format_bytes,
+    }
+
+    print_response(
+        ctx, result, field_formatters=field_formatters if human_readable else None
+    )
 
 
 def _store_state_zk_save(ctx: Context, path: str, state: OrphanedObjectsState) -> None:

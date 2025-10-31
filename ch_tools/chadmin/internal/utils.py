@@ -12,6 +12,7 @@ from click import Context
 
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
+from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
 DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -37,9 +38,6 @@ def execute_query(
 
     ch_client = clickhouse_client(ctx)
 
-    if replica is not None:
-        ch_client.host = replica
-
     return ch_client.query(
         query=query,
         query_args=kwargs,
@@ -49,6 +47,7 @@ def execute_query(
         dry_run=dry_run,
         stream=stream,
         settings=settings,
+        host=replica,
     )
 
 
@@ -77,6 +76,25 @@ def execute_query_on_shard(
             replica=replica,
             **kwargs,
         )
+
+
+def get_remote_table_for_hosts(ctx: Context, table: str, replicas: list[str]) -> str:
+    """
+    Get remote/remoteSecure function for a table with given remote replicas.
+    """
+    ch_client = clickhouse_client(ctx)
+    user_name = ch_client.user or ""
+
+    #  It is believed that all hosts in shard have the same port set, so check current for tcp port
+    if ch_client.check_port(ClickhousePort.TCP_SECURE):
+        remote_clause = "remoteSecure"
+    elif ch_client.check_port(ClickhousePort.TCP):
+        remote_clause = "remote"
+    else:
+        raise RuntimeError("For using remote() table function tcp port must be defined")
+
+    replicas_str = ",".join(replicas)
+    return f"{remote_clause}('{replicas_str}', {table}, '{user_name}', '{{user_password}}')"
 
 
 def format_query(query: str) -> str:

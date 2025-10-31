@@ -1,9 +1,11 @@
 import os
 import re
 import subprocess
+import uuid
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, Iterator, List, Optional
+from typing import Any, Callable, Dict, Generator, Iterator, List, Optional, Tuple
 
 from click import Context
 from humanfriendly import format_size
@@ -19,11 +21,17 @@ from ch_tools.chadmin.internal.object_storage.s3_iterator import (
     s3_object_storage_iterator,
 )
 from ch_tools.chadmin.internal.system import match_ch_backup_version, match_ch_version
+from ch_tools.chadmin.internal.table import (
+    delete_table_by_full_name,
+    list_tables,
+    table_exists,
+)
 from ch_tools.chadmin.internal.utils import (
     DATETIME_FORMAT,
     chunked,
     execute_query,
     execute_query_on_shard,
+    get_remote_table_for_hosts,
     remove_from_disk,
 )
 from ch_tools.chadmin.internal.zookeeper import has_zk
@@ -34,7 +42,6 @@ from ch_tools.common.clickhouse.client.clickhouse_client import (
     clickhouse_client,
 )
 from ch_tools.common.clickhouse.client.query import Query
-from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
@@ -51,6 +58,19 @@ DEFAULT_GUARD_INTERVAL = "24h"
 KEYS_BATCH_SIZE = 1000
 REMOTE_DATA_PATHS_TABLE = "system.remote_data_paths"
 ZOOKEEPER_ARGS = "('{replica_zk_prefix}/{{shard}}/{table_name}', '{{replica}}')"
+
+# Patterns for identifying unique service tables (with UUID and timestamp)
+UNIQUE_TABLE_UUID_PATTERN = (
+    r"[a-f0-9]{8}_[a-f0-9]{4}_[a-f0-9]{4}_[a-f0-9]{4}_[a-f0-9]{12}"
+)
+UNIQUE_TABLE_TIMESTAMP_PATTERN = r"\d{8}_\d{6}"
+UNIQUE_TABLE_SUFFIX_PATTERN = (
+    f"_{UNIQUE_TABLE_UUID_PATTERN}_({UNIQUE_TABLE_TIMESTAMP_PATTERN})"
+)
+# Precompiled regex patterns for better performance
+UNIQUE_TABLE_SUFFIX_REGEX = re.compile(UNIQUE_TABLE_SUFFIX_PATTERN)
+# Timestamp format for parsing table timestamps
+TIMESTAMP_FORMAT = "%Y%m%d_%H%M%S"
 
 
 class Scope(str, Enum):
@@ -81,34 +101,62 @@ def clean(
     Clean orphaned S3 objects.
     """
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
-    config = ctx.obj["config"]["object_storage"]["clean"]
+    config = ctx.obj["config"]["object_storage"]["space_usage"]
+    ch_client = clickhouse_client(ctx)
 
-    listing_table = f"{config['listing_table_database']}.{config['listing_table_prefix']}{disk_conf.name}"
-    orphaned_objects_table = f"{config['orphaned_objects_table_database']}.{config['orphaned_objects_table_prefix']}{disk_conf.name}"
+    _cleanup_old_service_tables(ctx)
 
     result_stat: ResultStatDict = {}
     _init_key_in_stat(result_stat, "Total")
 
-    try:
-        result_stat = _clean_object_storage(
-            ctx,
-            object_name_prefix,
-            from_time,
-            to_time,
-            dry_run,
-            use_saved_list,
-            listing_table,
-            orphaned_objects_table,
-            verify_paths_regex,
+    if dry_run:
+        logging.info("Counting orphaned objects...")
+    else:
+        logging.info("Deleting orphaned objects...")
+
+    with _get_blobs_tables(
+        ctx,
+        object_name_prefix,
+        from_time,
+        to_time,
+        unique_name=not keep_paths,
+        keep_table=keep_paths,
+        use_saved=use_saved_list,
+        ignore_missing_cloud_storage_backups=ignore_missing_cloud_storage_backups,
+    ) as (remote_blobs_table, local_blobs_table, orphaned_blobs_table):
+        timeout = config["antijoin_timeout"]
+        query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
+        orphaned_objects_iterator = _object_list_generator(
+            ch_client, orphaned_blobs_table, query_settings, timeout
+        )
+        listing_size_in_bucket = int(
+            ch_client.query_json_data_first_row(
+                query=f"SELECT sum(obj_size) FROM {remote_blobs_table}",
+                compact=True,
+            )[0]
+        )
+
+        # Safety checks
+        if ctx.obj["config"]["object_storage"]["clean"]["verify"]:
+            _sanity_check_before_cleanup(
+                ctx,
+                orphaned_objects_iterator,
+                ch_client,
+                listing_size_in_bucket,
+                orphaned_blobs_table,
+                verify_paths_regex,
+                dry_run,
+            )
+
+        result_stat = _cleanup_orphaned_objects(
+            orphaned_objects_iterator,
+            disk_conf,
+            listing_size_in_bucket,
             max_size_to_delete_bytes,
             max_size_to_delete_fraction,
-            ignore_missing_cloud_storage_backups,
             stat_partitioning,
+            dry_run,
         )
-    finally:
-        if not keep_paths and not dry_run:
-            _drop_table_on_shard(ctx, listing_table)
-            _drop_table_on_shard(ctx, orphaned_objects_table)
 
     return result_stat
 
@@ -118,15 +166,24 @@ def collect_object_storage_info(
     object_name_prefix: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
+    use_saved: bool = False,
 ) -> None:
-    _list_local_blobs(ctx)
-    _collect_orphaned_objects(
+    """
+    Collects object storage usage information.
+    Uses temporary unique tables for all blob tables with automatic deletion.
+    """
+    _cleanup_old_service_tables(ctx)
+
+    with _get_blobs_tables(
         ctx,
-        object_name_prefix=object_name_prefix,
-        from_time=from_time,
-        to_time=to_time,
-    )
-    _collect_space_usage(ctx)
+        object_name_prefix,
+        from_time,
+        to_time,
+        unique_name=False,
+        keep_table=True,
+        use_saved=use_saved,
+    ) as (remote_blobs_table, local_blobs_table, orphaned_blobs_table):
+        _collect_space_usage(ctx, local_blobs_table, orphaned_blobs_table)
 
 
 def get_object_storage_space_usage(
@@ -136,7 +193,9 @@ def get_object_storage_space_usage(
 ) -> dict:
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
     config = ctx.obj["config"]["object_storage"]["space_usage"]
-    space_usage_table = f"{config['space_usage_table_database']}.{config['space_usage_table_prefix']}{disk_conf.name}"
+    space_usage_table = (
+        f"{config['database']}.{config['space_usage_table_prefix']}{disk_conf.name}"
+    )
 
     # Table is replicated
     if scope == Scope.SHARD:
@@ -165,86 +224,344 @@ def get_object_storage_space_usage(
     return res
 
 
-def _list_local_blobs(
-    ctx: Context,
-) -> None:
+def _calculate_size_limits(
+    listing_size_in_bucket: int,
+    max_size_to_delete_bytes: int,
+    max_size_to_delete_fraction: float,
+) -> int:
+    """
+    Calculates the maximum size of objects to delete.
+    """
+    max_size_to_delete = int(listing_size_in_bucket * max_size_to_delete_fraction)
+    if max_size_to_delete_bytes:
+        max_size_to_delete = min(max_size_to_delete, max_size_to_delete_bytes)
+    return max_size_to_delete
+
+
+def _process_objects_batch(
+    objects: List[ObjListItem],
+    total_size: int,
+    max_size_to_delete: int,
+    result_stat: ResultStatDict,
+) -> Tuple[List[ObjListItem], bool]:
+    """
+    Processes a batch of objects, fitting them to size constraints.
+    Returns (processed_objects, is_last_batch).
+    """
+    batch_size = sum(obj.size for obj in objects)
+    is_last_batch = False
+
+    if result_stat["Total"]["total_size"] + batch_size > max_size_to_delete:
+        # To fit into the size restriction: sort all objects by size
+        # And remove elements from the end
+        is_last_batch = True
+        objects = sorted(objects, key=lambda obj: obj.size)
+        while total_size + batch_size > max_size_to_delete:
+            batch_size -= objects[-1].size
+            objects.pop()
+
+    return objects, is_last_batch
+
+
+def _cleanup_orphaned_objects(
+    orphaned_objects_iterator: Callable,
+    disk_conf: S3DiskConfiguration,
+    listing_size_in_bucket: int,
+    max_size_to_delete_bytes: int,
+    max_size_to_delete_fraction: float,
+    stat_partitioning: StatisticsPartitioning,
+    dry_run: bool,
+) -> ResultStatDict:
+    """
+    Performs the main logic for cleaning up orphaned objects.
+    """
+    result_stat: ResultStatDict = {}
+    _init_key_in_stat(result_stat, "Total")
+
+    max_size_to_delete = _calculate_size_limits(
+        listing_size_in_bucket, max_size_to_delete_bytes, max_size_to_delete_fraction
+    )
+
+    for objects in chunked(orphaned_objects_iterator(), KEYS_BATCH_SIZE):
+        objects, is_last_batch = _process_objects_batch(
+            objects, total_size, max_size_to_delete, result_stat
+        )
+
+        cleanup_s3_object_storage(
+            disk_conf, iter(objects), result_stat, stat_partitioning, dry_run
+        )
+
+        if is_last_batch:
+            break
+
+    deleted = result_stat["Total"]["deleted"]
+    total_size = format_size(result_stat["Total"]["total_size"], binary=True)
+    logging.info(
+        f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}]",
+    )
+
+    return result_stat
+
+
+def _cleanup_old_service_tables(ctx: Context) -> None:
+    """
+    Remove old service tables (local_blobs, orphaned_blobs, remote_blobs) that have unique names
+    (contain UUID and timestamp) and are older than configured retention period.
+    This helps prevent accumulation of temporary tables from previous runs.
+    """
+    config = ctx.obj["config"]["object_storage"]["space_usage"]
+    disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
+
+    retention_days = config.get("service_tables_retention_days", 7)
+    retention_threshold = datetime.now(timezone.utc) - timedelta(days=retention_days)
+
+    table_prefixes = [
+        config["local_blobs_table_prefix"],
+        config["orphaned_blobs_table_prefix"],
+        config["remote_blobs_table_prefix"],
+    ]
+
+    database = config["database"]
+
+    for table_prefix in table_prefixes:
+        try:
+            base_name = f"{table_prefix}{disk_conf.name}"
+            table_pattern = f"{base_name}_%"
+
+            tables = list_tables(
+                ctx, database_name=database, table_pattern=table_pattern
+            )
+
+            for table_info in tables:
+                table_name = table_info["name"]
+
+                if match := UNIQUE_TABLE_SUFFIX_REGEX.search(table_name):
+                    table_timestamp_str = match.group(1)
+                    table_timestamp = datetime.strptime(
+                        table_timestamp_str, TIMESTAMP_FORMAT
+                    )
+                    table_timestamp = table_timestamp.replace(tzinfo=timezone.utc)
+
+                    # Delete table if it's older than retention period
+                    if table_timestamp < retention_threshold:
+                        full_table_name = f"{database}.{table_name}"
+                        logging.info(f"Removing old service table: {full_table_name}")
+
+                        if table_prefix == config["remote_blobs_table_prefix"]:
+                            delete_table_by_full_name(ctx, full_table_name, shard=True)
+                        else:
+                            delete_table_by_full_name(ctx, full_table_name)
+        except:
+            logging.exception(f"Error cleaning up old {table_prefix} tables:")
+            raise
+
+
+def _get_table_name(ctx: Context, table_prefix: str, unique_name: bool = False) -> str:
+    """
+    Generates table name with UUID+timestamp if unique_name=True.
+    """
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
     config = ctx.obj["config"]["object_storage"]["space_usage"]
 
-    blob_state_table = f"{config['space_usage_table_database']}.{config['blob_state_table_prefix']}{disk_conf.name}"
-    blob_state_table_zk_path_prefix = config["space_usage_table_zk_path_prefix"]
-    storage_policy = config["storage_policy"]
+    base_name = f"{config['database']}.{table_prefix}{disk_conf.name}"
 
-    _create_local_object_listing_table(
-        ctx,
-        blob_state_table,
-        blob_state_table_zk_path_prefix,
-        storage_policy,
-        drop_existing_table=True,
-    )
+    if not unique_name:
+        return base_name
 
-    remote_data_paths_table = _get_table_function(
-        ctx, REMOTE_DATA_PATHS_TABLE, Scope.SHARD, cluster_name=None
-    )
-
-    blob_state_query = _get_fill_blob_state_query(
-        ctx, blob_state_table, remote_data_paths_table, disk_conf.name
-    )
-
-    timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
-    query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
-    execute_query(
-        ctx,
-        blob_state_query,
-        timeout=timeout,
-        settings=query_settings,
-    )
+    table_uuid = str(uuid.uuid4()).replace("-", "_")
+    timestamp = datetime.now(timezone.utc).strftime(TIMESTAMP_FORMAT)
+    return f"{base_name}_{table_uuid}_{timestamp}"
 
 
-def _collect_orphaned_objects(
+@contextmanager
+def _get_blobs_tables(
     ctx: Context,
     object_name_prefix: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
-) -> None:
+    unique_name: bool = False,
+    keep_table: bool = True,
+    use_saved: bool = False,
+    ignore_missing_cloud_storage_backups: bool = False,
+) -> Generator[Tuple[str, str, str], None, None]:
+    """
+    Returns tuple: (remote_blobs_table, local_blobs_table, orphaned_blobs_table)
+    Manages cloud storage backups automatically.
+    """
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
 
+    with (
+        _download_cloud_storage_backups(
+            ctx, disk_conf.name, ignore_missing_cloud_storage_backups
+        ),
+        _remote_blobs_table(
+            ctx,
+            object_name_prefix,
+            from_time,
+            to_time,
+            unique_name=unique_name,
+            keep_table=keep_table,
+            use_saved=use_saved,
+        ) as remote_blobs_table,
+        _local_blobs_table(ctx) as local_blobs_table,
+        _orphaned_blobs_table(
+            ctx, local_blobs_table, remote_blobs_table
+        ) as orphaned_blobs_table,
+    ):
+        yield remote_blobs_table, local_blobs_table, orphaned_blobs_table
+
+
+@contextmanager
+def _local_blobs_table(
+    ctx: Context,
+    unique_name: bool = True,
+    keep_table: bool = True,
+    use_saved: bool = False,
+) -> Generator[str, None, None]:
+    """
+    Context manager for creating and managing the local_blobs table.
+    """
     config = ctx.obj["config"]["object_storage"]["space_usage"]
-    blob_state_table = f"{config['space_usage_table_database']}.{config['blob_state_table_prefix']}{disk_conf.name}"
+    disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
 
-    config = ctx.obj["config"]["object_storage"]["clean"]
-    listing_table = f"{config['listing_table_database']}.{config['listing_table_prefix']}{disk_conf.name}"
-    listing_table_zk_path_prefix = config["listing_table_zk_path_prefix"]
-    orphaned_objects_table = f"{config['orphaned_objects_table_database']}.{config['orphaned_objects_table_prefix']}{disk_conf.name}"
-    orphaned_objects_table_zk_path_prefix = config[
-        "orphaned_objects_table_zk_path_prefix"
-    ]
-    storage_policy = config["storage_policy"]
-
-    # Create listing table for storing paths from object storage.
-    # Create orphaned objects for accumulating the result.
-    _create_object_listing_table(
-        ctx,
-        listing_table,
-        listing_table_zk_path_prefix,
-        storage_policy,
-        drop_existing_table=True,
-    )
-    _create_object_listing_table(
-        ctx,
-        orphaned_objects_table,
-        orphaned_objects_table_zk_path_prefix,
-        storage_policy,
-        drop_existing_table=True,
+    local_blobs_table = _get_table_name(
+        ctx, config["local_blobs_table_prefix"], unique_name
     )
 
-    prefix = object_name_prefix or disk_conf.prefix
-    prefix = os.path.join(prefix, "")
+    try:
+        if use_saved:
+            table_name_only = local_blobs_table.split(".")[1]
+            if not table_exists(ctx, config["database"], table_name_only):
+                raise RuntimeError(
+                    f"Can't use saved {local_blobs_table} because it does not exist"
+                )
+        else:
+            _create_local_blobs_table(
+                ctx,
+                local_blobs_table,
+                config["storage_policy"],
+                drop_existing_table=True,
+            )
 
-    logging.info(
-        f"Collecting objects... (Disk: '{disk_conf.name}', Endpoint '{disk_conf.endpoint_url}', Bucket: '{disk_conf.bucket_name}', Prefix: '{prefix}')",
+            remote_data_paths_table = _get_table_function(
+                ctx, REMOTE_DATA_PATHS_TABLE, Scope.SHARD, cluster_name=None
+            )
+
+            local_blobs_query = _get_fill_local_blobs_table_query(
+                ctx, local_blobs_table, remote_data_paths_table, disk_conf.name
+            )
+
+            timeout = config["antijoin_timeout"]
+            query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
+            execute_query(
+                ctx,
+                local_blobs_query,
+                timeout=timeout,
+                settings=query_settings,
+            )
+
+        yield local_blobs_table
+    finally:
+        if not keep_table:
+            delete_table_by_full_name(ctx, local_blobs_table)
+
+
+@contextmanager
+def _orphaned_blobs_table(
+    ctx: Context,
+    local_blobs_table: str,
+    remote_blobs_table: str,
+    unique_name: bool = True,
+    keep_table: bool = True,
+    use_saved: bool = False,
+) -> Generator[str, None, None]:
+    """
+    Context manager for creating and managing the orphaned_blobs table.
+    """
+    config = ctx.obj["config"]["object_storage"]["space_usage"]
+
+    orphaned_blobs_table = _get_table_name(
+        ctx, config["orphaned_blobs_table_prefix"], unique_name
     )
-    _traverse_object_storage(ctx, listing_table, from_time, to_time, prefix)
+
+    try:
+        if use_saved:
+            table_name_only = orphaned_blobs_table.split(".")[1]
+            if not table_exists(ctx, config["database"], table_name_only):
+                raise RuntimeError(
+                    f"Can't use saved {orphaned_blobs_table} because it does not exist"
+                )
+        else:
+            _create_orphaned_blobs_table(
+                ctx,
+                orphaned_blobs_table,
+                config["storage_policy"],
+                drop_existing_table=True,
+            )
+
+            _collect_orphaned_blobs(
+                ctx, local_blobs_table, orphaned_blobs_table, remote_blobs_table
+            )
+
+        yield orphaned_blobs_table
+    finally:
+        if not keep_table:
+            delete_table_by_full_name(ctx, orphaned_blobs_table)
+
+
+@contextmanager
+def _remote_blobs_table(
+    ctx: Context,
+    object_name_prefix: str,
+    from_time: Optional[timedelta],
+    to_time: timedelta,
+    unique_name: bool = False,
+    keep_table: bool = True,
+    use_saved: bool = False,
+) -> Generator[str, None, None]:
+    """
+    Context manager for creating and managing the remote_blobs table.
+    """
+    config = ctx.obj["config"]["object_storage"]["space_usage"]
+
+    remote_blobs_table = _get_table_name(
+        ctx, config["remote_blobs_table_prefix"], unique_name
+    )
+
+    try:
+        if use_saved:
+            table_name_only = remote_blobs_table.split(".")[1]
+            if not table_exists(ctx, config["database"], table_name_only):
+                raise RuntimeError(
+                    f"Can't use saved {remote_blobs_table} because it does not exist"
+                )
+        else:
+            _create_remote_blobs_table(
+                ctx,
+                remote_blobs_table,
+                config["zk_path_prefix"],
+                config["storage_policy"],
+                replicated=has_zk()
+                and not unique_name,  # Table with unique name is supposed to be temporary and should not be replicated
+                drop_existing_table=True,
+            )
+            _collect_remote_blobs(
+                ctx, from_time, to_time, object_name_prefix, remote_blobs_table
+            )
+
+        yield remote_blobs_table
+    finally:
+        if not keep_table:
+            delete_table_by_full_name(ctx, remote_blobs_table, shard=True)
+
+
+def _collect_orphaned_blobs(
+    ctx: Context,
+    local_blobs_table: str,
+    orphaned_blobs_table: str,
+    remote_blobs_table: str,
+) -> None:
+    config = ctx.obj["config"]["object_storage"]["space_usage"]
 
     ch_client = clickhouse_client(ctx)
     user_password = ch_client.password or ""
@@ -252,15 +569,15 @@ def _collect_orphaned_objects(
     antijoin_query = Query(
         f"""
         INSERT INTO {orphaned_objects_table}
-            SELECT last_modified, obj_path, obj_size FROM {listing_table} AS object_storage
-            LEFT ANTI JOIN {blob_state_table} AS object_table
+            SELECT last_modified, obj_path, obj_size FROM {remote_blobs_table} AS object_storage
+            LEFT ANTI JOIN {local_blobs_table} AS object_table
             ON object_table.obj_path = object_storage.obj_path
         """,
         sensitive_args={"user_password": user_password},
     )
     logging.info("Antijoin query: {}", str(antijoin_query))
 
-    timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
+    timeout = config["antijoin_timeout"]
     query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
     execute_query(
         ctx,
@@ -272,22 +589,21 @@ def _collect_orphaned_objects(
 
 def _collect_space_usage(
     ctx: Context,
+    local_blobs_table: str,
+    orphaned_blobs_table: str,
 ) -> None:
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
     config = ctx.obj["config"]["object_storage"]["space_usage"]
-    blob_state_table = f"{config['space_usage_table_database']}.{config['blob_state_table_prefix']}{disk_conf.name}"
-    space_usage_table = f"{config['space_usage_table_database']}.{config['space_usage_table_prefix']}{disk_conf.name}"
+    space_usage_table = (
+        f"{config['database']}.{config['space_usage_table_prefix']}{disk_conf.name}"
+    )
     space_usage_table_new = f"{space_usage_table}_new"
-    space_usage_table_zk_path_prefix = config["space_usage_table_zk_path_prefix"]
-
-    config = ctx.obj["config"]["object_storage"]["clean"]
-    orphaned_objects_table = f"{config['orphaned_objects_table_database']}.{config['orphaned_objects_table_prefix']}{disk_conf.name}"
 
     # This table will store the actual space usage data after the query
     _create_space_usage_table(
         ctx,
         space_usage_table_name=space_usage_table_new,
-        replica_zk_prefix=space_usage_table_zk_path_prefix,
+        replica_zk_prefix=config["zk_path_prefix"],
         storage_policy=config["storage_policy"],
         drop_existing_table=True,
     )
@@ -295,17 +611,17 @@ def _collect_space_usage(
     _create_space_usage_table(
         ctx,
         space_usage_table_name=space_usage_table,
-        replica_zk_prefix=space_usage_table_zk_path_prefix,
+        replica_zk_prefix=config["zk_path_prefix"],
         storage_policy=config["storage_policy"],
         drop_existing_table=False,
     )
 
     space_usage_query = _get_fill_space_usage_query(
-        ctx, blob_state_table, orphaned_objects_table, space_usage_table_new
+        ctx, local_blobs_table, orphaned_blobs_table, space_usage_table_new
     )
 
     # TODO: should probably use different setting for timeout
-    timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
+    timeout = config["antijoin_timeout"]
     query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
     execute_query(
         ctx,
@@ -318,7 +634,7 @@ def _collect_space_usage(
     execute_query(
         ctx, f"INSERT INTO {space_usage_table} SELECT * FROM {space_usage_table_new}"
     )
-    _drop_table_on_shard(ctx, space_usage_table_new)
+    delete_table_by_full_name(ctx, space_usage_table_new, shard=True)
 
 
 def _object_list_generator(
@@ -372,11 +688,14 @@ def _sanity_check_before_cleanup(
     orphaned_objects_iterator: Callable,
     ch_client: ClickhouseClient,
     listing_size_in_bucket: int,
-    blob_state_table: str,
+    orphaned_blobs_table: str,
     verify_paths_regex: Optional[str],
     dry_run: bool,
 ) -> None:
-
+    """
+    Performs safety checks before deleting objects.
+    Uses orphaned_blobs_table to check paths and size of objects to delete.
+    """
     size_error_rate_threshold_fraction = ctx.obj["config"]["object_storage"]["clean"][
         "verify_size_error_rate_threshold_fraction"
     ]
@@ -387,6 +706,8 @@ def _sanity_check_before_cleanup(
             "verify_paths_regex"
         ]["shard"]
 
+    paths_regex_compiled = re.compile(paths_regex)
+
     def raise_or_warn(dry_run: bool, msg: str) -> None:
         if not dry_run:
             raise RuntimeError(msg)
@@ -394,202 +715,97 @@ def _sanity_check_before_cleanup(
         logging.warning(f"Warning: {msg}")
 
     def perform_check_paths() -> None:
-        ### Compare path from system.remote_data_path and from list to delete. They must match the regex.
-        ### Perform such check to prevent silly mistakes if the paths are completely different.
-        ch_objects_cnt = int(
+        """
+        Validate that object paths match expected regex pattern.
+        This prevents accidental deletion of objects with unexpected paths.
+        """
+        orphaned_objects_count = int(
             ch_client.query_json_data_first_row(
                 query=Query(
-                    f"SELECT count() FROM {blob_state_table}",
+                    f"SELECT count() FROM {orphaned_blobs_table}",
                     sensitive_args={"user_password": ch_client.password or ""},
                 ),
                 compact=True,
             )[0]
         )
-        ## Nothing to check
-        if ch_objects_cnt == 0:
+
+        # Skip validation if no objects to check
+        if orphaned_objects_count == 0:
             return
-        path_form_ch = ch_client.query_json_data_first_row(
+
+        # Get a sample path from database for initial validation
+        sample_path = ch_client.query_json_data_first_row(
             query=Query(
-                f"SELECT obj_path FROM {blob_state_table} LIMIT 1",
+                f"SELECT obj_path FROM {orphaned_blobs_table} LIMIT 1",
                 sensitive_args={"user_password": ch_client.password or ""},
             ),
             compact=True,
         )[0]
 
-        if not re.match(paths_regex, path_form_ch):
+        if not paths_regex_compiled.match(sample_path):
             raise_or_warn(
                 dry_run,
-                "Sanity check not passed, because obj_path({}) doesn't matches the regex({}).".format(
-                    path_form_ch, paths_regex
-                ),
+                f"Path validation failed: sample path '{sample_path}' doesn't match regex '{paths_regex}'",
             )
 
         for orphaned_object in orphaned_objects_iterator():
-            if not re.match(paths_regex, orphaned_object.path):
+            if not paths_regex_compiled.match(orphaned_object.path):
                 raise_or_warn(
                     dry_run,
-                    "Sanity check not passed, because orphaned object({}) doesn't matches the regex({}).".format(
-                        orphaned_object.path, paths_regex
-                    ),
+                    f"Path validation failed: object path '{orphaned_object.path}' doesn't match regex '{paths_regex}'",
                 )
 
     def perform_check_size() -> None:
-
+        """
+        Validate that deletion size doesn't exceed safety threshold.
+        This prevents accidental deletion of too much data.
+        """
         if listing_size_in_bucket == 0:
             return
 
-        ### Total size of objects after cleanup must be very close to sum(bytes) FROM system.remote_data_paths
-        size_to_delete = 0
+        # Calculate total size of objects to be deleted
+        total_size_to_delete = 0
         for orphaned_object in orphaned_objects_iterator():
-            size_to_delete += orphaned_object.size
+            total_size_to_delete += orphaned_object.size
 
+        # Check if deletion size exceeds safety threshold
         if (
-            listing_size_in_bucket * size_error_rate_threshold_fraction
-            <= size_to_delete
+            total_size_to_delete
+            >= listing_size_in_bucket * size_error_rate_threshold_fraction
         ):
+            threshold_percentage = int(size_error_rate_threshold_fraction * 100)
             raise_or_warn(
                 dry_run,
-                "Potentially dangerous operation: Going to remove more than {}% of bucket content. To remove {}; listing size {}".format(
-                    int(size_error_rate_threshold_fraction * 100),
-                    format_size(size_to_delete),
-                    format_size(listing_size_in_bucket),
-                ),
+                f"Size validation failed: attempting to delete {format_size(total_size_to_delete)} "
+                f"which is more than {threshold_percentage}% of total bucket size {format_size(listing_size_in_bucket)}",
             )
 
     perform_check_paths()
 
-    ## In ver < 23.3 no column size in the system.remote_data_paths
+    # Size validation is only available in ClickHouse 23.3+ (when 'size' column exists in system.remote_data_paths)
     if match_ch_version(ctx, min_version="23.3"):
         perform_check_size()
 
 
-def _clean_object_storage(
+def _collect_remote_blobs(
     ctx: Context,
+    from_time: Optional[timedelta],
+    to_time: timedelta,
     object_name_prefix: str,
-    from_time: Optional[timedelta],
-    to_time: timedelta,
-    dry_run: bool,
-    use_saved_list: bool,
-    listing_table: str,
-    orphaned_objects_table: str,
-    verify_paths_regex: Optional[str] = None,
-    max_size_to_delete_bytes: int = 0,
-    max_size_to_delete_fraction: float = 1.0,
-    ignore_missing_cloud_storage_backups: bool = False,
-    stat_partitioning: StatisticsPartitioning = StatisticsPartitioning.ALL,
-) -> ResultStatDict:
-    """
-    Delete orphaned objects from object storage.
-    """
-    result_stat: ResultStatDict = {}
-    _init_key_in_stat(result_stat, "Total")
-
-    disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
-    ch_client = clickhouse_client(ctx)
-
-    downloaded_backups = []
-    # Setting traverse_shadow_remote_data_paths is available since ClickHouse 24.3
-    # Download metadata command is available since ch-backup 2.641.197281242
-    if (
-        not ignore_missing_cloud_storage_backups
-        and match_ch_backup_version("2.641.197281242")
-        and match_ch_version(ctx, min_version="24.3")
-    ):
-        logging.info(
-            "Will download cloud storage metadata from backups to shadow directory if they are missing"
-        )
-        downloaded_backups = _download_missing_cloud_storage_backups(disk_conf.name)
-
-    if use_saved_list:
-        _list_local_blobs(ctx)
-    else:
-        collect_object_storage_info(ctx, object_name_prefix, from_time, to_time)
-
-    if dry_run:
-        logging.info("Counting orphaned objects...")
-    else:
-        logging.info("Deleting orphaned objects...")
-
-    try:
-        timeout = ctx.obj["config"]["object_storage"]["clean"]["antijoin_timeout"]
-        query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
-        orphaned_objects_iterator = _object_list_generator(
-            ctx,
-            orphaned_objects_table,
-            from_time=from_time if use_saved_list else None,
-            to_time=to_time if use_saved_list else None,
-            query_settings=query_settings,
-            timeout=timeout,
-        )
-        listing_size_in_bucket = int(
-            ch_client.query_json_data_first_row(
-                query=f"SELECT sum(obj_size) FROM {listing_table}",
-                compact=True,
-            )[0]
-        )
-
-        config = ctx.obj["config"]["object_storage"]["space_usage"]
-        blob_state_table = f"{config['space_usage_table_database']}.{config['blob_state_table_prefix']}{disk_conf.name}"
-
-        if ctx.obj["config"]["object_storage"]["clean"]["verify"]:
-            _sanity_check_before_cleanup(
-                ctx,
-                orphaned_objects_iterator,
-                ch_client,
-                listing_size_in_bucket,
-                blob_state_table,
-                verify_paths_regex,
-                dry_run,
-            )
-
-        max_size_to_delete = listing_size_in_bucket * max_size_to_delete_fraction
-        if max_size_to_delete_bytes:
-            max_size_to_delete = min(max_size_to_delete, max_size_to_delete_bytes)
-
-        for objects in chunked(orphaned_objects_iterator(), KEYS_BATCH_SIZE):
-            batch_size = sum(obj.size for obj in objects)
-            is_last_batch = False
-
-            if result_stat["Total"]["total_size"] + batch_size > max_size_to_delete:
-                # To fit into the size restriction: sort all objects by size
-                # And remove elements from the end;
-                is_last_batch = True
-                objects = sorted(objects, key=lambda obj: obj.size)
-                while (
-                    result_stat["Total"]["total_size"] + batch_size > max_size_to_delete
-                ):
-                    batch_size -= objects[-1].size
-                    objects.pop()
-
-            cleanup_s3_object_storage(
-                disk_conf, iter(objects), result_stat, stat_partitioning, dry_run
-            )
-
-            if is_last_batch:
-                break
-
-        deleted = result_stat["Total"]["deleted"]
-        total_size = format_size(result_stat["Total"]["total_size"], binary=True)
-        logging.info(
-            f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {total_size} from bucket [{disk_conf.bucket_name}]",
-        )
-
-    finally:
-        _remove_backups_from_disk(disk_conf.name, downloaded_backups)
-
-    return result_stat
-
-
-def _traverse_object_storage(
-    ctx: Context,
-    listing_table: str,
-    from_time: Optional[timedelta],
-    to_time: timedelta,
-    prefix: str,
+    remote_blobs_table: str,
 ) -> None:
     """
     Traverse S3 disk's bucket and put object names to the ClickHouse table.
     """
+    disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
+
+    prefix = object_name_prefix or disk_conf.prefix
+    prefix = os.path.join(prefix, "")
+
+    logging.info(
+        f"Collecting objects... (Disk: '{disk_conf.name}', Endpoint '{disk_conf.endpoint_url}', Bucket: '{disk_conf.bucket_name}', Prefix: '{prefix}')",
+    )
+
     obj_paths_batch: List[ObjListItem] = []
     counter = 0
     now = datetime.now(timezone.utc)
@@ -604,18 +820,18 @@ def _traverse_object_storage(
         obj_paths_batch.append(ObjListItem(obj.last_modified, obj.key, obj.size))
         counter += 1
         if len(obj_paths_batch) >= INSERT_BATCH_SIZE:
-            _insert_listing_batch(ctx, obj_paths_batch, listing_table)
+            _insert_remote_blobs_batch(ctx, obj_paths_batch, remote_blobs_table)
             obj_paths_batch.clear()
 
     # Insert the last batch (might be shorter)
     if obj_paths_batch:
-        _insert_listing_batch(ctx, obj_paths_batch, listing_table)
+        _insert_remote_blobs_batch(ctx, obj_paths_batch, remote_blobs_table)
 
     logging.info("Collected {} objects", counter)
 
 
-def _insert_listing_batch(
-    ctx: Context, obj_paths_batch: List[ObjListItem], listing_table: str
+def _insert_remote_blobs_batch(
+    ctx: Context, obj_paths_batch: List[ObjListItem], remote_blobs_table: str
 ) -> None:
     """
     Insert batch of object names to the listing table.
@@ -626,31 +842,28 @@ def _insert_listing_batch(
     )
     execute_query(
         ctx,
-        f"INSERT INTO {listing_table} (last_modified, obj_path, obj_size) VALUES {batch_values}",
+        f"INSERT INTO {remote_blobs_table} (last_modified, obj_path, obj_size) VALUES {batch_values}",
         format_=None,
     )
 
 
-def _drop_table_on_shard(ctx: Context, table_name: str) -> None:
-    execute_query_on_shard(ctx, f"DROP TABLE IF EXISTS {table_name} SYNC", format_=None)
-
-
-def _create_object_listing_table(
+def _create_remote_blobs_table(
     ctx: Context,
     table_name: str,
     replica_zk_prefix: str,
     storage_policy: str,
-    drop_existing_table: bool,
+    replicated: bool,
+    drop_existing_table: bool = False,
 ) -> None:
     if drop_existing_table:
-        _drop_table_on_shard(ctx, table_name)
+        delete_table_by_full_name(ctx, table_name, shard=True)
 
     engine = (
         "ReplicatedMergeTree"
         + ZOOKEEPER_ARGS.format(
             replica_zk_prefix=replica_zk_prefix, table_name=table_name
         )
-        if has_zk()
+        if replicated
         else "MergeTree"
     )
 
@@ -667,32 +880,44 @@ def _create_object_listing_table(
     )
 
 
-def _create_local_object_listing_table(
+def _create_local_blobs_table(
     ctx: Context,
     table_name: str,
-    replica_zk_prefix: str,
     storage_policy: str,
     drop_existing_table: bool,
 ) -> None:
     if drop_existing_table:
-        _drop_table_on_shard(ctx, table_name)
+        delete_table_by_full_name(ctx, table_name)
 
-    engine = (
-        "ReplicatedSummingMergeTree"
-        + ZOOKEEPER_ARGS.format(
-            replica_zk_prefix=replica_zk_prefix, table_name=table_name
-        )
-        if has_zk()
-        else "MergeTree"
-    )
-
-    execute_query_on_shard(
+    execute_query(
         ctx,
         f"""
             CREATE TABLE IF NOT EXISTS {table_name}
                 (obj_path String, state String, obj_size UInt64, ref_count UInt32)
-                ENGINE {engine}
+                ENGINE SummingMergeTree
                 ORDER BY (obj_path, state)
+                SETTINGS storage_policy = '{storage_policy}'
+        """,
+        format_=None,
+    )
+
+
+def _create_orphaned_blobs_table(
+    ctx: Context,
+    table_name: str,
+    storage_policy: str,
+    drop_existing_table: bool,
+) -> None:
+    if drop_existing_table:
+        delete_table_by_full_name(ctx, table_name)
+
+    execute_query(
+        ctx,
+        f"""
+            CREATE TABLE IF NOT EXISTS {table_name}
+                (obj_path String, obj_size UInt64)
+                ENGINE MergeTree
+                ORDER BY obj_path
                 SETTINGS storage_policy = '{storage_policy}'
         """,
         format_=None,
@@ -704,10 +929,10 @@ def _create_space_usage_table(
     space_usage_table_name: str,
     replica_zk_prefix: str,
     storage_policy: str,
-    drop_existing_table: bool,
+    drop_existing_table: bool = True,
 ) -> None:
     if drop_existing_table:
-        _drop_table_on_shard(ctx, space_usage_table_name)
+        delete_table_by_full_name(ctx, space_usage_table_name, shard=True)
 
     engine = (
         "ReplicatedMergeTree"
@@ -737,37 +962,59 @@ def _get_table_function(
     scope: Scope,
     cluster_name: Optional[str] = None,
 ) -> str:
-    ch_client = clickhouse_client(ctx)
-    user_name = ch_client.user or ""
-
-    result = table
-
     if scope == Scope.CLUSTER:
         assert cluster_name
-        result = f"cluster('{cluster_name}', {table})"
+        return f"cluster('{cluster_name}', {table})"
     elif scope == Scope.SHARD:
-        #  It is believed that all hosts in shard have the same port set, so check current for tcp port
-        if ch_client.check_port(ClickhousePort.TCP_SECURE):
-            remote_clause = "remoteSecure"
-        elif ch_client.check_port(ClickhousePort.TCP):
-            remote_clause = "remote"
-        else:
-            raise RuntimeError(
-                "For using remote() table function tcp port must be defined"
-            )
+        return get_remote_table_for_hosts(ctx, table, ClickhouseInfo.get_replicas(ctx))
 
-        replicas = ",".join(ClickhouseInfo.get_replicas(ctx))
-        result = f"{remote_clause}('{replicas}', {table}, '{user_name}', '{{user_password}}')"
+    return table
 
-    return result
+
+@contextmanager
+def _download_cloud_storage_backups(
+    ctx: Context,
+    disk: str,
+    ignore: bool = False,
+) -> Generator[list[str], None, None]:
+    """
+    Context manager for downloading and cleaning up cloud storage backups.
+    """
+    downloaded_backups = _download_missing_cloud_storage_backups(ctx, disk, ignore)
+    try:
+        yield downloaded_backups
+    finally:
+        _remove_backups_from_disk(disk, downloaded_backups)
 
 
 def _download_missing_cloud_storage_backups(
+    ctx: Context,
     disk: str,
+    ignore: bool,
 ) -> list[str]:
     """
     Downloads created cloud storage backups if they are missing in shadow directory.
     """
+    missing_backups = []
+    skip_cause = ""
+
+    if ignore:
+        skip_cause = "Ignore downloading missing cloud storage backups"
+    elif not match_ch_backup_version("2.641.197281242"):
+        skip_cause = (
+            "Download metadata command is available since ch-backup 2.641.197281242"
+        )
+    elif not match_ch_version(ctx, min_version="24.3"):
+        skip_cause = "Setting traverse_shadow_remote_data_paths is available since ClickHouse 24.3"
+
+    if skip_cause:
+        logging.warning(f"Skip downloading missing backups. Reason: {skip_cause}")
+        return []
+
+    logging.info(
+        "Will download cloud storage metadata from backups to shadow directory if they are missing"
+    )
+
     missing_backups = get_missing_chs3_backups(disk)
 
     for backup in missing_backups:
@@ -783,7 +1030,6 @@ def _download_missing_cloud_storage_backups(
         )
 
         if proc.returncode:
-            _remove_backups_from_disk(disk, missing_backups)
             raise RuntimeError(
                 f"Downloading cloud storage metadata command has failed: retcode {proc.returncode}, stderr: {proc.stderr.decode()}"
             )
@@ -803,9 +1049,9 @@ def _remove_backups_from_disk(
         remove_from_disk(os.path.join(backups_path, backup))
 
 
-def _get_fill_blob_state_query(
+def _get_fill_local_blobs_table_query(
     ctx: Context,
-    blob_state_table: str,
+    local_blobs_table: str,
     remote_data_paths_table: str,
     disk_name: str,
 ) -> Query:
@@ -823,7 +1069,7 @@ def _get_fill_blob_state_query(
     user_password = clickhouse_client(ctx).password or ""
 
     query = f"""
-        INSERT INTO {blob_state_table}
+        INSERT INTO {local_blobs_table}
             SELECT
                 remote_path,
                 multiIf(
@@ -843,8 +1089,8 @@ def _get_fill_blob_state_query(
 
 def _get_fill_space_usage_query(
     ctx: Context,
-    blob_state_table: str,
-    orphaned_objects_table: str,
+    local_blobs_table: str,
+    orphaned_blobs_table: str,
     space_usage_table_new: str,
 ) -> Query:
     """
@@ -857,17 +1103,17 @@ def _get_fill_space_usage_query(
             WITH active AS
                 (SELECT sum(size / count) as size
                     FROM (SELECT sum(obj_size) size, sum(ref_count) count
-                        FROM {blob_state_table}
+                        FROM {local_blobs_table}
                         WHERE state = 'active'
                         GROUP BY obj_path)
                 ),
             unique_frozen AS
                 (SELECT sum(shadow.obj_size / shadow.ref_count) AS size
-                    FROM {blob_state_table} AS shadow
+                    FROM {local_blobs_table} AS shadow
                     LEFT ANTI JOIN
                     (
                         SELECT DISTINCT obj_path
-                        FROM {blob_state_table}
+                        FROM {local_blobs_table}
                         WHERE state = 'active'
                     ) AS has_other
                         ON shadow.obj_path = has_other.obj_path
@@ -876,11 +1122,11 @@ def _get_fill_space_usage_query(
                 ),
             unique_detached AS
                 (SELECT sum(detached.obj_size / detached.ref_count) AS size
-                    FROM {blob_state_table} AS detached
+                    FROM {local_blobs_table} AS detached
                     LEFT ANTI JOIN
                     (
                         SELECT DISTINCT obj_path
-                        FROM {blob_state_table}
+                        FROM {local_blobs_table}
                         WHERE state IN ('active', 'shadow')
                     ) AS has_other
                         ON detached.obj_path = has_other.obj_path
@@ -889,7 +1135,7 @@ def _get_fill_space_usage_query(
                 ),
             orphaned AS
                 (SELECT sum(obj_size) AS size
-                    FROM {orphaned_objects_table}
+                    FROM {orphaned_blobs_table}
                 )
             INSERT INTO {space_usage_table_new}
                 SELECT
@@ -904,16 +1150,16 @@ def _get_fill_space_usage_query(
                 SELECT
                     (SELECT sum(size / count)
                         FROM (SELECT sum(obj_size) size, sum(ref_count) count
-                            FROM {blob_state_table}
+                            FROM {local_blobs_table}
                             WHERE state = 'active'
                             GROUP BY obj_path)
                     ) AS active,
                     (SELECT sum(shadow.obj_size / shadow.ref_count)
-                        FROM {blob_state_table} AS shadow
+                        FROM {local_blobs_table} AS shadow
                         LEFT ANTI JOIN
                         (
                             SELECT DISTINCT obj_path
-                            FROM {blob_state_table}
+                            FROM {local_blobs_table}
                             WHERE state = 'active'
                         ) AS has_other
                             ON shadow.obj_path = has_other.obj_path
@@ -921,18 +1167,18 @@ def _get_fill_space_usage_query(
                                 shadow.state = 'shadow'
                     ) AS unique_frozen,
                     (SELECT sum(detached.obj_size / detached.ref_count)
-                        FROM {blob_state_table} AS detached
+                        FROM {local_blobs_table} AS detached
                         LEFT ANTI JOIN
                         (
                             SELECT DISTINCT obj_path
-                            FROM {blob_state_table}
+                            FROM {local_blobs_table}
                             WHERE state IN ('active', 'shadow')
                         ) AS has_other
                             ON detached.obj_path = has_other.obj_path
                             WHERE
                                 detached.state = 'detached'
                     ) AS unique_detached,
-                    (SELECT sum(obj_size)FROM {orphaned_objects_table}) AS orphaned
+                    (SELECT sum(obj_size)FROM {orphaned_blobs_table}) AS orphaned
         """
 
     return Query(
