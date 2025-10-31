@@ -13,9 +13,8 @@ from humanfriendly import format_size
 from ch_tools.chadmin.internal.object_storage import cleanup_s3_object_storage
 from ch_tools.chadmin.internal.object_storage.obj_list_item import ObjListItem
 from ch_tools.chadmin.internal.object_storage.s3_cleanup import (
-    ResultStatDict,
+    ResultStat,
     StatisticsPartitioning,
-    _init_key_in_stat,
 )
 from ch_tools.chadmin.internal.object_storage.s3_iterator import (
     s3_object_storage_iterator,
@@ -96,7 +95,7 @@ def clean(
     max_size_to_delete_fraction: float = 1.0,
     ignore_missing_cloud_storage_backups: bool = False,
     stat_partitioning: StatisticsPartitioning = StatisticsPartitioning.ALL,
-) -> ResultStatDict:
+) -> ResultStat:
     """
     Clean orphaned S3 objects.
     """
@@ -106,8 +105,7 @@ def clean(
 
     _cleanup_old_service_tables(ctx)
 
-    result_stat: ResultStatDict = {}
-    _init_key_in_stat(result_stat, "Total")
+    result_stat = ResultStat()
 
     if dry_run:
         logging.info("Counting orphaned objects...")
@@ -241,7 +239,7 @@ def _calculate_size_limits(
 def _process_objects_batch(
     objects: List[ObjListItem],
     max_size_to_delete: int,
-    result_stat: ResultStatDict,
+    result_stat: ResultStat,
 ) -> Tuple[List[ObjListItem], bool]:
     """
     Processes a batch of objects, fitting them to size constraints.
@@ -270,12 +268,11 @@ def _cleanup_orphaned_objects(
     max_size_to_delete_fraction: float,
     stat_partitioning: StatisticsPartitioning,
     dry_run: bool,
-) -> ResultStatDict:
+) -> ResultStat:
     """
     Performs the main logic for cleaning up orphaned objects.
     """
-    result_stat: ResultStatDict = {}
-    _init_key_in_stat(result_stat, "Total")
+    result_stat = ResultStat()
 
     max_size_to_delete = _calculate_size_limits(
         listing_size_in_bucket, max_size_to_delete_bytes, max_size_to_delete_fraction

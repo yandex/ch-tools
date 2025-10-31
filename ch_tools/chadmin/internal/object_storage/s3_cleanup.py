@@ -10,7 +10,26 @@ from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfig
 from .obj_list_item import ObjListItem
 
 BULK_DELETE_CHUNK_SIZE = 1000
-ResultStatDict = dict[str, dict[str, int]]
+
+
+class ResultStat:
+    def __getitem__(self, key: str) -> dict[str, int]:
+        if key not in self._dict:
+            self._init_key(key)
+        return self._dict[key]
+
+    def __setitem__(self, key: str, value: dict[str, int]) -> None:
+        self._dict[key] = value
+
+    def __init__(self) -> None:
+        self._dict: dict[str, dict[str, int]] = {}
+        self._init_key("Total")
+
+    def _init_key(self, key: str) -> None:
+        self[key] = {"deleted": 0, "total_size": 0}
+
+    def items(self) -> Any:
+        return self._dict.items()
 
 
 class StatisticsPartitioning(str, Enum):
@@ -26,7 +45,7 @@ class StatisticsPartitioning(str, Enum):
 def cleanup_s3_object_storage(
     disk: S3DiskConfiguration,
     keys: Iterator[ObjListItem],
-    stat: ResultStatDict,
+    stat: ResultStat,
     stat_partitioning: StatisticsPartitioning,
     dry_run: bool = False,
 ) -> None:
@@ -56,10 +75,8 @@ def _bulk_delete(bucket: Any, items: List[ObjListItem]) -> None:
 
 
 def _update_stat(
-    stat: ResultStatDict, stat_partitioning: StatisticsPartitioning, item: ObjListItem
+    stat: ResultStat, stat_partitioning: StatisticsPartitioning, item: ObjListItem
 ) -> None:
-    if "Total" not in stat:
-        _init_key_in_stat(stat, "Total")
     stat["Total"]["deleted"] += 1
     stat["Total"]["total_size"] += item.size
 
@@ -67,7 +84,6 @@ def _update_stat(
         stat_partitioning, item.last_modified.strftime(DATETIME_FORMAT)
     )
     if key != "Total":
-        _init_key_in_stat(stat, key)
         stat[key]["deleted"] += 1
         stat[key]["total_size"] += item.size
 
@@ -83,8 +99,3 @@ def _get_stat_key_by_partitioning(
     if stat_partitioning == StatisticsPartitioning.DAY:
         ymd_hms = full_key.split(" ")
         return ymd_hms[0]
-
-
-def _init_key_in_stat(stat: ResultStatDict, key: str) -> None:
-    if key not in stat:
-        stat[key] = {"deleted": 0, "total_size": 0}

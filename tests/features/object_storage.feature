@@ -534,11 +534,11 @@ Feature: chadmin object-storage commands
     """
     And we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h
+    chadmin object-storage collect-info --to-time 0h --traverse-remote
     """
     And we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --from-time 0h --to-time 0h --dry-run --use-saved-list
+    chadmin --format yaml object-storage clean --from-time 0h --to-time 0h --dry-run --use-saved-list --keep-paths
     """
     Then we get response contains
     """
@@ -547,7 +547,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --from-time 1h --to-time 0h --dry-run --use-saved-list
+    chadmin --format yaml object-storage clean --from-time 1h --to-time 0h --dry-run --use-saved-list --keep-paths
     """
     Then we get response contains
     """

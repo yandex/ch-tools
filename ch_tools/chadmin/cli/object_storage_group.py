@@ -18,7 +18,7 @@ from ch_tools.chadmin.internal.object_storage.orphaned_objects_state import (
     OrphanedObjectsState,
 )
 from ch_tools.chadmin.internal.object_storage.s3_cleanup import (
-    ResultStatDict,
+    ResultStat,
     StatisticsPartitioning,
 )
 from ch_tools.chadmin.internal.system import match_ch_version
@@ -200,7 +200,7 @@ def clean_command(
     """
     Clean orphaned S3 objects.
     """
-    result_stat = {}
+    result_stat = ResultStat()
     error_msg = ""
 
     # Need for correctly call format in Query
@@ -223,7 +223,7 @@ def clean_command(
             stat_partitioning,
         )
     finally:
-        total_size = result_stat.get("Total", {}).get("total_size", 0)
+        total_size = result_stat["Total"]["total_size"]
         state = OrphanedObjectsState(total_size, error_msg)
 
         if store_state_zk_path:
@@ -356,7 +356,7 @@ def _store_state_local_save(_: Context, state: OrphanedObjectsState) -> None:
         file.write(state.to_json())
 
 
-def _print_response(ctx: Context, dry_run: bool, result_stat: ResultStatDict) -> None:
+def _print_response(ctx: Context, dry_run: bool, result_stat: ResultStat) -> None:
     """
     Outputs result of cleaning.
     """
