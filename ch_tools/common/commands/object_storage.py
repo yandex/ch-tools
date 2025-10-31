@@ -127,7 +127,7 @@ def clean(
         timeout = config["antijoin_timeout"]
         query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
         orphaned_objects_iterator = _object_list_generator(
-            ch_client, orphaned_blobs_table, query_settings, timeout
+            ctx, orphaned_blobs_table, from_time, to_time, query_settings, timeout
         )
         listing_size_in_bucket = int(
             ch_client.query_json_data_first_row(
@@ -240,7 +240,6 @@ def _calculate_size_limits(
 
 def _process_objects_batch(
     objects: List[ObjListItem],
-    total_size: int,
     max_size_to_delete: int,
     result_stat: ResultStatDict,
 ) -> Tuple[List[ObjListItem], bool]:
@@ -256,7 +255,7 @@ def _process_objects_batch(
         # And remove elements from the end
         is_last_batch = True
         objects = sorted(objects, key=lambda obj: obj.size)
-        while total_size + batch_size > max_size_to_delete:
+        while result_stat["Total"]["total_size"] + batch_size > max_size_to_delete:
             batch_size -= objects[-1].size
             objects.pop()
 
@@ -284,7 +283,7 @@ def _cleanup_orphaned_objects(
 
     for objects in chunked(orphaned_objects_iterator(), KEYS_BATCH_SIZE):
         objects, is_last_batch = _process_objects_batch(
-            objects, total_size, max_size_to_delete, result_stat
+            objects, max_size_to_delete, result_stat
         )
 
         cleanup_s3_object_storage(
@@ -297,7 +296,7 @@ def _cleanup_orphaned_objects(
     deleted = result_stat["Total"]["deleted"]
     total_size = format_size(result_stat["Total"]["total_size"], binary=True)
     logging.info(
-        f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {format_size(total_size, binary=True)} from bucket [{disk_conf.bucket_name}]",
+        f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {total_size} from bucket [{disk_conf.bucket_name}]",
     )
 
     return result_stat
@@ -568,7 +567,7 @@ def _collect_orphaned_blobs(
 
     antijoin_query = Query(
         f"""
-        INSERT INTO {orphaned_objects_table}
+        INSERT INTO {orphaned_blobs_table}
             SELECT last_modified, obj_path, obj_size FROM {remote_blobs_table} AS object_storage
             LEFT ANTI JOIN {local_blobs_table} AS object_table
             ON object_table.obj_path = object_storage.obj_path
@@ -915,7 +914,7 @@ def _create_orphaned_blobs_table(
         ctx,
         f"""
             CREATE TABLE IF NOT EXISTS {table_name}
-                (obj_path String, obj_size UInt64)
+                (last_modified DateTime, obj_path String, obj_size UInt64)
                 ENGINE MergeTree
                 ORDER BY obj_path
                 SETTINGS storage_policy = '{storage_policy}'
