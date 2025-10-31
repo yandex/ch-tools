@@ -253,12 +253,19 @@ def clean_command(
     type=TimeSpanParamType(),
     help=("End of inspecting interval in human-friendly format."),
 )
+@option(
+    "--use-saved-list/--traverse-remote",
+    "use_saved_list",
+    default=True,
+    help=("Use saved remote blobs list without traversing object storage again."),
+)
 @pass_context
 def collect_info_command(
     ctx: Context,
     object_name_prefix: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
+    use_saved_list: bool,
 ) -> None:
     """
     Collect info about object storage memory usage and orphaned objects.
@@ -278,6 +285,7 @@ def collect_info_command(
         object_name_prefix=object_name_prefix,
         from_time=from_time,
         to_time=to_time,
+        use_saved=use_saved_list,
     )
 
 

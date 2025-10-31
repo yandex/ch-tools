@@ -44,14 +44,6 @@ DEFAULT_CONFIG = {
     "object_storage": {
         "bucket_name_prefix": "cloud-storage-",
         "clean": {
-            "listing_table_prefix": "listing_objects_from_",
-            "orphaned_objects_table_prefix": "orphaned_objects_",
-            "listing_table_database": "default",
-            "orphaned_objects_table_database": "default",
-            "listing_table_zk_path_prefix": "/_system/tables",
-            "orphaned_objects_table_zk_path_prefix": "/_system/tables",
-            "storage_policy": "default",
-            "antijoin_timeout": 10 * 60,
             "verify": True,
             "verify_paths_regex": {
                 "host": r"^(\w+)/(\w+)/(\w+)/",
@@ -61,10 +53,14 @@ DEFAULT_CONFIG = {
             "verify_size_error_rate_threshold_fraction": 0.9,
         },
         "space_usage": {
+            "service_tables_retention_days": 7,
             "space_usage_table_prefix": "space_usage_from_",
-            "blob_state_table_prefix": "blob_state_from_",
-            "space_usage_table_database": "default",
-            "space_usage_table_zk_path_prefix": "/_system/tables",
+            "local_blobs_table_prefix": "local_objects_",
+            "remote_blobs_table_prefix": "listing_objects_from_",
+            "orphaned_blobs_table_prefix": "orphaned_objects_",
+            "antijoin_timeout": 24 * 60 * 60,
+            "database": "default",
+            "zk_path_prefix": "/_system/tables",
             "storage_policy": "default",
         },
     },
@@ -189,6 +185,11 @@ DEFAULT_CONFIG = {
                 "Disk quota exceeded",
                 "No space left on device",
             ],
+        },
+        "system-metrics": {
+            "@disabled": False,
+            "crit": 10000,
+            "warn": 100,
         },
     },
     # Configuration of keeper-monitoring tool commands and options.
