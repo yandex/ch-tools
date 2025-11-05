@@ -173,8 +173,8 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     ),
 )
 @option(
-    "--stat-partitioning",
-    "stat_partitioning",
+    "--stat-by-period",
+    "stat_by_period",
     type=Choice(["all", "month", "day"]),
     default=StatisticsPartitioning.ALL,
     help=("Partition output stats by months or days, or return only total stats."),
@@ -195,12 +195,12 @@ def clean_command(
     max_size_to_delete_bytes: int,
     max_size_to_delete_fraction: float,
     ignore_missing_cloud_storage_backups: bool,
-    stat_partitioning: StatisticsPartitioning,
+    stat_by_period: StatisticsPartitioning,
 ) -> None:
     """
     Clean orphaned S3 objects.
     """
-    result_stat = ResultStat()
+    result_stat = ResultStat(stat_by_period)
     error_msg = ""
 
     # Need for correctly call format in Query
@@ -220,10 +220,10 @@ def clean_command(
             max_size_to_delete_bytes,
             max_size_to_delete_fraction,
             ignore_missing_cloud_storage_backups,
-            stat_partitioning,
+            stat_by_period,
         )
     finally:
-        total_size = result_stat["Total"]["total_size"]
+        total_size = result_stat.total["total_size"]
         state = OrphanedObjectsState(total_size, error_msg)
 
         if store_state_zk_path:

@@ -569,7 +569,7 @@ Feature: chadmin object-storage commands
     """
     And we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --to-time 0h --dry-run --stat-partitioning 'day'
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run --stat-by-period 'day'
     """
     Then we get response matches
     """
@@ -579,13 +579,45 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage clean --to-time 0h --dry-run --stat-partitioning 'month'
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run --stat-by-period 'month'
     """
     Then we get response matches
     """
     \d{4}-\d{2}:
       WouldDelete: 1
       TotalSize: 1
+    """
+
+  @require_version_23.3
+  Scenario: Clean with use-saved-list option recreates table with outdated schema
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE test.listing_objects_from_object_storage (id UInt32) ENGINE MergeTree ORDER BY id;
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --from-time 0h --to-time 0h --dry-run --use-saved-list --keep-paths
+    """
+    Then we get response contains
+    """
+      WouldDelete: 0
+      TotalSize: 0
+    """
+    When we execute query on clickhouse01
+    """
+    SHOW CREATE TABLE test.listing_objects_from_object_storage
+    """
+    Then we get response contains
+    """
+    `last_modified` DateTime
+    """
+    And we get response contains
+    """
+    `obj_path` String
+    """
+    And we get response contains
+    """
+    `obj_size` UInt64
     """
 
   @require_version_23.3

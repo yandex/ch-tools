@@ -22,6 +22,7 @@ from ch_tools.chadmin.internal.object_storage.s3_iterator import (
 from ch_tools.chadmin.internal.system import match_ch_backup_version, match_ch_version
 from ch_tools.chadmin.internal.table import (
     delete_table_by_full_name,
+    get_table,
     list_tables,
     table_exists,
 )
@@ -70,6 +71,8 @@ UNIQUE_TABLE_SUFFIX_PATTERN = (
 UNIQUE_TABLE_SUFFIX_REGEX = re.compile(UNIQUE_TABLE_SUFFIX_PATTERN)
 # Timestamp format for parsing table timestamps
 TIMESTAMP_FORMAT = "%Y%m%d_%H%M%S"
+# Can be used to check if schema is changed and table needs to be recreated forcefully
+REMOTE_BLOBS_COLUMNS = "last_modified DateTime, obj_path String, obj_size UInt64"
 
 
 class Scope(str, Enum):
@@ -105,7 +108,7 @@ def clean(
 
     _cleanup_old_service_tables(ctx)
 
-    result_stat = ResultStat()
+    result_stat = ResultStat(stat_partitioning)
 
     if dry_run:
         logging.info("Counting orphaned objects...")
@@ -248,12 +251,12 @@ def _process_objects_batch(
     batch_size = sum(obj.size for obj in objects)
     is_last_batch = False
 
-    if result_stat["Total"]["total_size"] + batch_size > max_size_to_delete:
+    if result_stat.total["total_size"] + batch_size > max_size_to_delete:
         # To fit into the size restriction: sort all objects by size
         # And remove elements from the end
         is_last_batch = True
         objects = sorted(objects, key=lambda obj: obj.size)
-        while result_stat["Total"]["total_size"] + batch_size > max_size_to_delete:
+        while result_stat.total["total_size"] + batch_size > max_size_to_delete:
             batch_size -= objects[-1].size
             objects.pop()
 
@@ -272,7 +275,7 @@ def _cleanup_orphaned_objects(
     """
     Performs the main logic for cleaning up orphaned objects.
     """
-    result_stat = ResultStat()
+    result_stat = ResultStat(stat_partitioning)
 
     max_size_to_delete = _calculate_size_limits(
         listing_size_in_bucket, max_size_to_delete_bytes, max_size_to_delete_fraction
@@ -283,15 +286,13 @@ def _cleanup_orphaned_objects(
             objects, max_size_to_delete, result_stat
         )
 
-        cleanup_s3_object_storage(
-            disk_conf, iter(objects), result_stat, stat_partitioning, dry_run
-        )
+        cleanup_s3_object_storage(disk_conf, iter(objects), result_stat, dry_run)
 
         if is_last_batch:
             break
 
-    deleted = result_stat["Total"]["deleted"]
-    total_size = format_size(result_stat["Total"]["total_size"], binary=True)
+    deleted = result_stat.total["deleted"]
+    total_size = format_size(result_stat.total["total_size"], binary=True)
     logging.info(
         f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {total_size} from bucket [{disk_conf.bucket_name}]",
     )
@@ -524,6 +525,8 @@ def _remote_blobs_table(
         ctx, config["remote_blobs_table_prefix"], unique_name
     )
 
+    recreate_table = not use_saved
+
     try:
         if use_saved:
             table_name_only = remote_blobs_table.split(".")[1]
@@ -531,7 +534,17 @@ def _remote_blobs_table(
                 raise RuntimeError(
                     f"Can't use saved {remote_blobs_table} because it does not exist"
                 )
-        else:
+
+            table_create_statement = get_table(
+                ctx, config["database"], table_name_only
+            )["create_table_query"]
+            if not _check_schema_mismatch_for_remote_blobs(table_create_statement):
+                logging.warning(
+                    f"Existing table {remote_blobs_table} has outdated schema, will recreate it"
+                )
+                recreate_table = True
+
+        if recreate_table:
             _create_remote_blobs_table(
                 ctx,
                 remote_blobs_table,
@@ -650,7 +663,7 @@ def _object_list_generator(
     )
 
     query = """
-        SELECT last_modified, obj_path, obj_size FROM {{ table_name }}
+        SELECT * FROM {{ table_name }}
         WHERE 1
         {%- if from_time_cond %}
             AND last_modified >= toDateTime('{{ from_time_cond }}')
@@ -665,7 +678,7 @@ def _object_list_generator(
         with execute_query(
             ctx,
             query,
-            format_="TabSeparated",
+            format_="JSONEachRow",
             timeout=timeout,
             settings=query_settings,
             stream=True,
@@ -674,7 +687,7 @@ def _object_list_generator(
             to_time_cond=to_time_cond,
         ) as resp:
             for line in resp.iter_lines():
-                yield ObjListItem.from_tab_separated(line.decode().strip())
+                yield ObjListItem.from_json(line)
 
     return obj_list_iterator
 
@@ -867,7 +880,7 @@ def _create_remote_blobs_table(
         ctx,
         f"""
         CREATE TABLE IF NOT EXISTS {table_name}
-            (last_modified DateTime, obj_path String, obj_size UInt64)
+            ({REMOTE_BLOBS_COLUMNS})
             ENGINE {engine}
             ORDER BY (last_modified, obj_path)
             SETTINGS storage_policy = '{storage_policy}'
@@ -1180,4 +1193,35 @@ def _get_fill_space_usage_query(
     return Query(
         query,
         sensitive_args={"user_password": user_password},
+    )
+
+
+def _check_schema_mismatch_for_remote_blobs(create_query: str) -> bool:
+    """
+    Check if table schema is changed and table should be recreated
+    """
+
+    def _get_columns_dict(columns_str: str) -> dict[str, str]:
+        res = {}
+        columns_str = columns_str.strip("()")
+        columns_list = [name_type.strip() for name_type in columns_str.split(",")]
+        name_type_list = [name_type.split() for name_type in columns_list]
+
+        for name_type_arr in name_type_list:
+            name = name_type_arr[0].strip("`")
+            c_type = name_type_arr[1]
+            res[name] = c_type
+
+        return res
+
+    m = re.search(r"CREATE TABLE .* \((.*)\) ENGINE", create_query)
+    logging.warning(m)
+    if m:
+        existing_columns = _get_columns_dict(m[1])
+        new_columns = _get_columns_dict(REMOTE_BLOBS_COLUMNS)
+
+        return existing_columns == new_columns
+
+    raise RuntimeError(
+        "Can't find columns in table create query for remote blobs table"
     )
