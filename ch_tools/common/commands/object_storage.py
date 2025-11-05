@@ -12,7 +12,7 @@ from humanfriendly import format_size
 
 from ch_tools.chadmin.internal.object_storage import cleanup_s3_object_storage
 from ch_tools.chadmin.internal.object_storage.obj_list_item import ObjListItem
-from ch_tools.chadmin.internal.object_storage.s3_cleanup import (
+from ch_tools.chadmin.internal.object_storage.s3_cleanup_stats import (
     ResultStat,
     StatisticsPartitioning,
 )

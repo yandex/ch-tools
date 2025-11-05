@@ -17,7 +17,7 @@ from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.object_storage.orphaned_objects_state import (
     OrphanedObjectsState,
 )
-from ch_tools.chadmin.internal.object_storage.s3_cleanup import (
+from ch_tools.chadmin.internal.object_storage.s3_cleanup_stats import (
     ResultStat,
     StatisticsPartitioning,
 )

@@ -1,5 +1,5 @@
 from ch_tools.chadmin.internal.object_storage.obj_list_item import ObjListItem
-from ch_tools.chadmin.internal.object_storage.s3_cleanup import (
+from ch_tools.chadmin.internal.object_storage.s3_cleanup_stats import (
     ResultStat,
     StatisticsPartitioning,
 )
