@@ -90,7 +90,7 @@ def _get_first_checksums_blob_path(object_storage_prefix: str, part: dict) -> st
             )
         return metadata.objects[0].key
 
-    return os.path.join(object_storage_prefix, metadata.objects[0].key)
+    return os.path.join(object_storage_prefix, metadata.objects[0].key.lstrip("/"))
 
 
 def _get_zero_copy_lock_path(
