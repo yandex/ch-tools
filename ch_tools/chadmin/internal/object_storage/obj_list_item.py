@@ -25,4 +25,4 @@ class ObjListItem:
     def from_json(cls, value: str) -> "ObjListItem":
         parsed_json = json.loads(value)
         last_modified = datetime.strptime(parsed_json["last_modified"], DATETIME_FORMAT)
-        return cls(last_modified, parsed_json["obj_path"], parsed_json["obj_size"])
+        return cls(last_modified, parsed_json["obj_path"], int(parsed_json["obj_size"]))

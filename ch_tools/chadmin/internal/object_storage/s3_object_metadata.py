@@ -33,7 +33,7 @@ class S3ObjectLocalMetaData:
         lines = value.splitlines()
         idx = 0
 
-        matches = re.match(r"^[123]$", lines[idx])
+        matches = re.match(r"^[12345]$", lines[idx])
         if not matches:
             raise ValueError(f"Incorrect metadata version. Line: `{lines[idx]}`")
         version = int(matches[0])
