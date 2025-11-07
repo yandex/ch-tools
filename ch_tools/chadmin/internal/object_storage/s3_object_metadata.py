@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List
 
 MAX_METADATA_FILE_SIZE = 10 * 1024
+VERSION_FULL_OBJECT_KEY = 5
 
 
 @dataclass
@@ -33,7 +34,7 @@ class S3ObjectLocalMetaData:
         lines = value.splitlines()
         idx = 0
 
-        matches = re.match(r"^[123]$", lines[idx])
+        matches = re.match(r"^[12345]$", lines[idx])
         if not matches:
             raise ValueError(f"Incorrect metadata version. Line: `{lines[idx]}`")
         version = int(matches[0])
@@ -88,3 +89,9 @@ class S3ObjectLocalMetaData:
             )
         with path.open(encoding="latin-1") as file:
             return cls.from_string(file.read())
+
+    def has_full_object_key(self) -> bool:
+        """
+        Whether key also contains object storage prefix or not.
+        """
+        return self.version >= VERSION_FULL_OBJECT_KEY
