@@ -13,7 +13,7 @@ def orphaned_backups_command() -> Result:
     if not orphaned_backups:
         return Result(OK)
 
-    orphaned_backups_str = ", ".join(orphaned_backups[:3])
+    orphaned_backups_str = ", ".join(sorted(orphaned_backups)[:3])
     if len(orphaned_backups) > 3:
         orphaned_backups_str += ", ..."
 

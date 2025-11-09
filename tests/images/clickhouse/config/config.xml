@@ -2,9 +2,11 @@
     <logger>
         <console>1</console>
     </logger>
+
     <listen_host>0.0.0.0</listen_host>
     <https_port>8443</https_port>
     <tcp_ssl_port>9440</tcp_ssl_port>
+
     <openSSL>
         <server>
             <certificateFile>/etc/clickhouse-server/ssl/server.crt</certificateFile>
@@ -17,6 +19,7 @@
             <preferServerCiphers>true</preferServerCiphers>
         </server>
     </openSSL>
+
     <remote_servers>
         <cluster>
             <shard>
@@ -30,6 +33,7 @@
             </shard>
         </cluster>
     </remote_servers>
+
     <zookeeper>
          <node index="1">
             <host>zookeeper01</host>
@@ -37,6 +41,7 @@
          </node>
          <session_timeout_ms>3000</session_timeout_ms>
     </zookeeper>
+
     <storage_configuration>
         <disks>
             <default />
@@ -62,8 +67,19 @@
                     </object_storage>
                 </volumes>
             </object_storage>
+            <hybrid_storage>
+                <volumes>
+                    <default>
+                        <disk>default</disk>
+                    </default>
+                    <object_storage>
+                        <disk>object_storage</disk>
+                    </object_storage>
+                </volumes>
+            </hybrid_storage>
         </policies>
     </storage_configuration>
+
     <keeper_server>
         <tcp_port_secure>2281</tcp_port_secure>
         <server_id>1</server_id>
@@ -82,9 +98,12 @@
             </server>
         </raft_configuration>
     </keeper_server>
+
     <macros>
         <replica>{{ instance_name }}.{{ conf.network_name }}</replica>
         <cluster>cluster</cluster>
         <shard>shard1</shard>
     </macros>
+
+    <enable_system_unfreeze>1</enable_system_unfreeze>
 </clickhouse>
