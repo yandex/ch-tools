@@ -64,6 +64,7 @@ RUN rm -rf /etc/supervisor && \
     ln -s /etc/clickhouse-server/ssl/server.crt /etc/clickhouse-server/ssl/allCAs.pem && \
     \
     groupadd monitor && useradd -g monitor -G monitor,clickhouse monitor && \
+    echo 'monitor ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && \
     mkdir /var/log/clickhouse-monitoring && \
     chown monitor:monitor -R /var/log/clickhouse-monitoring && \
     mkdir /var/log/keeper-monitoring && \

@@ -401,7 +401,10 @@ def detect_broken_partitions(
                 logging.error("Failed to perform extend objects: {!r}", e)
 
         for s3_object in objects:
-            object_storage_key = os.path.join(disk_conf.prefix, s3_object.key)
+            if s3_object.key_is_full:
+                object_storage_key = s3_object.key
+            else:
+                object_storage_key = os.path.join(disk_conf.prefix, s3_object.key)
 
             if check_key_in_object_storage(
                 s3_client, disk_conf.bucket_name, object_storage_key
