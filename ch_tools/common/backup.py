@@ -57,11 +57,19 @@ def get_chs3_backups(disk: str = DEFAULT_S3_DISK_NAME) -> set[str]:
 
 def get_orphaned_chs3_backups(disk: str = DEFAULT_S3_DISK_NAME) -> list[str]:
     """
-    Get backups from the local shadow directory for which there is no existing backup.
+    Find and return needless CHS3 backups (backups of S3 disks) that can be deleted.
+
+    A CHS3 backup is considered needless if corresponding ch-backup tool backup is missing or partially deleted.
     """
-    backups = get_backups()
-    shadow_chs3_backups = get_chs3_backups(disk)
-    return list(shadow_chs3_backups - {backup["name"] for backup in backups})
+    backups = {backup["name"]: backup for backup in get_backups()}
+
+    result = []
+    for backup_name in get_chs3_backups(disk):
+        backup = backups.get(backup_name)
+        if not backup or backup["state"] == "partially_deleted":
+            result.append(backup_name)
+
+    return result
 
 
 def get_missing_chs3_backups(disk: str = DEFAULT_S3_DISK_NAME) -> list[str]:
