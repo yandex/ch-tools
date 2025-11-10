@@ -58,15 +58,11 @@ def create_zero_copy_locks(
     )
 
     zero_copy_lock_paths = []
-    object_storage_prefix = None
     for part in part_info:
-        if not object_storage_prefix:
-            object_storage_prefix = storage_config.prefix
-
         zero_copy_lock_paths.append(
             (
                 _get_zero_copy_lock_path(
-                    object_storage_prefix,
+                    storage_config.prefix,
                     zero_copy_path,
                     table["uuid"],
                     part,
@@ -83,10 +79,18 @@ def create_zero_copy_locks(
         _create_zero_copy_locks(ctx, zero_copy_lock_paths, dry_run)
 
 
-def _get_first_checksums_blob_path(part: dict) -> str:
+def _get_first_checksums_blob_path(object_storage_prefix: str, part: dict) -> str:
     checksums_path = os.path.join(part["path"], "checksums.txt")
     metadata = S3ObjectLocalMetaData.from_file(Path(checksums_path))
-    return metadata.objects[0].key
+
+    if metadata.has_full_object_key():
+        if not metadata.objects[0].key.startswith(object_storage_prefix):
+            raise RuntimeError(
+                "Metadata file contains object storage prefix which is different from the one in storage config."
+            )
+        return metadata.objects[0].key
+
+    return os.path.join(object_storage_prefix, metadata.objects[0].key.lstrip("/"))
 
 
 def _get_zero_copy_lock_path(
@@ -96,10 +100,8 @@ def _get_zero_copy_lock_path(
     part: dict,
     replica: str,
 ) -> str:
-    blob_path = _get_first_checksums_blob_path(part)
-    object_storage_path = os.path.join(object_storage_prefix, blob_path).replace(
-        "/", "_"
-    )
+    blob_path = _get_first_checksums_blob_path(object_storage_prefix, part)
+    object_storage_path = blob_path.replace("/", "_")
 
     return os.path.join(
         zero_copy_path, table_uuid, part["name"], object_storage_path, replica

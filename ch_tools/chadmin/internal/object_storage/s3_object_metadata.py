@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List
 
 MAX_METADATA_FILE_SIZE = 10 * 1024
+VERSION_FULL_OBJECT_KEY = 5
 
 
 @dataclass
@@ -14,6 +15,7 @@ class S3ObjectLocalInfo:
 
     key: str
     size: int
+    key_is_full: bool
 
 
 @dataclass
@@ -33,7 +35,7 @@ class S3ObjectLocalMetaData:
         lines = value.splitlines()
         idx = 0
 
-        matches = re.match(r"^[123]$", lines[idx])
+        matches = re.match(r"^[12345]$", lines[idx])
         if not matches:
             raise ValueError(f"Incorrect metadata version. Line: `{lines[idx]}`")
         version = int(matches[0])
@@ -54,7 +56,13 @@ class S3ObjectLocalMetaData:
                 raise ValueError(
                     f"Incorrect metadata about object size and name. Line: `{lines[idx]}`"
                 )
-            objects.append(S3ObjectLocalInfo(key=matches[2], size=int(matches[1])))
+            objects.append(
+                S3ObjectLocalInfo(
+                    key=matches[2],
+                    size=int(matches[1]),
+                    key_is_full=cls._version_with_full_object_key(version),
+                )
+            )
             idx += 1
 
         matches = re.match(r"^\d+$", lines[idx])
@@ -88,3 +96,16 @@ class S3ObjectLocalMetaData:
             )
         with path.open(encoding="latin-1") as file:
             return cls.from_string(file.read())
+
+    @staticmethod
+    def _version_with_full_object_key(version: int) -> bool:
+        """
+        Whether key also contains object storage prefix or not.
+        """
+        return version >= VERSION_FULL_OBJECT_KEY
+
+    def has_full_object_key(self) -> bool:
+        """
+        Whether key also contains object storage prefix or not.
+        """
+        return self._version_with_full_object_key(self.version)
