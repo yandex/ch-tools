@@ -23,6 +23,8 @@ from pygments.token import Token
 from tabulate import tabulate
 from termcolor import colored
 
+from ch_tools.chadmin.internal.utils import DATETIME_FORMAT
+
 from ..yaml import dump_yaml
 from .utils import get_timezone
 
@@ -54,6 +56,8 @@ def print_response(
     separator: Optional[str] = None,
     limit: Optional[int] = None,
 ) -> None:
+    # pylint: disable=too-many-branches
+
     if format_ is None:
         # command-line parameter
         format_ = ctx.obj.get("format")
@@ -95,7 +99,13 @@ def print_response(
 
     if format_ in ("table", "csv"):
         if table_formatter:
-            value = [table_formatter(v) for v in value]
+            if isinstance(value, OrderedDict):
+                keys = list(value.keys())
+                value = [table_formatter(v) for v in value.values()]
+                for i, key in enumerate(keys):
+                    value[i]["key"] = key
+            else:
+                value = [table_formatter(v) for v in value]
 
         if format_ == "table":
             print_table(value)
@@ -282,7 +292,7 @@ def format_timestamp(ctx: Context, value: datetime) -> str:
     Format timestamp value.
     """
     value = value.astimezone(get_timezone(ctx))
-    result = value.strftime("%Y-%m-%d %H:%M:%S")
+    result = value.strftime(DATETIME_FORMAT)
     result += f".{int(value.microsecond / 1000):03d}"
     return result
 

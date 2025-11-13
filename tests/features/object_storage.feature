@@ -97,9 +97,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    - WouldDelete: 0
+      WouldDelete: 0
       TotalSize: 0
-    """  
+    """
 
   Scenario: Clean orphaned objects
     When we put object in S3
@@ -114,7 +114,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    - WouldDelete: 1
+      WouldDelete: 1
       TotalSize: 1
     """
     When we execute command on clickhouse01
@@ -123,7 +123,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    - Deleted: 1
+      Deleted: 1
       TotalSize: 1
     """
     And path does not exist in S3
@@ -145,7 +145,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    - WouldDelete: 100
+      WouldDelete: 100
       TotalSize: 200
     """
     When we execute command on clickhouse01
@@ -154,7 +154,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    - Deleted: 100
+      Deleted: 100
       TotalSize: 200
     """
     When we execute command on clickhouse01
@@ -163,7 +163,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    - WouldDelete: 0
+      WouldDelete: 0
       TotalSize: 0
     """
  
@@ -192,7 +192,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    - WouldDelete: 1
+      WouldDelete: 1
       TotalSize: 2
     """
     When we execute command on clickhouse01
@@ -201,7 +201,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    - Deleted: 1
+      Deleted: 1
       TotalSize: 2
     """
     And path does not exist in S3
@@ -215,7 +215,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    - WouldDelete: 1
+      WouldDelete: 1
       TotalSize: 3
     """
   
@@ -308,7 +308,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    - WouldDelete: 20
+      WouldDelete: 20
       TotalSize: 40
     """
     When we execute command on clickhouse01
@@ -317,7 +317,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    - Deleted: 15
+      Deleted: 15
       TotalSize: 30
     """
     When we execute command on clickhouse01
@@ -326,7 +326,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    - WouldDelete: 5
+      WouldDelete: 5
       TotalSize: 10
     """
 
@@ -349,7 +349,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    - WouldDelete: 20
+      WouldDelete: 20
       TotalSize: 40
     """
     When we execute command on clickhouse01
@@ -358,7 +358,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    - Deleted: 15
+      Deleted: 15
       TotalSize: 30
     """
     When we execute command on clickhouse01
@@ -367,7 +367,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    - WouldDelete: 5
+      WouldDelete: 5
       TotalSize: 10
     """
 
@@ -391,7 +391,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    - WouldDelete: 100
+      WouldDelete: 100
       TotalSize: 1100
     """
     When we try to execute command on clickhouse01
@@ -427,7 +427,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    - WouldDelete: 0
+      WouldDelete: 0
       TotalSize: 0
     """
     When we execute command on clickhouse01
@@ -440,7 +440,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response matches
     """
-    - WouldDelete: [1-9][0-9]*
+      WouldDelete: [1-9][0-9]*
       TotalSize: [1-9][0-9]*
     """
     When we execute command on clickhouse01
@@ -449,7 +449,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    - WouldDelete: 0
+      WouldDelete: 0
       TotalSize: 0
     """
     When we execute command on clickhouse01
@@ -516,8 +516,108 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    - WouldDelete: 0
+      WouldDelete: 0
       TotalSize: 0
+    """
+
+  @require_version_23.3
+  Scenario: Clean with use-saved-list option
+    When we execute query on clickhouse01
+    """
+    ALTER TABLE test.table_s3_01 DETACH PARTITION '0';
+    """
+    And we put object in S3
+    """
+      bucket: cloud-storage-test
+      path: /data/cluster_id/shard_1/orpaned_object.tsv
+      data: '1'
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin object-storage collect-info --to-time 0h --traverse-remote
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --from-time 0h --to-time 0h --dry-run --use-saved-list --keep-paths
+    """
+    Then we get response contains
+    """
+      WouldDelete: 0
+      TotalSize: 0
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --from-time 1h --to-time 0h --dry-run --use-saved-list --keep-paths
+    """
+    Then we get response contains
+    """
+      WouldDelete: 1
+      TotalSize: 1
+    """
+
+  @require_version_23.3
+  Scenario: Clean with stat partitioning
+    When we execute query on clickhouse01
+    """
+    ALTER TABLE test.table_s3_01 DETACH PARTITION '0';
+    """
+    And we put object in S3
+    """
+      bucket: cloud-storage-test
+      path: /data/cluster_id/shard_1/orpaned_object.tsv
+      data: '1'
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run --stat-by-period 'day'
+    """
+    Then we get response matches
+    """
+    '\d{4}-\d{2}-\d{2}':
+      WouldDelete: 1
+      TotalSize: 1
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run --stat-by-period 'month'
+    """
+    Then we get response matches
+    """
+    \d{4}-\d{2}:
+      WouldDelete: 1
+      TotalSize: 1
+    """
+
+  @require_version_23.3
+  Scenario: Clean with use-saved-list option recreates table with outdated schema
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE test.listing_objects_from_object_storage (id UInt32) ENGINE MergeTree ORDER BY id;
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --from-time 0h --to-time 0h --dry-run --use-saved-list --keep-paths
+    """
+    Then we get response contains
+    """
+      WouldDelete: 0
+      TotalSize: 0
+    """
+    When we execute query on clickhouse01
+    """
+    SHOW CREATE TABLE test.listing_objects_from_object_storage
+    """
+    Then we get response contains
+    """
+    `last_modified` DateTime
+    """
+    And we get response contains
+    """
+    `obj_path` String
+    """
+    And we get response contains
+    """
+    `obj_size` UInt64
     """
 
   @require_version_23.3
