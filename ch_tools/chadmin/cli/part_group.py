@@ -575,39 +575,41 @@ def move_parts_command(
     option(
         "-d",
         "--database",
-        help="Filter in data parts to attach by the specified database.",
+        help="Filter in data parts to remove the prefix by the specified database.",
     ),
     option(
-        "-t", "--table", help="Filter in data parts to attach by the specified table."
+        "-t",
+        "--table",
+        help="Filter in data parts to remove the prefix by the specified table.",
     ),
     option(
         "--id",
         "--partition",
         "partition_id",
-        help="Filter in data parts to attach by the specified partition.",
+        help="Filter in data parts to remove the prefix by the specified partition.",
     ),
     option(
         "--name",
         "--part",
         "part_name",
-        help="Filter in data parts to attach by the specified data part name.",
+        help="Filter in data parts to remove the prefix by the specified data part name.",
     ),
     option(
         "--disk",
         "disk_name",
-        help="Filter in data parts to attach by the specified disk.",
+        help="Filter in data parts to remove the prefix by the specified disk.",
     ),
     option(
         "-l",
         "--limit",
         type=int,
-        help="Limit the max number of data parts to attach.",
+        help="Limit the max number of data parts to remove the prefix.",
     ),
     option(
         "--use-part-list-from-json",
         default=None,
         type=str,
-        help="Use list of parts from the file. Example 'SELECT database, table, name ... FORMAT JSON' > file && chadmin part attach --use-part-list-from-json <file>.",
+        help="Use list of parts from the file. Example 'SELECT database, table, name ... FORMAT JSON' > file && chadmin part remove-detached-part-prefix --reason <> --use-part-list-from-json <file>.",
     ),
     constraint=If(
         IsSet("use_part_list_from_json"),
