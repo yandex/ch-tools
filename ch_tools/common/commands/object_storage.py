@@ -14,7 +14,7 @@ from ch_tools.chadmin.internal.object_storage import cleanup_s3_object_storage
 from ch_tools.chadmin.internal.object_storage.obj_list_item import ObjListItem
 from ch_tools.chadmin.internal.object_storage.s3_cleanup_stats import (
     ResultStat,
-    StatisticsPartitioning,
+    StatisticsPeriod,
 )
 from ch_tools.chadmin.internal.object_storage.s3_iterator import (
     s3_object_storage_iterator,
@@ -97,7 +97,7 @@ def clean(
     max_size_to_delete_bytes: int = 0,
     max_size_to_delete_fraction: float = 1.0,
     ignore_missing_cloud_storage_backups: bool = False,
-    stat_partitioning: StatisticsPartitioning = StatisticsPartitioning.ALL,
+    stat_partitioning: StatisticsPeriod = StatisticsPeriod.ALL,
 ) -> ResultStat:
     """
     Clean orphaned S3 objects.
@@ -269,7 +269,7 @@ def _cleanup_orphaned_objects(
     listing_size_in_bucket: int,
     max_size_to_delete_bytes: int,
     max_size_to_delete_fraction: float,
-    stat_partitioning: StatisticsPartitioning,
+    stat_partitioning: StatisticsPeriod,
     dry_run: bool,
 ) -> ResultStat:
     """

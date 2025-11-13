@@ -1,7 +1,7 @@
 from ch_tools.chadmin.internal.object_storage.obj_list_item import ObjListItem
 from ch_tools.chadmin.internal.object_storage.s3_cleanup_stats import (
     ResultStat,
-    StatisticsPartitioning,
+    StatisticsPeriod,
 )
 
 
@@ -25,7 +25,7 @@ def test_update() -> None:
 
 
 def test_partitioning_month() -> None:
-    stat = ResultStat(StatisticsPartitioning.MONTH)
+    stat = ResultStat(StatisticsPeriod.MONTH)
     item1 = ObjListItem.from_tab_separated("2025-11-05 10:15:20\tsome/path/on/s3\t4")
     item2 = ObjListItem.from_tab_separated("2025-10-05 10:15:20\tsome/path/on/s3\t2")
 
@@ -39,7 +39,7 @@ def test_partitioning_month() -> None:
 
 
 def test_partitioning_day() -> None:
-    stat = ResultStat(StatisticsPartitioning.DAY)
+    stat = ResultStat(StatisticsPeriod.DAY)
     item1 = ObjListItem.from_tab_separated("2025-11-05 10:15:20\tsome/path/on/s3\t4")
     item2 = ObjListItem.from_tab_separated("2025-11-06 10:15:20\tsome/path/on/s3\t2")
 

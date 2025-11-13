@@ -19,7 +19,7 @@ from ch_tools.chadmin.internal.object_storage.orphaned_objects_state import (
 )
 from ch_tools.chadmin.internal.object_storage.s3_cleanup_stats import (
     ResultStat,
-    StatisticsPartitioning,
+    StatisticsPeriod,
 )
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.zookeeper import (
@@ -176,7 +176,7 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     "--stat-by-period",
     "stat_by_period",
     type=Choice(["all", "month", "day"]),
-    default=StatisticsPartitioning.ALL,
+    default=StatisticsPeriod.ALL,
     help=("Partition output stats by months or days, or return only total stats."),
 )
 @pass_context
@@ -195,7 +195,7 @@ def clean_command(
     max_size_to_delete_bytes: int,
     max_size_to_delete_fraction: float,
     ignore_missing_cloud_storage_backups: bool,
-    stat_by_period: StatisticsPartitioning,
+    stat_by_period: StatisticsPeriod,
 ) -> None:
     """
     Clean orphaned S3 objects.
