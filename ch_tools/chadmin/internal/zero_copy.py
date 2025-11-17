@@ -39,6 +39,7 @@ def create_zero_copy_locks(
     replica: str,
     zookeeper_path: str,
     dry_run: bool = False,
+    zero_copy_path: Optional[str] = None,
 ) -> None:
     """Create missing zero-copy locks for given tables."""
     storage_config = S3DiskConfiguration.from_config(
@@ -47,7 +48,8 @@ def create_zero_copy_locks(
         ctx.obj["config"]["object_storage"]["bucket_name_prefix"],
     )
 
-    zero_copy_path = _get_zero_copy_zookeeper_path(ctx, "s3", table["uuid"])
+    if zero_copy_path is None:
+        zero_copy_path = _get_zero_copy_zookeeper_path(ctx, "s3", table["uuid"])
     part_info = list_parts(
         ctx,
         database=table["database"],

@@ -490,6 +490,15 @@ def clean_zk_locks_command(
 
 
 @zookeeper_group.command("create-zero-copy-locks")
+@option(
+    "--zero-copy-path",
+    "zero_copy_path",
+    default=None,
+    help=(
+        "Custom prefix for zero-copy locks path in ZooKeeper. "
+        "If not specified, will use 'remote_fs_zero_copy_zookeeper_path' value from ClickHouse."
+    ),
+)
 @option_group(
     "Disk selection options",
     option(
@@ -564,6 +573,7 @@ def clean_zk_locks_command(
 def create_zk_locks_command(
     ctx: Context,
     disk: str,
+    zero_copy_path: Optional[str] = None,
     database: Optional[str] = None,
     table: Optional[str] = None,
     partition_id: Optional[str] = None,
@@ -603,7 +613,15 @@ def create_zk_locks_command(
                 replica,
             )
             create_zero_copy_locks(
-                ctx, disk, table_info, partition_id, part_id, replica, zk_path, dry_run
+                ctx,
+                disk,
+                table_info,
+                partition_id,
+                part_id,
+                replica,
+                zk_path,
+                dry_run,
+                zero_copy_path,
             )
 
 
@@ -641,7 +659,7 @@ def _get_replicas_and_zk_path(
                 "The macro for replica is missing, specify --replicas explicitly."
             )
 
-    replicas_ = [r.strip() for r in replicas.split(",")]
+    replicas_ = [r.strip() for r in replicas.split(",")] if replicas else []
     for replica in replicas_:
         if replica not in replicas_list:
             raise RuntimeError(f"Replica {replica} is not present at system.replicas")
