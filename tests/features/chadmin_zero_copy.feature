@@ -456,3 +456,50 @@ Feature: chadmin zero-copy related zookeeper commands.
     /clickhouse01.ch_tools_test
     """
     Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
+
+
+  Scenario: Create zero-copy locks for large number of parts
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS test ON CLUSTER 'cluster';
+    CREATE DATABASE test ON CLUSTER 'cluster';
+
+    CREATE TABLE test.table_many_parts UUID '20000000-0000-0000-0000-000000000001' ON CLUSTER 'cluster' (
+        id Int32,
+        partition_key Int32
+    )
+    ENGINE = ReplicatedMergeTree('/tables/table_many_parts', '{replica}')
+    PARTITION BY partition_key
+    ORDER BY id
+    SETTINGS storage_policy='object_storage',allow_remote_fs_zero_copy_replication=1;
+    """
+    And we execute queries on clickhouse01
+    """
+    INSERT INTO test.table_many_parts
+    SELECT
+        number as id,
+        number as partition_key
+    FROM numbers(2000) SETTINGS max_partitions_per_insert_block=2000;
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid 20000000-0000-0000-0000-000000000001
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper create-zero-copy-locks --disk object_storage --max-workers 8 --zero-copy-path /custom_large/zero_copy/zero_copy_s3 -t table_many_parts
+    """
+    Then the list of children on clickhouse01 for zk node /custom_large/zero_copy/zero_copy_s3 is equal to
+    """
+    /custom_large/zero_copy/zero_copy_s3/20000000-0000-0000-0000-000000000001
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper list /custom_large/zero_copy/zero_copy_s3/20000000-0000-0000-0000-000000000001 | wc -l
+    """
+    Then we get response contains
+    """
+    2000
+    """
+

@@ -2,6 +2,7 @@ import os
 import re
 from pathlib import Path
 from typing import (
+    Generator,
     Optional,
     TypedDict,
 )
@@ -20,8 +21,7 @@ from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.retry import retry
 from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
-
-CREATE_ZERO_COPY_LOCKS_BATCH_SIZE = 1000
+from ch_tools.common.process_pool import WorkerTask
 
 
 class TableInfo(TypedDict):
@@ -30,7 +30,7 @@ class TableInfo(TypedDict):
     uuid: str
 
 
-def create_zero_copy_locks(
+def generate_zero_copy_lock_tasks(
     ctx: Context,
     disk: str,
     table: TableInfo,
@@ -40,8 +40,8 @@ def create_zero_copy_locks(
     zookeeper_path: str,
     dry_run: bool = False,
     zero_copy_path: Optional[str] = None,
-) -> None:
-    """Create missing zero-copy locks for given tables."""
+) -> Generator[WorkerTask, None, None]:
+    """Generate tasks for creating zero-copy locks for given table/replica."""
     storage_config = S3DiskConfiguration.from_config(
         get_clickhouse_config(ctx).storage_configuration,
         disk,
@@ -50,6 +50,7 @@ def create_zero_copy_locks(
 
     if zero_copy_path is None:
         zero_copy_path = _get_zero_copy_zookeeper_path(ctx, "s3", table["uuid"])
+
     part_info = list_parts(
         ctx,
         database=table["database"],
@@ -59,26 +60,27 @@ def create_zero_copy_locks(
         partition_id=partition_id,
     )
 
-    zero_copy_lock_paths = []
     for part in part_info:
-        zero_copy_lock_paths.append(
-            (
-                _get_zero_copy_lock_path(
-                    storage_config.prefix,
-                    zero_copy_path,
-                    table["uuid"],
-                    part,
-                    replica,
-                ),
-                _get_part_path_in_zk(part["name"], zookeeper_path, replica),
-            )
+        lock_path = _get_zero_copy_lock_path(
+            storage_config.prefix,
+            zero_copy_path,
+            table["uuid"],
+            part,
+            replica,
         )
-        if len(zero_copy_lock_paths) == CREATE_ZERO_COPY_LOCKS_BATCH_SIZE:
-            _create_zero_copy_locks(ctx, zero_copy_lock_paths, dry_run)
-            zero_copy_lock_paths.clear()
+        part_path = _get_part_path_in_zk(part["name"], zookeeper_path, replica)
 
-    if zero_copy_lock_paths:
-        _create_zero_copy_locks(ctx, zero_copy_lock_paths, dry_run)
+        task_id = f"{table['database']}.{table['name']}.{replica}.{part['name']}"
+        yield WorkerTask(
+            indeifier=task_id,
+            function=_create_single_zero_copy_lock,
+            kwargs={
+                "ctx": ctx,
+                "lock_path": lock_path,
+                "part_path": part_path,
+                "dry_run": dry_run,
+            },
+        )
 
 
 def _get_first_checksums_blob_path(object_storage_prefix: str, part: dict) -> str:
@@ -141,8 +143,7 @@ def _get_zero_copy_zookeeper_path(
                 return os.path.join(match[1], disk_dir)
         else:
             logging.warning(
-                "Table with uuid {} doesn't exist. Will search for locks in default 'remote_fs_zero_copy_zookeeper_path' directory.",
-                table_uuid,
+                f"Table with uuid {table_uuid} doesn't exist. Will search for locks in default 'remote_fs_zero_copy_zookeeper_path' directory."
             )
 
     query = "SELECT value FROM system.merge_tree_settings WHERE name = 'remote_fs_zero_copy_zookeeper_path'"
@@ -151,11 +152,14 @@ def _get_zero_copy_zookeeper_path(
     return os.path.join(base_path, disk_dir)
 
 
-def _create_zero_copy_locks(
+def _create_single_zero_copy_lock(
     ctx: Context,
-    paths: list[tuple[str, str]],
+    lock_path: str,
+    part_path: str,
     dry_run: bool = False,
 ) -> None:
+    """Create a single zero-copy lock."""
+
     # Some parent path may be deleted or created concurrently
     @retry(
         exception_types=(NoNodeError, NodeExistsError), max_attempts=3, max_interval=1
@@ -181,27 +185,26 @@ def _create_zero_copy_locks(
                 raise result
 
     with zk_client(ctx) as zk:
-        for lock_path, part_path in paths:
-            if zk.exists(lock_path):
-                continue
+        if zk.exists(lock_path):
+            return
 
-            part_node = zk.exists(part_path)
-            # This means part is already deleted
-            if not part_node:
-                continue
+        part_node = zk.exists(part_path)
+        # This means part is already deleted
+        if not part_node:
+            return
 
-            logging.info("Creating zero-copy lock at {}", lock_path)
-            if dry_run:
-                continue
+        logging.info("Creating zero-copy lock at {}", lock_path)
+        if dry_run:
+            return
 
-            try:
-                _create_lock_in_transaction(zk, lock_path, part_path, part_node.version)
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to create zero-copy lock at {lock_path}, reason: {e}"
-                )
+        try:
+            _create_lock_in_transaction(zk, lock_path, part_path, part_node.version)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to create zero-copy lock at {lock_path}, reason: {e}"
+            )
 
-            logging.info("Created zero-copy lock at {}", lock_path)
+        logging.info("Created zero-copy lock at {}", lock_path)
 
 
 def _get_parent_paths_to_create(zk: KazooClient, path: str) -> list[str]:

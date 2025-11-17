@@ -1,6 +1,6 @@
 import re
 import sys
-from typing import Any, Optional
+from typing import Any, Generator, Optional
 
 from cloup import (
     Choice,
@@ -21,7 +21,8 @@ from ch_tools.chadmin.internal.table_replica import (
     get_table_replica,
     list_table_replicas,
 )
-from ch_tools.chadmin.internal.zero_copy import create_zero_copy_locks
+from ch_tools.chadmin.internal.utils import chunked
+from ch_tools.chadmin.internal.zero_copy import generate_zero_copy_lock_tasks
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
     create_zk_nodes,
@@ -42,6 +43,9 @@ from ch_tools.common.cli.parameters import ListParamType, StringParamType
 from ch_tools.common.clickhouse.config import get_macros
 from ch_tools.common.clickhouse.config.storage_configuration import OBJECT_STORAGE_TYPES
 from ch_tools.common.config import load_config
+from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
+
+CREATE_ZERO_COPY_LOCKS_BATCH_SIZE = 1000
 
 
 @group("zookeeper", cls=Chadmin)
@@ -569,6 +573,20 @@ def clean_zk_locks_command(
     is_flag=True,
     help=("Do not create objects."),
 )
+@option(
+    "--max-workers",
+    "max_workers",
+    type=int,
+    default=4,
+    help=("Maximum number of parallel workers for creating locks."),
+)
+@option(
+    "--keep-going",
+    "keep_going",
+    is_flag=True,
+    default=False,
+    help=("Continue processing even if some tasks fail."),
+)
 @pass_context
 def create_zk_locks_command(
     ctx: Context,
@@ -581,6 +599,8 @@ def create_zk_locks_command(
     replicas: Optional[str] = None,
     all_replicas: bool = False,
     dry_run: bool = False,
+    max_workers: int = 4,
+    keep_going: bool = False,
 ) -> None:
     """
     Create zero copy locks.
@@ -595,34 +615,46 @@ def create_zk_locks_command(
     if not tables:
         raise RuntimeError("Couldn't find any replicated tables by given filters")
 
-    for table_info in tables:
-        zk_path, replicas_to_lock = _get_replicas_and_zk_path(
-            ctx, table_info, replicas, all_replicas
+    def generate_all_tasks() -> Generator[WorkerTask, None, None]:
+        for table_info in tables:
+            zk_path, replicas_to_lock = _get_replicas_and_zk_path(
+                ctx, table_info, replicas, all_replicas
+            )
+            if not replicas_to_lock:
+                logging.warning(
+                    f"Couldn't find any replicas for table '{table_info['database']}'.'{table_info['name']}'"
+                )
+                continue
+
+            for replica in replicas_to_lock:
+                logging.info(
+                    f"Preparing zero-copy lock tasks for table '{table_info['database']}'.'{table_info['name']}', replica '{replica}'"
+                )
+                yield from generate_zero_copy_lock_tasks(
+                    ctx,
+                    disk,
+                    table_info,
+                    partition_id,
+                    part_id,
+                    replica,
+                    zk_path,
+                    dry_run,
+                    zero_copy_path,
+                )
+
+    total_tasks = 0
+    for batch in chunked(generate_all_tasks(), CREATE_ZERO_COPY_LOCKS_BATCH_SIZE):
+        batch_len = len(batch)
+        total_tasks += batch_len
+        logging.info(
+            f"Executing batch of {batch_len} lock creation tasks with {max_workers} workers"
         )
-        if not replicas_to_lock:
-            logging.warning(
-                "Couldn't find any replicas for table '{}'.'{}'",
-                table_info["database"],
-                table_info["name"],
-            )
-        for replica in replicas_to_lock:
-            logging.info(
-                "Creating zero-copy locks for table '{}'.'{}', replica '{}'",
-                table_info["database"],
-                table_info["name"],
-                replica,
-            )
-            create_zero_copy_locks(
-                ctx,
-                disk,
-                table_info,
-                partition_id,
-                part_id,
-                replica,
-                zk_path,
-                dry_run,
-                zero_copy_path,
-            )
+        execute_tasks_in_parallel(batch, max_workers=max_workers, keep_going=keep_going)
+
+    if total_tasks > 0:
+        logging.info(f"All {total_tasks} zero-copy lock creation tasks completed")
+    else:
+        logging.info("No zero-copy lock tasks to execute")
 
 
 def _get_replicas_and_zk_path(
