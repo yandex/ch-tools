@@ -37,7 +37,7 @@ def check_resetup_running() -> None:
     """
     for proc in psutil.process_iter():
         if {"/usr/bin/ch-backup", "restore-schema"}.issubset(proc.cmdline()):
-            die(0, "resetup is running")
+            die(0, "resetup is running (restore schema)")
         if {"/usr/bin/chadmin", "wait", "replication-sync"}.issubset(proc.cmdline()):
             die(0, "resetup is running (wait for replication sync)")
 
