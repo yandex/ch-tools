@@ -644,12 +644,11 @@ def create_zk_locks_command(
 
     total_tasks = 0
     for batch in chunked(generate_all_tasks(), CREATE_ZERO_COPY_LOCKS_BATCH_SIZE):
-        batch_len = len(batch)
-        total_tasks += batch_len
+        total_tasks += len(batch)
         logging.info(
-            f"Executing batch of {batch_len} lock creation tasks with {max_workers} workers"
+            f"Executing batch of {len(batch)} lock creation tasks with {max_workers} workers"
         )
-        execute_tasks_in_parallel(batch, max_workers=max_workers, keep_going=keep_going)
+        execute_tasks_in_parallel(batch, max_workers, keep_going)
 
     if total_tasks > 0:
         logging.info(f"All {total_tasks} zero-copy lock creation tasks completed")

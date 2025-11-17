@@ -72,7 +72,7 @@ def generate_zero_copy_lock_tasks(
 
         task_id = f"{table['database']}.{table['name']}.{replica}.{part['name']}"
         yield WorkerTask(
-            indeifier=task_id,
+            identifier=task_id,
             function=_create_single_zero_copy_lock,
             kwargs={
                 "ctx": ctx,

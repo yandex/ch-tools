@@ -7,7 +7,7 @@ from ch_tools.common import logging
 
 @dataclass
 class WorkerTask:
-    indeifier: str
+    identifier: str
     function: Callable
     kwargs: Dict[str, Any]
 
@@ -23,7 +23,7 @@ def execute_tasks_in_parallel(
             executor.submit(
                 task.function,
                 **task.kwargs,
-            ): task.indeifier
+            ): task.identifier
             for task in tasks
         }
         result: Dict[str, Any] = {}
