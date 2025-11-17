@@ -15,6 +15,8 @@ from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_clien
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
+DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+
 
 def execute_query(
     ctx: Context,

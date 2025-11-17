@@ -1,8 +1,9 @@
-from typing import Any, Iterator, List, Tuple
+from typing import Any, Iterator, List
 
 import boto3
 from botocore.client import Config
 
+from ch_tools.chadmin.internal.object_storage.s3_cleanup_stats import ResultStat
 from ch_tools.chadmin.internal.utils import chunked
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 
@@ -12,8 +13,11 @@ BULK_DELETE_CHUNK_SIZE = 1000
 
 
 def cleanup_s3_object_storage(
-    disk: S3DiskConfiguration, keys: Iterator[ObjListItem], dry_run: bool = False
-) -> Tuple[int, int]:
+    disk: S3DiskConfiguration,
+    keys: Iterator[ObjListItem],
+    stat: ResultStat,
+    dry_run: bool = False,
+) -> None:
     s3 = boto3.resource(
         "s3",
         endpoint_url=disk.endpoint_url,
@@ -26,16 +30,12 @@ def cleanup_s3_object_storage(
         ),
     )
     bucket = s3.Bucket(disk.bucket_name)
-    deleted = 0
-    total_size = 0
 
     for chunk in chunked(keys, BULK_DELETE_CHUNK_SIZE):
         if not dry_run:
             _bulk_delete(bucket, chunk)
-        deleted += len(chunk)
-        total_size += sum(item.size for item in chunk)
-
-    return deleted, total_size
+        for item in chunk:
+            stat.update_by_item(item)
 
 
 def _bulk_delete(bucket: Any, items: List[ObjListItem]) -> None:

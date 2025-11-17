@@ -62,6 +62,7 @@ DEFAULT_CONFIG = {
             "database": "default",
             "zk_path_prefix": "/_system/tables",
             "storage_policy": "default",
+            "recreate_table_on_schema_mismatch": True,
         },
     },
     "zookeeper": {
