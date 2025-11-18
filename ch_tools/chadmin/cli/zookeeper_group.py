@@ -13,6 +13,7 @@ from cloup import (
     pass_context,
 )
 from cloup.constraints import If, IsSet, RequireAtLeast, mutually_exclusive, require_all
+from kazoo.client import KazooClient
 from kazoo.security import make_digest_acl
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -32,6 +33,7 @@ from ch_tools.chadmin.internal.zookeeper import (
     list_zk_nodes,
     update_acls_zk_node,
     update_zk_nodes,
+    zk_client,
 )
 from ch_tools.chadmin.internal.zookeeper_clean import (
     clean_zk_metadata_for_hosts,
@@ -615,7 +617,7 @@ def create_zk_locks_command(
     if not tables:
         raise RuntimeError("Couldn't find any replicated tables by given filters")
 
-    def generate_all_tasks() -> Generator[WorkerTask, None, None]:
+    def generate_all_tasks(zk: KazooClient) -> Generator[WorkerTask, None, None]:
         for table_info in tables:
             zk_path, replicas_to_lock = _get_replicas_and_zk_path(
                 ctx, table_info, replicas, all_replicas
@@ -638,17 +640,20 @@ def create_zk_locks_command(
                     part_id,
                     replica,
                     zk_path,
+                    zk,
                     dry_run,
                     zero_copy_path,
                 )
 
     total_tasks = 0
-    for batch in chunked(generate_all_tasks(), CREATE_ZERO_COPY_LOCKS_BATCH_SIZE):
-        total_tasks += len(batch)
-        logging.info(
-            f"Executing batch of {len(batch)} lock creation tasks with {max_workers} workers"
-        )
-        execute_tasks_in_parallel(batch, max_workers, keep_going)
+    # Use single zk client because it is thread safe
+    with zk_client(ctx) as zk:
+        for batch in chunked(generate_all_tasks(zk), CREATE_ZERO_COPY_LOCKS_BATCH_SIZE):
+            total_tasks += len(batch)
+            logging.info(
+                f"Executing batch of {len(batch)} lock creation tasks with {max_workers} workers"
+            )
+            execute_tasks_in_parallel(batch, max_workers, keep_going)
 
     if total_tasks > 0:
         logging.info(f"All {total_tasks} zero-copy lock creation tasks completed")

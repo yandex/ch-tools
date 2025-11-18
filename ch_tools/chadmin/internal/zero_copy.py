@@ -16,7 +16,6 @@ from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
 )
 from ch_tools.chadmin.internal.part import list_parts
 from ch_tools.chadmin.internal.utils import execute_query
-from ch_tools.chadmin.internal.zookeeper import zk_client
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.retry import retry
 from ch_tools.common.clickhouse.config import get_clickhouse_config
@@ -38,6 +37,7 @@ def generate_zero_copy_lock_tasks(
     part_name: Optional[str],
     replica: str,
     zookeeper_path: str,
+    zk: KazooClient,
     dry_run: bool = False,
     zero_copy_path: Optional[str] = None,
 ) -> Generator[WorkerTask, None, None]:
@@ -75,7 +75,7 @@ def generate_zero_copy_lock_tasks(
             identifier=task_id,
             function=_create_single_zero_copy_lock,
             kwargs={
-                "ctx": ctx,
+                "zk": zk,
                 "lock_path": lock_path,
                 "part_path": part_path,
                 "dry_run": dry_run,
@@ -153,7 +153,7 @@ def _get_zero_copy_zookeeper_path(
 
 
 def _create_single_zero_copy_lock(
-    ctx: Context,
+    zk: KazooClient,
     lock_path: str,
     part_path: str,
     dry_run: bool = False,
@@ -184,27 +184,26 @@ def _create_single_zero_copy_lock(
             ):
                 raise result
 
-    with zk_client(ctx) as zk:
-        if zk.exists(lock_path):
-            return
+    if zk.exists(lock_path):
+        return
 
-        part_node = zk.exists(part_path)
-        # This means part is already deleted
-        if not part_node:
-            return
+    part_node = zk.exists(part_path)
+    # This means part is already deleted
+    if not part_node:
+        return
 
-        logging.info("Creating zero-copy lock at {}", lock_path)
-        if dry_run:
-            return
+    logging.info("Creating zero-copy lock at {}", lock_path)
+    if dry_run:
+        return
 
-        try:
-            _create_lock_in_transaction(zk, lock_path, part_path, part_node.version)
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to create zero-copy lock at {lock_path}, reason: {e}"
-            )
+    try:
+        _create_lock_in_transaction(zk, lock_path, part_path, part_node.version)
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to create zero-copy lock at {lock_path}, reason: {e}"
+        )
 
-        logging.info("Created zero-copy lock at {}", lock_path)
+    logging.info("Created zero-copy lock at {}", lock_path)
 
 
 def _get_parent_paths_to_create(zk: KazooClient, path: str) -> list[str]:
