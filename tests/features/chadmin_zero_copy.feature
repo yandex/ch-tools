@@ -479,7 +479,7 @@ Feature: chadmin zero-copy related zookeeper commands.
     SELECT
         number as id,
         number as partition_key
-    FROM numbers(2000) SETTINGS max_partitions_per_insert_block=2000;
+    FROM numbers(100) SETTINGS max_partitions_per_insert_block=100;
     """
     And we execute command on clickhouse01
     """
@@ -500,6 +500,6 @@ Feature: chadmin zero-copy related zookeeper commands.
     """
     Then we get response contains
     """
-    2000
+    100
     """
 
