@@ -309,7 +309,7 @@ def _cleanup_old_service_tables(ctx: Context) -> None:
     config = ctx.obj["config"]["object_storage"]["space_usage"]
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
 
-    retention_days = config.get("service_tables_retention_days", 7)
+    retention_days = config["service_tables_retention_days"]
     retention_threshold = datetime.now(timezone.utc) - timedelta(days=retention_days)
 
     table_prefixes = [
