@@ -1,6 +1,6 @@
 import re
 import sys
-from typing import Any, Optional
+from typing import Any, Generator, Optional
 
 from cloup import (
     Choice,
@@ -13,6 +13,7 @@ from cloup import (
     pass_context,
 )
 from cloup.constraints import If, IsSet, RequireAtLeast, mutually_exclusive, require_all
+from kazoo.client import KazooClient
 from kazoo.security import make_digest_acl
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -21,7 +22,8 @@ from ch_tools.chadmin.internal.table_replica import (
     get_table_replica,
     list_table_replicas,
 )
-from ch_tools.chadmin.internal.zero_copy import create_zero_copy_locks
+from ch_tools.chadmin.internal.utils import chunked
+from ch_tools.chadmin.internal.zero_copy import generate_zero_copy_lock_tasks
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
     create_zk_nodes,
@@ -31,6 +33,7 @@ from ch_tools.chadmin.internal.zookeeper import (
     list_zk_nodes,
     update_acls_zk_node,
     update_zk_nodes,
+    zk_client,
 )
 from ch_tools.chadmin.internal.zookeeper_clean import (
     clean_zk_metadata_for_hosts,
@@ -42,6 +45,9 @@ from ch_tools.common.cli.parameters import ListParamType, StringParamType
 from ch_tools.common.clickhouse.config import get_macros
 from ch_tools.common.clickhouse.config.storage_configuration import OBJECT_STORAGE_TYPES
 from ch_tools.common.config import load_config
+from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
+
+CREATE_ZERO_COPY_LOCKS_BATCH_SIZE = 1000
 
 
 @group("zookeeper", cls=Chadmin)
@@ -490,6 +496,15 @@ def clean_zk_locks_command(
 
 
 @zookeeper_group.command("create-zero-copy-locks")
+@option(
+    "--zero-copy-path",
+    "zero_copy_path",
+    default=None,
+    help=(
+        "Custom prefix for zero-copy locks path in ZooKeeper. "
+        "If not specified, will use 'remote_fs_zero_copy_zookeeper_path' value from ClickHouse."
+    ),
+)
 @option_group(
     "Disk selection options",
     option(
@@ -560,10 +575,25 @@ def clean_zk_locks_command(
     is_flag=True,
     help=("Do not create objects."),
 )
+@option(
+    "--max-workers",
+    "max_workers",
+    type=int,
+    default=4,
+    help=("Maximum number of parallel workers for creating locks."),
+)
+@option(
+    "--keep-going",
+    "keep_going",
+    is_flag=True,
+    default=False,
+    help=("Continue processing even if some tasks fail."),
+)
 @pass_context
 def create_zk_locks_command(
     ctx: Context,
     disk: str,
+    zero_copy_path: Optional[str] = None,
     database: Optional[str] = None,
     table: Optional[str] = None,
     partition_id: Optional[str] = None,
@@ -571,6 +601,8 @@ def create_zk_locks_command(
     replicas: Optional[str] = None,
     all_replicas: bool = False,
     dry_run: bool = False,
+    max_workers: int = 4,
+    keep_going: bool = False,
 ) -> None:
     """
     Create zero copy locks.
@@ -585,26 +617,48 @@ def create_zk_locks_command(
     if not tables:
         raise RuntimeError("Couldn't find any replicated tables by given filters")
 
-    for table_info in tables:
-        zk_path, replicas_to_lock = _get_replicas_and_zk_path(
-            ctx, table_info, replicas, all_replicas
-        )
-        if not replicas_to_lock:
-            logging.warning(
-                "Couldn't find any replicas for table '{}'.'{}'",
-                table_info["database"],
-                table_info["name"],
+    def generate_all_tasks(zk: KazooClient) -> Generator[WorkerTask, None, None]:
+        for table_info in tables:
+            zk_path, replicas_to_lock = _get_replicas_and_zk_path(
+                ctx, table_info, replicas, all_replicas
             )
-        for replica in replicas_to_lock:
+            if not replicas_to_lock:
+                logging.warning(
+                    f"Couldn't find any replicas for table '{table_info['database']}'.'{table_info['name']}'"
+                )
+                continue
+
+            for replica in replicas_to_lock:
+                logging.info(
+                    f"Preparing zero-copy lock tasks for table '{table_info['database']}'.'{table_info['name']}', replica '{replica}'"
+                )
+                yield from generate_zero_copy_lock_tasks(
+                    ctx,
+                    disk,
+                    table_info,
+                    partition_id,
+                    part_id,
+                    replica,
+                    zk_path,
+                    zk,
+                    dry_run,
+                    zero_copy_path,
+                )
+
+    total_tasks = 0
+    # Use single zk client because it is thread safe
+    with zk_client(ctx) as zk:
+        for batch in chunked(generate_all_tasks(zk), CREATE_ZERO_COPY_LOCKS_BATCH_SIZE):
+            total_tasks += len(batch)
             logging.info(
-                "Creating zero-copy locks for table '{}'.'{}', replica '{}'",
-                table_info["database"],
-                table_info["name"],
-                replica,
+                f"Executing batch of {len(batch)} lock creation tasks with {max_workers} workers"
             )
-            create_zero_copy_locks(
-                ctx, disk, table_info, partition_id, part_id, replica, zk_path, dry_run
-            )
+            execute_tasks_in_parallel(batch, max_workers, keep_going)
+
+    if total_tasks > 0:
+        logging.info(f"All {total_tasks} zero-copy lock creation tasks completed")
+    else:
+        logging.info("No zero-copy lock tasks to execute")
 
 
 def _get_replicas_and_zk_path(
@@ -641,7 +695,7 @@ def _get_replicas_and_zk_path(
                 "The macro for replica is missing, specify --replicas explicitly."
             )
 
-    replicas_ = [r.strip() for r in replicas.split(",")]
+    replicas_ = [r.strip() for r in replicas.split(",")] if replicas else []
     for replica in replicas_:
         if replica not in replicas_list:
             raise RuntimeError(f"Replica {replica} is not present at system.replicas")
