@@ -51,6 +51,10 @@ DEFAULT_CONFIG = {
                 "cluster": r"^(\w+)/(\w+)/",
             },
             "verify_size_error_rate_threshold_fraction": 0.9,
+            "download_missing_cloud_storage_backups": {
+                "timeout": 1800,
+                "named_pipe_path": "/tmp/cloud-storage-metadata-pipe",
+            },
         },
         "space_usage": {
             "service_tables_retention_days": 7,
