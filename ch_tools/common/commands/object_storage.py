@@ -479,25 +479,20 @@ def _insert_missing_s3_backups_blobs(
     Download cloud storage metadata for missing backups and put it to local_blobs_table.
     """
 
-    def _insert_blobs_from_tar(table_tar_path: str) -> None:
-        blobs: List[S3ObjectLocalInfo] = []
-        with open(table_tar_path, "rb") as fifo:
-            with tarfile.open(fileobj=fifo, mode="r|*") as tar:
-                for member in tar:
-                    file = tar.extractfile(member)
-                    if file:
-                        data = file.read().decode("utf-8")
-                        metadata = S3ObjectLocalMetaData.from_string(data)
-                        blobs.extend(metadata.objects)
+    def _insert_blobs_from_tar(pipe_path: str) -> None:
+        def _generate_blobs_from_tar_files() -> Iterator[S3ObjectLocalInfo]:
+            with open(pipe_path, "rb") as pipe:
+                with tarfile.open(fileobj=pipe, mode="r|*") as tar:
+                    for member in tar:
+                        file = tar.extractfile(member)
+                        if file:
+                            data = file.read().decode("utf-8")
+                            yield from S3ObjectLocalMetaData.from_string(data).objects
 
-                    if len(blobs) >= INSERT_BATCH_SIZE:
-                        _insert_local_blobs_batch(
-                            ctx, blobs, local_blobs_table, disk_conf
-                        )
-                        blobs.clear()
-
-            if blobs:
-                _insert_local_blobs_batch(ctx, blobs, local_blobs_table, disk_conf)
+        for metadata_list in chunked(
+            _generate_blobs_from_tar_files(), INSERT_BATCH_SIZE
+        ):
+            _insert_local_blobs_batch(ctx, metadata_list, local_blobs_table, disk_conf)
 
     missing_backups = get_missing_chs3_backups(disk_conf.name)
 
@@ -513,18 +508,15 @@ def _insert_missing_s3_backups_blobs(
 
         logging.info(f"Downloading cloud storage metadata from '{backup}'")
 
-        config = ctx.obj["config"]["object_storage"]["clean"][
+        config = ctx.obj["config"]["object_storage"]["space_usage"][
             "download_missing_cloud_storage_backups"
         ]
         pipe_path = config["named_pipe_path"]
         timeout = config["timeout"]
         if os.path.exists(pipe_path):
             raise RuntimeError(f"Pipe at {pipe_path} already exists")
-        os.mkfifo(pipe_path)
-        # mkfifo with mode parameter doesn't work correctly
-        os.chmod(pipe_path, 0o666)
 
-        try:
+        with _missing_backups_named_pipe(pipe_path):
             parse_thread = threading.Thread(
                 target=_insert_blobs_from_tar, args=(pipe_path,), daemon=True
             )
@@ -545,11 +537,11 @@ def _insert_missing_s3_backups_blobs(
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
-            proc.wait(timeout)
+            _, stderr = proc.communicate(timeout)
             if proc.returncode:
                 assert proc.stderr
                 raise RuntimeError(
-                    f"Downloading cloud storage metadata command has failed: retcode {proc.returncode}, stderr: {proc.stderr.read().decode('utf-8')}"
+                    f"Downloading cloud storage metadata command has failed: retcode {proc.returncode}, stderr: {stderr.decode('utf-8')}"
                 )
 
             parse_thread.join(timeout)
@@ -558,8 +550,21 @@ def _insert_missing_s3_backups_blobs(
                     "Downloading cloud storage metadata command has failed: Timeout exceeded, metadata reading thread is probably locked"
                 )
 
-        finally:
-            os.remove(pipe_path)
+
+@contextmanager
+def _missing_backups_named_pipe(
+    pipe_path: str,
+) -> Generator[None, None, None]:
+    """
+    Context manager for creating and managing the named pipe to read missing backups from ch-backup.
+    """
+    os.mkfifo(pipe_path)
+    # mkfifo with mode parameter doesn't work correctly
+    os.chmod(pipe_path, 0o666)
+    try:
+        yield
+    finally:
+        os.remove(pipe_path)
 
 
 @contextmanager
