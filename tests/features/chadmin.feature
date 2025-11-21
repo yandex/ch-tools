@@ -196,6 +196,7 @@ Feature: chadmin commands.
     """
     Then query was completed successfully
 
+  @require_version_23.3
   Scenario: Check table commands
     Given we have executed queries on clickhouse01
     """
