@@ -1,7 +1,7 @@
 # pylint: disable=too-many-lines
 import os
 from collections import OrderedDict
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 from cloup import Choice, Context, argument, group, option, option_group, pass_context
 from cloup.constraints import (
@@ -22,6 +22,7 @@ from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
 from ch_tools.chadmin.internal.table import (
     attach_table,
     change_table_uuid,
+    check_table,
     delete_detached_table,
     delete_table,
     detach_table,
@@ -1003,3 +1004,38 @@ def check_schema_equal(
                 logging.error(msg)
             else:
                 raise RuntimeError(msg)
+
+
+@table_group.command("check")
+@option("-d", "--database", default=None)
+@option("-a", "--all", "_all", is_flag=True, help="Check all tables in database.")
+@option("-t", "--table", default=None)
+@option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Dry run.",
+)
+@constraint(require_one, ["database", "_all"])
+@pass_context
+def check_table_command(
+    ctx: Context,
+    database: Optional[str],
+    table: Optional[str],
+    _all: bool,
+    dry_run: bool,
+) -> None:
+    result: List[Dict[str, Any]] = []
+    for row in list_tables(
+        ctx, database_name=database, table_name=table, engine_pattern="%MergeTree%"
+    ):
+        database = row["database"]
+        table = row["name"]
+        result.append(
+            {
+                "table": f"{database}.{table}",
+                "result": check_table(ctx, database, table, False, dry_run),
+            }
+        )
+
+    print_response(ctx, result, default_format="table")

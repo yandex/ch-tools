@@ -527,6 +527,40 @@ def materialize_ttl(
     execute_query(ctx, query, timeout=timeout, echo=echo, dry_run=dry_run, format_=None)
 
 
+def check_table(
+    ctx: Context,
+    database_name: str,
+    table_name: str,
+    echo: bool = False,
+    dry_run: bool = False,
+    partition: Optional[str] = None,
+    part: Optional[str] = None,
+) -> bool:
+    """
+    Check table for the specified table.
+    """
+    timeout = ctx.obj["config"]["clickhouse"]["timeout"]
+    query = f"CHECK TABLE `{database_name}`.`{table_name}`"
+
+    if partition and part:
+        raise ValueError("The partition and the part are specified for check command.")
+
+    if partition:
+        query += f"PARTITION {partition}"
+    elif part:
+        query += f"PARTITION {part}"
+
+    rows = execute_query(
+        ctx,
+        query,
+        timeout=timeout,
+        echo=echo,
+        dry_run=dry_run,
+        format_=OutputFormat.JSON,
+    )["data"]
+    return bool(rows[0]["result"])
+
+
 def get_info_from_system_tables(ctx: Context, database: str, table: str) -> dict:
     query = f"""
         SELECT uuid, metadata_path, engine FROM system.tables WHERE database='{database}' AND table='{table}'

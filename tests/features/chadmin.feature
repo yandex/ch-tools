@@ -195,3 +195,53 @@ Feature: chadmin commands.
     SELECT * from testdb.table_01
     """
     Then query was completed successfully
+
+  Scenario: Check table commands
+    Given we have executed queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS check_part_db;
+    CREATE DATABASE check_part_db;
+    CREATE TABLE check_part_db.table (a UInt32, b UInt32) ENGINE=MergeTree() ORDER BY b PARTITION BY a;
+    INSERT INTO check_part_db.table SELECT number, number FROM numbers(3);
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml table check --database check_part_db
+    """
+    Then we get response contains
+    """
+    - table: check_part_db.table
+      result: true
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml partition check --database check_part_db
+    """
+    Then we get response contains
+    """
+    - table: check_part_db.table
+      partition: '0'
+      result: true
+    - table: check_part_db.table
+      partition: '1'
+      result: true
+    - table: check_part_db.table
+      partition: '2'
+      result: true
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml part check --database check_part_db
+    """
+    Then we get response contains
+    """
+    - table: check_part_db.table
+      part: '0_1_1_0'
+      result: true
+    - table: check_part_db.table
+      part: '1_2_2_0'
+      result: true
+    - table: check_part_db.table
+      part: '2_3_3_0'
+      result: true
+    """
