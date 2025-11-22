@@ -12,7 +12,7 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
     make_ch_disks_config,
     remove_from_ch_disk,
 )
-from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
+from ch_tools.chadmin.internal.system import get_version, match_ch_version
 from ch_tools.chadmin.internal.table_metadata import (
     check_replica_path_contains_macros,
     get_table_shared_id,
@@ -628,7 +628,7 @@ def change_table_uuid(
     attached: bool,
 ) -> None:
     logging.debug("call change_table_uuid with table={}", table)
-    if match_str_ch_version(get_version(ctx), "25.1"):
+    if match_ch_version(ctx, "25.1"):
         table_local_metadata_path = f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
 
     if is_table(engine=engine):
@@ -689,7 +689,7 @@ def change_table_uuid(
 
 
 def read_local_table_metadata(ctx: Context, table_local_metadata_path: str) -> str:
-    if match_str_ch_version(get_version(ctx), "25.1"):
+    if match_ch_version(ctx, "25.1"):
         table_local_metadata_path = f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
 
     with open(table_local_metadata_path, "r", encoding="utf-8") as f:
