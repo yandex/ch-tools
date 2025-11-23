@@ -25,7 +25,8 @@ def _parse_version(version: str) -> list[int]:
     """
     Parse version string.
     """
-    return [int(x) for x in re.sub(r"-.*$", "", version).split(".")]
+    stripped_version = re.sub(r"^(\d+(?:\.\d+)*).*$", r"\1", version.strip())
+    return [int(x) for x in stripped_version.split(".")]
 
 
 def strip_query(query_text: str) -> str:
