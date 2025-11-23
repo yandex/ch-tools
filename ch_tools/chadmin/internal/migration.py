@@ -156,7 +156,6 @@ def _check_tables_consistent(
             continue
 
         if not _compare_table_schemas(
-            ctx,
             table["name"],
             read_local_table_metadata(ctx, table["metadata_path"]),
             zk_tables[table["name"]],
@@ -178,16 +177,13 @@ def _check_tables_consistent(
 
 
 def _compare_table_schemas(
-    ctx: Context,
     table_name: str,
-    table_local_metadata_path: str,
+    local_table_metadata: str,
     zk_table_metadata: str,
 ) -> bool:
     """
     Compare local table schema with ZooKeeper metadata except for UUID.
     """
-    local_table_metadata = read_local_table_metadata(ctx, table_local_metadata_path)
-
     zk_table_metadata = zk_table_metadata.rstrip()
     local_table_metadata = local_table_metadata.rstrip()
     logging.debug(
