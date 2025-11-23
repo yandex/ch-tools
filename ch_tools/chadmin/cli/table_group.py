@@ -18,7 +18,7 @@ from cloup.constraints import (
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
-from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
+from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.table import (
     attach_table,
     change_table_uuid,
@@ -915,7 +915,7 @@ def change_uuid_command(
 
         if zk:
             table_local_metadata_path = table_info["metadata_path"]
-            if match_str_ch_version(get_version(ctx), "25.1"):
+            if match_ch_version(ctx, "25.1"):
                 table_local_metadata_path = (
                     f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
                 )
