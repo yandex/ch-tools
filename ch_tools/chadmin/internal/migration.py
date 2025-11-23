@@ -11,7 +11,7 @@ from ch_tools.chadmin.cli.database_metadata import (
     remove_uuid_from_metadata,
 )
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
-from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
+from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.table import (
     change_table_uuid,
     detach_table,
@@ -424,7 +424,7 @@ def _create_database_metadata_nodes(
         table_name = row["name"]
         metadata_path = row["metadata_path"]
 
-        if match_str_ch_version(get_version(ctx), "25.1"):
+        if match_ch_version(ctx, "25.1"):
             metadata_path = CLICKHOUSE_PATH + "/" + metadata_path
 
         with open(metadata_path, "r", encoding="utf-8") as metadata_file:

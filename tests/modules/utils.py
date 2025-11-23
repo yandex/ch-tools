@@ -6,12 +6,9 @@ import string
 from functools import wraps
 from random import choice as random_choise
 from types import SimpleNamespace
-from typing import Any, Callable, Mapping, MutableMapping, Union
+from typing import Any, Callable, Mapping, MutableMapping
 
-from packaging.version import Version
-from packaging.version import parse as parse_version
-
-from ch_tools.common import logging
+from ch_tools.common import logging, utils
 
 from .typing import ContextT
 
@@ -84,7 +81,7 @@ def context_to_dict(context: ContextT) -> dict:
     return result
 
 
-def version_ge(current_version: Union[str, Version], comparing_version: str) -> bool:
+def version_ge(current_version: str, comparing_version: str) -> bool:
     """
     Return True if `current_version` is greater or equal than `comparing_version`, or False otherwise.
     """
@@ -92,10 +89,10 @@ def version_ge(current_version: Union[str, Version], comparing_version: str) -> 
     if current_version == "latest":
         return True
 
-    return parse_version(current_version) >= parse_version(comparing_version)  # type: ignore
+    return utils.version_ge(current_version, comparing_version)
 
 
-def version_lt(current_version: Union[str, Version], comparing_version: str) -> bool:
+def version_lt(current_version: str, comparing_version: str) -> bool:
     """
     Return True if `current_version` is less than `comparing_version`, or False otherwise.
     """
@@ -103,4 +100,4 @@ def version_lt(current_version: Union[str, Version], comparing_version: str) -> 
     if current_version == "latest":
         return False
 
-    return parse_version(current_version) < parse_version(comparing_version)  # type: ignore
+    return utils.version_lt(current_version, comparing_version)

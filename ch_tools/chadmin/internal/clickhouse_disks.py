@@ -3,9 +3,9 @@ from typing import Optional, Tuple
 
 import xmltodict
 
-from ch_tools.chadmin.internal.system import match_str_ch_version
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import ClickhouseConfig
+from ch_tools.common.utils import version_ge
 
 CLICKHOUSE_PATH = "/var/lib/clickhouse"
 CLICKHOUSE_STORE_PATH = CLICKHOUSE_PATH + "/store"
@@ -42,7 +42,7 @@ def remove_from_ch_disk(
     dry_run: bool = False,
 ) -> Tuple[int, bytes]:
     cmd = f"clickhouse-disks {'-C ' + disk_config_path if disk_config_path else ''} --disk {disk}"
-    if match_str_ch_version(ch_version, "24.7"):
+    if version_ge(ch_version, "24.7"):
         cmd += f' --query "remove {path} --recursive"'
     else:
         cmd += f" remove {path}"
