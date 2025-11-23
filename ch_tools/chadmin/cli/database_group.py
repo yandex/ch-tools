@@ -8,7 +8,7 @@ from kazoo.exceptions import NodeExistsError
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.cli.database_metadata import (
     DatabaseEngine,
-    parse_database_from_metadata,
+    parse_database_metadata,
 )
 from ch_tools.chadmin.internal.database import list_databases
 from ch_tools.chadmin.internal.migration import (
@@ -150,7 +150,7 @@ def restore_replica_command(ctx: Context, database: str) -> None:
     if not is_database_exists(ctx, database):
         raise RuntimeError(f"Database {database} does not exists, skip restore")
 
-    db_metadata = parse_database_from_metadata(database)
+    db_metadata = parse_database_metadata(database)
 
     if not db_metadata.database_engine.is_replicated():
         raise RuntimeError(f"Database {database} is not Replicated, stop restore")
@@ -160,7 +160,7 @@ def restore_replica_command(ctx: Context, database: str) -> None:
         create_database_nodes(
             ctx,
             database_name=database,
-            db_replica_path=db_metadata.replica_path,
+            db_replica_path=db_metadata.zookeeper_path,
         )
     except NodeExistsError as ex:
         logging.info(
@@ -177,5 +177,5 @@ def restore_replica_command(ctx: Context, database: str) -> None:
         ctx,
         database,
         first_replica=first_replica,
-        db_replica_path=db_metadata.replica_path,
+        db_replica_path=db_metadata.zookeeper_path,
     )

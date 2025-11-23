@@ -18,6 +18,7 @@ from kazoo.security import make_digest_acl
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.table import list_tables
+from ch_tools.chadmin.internal.table_info import TableInfo
 from ch_tools.chadmin.internal.table_replica import (
     get_table_replica,
     list_table_replicas,
@@ -663,7 +664,7 @@ def create_zk_locks_command(
 
 def _get_replicas_and_zk_path(
     ctx: Context,
-    table: dict,
+    table: TableInfo,
     replicas: Optional[str],
     all_replicas: bool,
 ) -> tuple[str, list[str]]:
