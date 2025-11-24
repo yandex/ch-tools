@@ -497,16 +497,15 @@ def _insert_missing_s3_backups_blobs(
     missing_backups = get_missing_chs3_backups(disk_conf.name)
 
     for backup in missing_backups:
-        logging.debug(f"Parsing metadata of '{backup}' backup")
-
-        # TODO: set new version when ch-backup is released
-        if not match_ch_backup_version("2.641.197281242"):
+        if not match_ch_backup_version("2.651.159295191"):
             logging.warning(
-                "Skip downloading missing backups. Reason: Download metadata command is available since ch-backup 2.641.197281242"
+                "Skip downloading missing backups. Reason: Download metadata command is available since ch-backup 2.651.159295191"
             )
             return
 
-        logging.info(f"Downloading cloud storage metadata from '{backup}'")
+        logging.info(
+            f"Downloading cloud storage metadata from missing backup '{backup}'"
+        )
 
         config = ctx.obj["config"]["object_storage"]["space_usage"][
             "download_missing_cloud_storage_backups"
