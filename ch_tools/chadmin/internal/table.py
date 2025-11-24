@@ -100,6 +100,7 @@ def list_tables(
                 t.metadata_modification_time,
                 t.engine,
                 t.data_paths,
+                t.metadata_path,
                 t.create_table_query
             FROM system.tables t
         {% if is_readonly -%}

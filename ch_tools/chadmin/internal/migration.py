@@ -311,7 +311,7 @@ def migrate_as_non_first_replica(ctx: Context, migrating_database: str) -> None:
         builder.commit()
 
     metadata_non_repl_db.set_replicated()
-    was_changed = _change_tables_uuid(ctx, tables, migrating_database)
+    was_changed = _change_tables_uuid(ctx, tables)
 
     if was_changed:
         logging.info(
@@ -526,9 +526,7 @@ def _attach_dbs(ctx: Context, dbs: list) -> None:
         )
 
 
-def _change_tables_uuid(
-    ctx: Context, tables_info: list[TableInfo], database_name: str
-) -> bool:
+def _change_tables_uuid(ctx: Context, tables_info: list[TableInfo]) -> bool:
     was_changed = False
     for table in tables_info:
         table_local_metadata_path = table["metadata_path"]
