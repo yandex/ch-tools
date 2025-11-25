@@ -690,7 +690,6 @@ Feature: chadmin object-storage commands
     And we execute query on clickhouse01
     """
     CREATE TABLE test.local_objects_object_storage_new_22222222_2222_2222_2222_222222222222_20991231_120000 (
-    CREATE TABLE test.local_objects_object_storage_new_22222222_2222_2222_2222_222222222222_20991231_120000 (
         obj_path String,
         state String,
         obj_size UInt64,
