@@ -63,6 +63,10 @@ DEFAULT_CONFIG = {
             "zk_path_prefix": "/_system/tables",
             "storage_policy": "default",
             "recreate_table_on_schema_mismatch": True,
+            "download_missing_cloud_storage_backups": {
+                "timeout": 1800,
+                "named_pipe_path": "/tmp/cloud-storage-metadata-pipe",
+            },
         },
     },
     "zookeeper": {

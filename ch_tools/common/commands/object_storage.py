@@ -1,6 +1,8 @@
 import os
 import re
 import subprocess
+import tarfile
+import threading
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -19,6 +21,10 @@ from ch_tools.chadmin.internal.object_storage.s3_cleanup_stats import (
 from ch_tools.chadmin.internal.object_storage.s3_iterator import (
     s3_object_storage_iterator,
 )
+from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
+    S3ObjectLocalInfo,
+    S3ObjectLocalMetaData,
+)
 from ch_tools.chadmin.internal.system import match_ch_backup_version, match_ch_version
 from ch_tools.chadmin.internal.table import (
     delete_table_by_full_name,
@@ -32,11 +38,10 @@ from ch_tools.chadmin.internal.utils import (
     execute_query,
     execute_query_on_shard,
     get_remote_table_for_hosts,
-    remove_from_disk,
 )
 from ch_tools.chadmin.internal.zookeeper import has_zk
 from ch_tools.common import logging
-from ch_tools.common.backup import CHS3_BACKUPS_DIRECTORY, get_missing_chs3_backups
+from ch_tools.common.backup import get_missing_chs3_backups
 from ch_tools.common.clickhouse.client.clickhouse_client import (
     ClickhouseClient,
     clickhouse_client,
@@ -385,12 +390,7 @@ def _get_blobs_tables(
     Returns tuple: (remote_blobs_table, local_blobs_table, orphaned_blobs_table)
     Manages cloud storage backups automatically.
     """
-    disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
-
     with (
-        _download_cloud_storage_backups(
-            ctx, disk_conf.name, ignore_missing_cloud_storage_backups
-        ),
         _remote_blobs_table(
             ctx,
             object_name_prefix,
@@ -400,7 +400,10 @@ def _get_blobs_tables(
             keep_table=keep_table,
             use_saved=use_saved,
         ) as remote_blobs_table,
-        _local_blobs_table(ctx) as local_blobs_table,
+        _local_blobs_table(
+            ctx,
+            ignore_missing_cloud_storage_backups=ignore_missing_cloud_storage_backups,
+        ) as local_blobs_table,
         _orphaned_blobs_table(
             ctx, local_blobs_table, remote_blobs_table
         ) as orphaned_blobs_table,
@@ -414,6 +417,7 @@ def _local_blobs_table(
     unique_name: bool = True,
     keep_table: bool = True,
     use_saved: bool = False,
+    ignore_missing_cloud_storage_backups: bool = False,
 ) -> Generator[str, None, None]:
     """
     Context manager for creating and managing the local_blobs table.
@@ -457,10 +461,109 @@ def _local_blobs_table(
                 settings=query_settings,
             )
 
+            if not ignore_missing_cloud_storage_backups:
+                _insert_missing_s3_backups_blobs(ctx, local_blobs_table, disk_conf)
+
         yield local_blobs_table
     finally:
         if not keep_table:
             delete_table_by_full_name(ctx, local_blobs_table)
+
+
+def _insert_missing_s3_backups_blobs(
+    ctx: Context,
+    local_blobs_table: str,
+    disk_conf: S3DiskConfiguration,
+) -> None:
+    """
+    Download cloud storage metadata for missing backups and put it to local_blobs_table.
+    """
+
+    def _insert_blobs_from_tar(pipe_path: str) -> None:
+        def _generate_blobs_from_tar_files() -> Iterator[S3ObjectLocalInfo]:
+            with open(pipe_path, "rb") as pipe:
+                with tarfile.open(fileobj=pipe, mode="r|*") as tar:
+                    for member in tar:
+                        file = tar.extractfile(member)
+                        if file:
+                            data = file.read().decode("utf-8")
+                            yield from S3ObjectLocalMetaData.from_string(data).objects
+
+        for metadata_list in chunked(
+            _generate_blobs_from_tar_files(), INSERT_BATCH_SIZE
+        ):
+            _insert_local_blobs_batch(ctx, metadata_list, local_blobs_table, disk_conf)
+
+    missing_backups = get_missing_chs3_backups(disk_conf.name)
+
+    for backup in missing_backups:
+        if not match_ch_backup_version("2.651.159295191"):
+            logging.warning(
+                "Skip downloading missing backups. Reason: Download metadata command is available since ch-backup 2.651.159295191"
+            )
+            return
+
+        logging.info(
+            f"Downloading cloud storage metadata from missing backup '{backup}'"
+        )
+
+        config = ctx.obj["config"]["object_storage"]["space_usage"][
+            "download_missing_cloud_storage_backups"
+        ]
+        pipe_path = config["named_pipe_path"]
+        timeout = config["timeout"]
+        if os.path.exists(pipe_path):
+            raise RuntimeError(f"Pipe at {pipe_path} already exists")
+
+        with _missing_backups_named_pipe(pipe_path):
+            parse_thread = threading.Thread(
+                target=_insert_blobs_from_tar, args=(pipe_path,), daemon=True
+            )
+            parse_thread.start()
+
+            cmd = [
+                "ch-backup",
+                "get-cloud-storage-metadata",
+                "--disk",
+                disk_conf.name,
+                "--local-path",
+                pipe_path,
+                backup,
+            ]
+            proc = subprocess.Popen(
+                cmd,
+                shell=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            _, stderr = proc.communicate(timeout)
+            if proc.returncode:
+                assert proc.stderr
+                raise RuntimeError(
+                    f"Downloading cloud storage metadata command has failed: retcode {proc.returncode}, stderr: {stderr.decode('utf-8')}"
+                )
+
+            parse_thread.join(timeout)
+            if parse_thread.is_alive():
+                raise RuntimeError(
+                    "Downloading cloud storage metadata command has failed: Timeout exceeded, metadata reading thread is probably locked"
+                )
+
+
+@contextmanager
+def _missing_backups_named_pipe(
+    pipe_path: str,
+) -> Generator[None, None, None]:
+    """
+    Context manager for creating and managing the named pipe to read missing backups from ch-backup.
+    """
+    os.mkfifo(pipe_path)
+    # mkfifo with mode parameter doesn't work correctly
+    os.chmod(pipe_path, 0o666)
+    try:
+        yield
+    finally:
+        os.remove(pipe_path)
 
 
 @contextmanager
@@ -856,6 +959,26 @@ def _insert_remote_blobs_batch(
     )
 
 
+def _insert_local_blobs_batch(
+    ctx: Context,
+    obj_paths_batch: List[S3ObjectLocalInfo],
+    local_blobs_table: str,
+    disk_conf: S3DiskConfiguration,
+) -> None:
+    """
+    Insert batch of object names to the listing table.
+    """
+    batch_values = ",".join(
+        f"('{item.key if item.key_is_full else os.path.join(disk_conf.prefix, item.key)}','shadow',{item.size},1)"
+        for item in obj_paths_batch
+    )
+    execute_query(
+        ctx,
+        f"INSERT INTO {local_blobs_table} (obj_path, state, obj_size, ref_count) VALUES {batch_values}",
+        format_=None,
+    )
+
+
 def _create_remote_blobs_table(
     ctx: Context,
     table_name: str,
@@ -978,84 +1101,6 @@ def _get_table_function(
         return get_remote_table_for_hosts(ctx, table, ClickhouseInfo.get_replicas(ctx))
 
     return table
-
-
-@contextmanager
-def _download_cloud_storage_backups(
-    ctx: Context,
-    disk: str,
-    ignore: bool = False,
-) -> Generator[list[str], None, None]:
-    """
-    Context manager for downloading and cleaning up cloud storage backups.
-    """
-    downloaded_backups = _download_missing_cloud_storage_backups(ctx, disk, ignore)
-    try:
-        yield downloaded_backups
-    finally:
-        _remove_backups_from_disk(disk, downloaded_backups)
-
-
-def _download_missing_cloud_storage_backups(
-    ctx: Context,
-    disk: str,
-    ignore: bool,
-) -> list[str]:
-    """
-    Downloads created cloud storage backups if they are missing in shadow directory.
-    """
-    missing_backups = []
-    skip_cause = ""
-
-    if ignore:
-        skip_cause = "Ignore downloading missing cloud storage backups"
-    elif not match_ch_backup_version("2.641.197281242"):
-        skip_cause = (
-            "Download metadata command is available since ch-backup 2.641.197281242"
-        )
-    elif not match_ch_version(ctx, min_version="24.3"):
-        skip_cause = "Setting traverse_shadow_remote_data_paths is available since ClickHouse 24.3"
-
-    if skip_cause:
-        logging.warning(f"Skip downloading missing backups. Reason: {skip_cause}")
-        return []
-
-    logging.info(
-        "Will download cloud storage metadata from backups to shadow directory if they are missing"
-    )
-
-    missing_backups = get_missing_chs3_backups(disk)
-
-    for backup in missing_backups:
-        logging.info(f"Downloading cloud storage metadata from '{backup}'")
-
-        cmd = ["ch-backup", "get-cloud-storage-metadata", "--disk", disk, backup]
-        proc = subprocess.run(
-            cmd,
-            shell=False,
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-
-        if proc.returncode:
-            raise RuntimeError(
-                f"Downloading cloud storage metadata command has failed: retcode {proc.returncode}, stderr: {proc.stderr.decode()}"
-            )
-
-    return missing_backups
-
-
-def _remove_backups_from_disk(
-    disk: str,
-    backups: list[str],
-) -> None:
-    """
-    Removes backups from disk. Should be used to clean missing cloud storage backups after deleting orphaned objects.
-    """
-    backups_path = CHS3_BACKUPS_DIRECTORY.format(disk=disk)
-    for backup in backups:
-        remove_from_disk(os.path.join(backups_path, backup))
 
 
 def _get_fill_local_blobs_table_query(

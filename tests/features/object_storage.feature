@@ -454,7 +454,7 @@ Feature: chadmin object-storage commands
     """
     When we execute command on clickhouse01
     """
-    ls /var/lib/clickhouse/disks/object_storage/shadow
+    ls /tmp
     """
     Then we get response
     """
@@ -488,7 +488,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    Downloading cloud storage metadata from 'test3'
+    Downloading cloud storage metadata from missing backup 'test3'
     """
     When we execute command on clickhouse01
     """
@@ -500,9 +500,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-    Downloading cloud storage metadata from 'test3'
-    Downloading cloud storage metadata from 'test2'
-    Downloading cloud storage metadata from 'test1'
+    Downloading cloud storage metadata from missing backup 'test3'
+    Downloading cloud storage metadata from missing backup 'test2'
+    Downloading cloud storage metadata from missing backup 'test1'
     """
 
   Scenario: Sanity check when no objects in CH
