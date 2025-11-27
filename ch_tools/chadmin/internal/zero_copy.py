@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import (
     Generator,
     Optional,
-    TypedDict,
 )
 
 from click import Context
@@ -15,18 +14,13 @@ from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
     S3ObjectLocalMetaData,
 )
 from ch_tools.chadmin.internal.part import list_parts
+from ch_tools.chadmin.internal.table_info import TableInfo
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.retry import retry
 from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.common.process_pool import WorkerTask
-
-
-class TableInfo(TypedDict):
-    database: str
-    name: str
-    uuid: str
 
 
 def generate_zero_copy_lock_tasks(

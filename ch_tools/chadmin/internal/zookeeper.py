@@ -114,8 +114,8 @@ def update_acls_zk_node(ctx: Context, path: str, acls: Any) -> None:
         zk.set_acls(format_path(ctx, path), acls)
 
 
-def delete_zk_node(ctx: Context, path: str) -> None:
-    delete_zk_nodes(ctx, [path])
+def delete_zk_node(ctx: Context, path: str, dry_run: bool = False) -> None:
+    delete_zk_nodes(ctx, [path], dry_run)
 
 
 def delete_zk_nodes(ctx: Context, paths: List[str], dry_run: bool = False) -> None:
@@ -326,12 +326,25 @@ def get_table_shared_id(ctx: Context, zk_path: str) -> str:
 
 @contextmanager
 def zk_client(ctx: Context) -> Generator[KazooClient, None, None]:
-    zk = _get_zk_client(ctx)
-    try:
+    """
+    Context manager for providing a started ZooKeeper client.
+
+    Uses an existing client from the context if present,
+    otherwise creates, starts, and injects a new one for the context.
+    Cleans up (stops and removes) the client on exit if it was created here.
+    """
+
+    if "zk_client" in ctx.obj:
+        yield ctx.obj["zk_client"]
+    else:
+        zk = _get_zk_client(ctx)
         zk.start()
-        yield zk
-    finally:
-        zk.stop()
+        try:
+            ctx.obj["zk_client"] = zk
+            yield zk
+        finally:
+            del ctx.obj["zk_client"]
+            zk.stop()
 
 
 def _get_zk_client(ctx: Context) -> KazooClient:

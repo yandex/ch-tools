@@ -961,14 +961,35 @@ def change_uuid_command(
 
 @table_group.command("check-uuid-equal")
 @option("-d", "--database", required=True)
-@option("-t", "--table", required=True)
+@option("-a", "--all", "_all", is_flag=True, help="Check all tables in database.")
+@option("-t", "--table")
+@option(
+    "--keep-going",
+    is_flag=True,
+    default=False,
+    help="Keep going checking UUIDs despite on errors.",
+)
+@constraint(require_one, ["table", "_all"])
 @pass_context
-def check_uuid_equal(ctx: Context, database: str, table: str) -> None:
-    uuids = get_table_uuids_from_cluster(ctx, database, table)
-    logging.info("Table {} has uuid: {}", table, uuids)
+def check_uuid_equal(
+    ctx: Context, database: str, _all: bool, table: str, keep_going: bool
+) -> None:
+    tables = []
+    if _all:
+        tables = get_tables_names_from_system_tables(ctx, database)
+    else:
+        tables = [table]
 
-    if len(uuids) > 1:
-        raise RuntimeError(f"Table {table} has different uuid in cluster")
+    for table_name in tables:
+        uuids = get_table_uuids_from_cluster(ctx, database, table_name)
+        logging.info("Table {} has uuid: {}", table_name, uuids)
+
+        if len(uuids) > 1:
+            msg = f"Table {table_name} has different uuid in cluster"
+            if keep_going:
+                logging.error(msg)
+            else:
+                raise RuntimeError(msg)
 
 
 @table_group.command("check-schema-equal")

@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from click import ClickException, Context
 
@@ -13,6 +13,7 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
     remove_from_ch_disk,
 )
 from ch_tools.chadmin.internal.system import get_version, match_ch_version
+from ch_tools.chadmin.internal.table_info import TableInfo
 from ch_tools.chadmin.internal.table_metadata import (
     check_replica_path_contains_macros,
     get_table_shared_id,
@@ -54,7 +55,7 @@ def get_table(
     database_name: str,
     table_name: str,
     active_parts: Optional[str] = None,
-) -> dict:
+) -> TableInfo:
     tables = list_tables(
         ctx,
         database_name=database_name,
@@ -83,7 +84,7 @@ def list_tables(
     active_parts: Optional[str] = None,
     order_by: Optional[str] = None,
     limit: Optional[int] = None,
-) -> list:
+) -> List[TableInfo]:
     order_by = {
         "size": "disk_size DESC",
         "parts": "parts DESC",
@@ -99,6 +100,7 @@ def list_tables(
                 t.metadata_modification_time,
                 t.engine,
                 t.data_paths,
+                t.metadata_path,
                 t.create_table_query
             FROM system.tables t
         {% if is_readonly -%}
@@ -157,12 +159,13 @@ def list_tables(
             t.uuid,
             t.engine,
             t.create_table_query,
+            t.metadata_path,
             t.metadata_modification_time,
             t.data_paths,
-            p.disk_size,
-            p.partitions,
-            p.parts,
-            p.rows
+            COALESCE(p.disk_size, 0) AS disk_size,
+            COALESCE(p.partitions, 0) AS partitions,
+            COALESCE(p.parts, 0) AS parts,
+            COALESCE(p.rows, 0) AS rows
         FROM tables t
         LEFT JOIN parts p ON p.database = t.database AND p.table = t.name
         ORDER BY {{ order_by }}
