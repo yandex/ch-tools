@@ -349,7 +349,9 @@ def clean_zk_metadata_for_hosts(
         if len(list_replicas):
             database = list_replicas[0]["database"]
             table = list_replicas[0]["table"]
-            retry_decorator(system_table_drop_replica)(ctx, replica, database, table)
+            retry_decorator(system_table_drop_replica)(
+                ctx, replica, database, table, dry_run
+            )
         else:
             retry_decorator(system_table_drop_replica_by_zk_path)(
                 ctx, replica, table_zk_path, dry_run
@@ -371,7 +373,7 @@ def clean_zk_metadata_for_hosts(
 
     def cleanup_tables_and_databases(zk: KazooClient) -> None:
         """
-        Collects all objects that have nodes to be deleted and runs drop repliaca for them.
+        Collects all objects that have nodes to be deleted and runs drop replica for them.
         """
         clean_zk_metadata_config = ctx.obj["config"]["chadmin"]["zookeeper"][
             "clean_zk_metadata_for_hosts"

@@ -393,7 +393,7 @@ def remove_hosts_from_table(
     clean_zk_metadata_for_hosts(
         ctx,
         fqdn,
-        zk_ddl_query_path=zookeeper_table_path,
+        zk_cleanup_root_path=zookeeper_table_path,
         cleanup_database=False,
         cleanup_ddl_queue=False,
         dry_run=dry_run,
