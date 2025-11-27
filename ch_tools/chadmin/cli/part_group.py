@@ -701,13 +701,13 @@ def remove_detached_part_prefix_command(
         "-l",
         "--limit",
         type=int,
-        help="Limit the max number of data parts to detach.",
+        help="Limit the max number of data parts to check.",
     ),
     option(
         "--use-part-list-from-json",
         default=None,
         type=str,
-        help="Use list of parts from the file. Example 'SELECT database, table, name ... FORMAT JSON' > file && chadmin part detach --use-part-list-from-json <file>.",
+        help="Use list of parts from the file. Example 'SELECT database, table, name ... FORMAT JSON' > file && chadmin part check --use-part-list-from-json <file>.",
     ),
     constraint=If(
         IsSet("use_part_list_from_json"),

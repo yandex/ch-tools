@@ -546,9 +546,9 @@ def check_table(
         raise ValueError("The partition and the part are specified for check command.")
 
     if partition:
-        query += f"PARTITION {partition}"
+        query += f" PARTITION {partition}"
     elif part:
-        query += f"PARTITION {part}"
+        query += f" PART '{part}'"
 
     rows = execute_query(
         ctx,
