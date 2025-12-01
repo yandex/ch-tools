@@ -33,13 +33,13 @@ class DatabaseMetadata:
     database_name: str
     database_uuid: str
     database_engine: DatabaseEngine
-    replica_path: Optional[str] = None
+    zookeeper_path: Optional[str] = None
     shard: Optional[str] = None
     replica_name: Optional[str] = None
 
     def set_engine_from(self, db_metadata: "DatabaseMetadata") -> None:
         self.database_engine = db_metadata.database_engine
-        self.replica_path = db_metadata.replica_path
+        self.zookeeper_path = db_metadata.zookeeper_path
         self.shard = db_metadata.shard
         self.replica_name = db_metadata.replica_name
 
@@ -49,7 +49,7 @@ class DatabaseMetadata:
         with open(file_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
         if self.database_engine == DatabaseEngine.REPLICATED:
-            engine_line = f"ENGINE = Replicated('{self.replica_path}', '{self.shard}', '{ self.replica_name}')"
+            engine_line = f"ENGINE = Replicated('{self.zookeeper_path}', '{self.shard}', '{ self.replica_name}')"
         else:
             engine_line = "ENGINE = Atomic"
 
@@ -60,7 +60,7 @@ class DatabaseMetadata:
 
     def set_replicated(self) -> None:
         self.database_engine = DatabaseEngine.REPLICATED
-        self.replica_path = f"/clickhouse/{self.database_name}"
+        self.zookeeper_path = f"/clickhouse/{self.database_name}"
         self.shard = "{shard}"
         self.replica_name = "{replica}"
 
@@ -68,7 +68,7 @@ class DatabaseMetadata:
 
     def set_atomic(self) -> None:
         self.database_engine = DatabaseEngine.ATOMIC
-        self.replica_path = None
+        self.zookeeper_path = None
         self.shard = None
         self.replica_name = None
 
@@ -79,13 +79,13 @@ def db_metadata_path(database_name: str) -> str:
     return CLICKHOUSE_METADATA_PATH + f"/{database_name}.sql"
 
 
-def parse_database_from_metadata(database_name: str) -> DatabaseMetadata:
+def parse_database_metadata(database_name: str) -> DatabaseMetadata:
     database_metadata_path = db_metadata_path(database_name)
 
     assert database_metadata_path.endswith(".sql")
     database_uuid = None
     database_engine = None
-    replica_path = None
+    zookeeper_path = None
     shard = None
     replica_name = None
 
@@ -98,8 +98,8 @@ def parse_database_from_metadata(database_name: str) -> DatabaseMetadata:
                 assert database_engine is None
                 database_engine = _parse_engine(line)
                 if database_engine.is_replicated():
-                    replica_path, shard, replica_name = _parse_database_replica_params(
-                        line
+                    zookeeper_path, shard, replica_name = (
+                        _parse_database_replica_params(line)
                     )
 
     if database_uuid is None:
@@ -114,7 +114,7 @@ def parse_database_from_metadata(database_name: str) -> DatabaseMetadata:
         database_name,
         database_uuid,
         database_engine,
-        replica_path=replica_path,
+        zookeeper_path=zookeeper_path,
         shard=shard,
         replica_name=replica_name,
     )

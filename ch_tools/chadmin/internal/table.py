@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from click import ClickException, Context
 
@@ -12,7 +12,8 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
     make_ch_disks_config,
     remove_from_ch_disk,
 )
-from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
+from ch_tools.chadmin.internal.system import get_version, match_ch_version
+from ch_tools.chadmin.internal.table_info import TableInfo
 from ch_tools.chadmin.internal.table_metadata import (
     check_replica_path_contains_macros,
     get_table_shared_id,
@@ -54,7 +55,7 @@ def get_table(
     database_name: str,
     table_name: str,
     active_parts: Optional[str] = None,
-) -> dict:
+) -> TableInfo:
     tables = list_tables(
         ctx,
         database_name=database_name,
@@ -83,7 +84,7 @@ def list_tables(
     active_parts: Optional[str] = None,
     order_by: Optional[str] = None,
     limit: Optional[int] = None,
-) -> list:
+) -> List[TableInfo]:
     order_by = {
         "size": "disk_size DESC",
         "parts": "parts DESC",
@@ -99,6 +100,7 @@ def list_tables(
                 t.metadata_modification_time,
                 t.engine,
                 t.data_paths,
+                t.metadata_path,
                 t.create_table_query
             FROM system.tables t
         {% if is_readonly -%}
@@ -157,12 +159,13 @@ def list_tables(
             t.uuid,
             t.engine,
             t.create_table_query,
+            t.metadata_path,
             t.metadata_modification_time,
             t.data_paths,
-            p.disk_size,
-            p.partitions,
-            p.parts,
-            p.rows
+            COALESCE(p.disk_size, 0) AS disk_size,
+            COALESCE(p.partitions, 0) AS partitions,
+            COALESCE(p.parts, 0) AS parts,
+            COALESCE(p.rows, 0) AS rows
         FROM tables t
         LEFT JOIN parts p ON p.database = t.database AND p.table = t.name
         ORDER BY {{ order_by }}
@@ -527,6 +530,40 @@ def materialize_ttl(
     execute_query(ctx, query, timeout=timeout, echo=echo, dry_run=dry_run, format_=None)
 
 
+def check_table(
+    ctx: Context,
+    database_name: str,
+    table_name: str,
+    echo: bool = False,
+    dry_run: bool = False,
+    partition: Optional[str] = None,
+    part: Optional[str] = None,
+) -> bool:
+    """
+    Check table for the specified table.
+    """
+    timeout = ctx.obj["config"]["clickhouse"]["timeout"]
+    query = f"CHECK TABLE `{database_name}`.`{table_name}`"
+
+    if partition and part:
+        raise ValueError("The partition and the part are specified for check command.")
+
+    if partition:
+        query += f" PARTITION {partition}"
+    elif part:
+        query += f" PART '{part}'"
+
+    rows = execute_query(
+        ctx,
+        query,
+        timeout=timeout,
+        echo=echo,
+        dry_run=dry_run,
+        format_=OutputFormat.JSON,
+    )["data"]
+    return bool(rows[0]["result"])
+
+
 def get_info_from_system_tables(ctx: Context, database: str, table: str) -> dict:
     query = f"""
         SELECT uuid, metadata_path, engine FROM system.tables WHERE database='{database}' AND table='{table}'
@@ -628,7 +665,7 @@ def change_table_uuid(
     attached: bool,
 ) -> None:
     logging.debug("call change_table_uuid with table={}", table)
-    if match_str_ch_version(get_version(ctx), "25.1"):
+    if match_ch_version(ctx, "25.1"):
         table_local_metadata_path = f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
 
     if is_table(engine=engine):
@@ -689,7 +726,7 @@ def change_table_uuid(
 
 
 def read_local_table_metadata(ctx: Context, table_local_metadata_path: str) -> str:
-    if match_str_ch_version(get_version(ctx), "25.1"):
+    if match_ch_version(ctx, "25.1"):
         table_local_metadata_path = f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
 
     with open(table_local_metadata_path, "r", encoding="utf-8") as f:

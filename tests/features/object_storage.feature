@@ -411,7 +411,62 @@ Feature: chadmin object-storage commands
     Size validation failed
     """
 
-
+  @require_version_24.3
+  Scenario: Download of missing backups prevents data from removal
+    When we execute command on clickhouse01
+    """
+    ch-backup backup --name test1 --databases test -f
+    """
+    And we execute command on clickhouse01
+    """
+    ls /var/lib/clickhouse/disks/object_storage/shadow
+    """
+    Then we get response
+    """
+    test1
+    """
+    When we execute query on clickhouse01
+    """
+    DROP TABLE test.table_s3_01 SYNC
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run
+    """
+    Then we get response contains
+    """
+      WouldDelete: 0
+      TotalSize: 0
+    """
+    When we execute command on clickhouse01
+    """
+    rm -r /var/lib/clickhouse/disks/object_storage/shadow
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run --ignore-missing-cloud-storage-backups
+    """
+    Then we get response matches
+    """
+      WouldDelete: [1-9][0-9]*
+      TotalSize: [1-9][0-9]*
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --dry-run
+    """
+    Then we get response contains
+    """
+      WouldDelete: 0
+      TotalSize: 0
+    """
+    When we execute command on clickhouse01
+    """
+    ls /tmp
+    """
+    Then we get response
+    """
+    """
 
   @require_version_24.3
   Scenario: All missing backups are downloaded

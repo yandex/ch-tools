@@ -1,22 +1,25 @@
+from operator import itemgetter
 from typing import Any, List, Literal, Optional, Tuple
 
 from click import ClickException, Context
 from kazoo.client import KazooClient, TransactionRequest
-from kazoo.exceptions import NodeExistsError
+from kazoo.exceptions import NodeExistsError, NoNodeError
 
 from ch_tools.chadmin.cli import metadata
 from ch_tools.chadmin.cli.database_metadata import (
     DatabaseEngine,
-    parse_database_from_metadata,
+    parse_database_metadata,
     remove_uuid_from_metadata,
 )
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
-from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
+from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.table import (
     change_table_uuid,
     detach_table,
+    list_tables,
     read_local_table_metadata,
 )
+from ch_tools.chadmin.internal.table_info import TableInfo
 from ch_tools.chadmin.internal.utils import execute_query, replace_macros
 from ch_tools.chadmin.internal.zookeeper import (
     delete_zk_node,
@@ -112,43 +115,94 @@ def create_temp_db(ctx: Context, migrating_database: str, temp_db: str) -> None:
 def _update_local_metadata_first_replica(ctx: Context, migrating_database: str) -> None:
     with AttacherContext(ctx, migrating_database) as _:
         try:
-            metadata_non_repl_db = parse_database_from_metadata(migrating_database)
+            metadata_non_repl_db = parse_database_metadata(migrating_database)
             metadata_non_repl_db.set_replicated()
         except Exception as ex:
             logging.error("Failed _update_local_metadata_first_replica with ex={}", ex)
             raise ex
 
 
-def _check_tables_consistent(
-    ctx: Context, database_name: str, tables_info: dict
-) -> None:
-    for row in tables_info:
-        table_name = row["name"]
-        table_local_metadata_path = row["metadata_path"]
+def _get_zk_tables_metadata(ctx: Context, database_name: str) -> dict[str, str]:
+    """
+    Get table names and their metadata for Replicated database from ZooKeeper.
+    """
+    zk_tables_metadata = {}
 
-        if not is_table_schema_equal(
-            ctx,
-            database_name=database_name,
-            table_name=table_name,
-            table_local_metadata_path=table_local_metadata_path,
-        ):
-            if "Replicated" in row["engine"]:
-                logging.warning(
-                    "Replicated table engine {} can have different schema. Continue.",
-                    row["engine"],
+    with zk_client(ctx) as zk:
+        zk_metadata_path = f"/clickhouse/{database_name}/metadata"
+        children: list[str] = zk.get_children(zk_metadata_path)
+        for table_name in children:
+            try:
+                table_metadata_path = f"{zk_metadata_path}/{table_name}"
+                zk_tables_metadata[table_name] = (
+                    zk.get(table_metadata_path)[0].decode().strip()
                 )
-                continue
+            except NoNodeError:
+                logging.warning(f"Table {table_name} metadata was removed concurrently")
 
-            logging.error(
-                "Table {} with engine {} has different schema.",
-                table_name,
-                row["engine"],
-            )
-            _attach_dbs(ctx, dbs=[database_name])
+    return zk_tables_metadata
 
-            raise RuntimeError(
-                f"Local table metadata for table {table_name} is different from zk metadata"
-            )
+
+def _check_tables_consistent(
+    ctx: Context, database_name: str, local_tables: list[TableInfo]
+) -> None:
+    zk_tables = _get_zk_tables_metadata(ctx, database_name)
+    missing_in_zk = []
+    schema_mismatches = []
+
+    for table in local_tables:
+        if table["name"] not in zk_tables:
+            missing_in_zk.append(table["name"])
+            continue
+
+        if not _compare_table_schemas(
+            table["name"],
+            read_local_table_metadata(ctx, table["metadata_path"]),
+            zk_tables[table["name"]],
+        ):
+            schema_mismatches.append(table["name"])
+
+    if missing_in_zk or schema_mismatches:
+        error_msg = f"Database '{database_name}' tables are inconsistent."
+        if missing_in_zk:
+            error_msg += f"\nMissing in ZK: {missing_in_zk}."
+        if schema_mismatches:
+            error_msg += f"\nSchema mismatches: {schema_mismatches}."
+
+        logging.error(error_msg)
+        logging.error("Local tables: {}", sorted(local_tables, key=itemgetter("name")))
+        logging.error("ZooKeeper tables: {}", sorted(zk_tables))
+
+        raise RuntimeError(error_msg)
+
+
+def _compare_table_schemas(
+    table_name: str,
+    local_table_metadata: str,
+    zk_table_metadata: str,
+) -> bool:
+    """
+    Compare local table schema with ZooKeeper metadata except for UUID.
+    """
+    zk_table_metadata = zk_table_metadata.rstrip()
+    local_table_metadata = local_table_metadata.rstrip()
+    logging.debug(
+        f"Table {table_name} has local metadata={local_table_metadata} and zookeeper metadata={zk_table_metadata}"
+    )
+
+    local_table_metadata = remove_uuid_from_metadata(local_table_metadata)
+    zk_table_metadata = remove_uuid_from_metadata(zk_table_metadata)
+
+    if local_table_metadata != zk_table_metadata:
+        logging.warning(
+            "Table {}: local metadata differs from zookeeper metadata", table_name
+        )
+        return False
+
+    logging.info(
+        "Table {}: local metadata is the same as zookeeper metadata", table_name
+    )
+    return True
 
 
 def _generate_counter(ctx: Context, zk: KazooClient, db_zk_path: str) -> str:
@@ -234,6 +288,11 @@ def migrate_as_non_first_replica(ctx: Context, migrating_database: str) -> None:
     prefix_db_zk_path = _default_db_zk_path(migrating_database)
 
     with zk_client(ctx) as zk:
+        metadata_non_repl_db = parse_database_metadata(migrating_database)
+        tables = list_tables(ctx, database_name=migrating_database)
+
+        _check_tables_consistent(ctx, migrating_database, tables)
+
         counter = _generate_counter(ctx, zk, prefix_db_zk_path)
 
         builder = ZKTransactionBuilder(ctx, zk)
@@ -246,16 +305,13 @@ def migrate_as_non_first_replica(ctx: Context, migrating_database: str) -> None:
             prefix_db_zk_path=prefix_db_zk_path,
         )
 
-        metadata_non_repl_db = parse_database_from_metadata(migrating_database)
-        tables_info = _get_tables_info_and_detach(ctx, migrating_database)
-
+        _detach_tables(ctx, tables, permanently=False)
         _detach_dbs(ctx, dbs=[migrating_database])
-        _check_tables_consistent(ctx, migrating_database, tables_info)
 
         builder.commit()
 
     metadata_non_repl_db.set_replicated()
-    was_changed = _change_tables_uuid(ctx, tables_info, migrating_database)
+    was_changed = _change_tables_uuid(ctx, tables)
 
     if was_changed:
         logging.info(
@@ -420,11 +476,11 @@ def _create_database_metadata_nodes(
     """
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
 
-    for row in rows["data"]:
-        table_name = row["name"]
-        metadata_path = row["metadata_path"]
+    for table in rows["data"]:
+        table_name = table["name"]
+        metadata_path = table["metadata_path"]
 
-        if match_str_ch_version(get_version(ctx), "25.1"):
+        if match_ch_version(ctx, "25.1"):
             metadata_path = CLICKHOUSE_PATH + "/" + metadata_path
 
         with open(metadata_path, "r", encoding="utf-8") as metadata_file:
@@ -441,7 +497,7 @@ def _create_database_metadata_nodes(
             )
 
 
-def _detach_dbs(ctx: Context, dbs: list) -> None:
+def _detach_dbs(ctx: Context, dbs: list[str]) -> None:
     for db in dbs:
         query = f"""
             DETACH DATABASE {db}
@@ -451,6 +507,11 @@ def _detach_dbs(ctx: Context, dbs: list) -> None:
             query,
             echo=True,
         )
+
+
+def _detach_tables(ctx: Context, tables: list[TableInfo], permanently: bool) -> None:
+    for table in tables:
+        detach_table(ctx, table["database"], table["name"], permanently)
 
 
 def _attach_dbs(ctx: Context, dbs: list) -> None:
@@ -465,76 +526,14 @@ def _attach_dbs(ctx: Context, dbs: list) -> None:
         )
 
 
-def _get_tables_info_and_detach(ctx: Context, database_name: str) -> dict:
-    query = f"""
-        SELECT database, name, uuid, create_table_query, metadata_path, engine FROM system.tables WHERE database='{database_name}'
-    """
-    rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)
-
-    tables = rows["data"]
-
-    for row in rows["data"]:
-        logging.debug("got row={}", row)
-        table_name = row["name"]
-        metadata_path = row["metadata_path"]
-        create_table_query = row["create_table_query"]
-
-        logging.debug(
-            "table_name={}, metadata_path={}, create_table_query={}",
-            table_name,
-            metadata_path,
-            create_table_query,
-        )
-
-        detach_table(
-            ctx, database_name=database_name, table_name=table_name, permanently=False
-        )
-
-    logging.info("Database {} contains tables: {}", database_name, tables)
-    return tables
-
-
-def is_table_schema_equal(
-    ctx: Context, database_name: str, table_name: str, table_local_metadata_path: str
-) -> bool:
-    zk_metadata_path = f"/clickhouse/{database_name}/metadata/{table_name}"
-    zk_table_metadata = get_zk_node(ctx, zk_metadata_path)
-
-    local_table_metadata = read_local_table_metadata(ctx, table_local_metadata_path)
-
-    logging.debug("Table {} has local metadata={}", table_name, local_table_metadata)
-
-    zk_table_metadata = zk_table_metadata.rstrip()
-    local_table_metadata = local_table_metadata.rstrip()
-
-    local_table_metadata = remove_uuid_from_metadata(local_table_metadata)
-    zk_table_metadata = remove_uuid_from_metadata(zk_table_metadata)
-    logging.debug(
-        "Table {} has zookeeper metadata={}", table_name, local_table_metadata
-    )
-
-    is_equal = local_table_metadata == zk_table_metadata
-
-    if is_equal:
-        logging.info(
-            f"Table {database_name}.{table_name}: local metadata is the same as zookeeper metadata"
-        )
-    else:
-        logging.warning(
-            f"Table {database_name}.{table_name}: local metadata differs from zookeeper metadata"
-        )
-
-    return is_equal
-
-
-def _change_tables_uuid(ctx: Context, tables_info: dict, database_name: str) -> bool:
+def _change_tables_uuid(ctx: Context, tables_info: list[TableInfo]) -> bool:
     was_changed = False
-    for row in tables_info:
-        table_local_metadata_path = row["metadata_path"]
+    for table in tables_info:
+        table_local_metadata_path = table["metadata_path"]
 
-        table_name = row["name"]
-        database_name = row["database"]
-        old_table_uuid = row["uuid"]
+        table_name = table["name"]
+        database_name = table["database"]
+        old_table_uuid = table["uuid"]
 
         zk_metadata_path = f"/clickhouse/{database_name}/metadata/{table_name}"
         zk_table_metadata = get_zk_node(ctx, zk_metadata_path)
@@ -562,7 +561,7 @@ def _change_tables_uuid(ctx: Context, tables_info: dict, database_name: str) -> 
             ctx,
             database=database_name,
             table=table_name,
-            engine=row["engine"],
+            engine=table["engine"],
             new_local_uuid=zk_table_uuid,
             old_table_uuid=old_table_uuid,
             table_local_metadata_path=table_local_metadata_path,
@@ -582,7 +581,7 @@ def is_database_exists(ctx: Context, database_name: str) -> bool:
 
 
 def migrate_database_to_replicated(ctx: Context, database: str) -> None:
-    metadata_db = parse_database_from_metadata(database)
+    metadata_db = parse_database_metadata(database)
     if metadata_db.database_engine != DatabaseEngine.ATOMIC:
         raise RuntimeError(
             f"Database {database} has engine {metadata_db.database_engine}. Migration to Replicated from Atomic only is supported."
@@ -612,7 +611,7 @@ def migrate_database_to_replicated(ctx: Context, database: str) -> None:
 def migrate_database_to_atomic(
     ctx: Context, database: str, clean_zookeeper: bool
 ) -> None:
-    metadata_repl_db = parse_database_from_metadata(database)
+    metadata_repl_db = parse_database_metadata(database)
     if metadata_repl_db.database_engine != DatabaseEngine.REPLICATED:
         raise RuntimeError(
             f"Database {database} has engine {metadata_repl_db.database_engine}. Migration to Atomic from Replicated only is supported."
@@ -620,16 +619,16 @@ def migrate_database_to_atomic(
 
     with AttacherContext(ctx, database) as _:
         try:
-            replica_path = metadata_repl_db.replica_path
+            zookeeper_path = metadata_repl_db.zookeeper_path
             metadata_repl_db.set_atomic()
 
             if clean_zookeeper:
                 logging.debug(
                     "Set clean_zookeeper - delete zookeeper nodes {}",
-                    replica_path,
+                    zookeeper_path,
                 )
-                if replica_path:
-                    delete_zk_node(ctx, replica_path)
+                if zookeeper_path:
+                    delete_zk_node(ctx, zookeeper_path)
 
         except Exception as ex:
             logging.error("Failed set atomic in metadata: {}", ex)

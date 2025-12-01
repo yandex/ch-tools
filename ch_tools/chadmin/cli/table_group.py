@@ -1,7 +1,7 @@
 # pylint: disable=too-many-lines
 import os
 from collections import OrderedDict
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 from cloup import Choice, Context, argument, group, option, option_group, pass_context
 from cloup.constraints import (
@@ -18,10 +18,11 @@ from cloup.constraints import (
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
-from ch_tools.chadmin.internal.system import get_version, match_str_ch_version
+from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.table import (
     attach_table,
     change_table_uuid,
+    check_table,
     delete_detached_table,
     delete_table,
     detach_table,
@@ -915,7 +916,7 @@ def change_uuid_command(
 
         if zk:
             table_local_metadata_path = table_info["metadata_path"]
-            if match_str_ch_version(get_version(ctx), "25.1"):
+            if match_ch_version(ctx, "25.1"):
                 table_local_metadata_path = (
                     f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
                 )
@@ -961,14 +962,35 @@ def change_uuid_command(
 
 @table_group.command("check-uuid-equal")
 @option("-d", "--database", required=True)
-@option("-t", "--table", required=True)
+@option("-a", "--all", "_all", is_flag=True, help="Check all tables in database.")
+@option("-t", "--table")
+@option(
+    "--keep-going",
+    is_flag=True,
+    default=False,
+    help="Keep going checking UUIDs despite on errors.",
+)
+@constraint(require_one, ["table", "_all"])
 @pass_context
-def check_uuid_equal(ctx: Context, database: str, table: str) -> None:
-    uuids = get_table_uuids_from_cluster(ctx, database, table)
-    logging.info("Table {} has uuid: {}", table, uuids)
+def check_uuid_equal(
+    ctx: Context, database: str, _all: bool, table: str, keep_going: bool
+) -> None:
+    tables = []
+    if _all:
+        tables = get_tables_names_from_system_tables(ctx, database)
+    else:
+        tables = [table]
 
-    if len(uuids) > 1:
-        raise RuntimeError(f"Table {table} has different uuid in cluster")
+    for table_name in tables:
+        uuids = get_table_uuids_from_cluster(ctx, database, table_name)
+        logging.info("Table {} has uuid: {}", table_name, uuids)
+
+        if len(uuids) > 1:
+            msg = f"Table {table_name} has different uuid in cluster"
+            if keep_going:
+                logging.error(msg)
+            else:
+                raise RuntimeError(msg)
 
 
 @table_group.command("check-schema-equal")
@@ -1003,3 +1025,38 @@ def check_schema_equal(
                 logging.error(msg)
             else:
                 raise RuntimeError(msg)
+
+
+@table_group.command("check")
+@option("-d", "--database", default=None)
+@option("-a", "--all", "_all", is_flag=True, help="Check all tables in database.")
+@option("-t", "--table", default=None)
+@option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Dry run.",
+)
+@constraint(require_one, ["database", "_all"])
+@pass_context
+def check_table_command(
+    ctx: Context,
+    database: Optional[str],
+    table: Optional[str],
+    _all: bool,
+    dry_run: bool,
+) -> None:
+    result: List[Dict[str, Any]] = []
+    for row in list_tables(
+        ctx, database_name=database, table_name=table, engine_pattern="%MergeTree%"
+    ):
+        database = row["database"]
+        table = row["name"]
+        result.append(
+            {
+                "table": f"{database}.{table}",
+                "result": check_table(ctx, database, table, False, dry_run),
+            }
+        )
+
+    print_response(ctx, result, default_format="table")

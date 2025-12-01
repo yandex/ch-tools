@@ -17,8 +17,10 @@ from ch_tools.chadmin.internal.part import (
     list_parts,
     move_part,
     part_has_suffix,
+    remove_detached_part_prefix_on_disk,
 )
 from ch_tools.chadmin.internal.system import match_ch_version
+from ch_tools.chadmin.internal.table import check_table
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import format_bytes, print_response
 from ch_tools.common.cli.parameters import BytesParamType
@@ -559,3 +561,188 @@ def move_parts_command(
                 logging.warning("{!r}\n", e)
             else:
                 raise
+
+
+@part_group.command("remove-detached-part-prefix")
+@option_group(
+    "Part selection options",
+    option(
+        "-a",
+        "--all",
+        "_all",
+        is_flag=True,
+        help="Filter in all data parts.",
+    ),
+    option(
+        "-d",
+        "--database",
+        help="Filter in data parts to remove the prefix by the specified database.",
+    ),
+    option(
+        "-t",
+        "--table",
+        help="Filter in data parts to remove the prefix by the specified table.",
+    ),
+    option(
+        "--id",
+        "--partition",
+        "partition_id",
+        help="Filter in data parts to remove the prefix by the specified partition.",
+    ),
+    option(
+        "--name",
+        "--part",
+        "part_name",
+        help="Filter in data parts to remove the prefix by the specified data part name.",
+    ),
+    option(
+        "--disk",
+        "disk_name",
+        help="Filter in data parts to remove the prefix by the specified disk.",
+    ),
+    option(
+        "-l",
+        "--limit",
+        type=int,
+        help="Limit the max number of data parts to remove the prefix.",
+    ),
+    option(
+        "--use-part-list-from-json",
+        default=None,
+        type=str,
+        help="Use list of parts from the file. Example 'SELECT database, table, name ... FORMAT JSON' > file && chadmin part remove-detached-part-prefix --reason <> --use-part-list-from-json <file>.",
+    ),
+    constraint=If(
+        IsSet("use_part_list_from_json"),
+        then=RequireExactly(1),
+        else_=RequireAtLeast(1),
+    ),
+)
+@option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
+@option(
+    "-n",
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Enable dry run mode and do not perform any modifying actions.",
+)
+@option(
+    "--reason",
+    default="broken-on-start",
+    type=str,
+    help="Part reason of detach.",
+)
+@pass_context
+def remove_detached_part_prefix_command(
+    ctx: Context,
+    keep_going: bool,
+    dry_run: bool,
+    _all: bool,
+    reason: str,
+    **kwargs: Any,
+) -> None:
+    """Move one or several data parts."""
+    parts = list_detached_parts(
+        ctx,
+        reason=reason,
+        use_part_list_required_columns_list=[
+            "path",
+        ],
+        **kwargs,
+    )
+    for part in parts:
+        try:
+            remove_detached_part_prefix_on_disk(part["path"], reason + "_", dry_run)
+        except Exception as e:
+            if keep_going:
+                logging.warning("{!r}\n", e)
+            else:
+                raise
+
+
+@part_group.command("check")
+@option_group(
+    "Part selection options",
+    option(
+        "-a",
+        "--all",
+        "_all",
+        is_flag=True,
+        help="Filter in all data parts.",
+    ),
+    option(
+        "-d",
+        "--database",
+        help="Filter in data parts to check by the specified database.",
+    ),
+    option(
+        "-t",
+        "--table",
+        help="Filter in data parts to check by the specified table.",
+    ),
+    option(
+        "--id",
+        "--partition",
+        "partition_id",
+        help="Filter in data parts to check by the specified partition.",
+    ),
+    option(
+        "--name",
+        "--part",
+        "part_name",
+        help="Filter in data parts to check by the specified data part name.",
+    ),
+    option(
+        "--disk",
+        "disk_name",
+        help="Filter in data parts to check by the specified disk.",
+    ),
+    option(
+        "-l",
+        "--limit",
+        type=int,
+        help="Limit the max number of data parts to check.",
+    ),
+    option(
+        "--use-part-list-from-json",
+        default=None,
+        type=str,
+        help="Use list of parts from the file. Example 'SELECT database, table, name ... FORMAT JSON' > file && chadmin part check --use-part-list-from-json <file>.",
+    ),
+    constraint=If(
+        IsSet("use_part_list_from_json"),
+        then=RequireExactly(1),
+        else_=RequireAtLeast(1),
+    ),
+)
+@option(
+    "-n",
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Enable dry run mode and do not perform any modifying actions.",
+)
+@pass_context
+def check_parts_command(
+    ctx: Context,
+    _all: bool,
+    dry_run: bool,
+    **kwargs: Any,
+) -> None:
+    """Check one or several parts."""
+    result: List[Dict[str, Any]] = []
+    for part in list_parts(ctx, **kwargs):
+        result.append(
+            {
+                "table": f"{part['database']}.{part['table']}",
+                "part": part["name"],
+                "result": check_table(
+                    ctx,
+                    part["database"],
+                    part["table"],
+                    dry_run=dry_run,
+                    part=part["name"],
+                ),
+            }
+        )
+    print_response(ctx, result, default_format="table")

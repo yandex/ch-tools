@@ -1,6 +1,7 @@
+# pylint: disable=too-many-lines
 import json
 from collections import OrderedDict
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from click import Context
 from cloup import Choice, constraint, group, option, option_group, pass_context
@@ -14,6 +15,7 @@ from ch_tools.chadmin.internal.partition import (
     materialize_ttl_in_partition,
     optimize_partition,
 )
+from ch_tools.chadmin.internal.table import check_table
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
@@ -801,6 +803,79 @@ def read_and_validate_partitions_from_json(json_path: str) -> Dict[str, Any]:
             if "partition_id" not in p:
                 raise ValueError(base_exception_str.format("partition_id"))
     return json_obj
+
+
+@partition_group.command("check")
+@option_group(
+    "Partition selection options",
+    option(
+        "-d",
+        "--database",
+        help="Filter in partitions to check by the specified database."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "-t",
+        "--table",
+        help="Filter in partitions to check by the specified table."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "--id",
+        "--partition",
+        "partition_id",
+        help="Filter in partitions to check by the specified partition."
+        " Multiple values can be specified through a comma.",
+    ),
+    option("--min-partition", "min_partition_id"),
+    option("--max-partition", "max_partition_id"),
+    option("--disk", "disk_name"),
+    constraint=RequireAtLeast(1),
+)
+@option(
+    "-n",
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Enable dry run mode and do not perform any modifying actions.",
+)
+@pass_context
+def check_command(
+    ctx: Context,
+    database: Optional[str],
+    table: Optional[str],
+    partition_id: Optional[str],
+    min_partition_id: Optional[str],
+    max_partition_id: Optional[str],
+    disk_name: Optional[str],
+    dry_run: bool,
+) -> None:
+    """Check partitions"""
+    result: List[Dict[str, Any]] = []
+    for p in get_partitions(
+        ctx,
+        database,
+        table,
+        partition_id=partition_id,
+        min_partition_id=min_partition_id,
+        max_partition_id=max_partition_id,
+        disk_name=disk_name,
+        format_="JSON",
+    )["data"]:
+        result.append(
+            {
+                "table": f"{p['database']}.{p['table']}",
+                "partition": p["partition_id"],
+                "result": check_table(
+                    ctx,
+                    p["database"],
+                    p["table"],
+                    dry_run=dry_run,
+                    partition=p["partition_id"],
+                ),
+            }
+        )
+    print_response(ctx, result, default_format="table")
 
 
 def get_partitions(

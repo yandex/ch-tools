@@ -11,14 +11,22 @@ def version_ge(version1: str, version2: str) -> bool:
     """
     Return True if version1 is greater or equal than version2.
     """
-    return parse_version(version1) >= parse_version(version2)
+    return _parse_version(version1) >= _parse_version(version2)
 
 
-def parse_version(version: str) -> List[int]:
+def version_lt(version1: str, version2: str) -> bool:
+    """
+    Return True if version1 is less than version2.
+    """
+    return _parse_version(version1) < _parse_version(version2)
+
+
+def _parse_version(version: str) -> list[int]:
     """
     Parse version string.
     """
-    return [int(x) for x in version.strip().split(".")]
+    stripped_version = re.sub(r"^(\d+(?:\.\d+)*).*$", r"\1", version.strip())
+    return [int(x) for x in stripped_version.split(".")]
 
 
 def strip_query(query_text: str) -> str:

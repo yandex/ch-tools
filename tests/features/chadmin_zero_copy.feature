@@ -335,7 +335,7 @@ Feature: chadmin zero-copy related zookeeper commands.
     """
     Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
 
-  Scenario: Cleanup all zero-copy locks for table with custom zookeeper zero-copy path
+  Scenario: Cleanup all zero-copy locks for table with per-table zookeeper zero-copy path
     When we execute queries on clickhouse01
     """
     DROP DATABASE IF EXISTS test ON CLUSTER 'cluster'; 
@@ -413,3 +413,93 @@ Feature: chadmin zero-copy related zookeeper commands.
     """
     cloud_storage/shard1/
     """
+
+
+  Scenario: Create zero-copy locks with custom zero-copy path
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS test ON CLUSTER 'cluster';
+    CREATE DATABASE test ON CLUSTER 'cluster';
+
+    CREATE TABLE test.table_01 UUID '10000000-0000-0000-0000-000000000001' ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n
+    SETTINGS storage_policy='object_storage',allow_remote_fs_zero_copy_replication=1;
+    INSERT INTO test.table_01 SELECT number FROM numbers(2);
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid 10000000-0000-0000-0000-000000000001
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper create-zero-copy-locks --disk object_storage --zero-copy-path /custom/zero_copy/zero_copy_s3 -t table_01
+    """
+    Then the list of children on clickhouse01 for zk node /custom/zero_copy/zero_copy_s3 is equal to
+    """
+    /custom/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper list $(chadmin zookeeper list /custom/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/0_0_0_0/)
+    """
+    Then we get response contains
+    """
+    /clickhouse01.ch_tools_test
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper list $(chadmin zookeeper list /custom/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/1_0_0_0/)
+    """
+    Then we get response contains
+    """
+    /clickhouse01.ch_tools_test
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
+
+
+  Scenario: Create zero-copy locks for large number of parts
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS test ON CLUSTER 'cluster';
+    CREATE DATABASE test ON CLUSTER 'cluster';
+
+    CREATE TABLE test.table_many_parts UUID '20000000-0000-0000-0000-000000000001' ON CLUSTER 'cluster' (
+        id Int32,
+        partition_key Int32
+    )
+    ENGINE = ReplicatedMergeTree('/tables/table_many_parts', '{replica}')
+    PARTITION BY partition_key
+    ORDER BY id
+    SETTINGS storage_policy='object_storage',allow_remote_fs_zero_copy_replication=1;
+    """
+    And we execute queries on clickhouse01
+    """
+    INSERT INTO test.table_many_parts
+    SELECT
+        number as id,
+        number as partition_key
+    FROM numbers(100) SETTINGS max_partitions_per_insert_block=100;
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid 20000000-0000-0000-0000-000000000001
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper create-zero-copy-locks --disk object_storage --max-workers 8 --zero-copy-path /custom_large/zero_copy/zero_copy_s3 -t table_many_parts
+    """
+    Then the list of children on clickhouse01 for zk node /custom_large/zero_copy/zero_copy_s3 is equal to
+    """
+    /custom_large/zero_copy/zero_copy_s3/20000000-0000-0000-0000-000000000001
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper list /custom_large/zero_copy/zero_copy_s3/20000000-0000-0000-0000-000000000001 | wc -l
+    """
+    Then we get response contains
+    """
+    100
+    """
+
