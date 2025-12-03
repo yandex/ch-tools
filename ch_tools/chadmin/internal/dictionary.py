@@ -61,11 +61,10 @@ def migrate_dictionaries(ctx: Context) -> None:
 
     config_path = Path(CLICKHOUSE_SERVER_CONFIG_PATH)
     config_directory = config_path.parent
+    config_path_list = list(config_directory.glob(config_glob_pattern))
 
     logging.info("Starting external dictionaries migration")
-    for i, config_file in enumerate(
-        config_directory.glob(config_glob_pattern), start=1
-    ):
+    for i, config_file in enumerate(config_path_list, start=1):
         logging.info("Migration #{}: dictionary config file '{}'", i, config_file)
         try:
             queries = generate_ddl_dictionaries_from_xml(str(config_file))
@@ -81,6 +80,14 @@ def migrate_dictionaries(ctx: Context) -> None:
                 f"Dictionary migration failed for config file '{config_file}'"
             ) from error
     logging.info("External dictionaries migration completed successfully")
+
+    for path in config_path_list:
+        try:
+            path.unlink()
+            logging.info("Deleted config file '{}'", path)
+        except Exception as error:
+            logging.critical("Error removing '{}': {}", path, error)
+            return
 
 
 def generate_ddl_dictionaries_from_xml(config_path: str) -> list[str]:
