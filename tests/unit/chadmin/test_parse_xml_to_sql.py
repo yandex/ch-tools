@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from ch_tools.chadmin.internal.dictionary import generate_ddl_dictionary_from_xml
+from ch_tools.chadmin.internal.dictionary import generate_ddl_dictionaries_from_xml
 
 
 @pytest.fixture
@@ -14,8 +14,8 @@ def test_data_dir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def create_xml_file(test_data_dir: Path) -> Callable[[Path, str], str]:
-    def _create(filename: Path, content: str) -> str:
+def create_xml_file(test_data_dir: Path) -> Callable[[str, str], str]:
+    def _create(filename: str, content: str) -> str:
         filepath = test_data_dir / filename
         filepath.write_text(content)
         return str(filepath)
@@ -282,15 +282,16 @@ LIFETIME(MIN 0 MAX 100)
     ],
 )
 def test_parse_xml_to_sql(
-    create_xml_file: Callable[[str, str], str], xml_content: str, expected_queries: str
+    create_xml_file: Callable[[str, str], str],
+    xml_content: str,
+    expected_queries: list[str],
 ) -> None:
     filepath = create_xml_file("test_dict.xml", xml_content)
+    results = generate_ddl_dictionaries_from_xml(filepath)
 
-    result = generate_ddl_dictionary_from_xml(filepath)
+    assert len(results) == len(expected_queries)
 
-    assert len(result) == len(expected_queries)
-
-    for actual, expected in zip(result, expected_queries):
+    for actual, expected in zip(results, expected_queries):
         assert normalize_sql(actual) == normalize_sql(expected)
 
 
@@ -337,8 +338,94 @@ def normalize_sql(sql: str) -> str:
     ],
 )
 def test_parse_multiple_dictionaries(
-    create_xml_file: Callable[[str, str], str], xml_content: str, expected_count: str
+    create_xml_file: Callable[[str, str], str], xml_content: str, expected_count: int
 ) -> None:
     filepath = create_xml_file("test_multiple.xml", xml_content)
-    result = generate_ddl_dictionary_from_xml(filepath)
-    assert len(result) == expected_count
+    results = generate_ddl_dictionaries_from_xml(filepath)
+    assert len(results) == expected_count
+
+
+@pytest.mark.parametrize(
+    "xml_content",
+    [
+        pytest.param(
+            "<config></config>",
+            id="missing-dictionaries-root",
+        ),
+        pytest.param(
+            "<dictionaries></dictionaries>",
+            id="missing-dictionary",
+        ),
+        pytest.param(
+            """
+<dictionaries>
+  <dictionary>
+    <source>
+      <clickhouse>
+        <db>db</db>
+        <table>tbl</table>
+      </clickhouse>
+    </source>
+    <structure>
+      <attribute>
+        <name>value</name>
+        <type>String</type>
+      </attribute>
+    </structure>
+  </dictionary>
+</dictionaries>
+""",
+            id="missing-name",
+        ),
+        pytest.param(
+            """
+<dictionaries>
+  <dictionary>
+    <name>dict_without_source</name>
+  </dictionary>
+</dictionaries>
+""",
+            id="missing-source-or-structure",
+        ),
+        pytest.param(
+            """
+<dictionaries>
+  <dictionary>
+    <name>dict_with_id_and_key</name>
+    <source>
+      <clickhouse>
+        <db>db</db>
+        <table>tbl</table>
+      </clickhouse>
+    </source>
+    <structure>
+      <id>
+        <name>id</name>
+        <type>UInt64</type>
+      </id>
+      <key>
+        <attribute>
+          <name>k</name>
+          <type>UInt64</type>
+        </attribute>
+      </key>
+      <attribute>
+        <name>value</name>
+        <type>String</type>
+      </attribute>
+    </structure>
+  </dictionary>
+</dictionaries>
+""",
+            id="id-and-key-present",
+        ),
+    ],
+)
+def test_parse_xml_to_sql_invalid_configs(
+    xml_content: str,
+    create_xml_file: Callable[[str, str], str],
+) -> None:
+    filepath = create_xml_file("invalid_dictionary.xml", xml_content)
+
+    with pytest.raises(RuntimeError):
+        generate_ddl_dictionaries_from_xml(filepath)
