@@ -75,3 +75,32 @@ def step_delete_command(context: ContextT, zk_nodes: str, node: str) -> None:
     container = get_container(context, node)
     result = Chadmin(container).zk_delete(zk_nodes)
     assert result.exit_code == 0, f" output:\n {result.output.decode().strip()}"
+
+
+@then('dictionary "{dict_name}" returns expected values on {node:w}')
+def step_check_dict_values(context: ContextT, dict_name: str, node: str) -> None:
+    container = get_container(context, node)
+
+    container.exec_run('clickhouse-client -q "SYSTEM RELOAD DICTIONARIES"')
+    errors = []
+    for row in context.table:
+        identifier = row["id"]
+        attr = row["attribute"]
+        expected = row["expected"]
+
+        query = f"SELECT dictGet('{dict_name}', '{attr}', {identifier})"
+        result = container.exec_run(f'clickhouse-client -q "{query}"')
+
+        if result.exit_code != 0:
+            errors.append(f"\nQuery failed: {result.output.decode()}")
+            continue
+
+        actual = result.output.decode().strip()
+
+        if actual != expected:
+            errors.append(
+                f"id={identifier}, attribute='{attr}': expected '{expected}', got '{actual}'"
+            )
+
+    if errors:
+        raise AssertionError("\n".join(errors))
