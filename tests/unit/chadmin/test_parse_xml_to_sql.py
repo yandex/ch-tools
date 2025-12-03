@@ -1,0 +1,344 @@
+from collections.abc import Callable
+from pathlib import Path
+
+import pytest
+
+from ch_tools.chadmin.internal.dictionary import generate_ddl_dictionary_from_xml
+
+
+@pytest.fixture
+def test_data_dir(tmp_path: Path) -> Path:
+    data_dir = tmp_path / "test_dictionary.xml"
+    data_dir.mkdir()
+    return data_dir
+
+
+@pytest.fixture
+def create_xml_file(test_data_dir: Path) -> Callable[[Path, str], str]:
+    def _create(filename: Path, content: str) -> str:
+        filepath = test_data_dir / filename
+        filepath.write_text(content)
+        return str(filepath)
+
+    return _create
+
+
+@pytest.mark.parametrize(
+    "xml_content,expected_queries",
+    [
+        pytest.param(
+            """
+<dictionaries>
+  <dictionary>
+    <name>test_dict1</name>
+    <source>
+      <clickhouse>
+        <db>db</db>
+        <table>tab</table>
+      </clickhouse>
+    </source>
+    <layout><flat/></layout>
+    <lifetime><min>0</min><max>100</max></lifetime>
+    <structure>
+      <id><name>id</name></id>
+      <attribute>
+        <name>name</name>
+        <type>String</type>
+        <null_value></null_value>
+      </attribute>
+    </structure>
+  </dictionary>
+</dictionaries>
+            """,
+            [
+                """
+CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict1
+(
+    id UInt64,
+    name String DEFAULT ''
+)
+PRIMARY KEY id
+SOURCE(clickhouse(DB db TABLE tab))
+LAYOUT(FLAT())
+LIFETIME(MIN 0 MAX 100)
+                """
+            ],
+            id="empty_null_value",
+        ),
+        pytest.param(
+            """
+<dictionaries>
+  <dictionary>
+    <name>test_dict2</name>
+    <source>
+      <clickhouse>
+        <db>db</db>
+        <table>tab</table>
+      </clickhouse>
+    </source>
+    <layout><flat/></layout>
+    <lifetime>100</lifetime>
+    <structure>
+      <id><name>id</name></id>
+      <attribute>
+        <name>name</name>
+        <type>String</type>
+        <null_value>Mama</null_value>
+      </attribute>
+    </structure>
+  </dictionary>
+</dictionaries>""",
+            [
+                """
+CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict2
+(
+    id UInt64,
+    name String DEFAULT 'Mama'
+)
+PRIMARY KEY id
+SOURCE(clickhouse(DB db TABLE tab))
+LAYOUT(FLAT())
+LIFETIME(100)
+           """
+            ],
+            id="explicit_null_value",
+        ),
+        pytest.param(
+            """
+<dictionaries>
+  <dictionary>
+    <name>test_dict3</name>
+    <source>
+      <clickhouse>
+        <db>db</db>
+        <table>tab</table>
+      </clickhouse>
+    </source>
+    <layout><flat/></layout>
+    <lifetime>0</lifetime>
+    <structure>
+      <id><name>id</name></id>
+      <attribute>
+        <name>name</name>
+        <type>String</type>
+      </attribute>
+    </structure>
+  </dictionary>
+</dictionaries>
+            """,
+            [
+                """
+CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict3
+(
+    id UInt64,
+    name String
+)
+PRIMARY KEY id
+SOURCE(clickhouse(DB db TABLE tab))
+LAYOUT(FLAT())
+LIFETIME(0)
+                """
+            ],
+            id="no_null_value_attribute",
+        ),
+        pytest.param(
+            """
+<dictionaries>
+  <dictionary>
+    <name>test_dict4</name>
+    <source>
+      <clickhouse>
+        <db>db</db>
+        <table>tab</table>
+      </clickhouse>
+    </source>
+    <layout><flat/></layout>
+    <lifetime><min>0</min><max>100</max></lifetime>
+    <structure>
+      <id><name>id</name></id>
+      <attribute>
+        <name>name</name>
+        <type>String</type>
+        <null_value/>
+      </attribute>
+    </structure>
+  </dictionary>
+</dictionaries>
+            """,
+            [
+                """
+CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict4
+(
+    id UInt64,
+    name String DEFAULT ''
+)
+PRIMARY KEY id
+SOURCE(clickhouse(DB db TABLE tab))
+LAYOUT(FLAT())
+LIFETIME(MIN 0 MAX 100)
+                """
+            ],
+            id="self_closing_null_value",
+        ),
+        pytest.param(
+            """
+<dictionaries>
+  <dictionary>
+    <name>test_dict5</name>
+    <source>
+      <clickhouse>
+        <db>db</db>
+        <table>tab</table>
+      </clickhouse>
+    </source>
+    <layout><hashed/></layout>
+    <lifetime><min>0</min><max>100</max></lifetime>
+    <structure>
+      <key>
+        <attribute>
+          <name>id1</name>
+          <type>UInt64</type>
+        </attribute>
+        <attribute>
+          <name>id2</name>
+          <type>String</type>
+        </attribute>
+      </key>
+      <attribute>
+        <name>value</name>
+        <type>Int32</type>
+        <null_value></null_value>
+      </attribute>
+    </structure>
+  </dictionary>
+</dictionaries>
+            """,
+            [
+                """
+CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict5
+(
+    id1 UInt64,
+    id2 String,
+    value Int32 DEFAULT 0
+)
+PRIMARY KEY id1, id2
+SOURCE(clickhouse(DB db TABLE tab))
+LAYOUT(HASHED())
+LIFETIME(MIN 0 MAX 100)
+                """
+            ],
+            id="composite_key",
+        ),
+        pytest.param(
+            """
+<dictionaries>
+  <dictionary>
+    <name>test_dict6</name>
+    <source>
+      <clickhouse>
+        <db>db</db>
+        <table>tab</table>
+      </clickhouse>
+    </source>
+    <layout><flat/></layout>
+    <lifetime><min>0</min><max>100</max></lifetime>
+    <structure>
+      <id><name>id</name></id>
+      <attribute>
+        <name>score</name>
+        <type>Float64</type>
+        <null_value></null_value>
+      </attribute>
+      <attribute>
+        <name>date</name>
+        <type>Date</type>
+        <null_value/>
+      </attribute>
+      <attribute>
+        <name>tags</name>
+        <type>Array</type>
+        <null_value></null_value>
+      </attribute>
+    </structure>
+  </dictionary>
+</dictionaries>""",
+            [
+                """
+CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict6
+(
+    id UInt64,
+    score Float64 DEFAULT 0,
+    date Date DEFAULT 1970-01-01,
+    tags Array DEFAULT []
+)
+PRIMARY KEY id
+SOURCE(clickhouse(DB db TABLE tab))
+LAYOUT(FLAT())
+LIFETIME(MIN 0 MAX 100)
+                """
+            ],
+            id="multiple_types",
+        ),
+    ],
+)
+def test_parse_xml_to_sql(
+    create_xml_file: Callable[[str, str], str], xml_content: str, expected_queries: str
+) -> None:
+    filepath = create_xml_file("test_dict.xml", xml_content)
+
+    result = generate_ddl_dictionary_from_xml(filepath)
+
+    assert len(result) == len(expected_queries)
+
+    for actual, expected in zip(result, expected_queries):
+        assert normalize_sql(actual) == normalize_sql(expected)
+
+
+def normalize_sql(sql: str) -> str:
+    lines = [line.strip() for line in sql.strip().split("\n")]
+    return "\n".join(line for line in lines if line)
+
+
+@pytest.mark.parametrize(
+    "xml_content,expected_count",
+    [
+        pytest.param(
+            """
+<dictionaries>
+  <dictionary>
+    <name>dict1</name>
+    <source>
+        <clickhouse>
+            <db>db</db>
+            <table>t</table>
+        </clickhouse>
+    </source>
+    <layout><flat/></layout>
+    <lifetime>0</lifetime>
+    <structure><id><name>id</name></id></structure>
+  </dictionary>
+  <dictionary>
+    <name>dict2</name>
+    <source>
+        <clickhouse>
+            <db>db</db>
+            <table>t</table>
+        </clickhouse>
+    </source>
+    <layout><flat/></layout>
+    <lifetime>0</lifetime>
+    <structure><id><name>id</name></id></structure>
+  </dictionary>
+</dictionaries>
+            """,
+            2,
+            id="multiple_dictionaries",
+        ),
+    ],
+)
+def test_parse_multiple_dictionaries(
+    create_xml_file: Callable[[str, str], str], xml_content: str, expected_count: str
+) -> None:
+    filepath = create_xml_file("test_multiple.xml", xml_content)
+    result = generate_ddl_dictionary_from_xml(filepath)
+    assert len(result) == expected_count
