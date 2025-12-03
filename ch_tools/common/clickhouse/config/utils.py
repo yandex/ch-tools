@@ -20,7 +20,8 @@ def load_config(config_path: str, configd_dir: str = "config.d") -> Any:
     if os.path.exists(configd_path):
         for file in os.listdir(configd_path):
             file_path = os.path.join(configd_path, file)
-            _merge_configs(config, _load_config(file_path))
+            if file_path.endswith(".xml") or file_path.endswith(".yaml"):
+                _merge_configs(config, _load_config(file_path))
 
     # Process includes.
     root_section = first_value(config)
