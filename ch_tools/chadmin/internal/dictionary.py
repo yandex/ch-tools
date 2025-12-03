@@ -50,7 +50,9 @@ def reload_dictionary(
 
 
 def migrate_dictionaries(ctx: Context) -> None:
-    """Migrate external dictionaries to DDL."""
+    """
+    Migrate external dictionaries to DDL.
+    """
     logging.info("Creating '_dictionaries' database")
     execute_query(ctx, "CREATE DATABASE IF NOT EXISTS _dictionaries", format_=None)
 
@@ -66,7 +68,7 @@ def migrate_dictionaries(ctx: Context) -> None:
     ):
         logging.info("Migration #{}: dictionary config file '{}'", i, config_file)
         try:
-            queries = generate_ddl_dictionary_from_xml(str(config_file))
+            queries = generate_ddl_dictionaries_from_xml(str(config_file))
             for j, query in enumerate(queries, start=1):
                 logging.debug("Query #{}:\n{}", j, query)
                 execute_query(ctx, query, format_=None)
@@ -81,13 +83,11 @@ def migrate_dictionaries(ctx: Context) -> None:
     logging.info("External dictionaries migration completed successfully")
 
 
-def generate_ddl_dictionary_from_xml(config_path: str) -> list[str]:
+def generate_ddl_dictionaries_from_xml(config_path: str) -> list[str]:
     """
     Parse XML dictionary config and generate CREATE DICTIONARY statements.
     """
     config: dict[str, Any] = _load_config(config_path)
-
-    queries: list[str] = []
     dictionaries = config.get("dictionaries")
 
     if dictionaries is None:
@@ -102,6 +102,7 @@ def generate_ddl_dictionary_from_xml(config_path: str) -> list[str]:
     if not isinstance(dictionary_nodes, list) or isinstance(dictionary_nodes, dict):
         dictionary_nodes = [dictionary_nodes]
 
+    queries: list[str] = []
     for attrs in dictionary_nodes:
         if isinstance(attrs, dict):
             queries.append(_build_dictionary_ddl_from_config(attrs))
@@ -113,13 +114,13 @@ def _get_dictionaries_config_pattern() -> str:
     config_path = CLICKHOUSE_SERVER_CONFIG_PATH
     parsed_config = _load_config(CLICKHOUSE_SERVER_CONFIG_PATH)
 
-    clickhouse = parsed_config.get("clickhouse", None)
+    clickhouse = parsed_config.get("clickhouse")
     if clickhouse is None:
         raise RuntimeError(
             f"Config '{config_path}' must contain <clickhouse> root element"
         )
 
-    dictionaries_config = clickhouse.get("dictionaries_config", None)
+    dictionaries_config = clickhouse.get("dictionaries_config")
     if dictionaries_config is None or not isinstance(dictionaries_config, str):
         raise RuntimeError(
             f"Config '{config_path}' must contain <clickhouse><dictionaries_config> element of type string"
@@ -135,11 +136,9 @@ def _build_dictionary_ddl_from_config(attrs: dict[str, Any]) -> str:
     layout = _build_layout_block(attrs)
     primary_key, structure = _build_structure_and_primary_key(attrs)
 
-    query = _build_create_dictionary_statement(
+    return _build_create_dictionary_statement(
         name, structure, primary_key, source, layout, lifetime, "", ""
     )
-
-    return query
 
 
 def _get_dictionary_name(attrs: dict[str, Any]) -> str:
@@ -196,31 +195,33 @@ def _build_layout_block(attrs: dict[str, Any]) -> str:
         params.append(f"[{param.upper()} {value.upper()}]")
 
     str_params = " ".join(params)
-    return f"LAYOUT({layout_params}({str_params}))"
+    return f"LAYOUT({layout_type}({str_params}))"
 
 
 def _build_lifetime_block(attrs: dict[str, Any]) -> str:
-    lifetime = attrs.get("lifetime", None)
+    lifetime = attrs.get("lifetime")
     if lifetime is None:
         return "LIFETIME(0)"
-    if isinstance(lifetime, (str, int)):
+    if isinstance(lifetime, str):
         return f"LIFETIME({lifetime})"
 
     if not isinstance(lifetime, dict):
         raise RuntimeError("Dictionary config has invalid <lifetime> block")
 
-    min_val = lifetime.get("min", None)
-    max_val = lifetime.get("max", None)
+    min_val = lifetime.get("min")
+    max_val = lifetime.get("max")
 
     if min_val is None and max_val is None:
         raise RuntimeError(
             "At least one of <min> or <max> must be specified in <lifetime>"
         )
 
-    if max_val is None and not isinstance(min_val, (str, int)):
-        return f"LIFETIME(({min_val}))"
+    if max_val is None:
+        if not isinstance(min_val, str):
+            raise RuntimeError("<min> in <lifetime> must contain a single value")
+        return f"LIFETIME({min_val})"
 
-    if not isinstance(min_val, (str, int)) or not isinstance(max_val, (str, int)):
+    if not isinstance(min_val, str) or not isinstance(max_val, str):
         raise RuntimeError("<max> and <min> must each contain a single value")
 
     return f"LIFETIME(MIN {min_val} MAX {max_val})"
@@ -270,47 +271,50 @@ def _build_structure_and_primary_key(attrs: dict[str, Any]) -> tuple[str, str]:
 
 
 def _normalize_null_default_value(attr_type: str, null_value: str) -> str:
-    defaults = {
-        "Int8": "0",
-        "Int16": "0",
-        "Int32": "0",
-        "Int64": "0",
-        "Int128": "0",
-        "Int256": "0",
-        "UInt8": "0",
-        "UInt16": "0",
-        "UInt32": "0",
-        "UInt64": "0",
-        "UInt128": "0",
-        "UInt256": "0",
-        "Float32": "0",
-        "Float64": "0",
-        "Decimal": "0",
-        "Decimal32": "0",
-        "Decimal64": "0",
-        "Decimal128": "0",
-        "Decimal256": "0",
-        "String": "''",
-        "FixedString": "''",
-        "Date": "1970-01-01",
-        "Date32": "1900-01-01",
-        "DateTime": "1970-01-01 00:00:00",
-        "DateTime64": "1970-01-01 00:00:00.000",
-        "Bool": "0",
-        "UUID": "00000000-0000-0000-0000-000000000000",
-        "IPv4": "0.0.0.0",
-        "IPv6": "::",
-        "Array": "[]",
-        "Tuple": "()",
-        "Map": "{}",
-        "Nullable": "NULL",
-        "Point": "(0, 0)",
-        "Ring": "[]",
-        "Polygon": "[]",
-        "MultiPolygon": "[]",
-    }
     if null_value is None:
-        return defaults[attr_type]
+        defaults = {
+            "Int8": "0",
+            "Int16": "0",
+            "Int32": "0",
+            "Int64": "0",
+            "Int128": "0",
+            "Int256": "0",
+            "UInt8": "0",
+            "UInt16": "0",
+            "UInt32": "0",
+            "UInt64": "0",
+            "UInt128": "0",
+            "UInt256": "0",
+            "Float32": "0",
+            "Float64": "0",
+            "Decimal": "0",
+            "Decimal32": "0",
+            "Decimal64": "0",
+            "Decimal128": "0",
+            "Decimal256": "0",
+            "String": "''",
+            "FixedString": "''",
+            "Date": "1970-01-01",
+            "Date32": "1900-01-01",
+            "DateTime": "1970-01-01 00:00:00",
+            "DateTime64": "1970-01-01 00:00:00.000",
+            "Bool": "0",
+            "UUID": "00000000-0000-0000-0000-000000000000",
+            "IPv4": "0.0.0.0",
+            "IPv6": "::",
+            "Array": "[]",
+            "Tuple": "()",
+            "Map": "{}",
+            "Nullable": "NULL",
+            "Point": "(0, 0)",
+            "Ring": "[]",
+            "Polygon": "[]",
+            "MultiPolygon": "[]",
+        }
+        result = defaults.get(attr_type)
+        if result is None:
+            raise RuntimeError(f"Type '{attr_type}' doesn't support a default value")
+        return result
     if attr_type in ("String", "FixedString"):
         return f"'{null_value}'"
     return null_value

@@ -62,6 +62,6 @@ def _full_name(dictionary: Any) -> str:
 @pass_context
 def migrate_command(ctx: Context) -> None:
     """
-    Migrate XML-dictionaries to DLL.
+    Migrate XML-dictionaries to DDL.
     """
     migrate_dictionaries(ctx)

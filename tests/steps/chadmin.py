@@ -81,7 +81,14 @@ def step_delete_command(context: ContextT, zk_nodes: str, node: str) -> None:
 def step_check_dict_values(context: ContextT, dict_name: str, node: str) -> None:
     container = get_container(context, node)
 
-    container.exec_run('clickhouse-client -q "SYSTEM RELOAD DICTIONARIES"')
+    reload_result = container.exec_run(
+        'clickhouse-client -q "SYSTEM RELOAD DICTIONARIES"'
+    )
+    assert reload_result.exit_code == 0, (
+        f"SYSTEM RELOAD DICTIONARIES failed with exit code "
+        f"{reload_result.exit_code}, output:\n{reload_result.output.decode().strip()}"
+    )
+
     errors = []
     for row in context.table:
         identifier = row["id"]
