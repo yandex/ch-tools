@@ -3,7 +3,11 @@ from typing import Any
 from click import Context, group, option, pass_context
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
-from ch_tools.chadmin.internal.dictionary import list_dictionaries, reload_dictionary
+from ch_tools.chadmin.internal.dictionary import (
+    list_dictionaries,
+    migrate_dictionaries,
+    reload_dictionary,
+)
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
 
@@ -52,3 +56,12 @@ def _full_name(dictionary: Any) -> str:
         return f"`{db_name}`.`{dict_name}`"
 
     return f"`{dict_name}`"
+
+
+@dictionary_group.command("migrate")
+@pass_context
+def migrate_command(ctx: Context) -> None:
+    """
+    Migrate XML-dictionaries to DLL.
+    """
+    migrate_dictionaries(ctx)
