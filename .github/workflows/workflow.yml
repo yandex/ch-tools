@@ -73,7 +73,7 @@ jobs:
       - run: make test-unit
       - run: make test-integration
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         if: ${{ failure() }}
         with:
           name: integration-test-logs-py${{ matrix.python }}-clickhouse-${{ matrix.clickhouse }}
@@ -105,14 +105,14 @@ jobs:
       run: make build-python-packages
 
     - name: upload wheel
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: ${{ env.PROJECT_NAME_UNDESCORE }}_py${{ matrix.target.python }}.whl
         path: ${{ env.BUILD_PYTHON_OUTPUT_DIR }}/*.whl
         if-no-files-found: error
 
     - name: upload sdist
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: ${{ env.PROJECT_NAME_UNDESCORE }}_py${{ matrix.target.python }}.tar.gz
         path: ${{ env.BUILD_PYTHON_OUTPUT_DIR }}/*.tar.gz
@@ -138,7 +138,7 @@ jobs:
         sudo keeper-monitoring --help
  
     - name: upload DEB package artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: ${{ env.PROJECT_NAME }}_py-${{ matrix.target.python }}_ubuntu-${{ matrix.target.ubuntu }}.deb
         path: ${{ env.BUILD_DEB_OUTPUT_DIR }}/*.deb
