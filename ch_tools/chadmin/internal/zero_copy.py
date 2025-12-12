@@ -223,8 +223,12 @@ def _create_single_zero_copy_lock(
         value_path = os.path.dirname(os.path.dirname(lock_path_old))
         try:
             value, _ = zk.get(value_path)
-            logging.debug("Found old lock at {}, will copy it's value", lock_path_old)
-        except Exception:
+            logging.debug(
+                "Found old lock at {}, will copy it's value from {}",
+                lock_path_old,
+                value_path,
+            )
+        except NoNodeError:
             # Lock was concurrently removed
             pass
 
