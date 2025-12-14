@@ -731,3 +731,31 @@ def read_local_table_metadata(ctx: Context, table_local_metadata_path: str) -> s
 
     with open(table_local_metadata_path, "r", encoding="utf-8") as f:
         return f.read()
+
+
+def has_data_on_disk(ctx: Context, table: TableInfo, disk: str) -> bool:
+    query = """
+        SELECT count() count FROM system.parts
+        WHERE database = '{{ database }}' AND table = '{{ table }}'
+            AND disk_name = '{{ disk }}'AND active = 1
+        """
+    parts_count = execute_query(
+        ctx,
+        query,
+        database=table["database"],
+        table=table["name"],
+        disk=disk,
+        format_="JSONCompact",
+    )["data"][0][0]
+
+    return int(parts_count) > 0
+
+
+def set_table_setting(
+    ctx: Context, table: TableInfo, setting: str, value: Optional[Any] = None
+) -> None:
+    setting_clause = (
+        f"MODIFY SETTING {setting}={value}" if value else f"RESET SETTING {setting}"
+    )
+    query = f"ALTER TABLE {table['database']}.{table['name']} {setting_clause}"
+    execute_query_on_shard(ctx, query)
