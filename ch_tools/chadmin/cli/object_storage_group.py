@@ -11,9 +11,11 @@ from click import (
     option,
     pass_context,
 )
+from cloup import option_group
 from humanfriendly import format_size
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
+from ch_tools.chadmin.cli.partition_group import get_partitions
 from ch_tools.chadmin.internal.object_storage.orphaned_objects_state import (
     OrphanedObjectsState,
 )
@@ -21,12 +23,20 @@ from ch_tools.chadmin.internal.object_storage.s3_cleanup_stats import (
     ResultStat,
     StatisticsPeriod,
 )
+from ch_tools.chadmin.internal.partition import attach_partition, detach_partition
 from ch_tools.chadmin.internal.system import match_ch_version
+from ch_tools.chadmin.internal.table import (
+    has_data_on_disk,
+    list_tables,
+    set_table_setting,
+)
+from ch_tools.chadmin.internal.utils import execute_query_on_shard
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
     create_zk_nodes,
     update_zk_nodes,
 )
+from ch_tools.common import logging
 from ch_tools.common.cli.formatting import format_bytes, print_response
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config import get_clickhouse_config
@@ -41,10 +51,11 @@ from ch_tools.common.commands.object_storage import (
 
 # Use big enough timeout for stream HTTP query
 STREAM_TIMEOUT = 10 * 60
-
 STATE_LOCAL_PATH = "/tmp/object_storage_cleanup_state.json"
-
 DEFAULT_CLUSTER_NAME = "{cluster}"
+ALWAYS_FETCH_ON_ATTACH_SETTING = (
+    "max_suspicious_broken_parts"  # "always_fetch_instead_of_attach_zero_copy"
+)
 
 
 @group("object-storage", cls=Chadmin)
@@ -342,6 +353,109 @@ def space_usage_command(
     print_response(
         ctx, result, field_formatters=field_formatters if human_readable else None
     )
+
+
+@object_storage_group.command("deduplicate")
+@option_group(
+    "Partition selection options",
+    option(
+        "-a",
+        "--all",
+        "_all",
+        is_flag=True,
+        help="Filter in all partitions.",
+    ),
+    option(
+        "-d",
+        "--database",
+        help="Filter in partitions to reattach by the specified database."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "-t",
+        "--table",
+        help="Filter in partitions to reattach by the specified table."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "--id",
+        "--partition",
+        "partition_id",
+        help="Filter in partitions to reattach by the specified partition."
+        " Multiple values can be specified through a comma.",
+    ),
+    option("--min-partition", "min_partition_id"),
+    option("--max-partition", "max_partition_id"),
+)
+@option(
+    "--dry-run",
+    "dry_run",
+    is_flag=True,
+    help=("Do not delete objects. Show only statistics."),
+)
+@pass_context
+def deduplicate_command(
+    ctx: Context,
+    _all: bool,
+    database: Optional[str],
+    table: Optional[str],
+    partition_id: Optional[str],
+    min_partition_id: Optional[str],
+    max_partition_id: Optional[str],
+    dry_run: bool,
+) -> None:
+    """
+    Reattach all partitions with 'always_fetch_instead_of_attach_zero_copy' setting to deduplicate zero-copy parts.
+    Requires custom ClickHouse build with copying of part's data on attach instead of detach.
+    """
+    disk: S3DiskConfiguration = ctx.obj["disk_configuration"]
+    tables = [
+        table
+        for table in list_tables(
+            ctx,
+            database_name=database,
+            table_name=table,
+            engine_pattern="Replicated%MergeTree",
+        )
+        if has_data_on_disk(ctx, table, disk.name)
+    ]
+
+    logging.info(
+        "Will deduplicate zero-copy data for tables {}",
+        [f"{table['database']}.{table['name']}" for table in tables],
+    )
+
+    for table_info in tables:
+        set_table_setting(ctx, table_info, ALWAYS_FETCH_ON_ATTACH_SETTING, 1)
+
+        partitions = get_partitions(
+            ctx,
+            table_info["database"],
+            table_info["name"],
+            partition_id=partition_id,
+            min_partition_id=min_partition_id,
+            max_partition_id=max_partition_id,
+            disk_name=disk.name,
+            format_="JSON",
+        )["data"]
+
+        for p in partitions:
+            try:
+                detach_partition(
+                    ctx, p["database"], p["table"], p["partition_id"], dry_run=dry_run
+                )
+                attach_partition(
+                    ctx, p["database"], p["table"], p["partition_id"], dry_run=dry_run
+                )
+            except Exception:
+                pass
+
+        execute_query_on_shard(
+            ctx,
+            f"SYSTEM SYNC REPLICA {table_info['database']}.{table_info['name']}",
+            format_=None,
+        )
+        set_table_setting(ctx, table_info, ALWAYS_FETCH_ON_ATTACH_SETTING)
 
 
 def _store_state_zk_save(ctx: Context, path: str, state: OrphanedObjectsState) -> None:
