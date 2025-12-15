@@ -111,3 +111,15 @@ def step_check_dict_values(context: ContextT, dict_name: str, node: str) -> None
 
     if errors:
         raise AssertionError("\n".join(errors))
+
+
+@when("we execute command on {node:w} expecting failure")
+@then("we execute command on {node:w} expecting failure")
+def step_execute_command_expecting_failure(context: ContextT, node: str) -> None:
+    container = get_container(context, node)
+    command = context.text.strip()
+    result = container.exec_run(["bash", "-c", command])
+    assert result.exit_code != 0, (
+        f"Expected command to fail but it succeeded with exit code 0.\n"
+        f"Output: {result.output.decode().strip()}"
+    )
