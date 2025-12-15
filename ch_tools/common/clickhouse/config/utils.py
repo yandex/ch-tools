@@ -50,6 +50,10 @@ def dump_config(
     return result
 
 
+def load_config_file(config_path: str) -> Any:
+    return _load_config(config_path)
+
+
 def _load_config(config_path: str) -> Any:
     with open(config_path, "r", encoding="utf-8") as file:
         if config_path.endswith(".xml"):
