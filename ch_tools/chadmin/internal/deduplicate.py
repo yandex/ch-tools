@@ -1,5 +1,6 @@
 import os
 from typing import Optional
+
 from click import Context
 
 from ch_tools.chadmin.cli.partition_group import get_partitions
@@ -12,19 +13,18 @@ from ch_tools.chadmin.internal.table import (
 from ch_tools.chadmin.internal.table_info import TableInfo
 from ch_tools.chadmin.internal.utils import execute_query_on_shard
 from ch_tools.chadmin.internal.zookeeper import (
+    check_zk_node,
     create_zk_nodes,
     delete_zk_node,
+    get_zk_node,
     list_children,
-    update_zk_nodes,
     zk_client,
 )
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
 
-ALWAYS_FETCH_ON_ATTACH_SETTING = (
-    "max_suspicious_broken_parts"  # "always_fetch_instead_of_attach_zero_copy"
-)
+ALWAYS_FETCH_ON_ATTACH_SETTING = "always_fetch_instead_of_attach_zero_copy"
 DEDUPLICATION_ROOT_PATH = "deduplication"
 DEDUPLICATED_TABLES_PATH = os.path.join(DEDUPLICATION_ROOT_PATH, "done")
 
@@ -110,8 +110,6 @@ def _get_deduplication_tasks(
             else _get_min_partition_to_deduplicate(ctx, table_info, min_partition_id)
         )
 
-        # TODO: delete old partition node
-
         partitions = get_partitions(
             ctx,
             table_info["database"],
@@ -123,6 +121,10 @@ def _get_deduplication_tasks(
             format_="JSON",
         )["data"]
 
+        delete_zk_node(
+            ctx, _get_table_deduplication_zk_path(table_info), dry_run=dry_run
+        )
+
         for p in partitions:
             try:
                 detach_partition(
@@ -133,7 +135,7 @@ def _get_deduplication_tasks(
                 )
             except Exception:
                 if not dry_run:
-                    update_zk_nodes(
+                    create_zk_nodes(
                         ctx,
                         [_get_table_deduplication_zk_path(table_info)],
                         p["name"],
@@ -181,8 +183,9 @@ def _get_last_reattached_partition_from_zk(
     ctx: Context, table: TableInfo
 ) -> Optional[str]:
     path = _get_table_deduplication_zk_path(table)
-    partitions = list_children(ctx, path)
-    return min(partitions) if partitions else None
+    if check_zk_node(ctx, path):
+        return get_zk_node(ctx, path)
+    return None
 
 
 def _get_table_deduplication_zk_path(table: TableInfo) -> str:

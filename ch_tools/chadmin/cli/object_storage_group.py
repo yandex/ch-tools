@@ -418,6 +418,7 @@ def deduplicate_command(
     Requires custom ClickHouse build with copying of part's data on attach instead of detach.
     In case of errors saves state in ZK to use it on retry.
     """
+    # TODO: Check for custom version
     deduplicate(
         ctx=ctx,
         database=database,
