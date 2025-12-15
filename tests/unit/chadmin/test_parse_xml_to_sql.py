@@ -3,7 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from ch_tools.chadmin.internal.dictionary import generate_ddl_dictionaries_from_xml
+from ch_tools.chadmin.internal.dictionary_migration import (
+    _generate_ddl_dictionaries_from_xml,
+)
 
 
 @pytest.fixture
@@ -26,6 +28,94 @@ def create_xml_file(test_data_dir: Path) -> Callable[[str, str], str]:
 @pytest.mark.parametrize(
     "xml_content,expected_queries",
     [
+        pytest.param(
+            """
+<clickhouse>
+  <dictionary>
+    <name>test_dict1</name>
+    <source>
+      <clickhouse>
+        <db>db</db>
+        <table>tab</table>
+      </clickhouse>
+    </source>
+    <layout><flat/></layout>
+    <lifetime><min>0</min><max>100</max></lifetime>
+    <structure>
+      <id><name>id</name></id>
+      <attribute>
+        <name>name</name>
+        <type>String</type>
+        <null_value></null_value>
+      </attribute>
+    </structure>
+  </dictionary>
+</clickhouse>
+            """,
+            [
+                """
+CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict1
+(
+    id UInt64,
+    name String DEFAULT ''
+)
+PRIMARY KEY id
+SOURCE(clickhouse(DB db TABLE tab))
+LAYOUT(FLAT())
+LIFETIME(MIN 0 MAX 100)
+                """
+            ],
+            id="in-any-block",
+        ),
+        pytest.param(
+            """
+<clickhouse>
+    <dictionary>
+        <name>dictionary1</name>
+        <source>
+            <clickhouse>
+                <host>name.db.yandex.net</host>
+                <port>8123</port>
+                <user>default</user>
+                <password></password>
+                <db>default</db>
+                <table>test_dict</table>
+            </clickhouse>
+        </source>
+        <structure>
+            <id>
+                <name>id</name>
+            </id>
+            <attribute>
+                <name>value</name>
+                <type>UInt64</type>
+                <null_value>0</null_value>
+                <hierarchical>0</hierarchical>
+                <injective>0</injective>
+            </attribute>
+        </structure>
+        <layout>
+            <flat/>
+        </layout>
+        <lifetime>50</lifetime>
+    </dictionary>
+</clickhouse>
+            """,
+            [
+                """
+CREATE DICTIONARY IF NOT EXISTS _dictionaries.dictionary1
+(
+    id UInt64,
+    value UInt64 DEFAULT 0 HIERARCHICAL INJECTIVE
+)
+PRIMARY KEY id
+SOURCE(clickhouse(HOST name.db.yandex.net PORT 8123 USER default PASSWORD '' DB default TABLE test_dict))
+LAYOUT(FLAT())
+LIFETIME(50)
+                """
+            ],
+            id="large-config",
+        ),
         pytest.param(
             """
 <dictionaries>
@@ -63,7 +153,7 @@ LAYOUT(FLAT())
 LIFETIME(MIN 0 MAX 100)
                 """
             ],
-            id="empty_null_value",
+            id="empty-null-value",
         ),
         pytest.param(
             """
@@ -227,7 +317,7 @@ LAYOUT(HASHED())
 LIFETIME(MIN 0 MAX 100)
                 """
             ],
-            id="composite_key",
+            id="composite-key",
         ),
         pytest.param(
             """
@@ -277,7 +367,7 @@ LAYOUT(FLAT())
 LIFETIME(MIN 0 MAX 100)
                 """
             ],
-            id="multiple_types",
+            id="multiple-types",
         ),
     ],
 )
@@ -287,7 +377,12 @@ def test_parse_xml_to_sql(
     expected_queries: list[str],
 ) -> None:
     filepath = create_xml_file("test_dict.xml", xml_content)
-    results = generate_ddl_dictionaries_from_xml(filepath)
+    results = [
+        query
+        for dict_name, query in _generate_ddl_dictionaries_from_xml(
+            filepath, target_database="_dictionaries"
+        )
+    ]
 
     assert len(results) == len(expected_queries)
 
@@ -333,29 +428,23 @@ def normalize_sql(sql: str) -> str:
 </dictionaries>
             """,
             2,
-            id="multiple_dictionaries",
+            id="multiple-dictionaries",
         ),
     ],
 )
-def test_parse_multiple_dictionaries(
+def test_parse_with_multiple_dictionaries(
     create_xml_file: Callable[[str, str], str], xml_content: str, expected_count: int
 ) -> None:
     filepath = create_xml_file("test_multiple.xml", xml_content)
-    results = generate_ddl_dictionaries_from_xml(filepath)
+    results = _generate_ddl_dictionaries_from_xml(
+        filepath, target_database="_dictionaries"
+    )
     assert len(results) == expected_count
 
 
 @pytest.mark.parametrize(
     "xml_content",
     [
-        pytest.param(
-            "<config></config>",
-            id="missing-dictionaries-root",
-        ),
-        pytest.param(
-            "<dictionaries></dictionaries>",
-            id="missing-dictionary",
-        ),
         pytest.param(
             """
 <dictionaries>
@@ -421,11 +510,11 @@ def test_parse_multiple_dictionaries(
         ),
     ],
 )
-def test_parse_xml_to_sql_invalid_configs(
+def test_parse_xml_with_invalid_config(
     xml_content: str,
     create_xml_file: Callable[[str, str], str],
 ) -> None:
     filepath = create_xml_file("invalid_dictionary.xml", xml_content)
 
     with pytest.raises(RuntimeError):
-        generate_ddl_dictionaries_from_xml(filepath)
+        _generate_ddl_dictionaries_from_xml(filepath, target_database="_dictionaries")
