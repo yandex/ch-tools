@@ -446,16 +446,16 @@ def _build_attribute_definition(attr: dict[str, Any]) -> str:
         null_value = _normalize_null_default_value(attr_type, attr["null_value"])
         parts.append(f"DEFAULT {null_value}")
 
-    if attr.get("expression"):
+    if "expression" in attr:
         parts.append(f"EXPRESSION {attr['expression']}")
 
-    if attr.get("hierarchical"):
+    if "hierarchical" in attr:
         parts.append("HIERARCHICAL")
 
-    if attr.get("injective"):
+    if "injective" in attr:
         parts.append("INJECTIVE")
 
-    if attr.get("is_object_id"):
+    if "is_object_id" in attr:
         parts.append("IS_OBJECT_ID")
 
     return " ".join(parts)
