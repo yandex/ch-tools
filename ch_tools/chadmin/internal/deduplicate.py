@@ -41,11 +41,11 @@ def deduplicate(
     dry_run: bool,
 ) -> None:
     disk: S3DiskConfiguration = ctx.obj["disk_configuration"]
-    deduplicated_tables = (
-        set()
-        if ignore_saved_state
-        else set(list_children(ctx, DEDUPLICATED_TABLES_PATH))
-    )
+
+    if ignore_saved_state:
+        delete_zk_node(ctx, DEDUPLICATION_ROOT_PATH, dry_run=dry_run)
+
+    deduplicated_tables = set(list_children(ctx, DEDUPLICATED_TABLES_PATH))
 
     tables = [
         table
@@ -78,7 +78,6 @@ def deduplicate(
         partition_id,
         min_partition_id,
         max_partition_id,
-        ignore_saved_state,
         dry_run,
     )
 
@@ -96,7 +95,6 @@ def _get_deduplication_tasks(
     partition_id: Optional[str],
     min_partition_id: Optional[str],
     max_partition_id: Optional[str],
-    ignore_saved_state: bool,
     dry_run: bool,
 ) -> list[WorkerTask]:
     def _task(table_info: TableInfo) -> None:
@@ -104,10 +102,8 @@ def _get_deduplication_tasks(
             ctx, table_info, ALWAYS_FETCH_ON_ATTACH_SETTING, 1, dry_run=dry_run
         )
 
-        min_partition_id_actual = (
-            min_partition_id
-            if ignore_saved_state
-            else _get_min_partition_to_deduplicate(ctx, table_info, min_partition_id)
+        min_partition_id_actual = _get_min_partition_to_deduplicate(
+            ctx, table_info, min_partition_id
         )
 
         partitions = get_partitions(

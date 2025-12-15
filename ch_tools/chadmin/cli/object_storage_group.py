@@ -390,9 +390,7 @@ def space_usage_command(
     "--ignore-saved-state",
     "ignore_saved_state",
     is_flag=True,
-    help=(
-        "Do not load already processed tables to skip them. Also do not load partition ids from the previous unsuccessful attempt to use it as min_partition_id."
-    ),
+    help=("Remove saved processed tables and partitions from ZK before executing."),
 )
 @option(
     "--dry-run",
