@@ -446,7 +446,7 @@ def _build_attribute_definition(attr: dict[str, Any]) -> str:
         null_value = _normalize_null_default_value(attr_type, attr["null_value"])
         parts.append(f"DEFAULT {null_value}")
 
-    if "expression" in attr:
+    if attr.get("expression"):
         parts.append(f"EXPRESSION {attr['expression']}")
 
     if "hierarchical" in attr:
