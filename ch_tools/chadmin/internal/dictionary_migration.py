@@ -321,20 +321,17 @@ def _build_xml_dictionary_lifetime_block(attrs: dict[str, Any]) -> str:
         raise RuntimeError("Dictionary config has invalid <lifetime> block")
 
     min_val = lifetime.get("min")
+    if min_val == "" or min_val is None:
+        min_val = None
     max_val = lifetime.get("max")
+    if max_val == "" or max_val is None:
+        max_val = None
 
     if min_val is None and max_val is None:
-        raise RuntimeError(
-            "At least one of <min> or <max> must be specified in <lifetime>"
-        )
+        return "LIFETIME(0)"
 
     if max_val is None:
-        if not isinstance(min_val, str):
-            raise RuntimeError("<min> in <lifetime> must contain a single value")
         return f"LIFETIME({min_val})"
-
-    if not isinstance(min_val, str) or not isinstance(max_val, str):
-        raise RuntimeError("<max> and <min> must each contain a single value")
 
     return f"LIFETIME(MIN {min_val} MAX {max_val})"
 
@@ -357,13 +354,20 @@ def _build_structure_and_primary_key(attrs: dict[str, Any]) -> tuple[str, str]:
         )
 
     if attr_id is not None:
+        if not isinstance(attr_id, dict):
+            raise RuntimeError("<id> must be a dictionary")
         name = attr_id.get("name")
+        if not name:
+            raise RuntimeError("<id> must contain <name>")
         primary_key = f"PRIMARY KEY {name}"
         attribute_list.append(f"\t{name} UInt64")
     else:
         key_attrs = key.get("attribute", [])
         if isinstance(key_attrs, dict):
             key_attrs = [key_attrs]
+
+        if not key_attrs:
+            raise RuntimeError("<key> must contain at least one <attribute>")
 
         key_names: list[str] = []
         for attr in key_attrs:
@@ -449,13 +453,13 @@ def _build_attribute_definition(attr: dict[str, Any]) -> str:
     if attr.get("expression"):
         parts.append(f"EXPRESSION {attr['expression']}")
 
-    if "hierarchical" in attr:
+    if attr.get("hierarchical") and attr["hierarchical"] not in ("0", "false", ""):
         parts.append("HIERARCHICAL")
 
-    if "injective" in attr:
+    if attr.get("injective") and attr["injective"] not in ("0", "false", ""):
         parts.append("INJECTIVE")
 
-    if "is_object_id" in attr:
+    if attr.get("is_object_id") and attr["is_object_id"] not in ("0", "false", ""):
         parts.append("IS_OBJECT_ID")
 
     return " ".join(parts)

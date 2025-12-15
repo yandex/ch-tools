@@ -106,7 +106,7 @@ LIFETIME(MIN 0 MAX 100)
 CREATE DICTIONARY IF NOT EXISTS _dictionaries.dictionary1
 (
     id UInt64,
-    value UInt64 DEFAULT 0 HIERARCHICAL INJECTIVE
+    value UInt64 DEFAULT 0
 )
 PRIMARY KEY id
 SOURCE(clickhouse(HOST name.db.yandex.net PORT 8123 USER default PASSWORD '' DB default TABLE test_dict))
