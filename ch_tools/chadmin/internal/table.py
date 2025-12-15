@@ -752,10 +752,14 @@ def has_data_on_disk(ctx: Context, table: TableInfo, disk: str) -> bool:
 
 
 def set_table_setting(
-    ctx: Context, table: TableInfo, setting: str, value: Optional[Any] = None
+    ctx: Context,
+    table: TableInfo,
+    setting: str,
+    value: Optional[Any] = None,
+    dry_run: bool = False,
 ) -> None:
     setting_clause = (
         f"MODIFY SETTING {setting}={value}" if value else f"RESET SETTING {setting}"
     )
     query = f"ALTER TABLE {table['database']}.{table['name']} {setting_clause}"
-    execute_query_on_shard(ctx, query)
+    execute_query_on_shard(ctx, query, dry_run=dry_run)
