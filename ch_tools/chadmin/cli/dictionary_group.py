@@ -5,9 +5,9 @@ from click import Context, group, option, pass_context
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.dictionary import (
     list_dictionaries,
-    migrate_dictionaries,
     reload_dictionary,
 )
+from ch_tools.chadmin.internal.dictionary_migration import migrate_dictionaries
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
 
@@ -59,9 +59,58 @@ def _full_name(dictionary: Any) -> str:
 
 
 @dictionary_group.command("migrate")
+@option(
+    "--dry-run",
+    "dry_run",
+    is_flag=True,
+    default=False,
+    help="Only print generated SQL statements without executing them.",
+)
+@option(
+    "--remove",
+    "should_remove",
+    is_flag=True,
+    default=False,
+    help="Decide if old dictionaries should be removed.",
+)
+@option(
+    "--include",
+    "include_pattern",
+    default=None,
+    type=str,
+    help="Regex pattern to filter dictionaries by name.",
+)
+@option(
+    "--exclude",
+    "exclude_pattern",
+    default=None,
+    type=str,
+    help="Regex pattern to exclude dictionaries by name.",
+)
+@option(
+    "--database",
+    "target_database",
+    default="_dictionaries",
+    type=str,
+    help="Target database for migrated dictionaries.",
+)
 @pass_context
-def migrate_command(ctx: Context) -> None:
+def migrate_command(
+    ctx: Context,
+    dry_run: bool,
+    should_remove: bool,
+    target_database: str,
+    include_pattern: str,
+    exclude_pattern: str,
+) -> None:
     """
     Migrate XML-dictionaries to DDL.
     """
-    migrate_dictionaries(ctx)
+    migrate_dictionaries(
+        ctx,
+        dry_run,
+        should_remove,
+        target_database,
+        include_pattern,
+        exclude_pattern,
+    )
