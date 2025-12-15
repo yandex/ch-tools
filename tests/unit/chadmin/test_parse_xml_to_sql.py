@@ -191,7 +191,7 @@ LAYOUT(FLAT())
 LIFETIME(100)
            """
             ],
-            id="explicit_null_value",
+            id="explicit-null-value",
         ),
         pytest.param(
             """
@@ -229,7 +229,7 @@ LAYOUT(FLAT())
 LIFETIME(0)
                 """
             ],
-            id="no_null_value_attribute",
+            id="no-null-value-attribute",
         ),
         pytest.param(
             """
@@ -268,7 +268,7 @@ LAYOUT(FLAT())
 LIFETIME(MIN 0 MAX 100)
                 """
             ],
-            id="self_closing_null_value",
+            id="self-closing-null-value",
         ),
         pytest.param(
             """
