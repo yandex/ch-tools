@@ -36,7 +36,9 @@ from ch_tools.chadmin.internal.table_replica import (
     system_table_drop_replica_by_zk_path,
 )
 from ch_tools.chadmin.internal.utils import chunked
-from ch_tools.chadmin.internal.zero_copy import _get_zero_copy_zookeeper_path
+from ch_tools.chadmin.internal.zero_copy import (
+    _get_zero_copy_zookeeper_path_for_disk_type,
+)
 from ch_tools.chadmin.internal.zookeeper import (
     delete_recursive,
     delete_zk_nodes,
@@ -686,8 +688,8 @@ def delete_zero_copy_locks(
     """
     _validate_args(ctx, zero_copy_path, table_uuid, part_id, remote_path_prefix)
 
-    zero_copy_path = zero_copy_path or _get_zero_copy_zookeeper_path(
-        ctx, disk_type, table_uuid
+    zero_copy_path = _get_zero_copy_zookeeper_path_for_disk_type(
+        ctx, disk_type, zero_copy_path=zero_copy_path, table_uuid=table_uuid
     )
 
     with zk_client(ctx) as zk:
