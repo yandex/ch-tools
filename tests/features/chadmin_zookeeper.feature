@@ -358,6 +358,42 @@ Feature: chadmin zookeeper commands.
     And we do hosts cleanup on clickhouse01 with fqdn clickhouse01.ch_tools_test,clickhouse02.ch_tools_test and zk root /
     Then the list of children on clickhouse01 for zk node /clickhouse/databases/ is empty
 
+  @require_version_23.1
+  Scenario: Remove single host from table.
+    Given merged clickhouse-tools configuration on clickhouse01
+    """
+    chadmin:
+      zookeeper:
+        clean_zk_metadata_for_hosts:
+          excluded_paths: [
+            "/tables/table_01"
+          ]
+    """
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS test ON CLUSTER 'cluster'; 
+    CREATE DATABASE test ON CLUSTER 'cluster';
+
+    CREATE TABLE test.table_01 ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n;
+
+    CREATE TABLE test.table_02 ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_02', '{replica}') PARTITION BY n ORDER BY n;
+
+    DETACH TABLE test.table_01;
+    DETACH TABLE test.table_02;
+    """
+    And we do table cleanup on clickhouse01 with fqdn clickhouse01.ch_tools_test from table with / zookeeper path
+    Then the list of children on clickhouse01 for zk node /tables/table_01/replicas is equal to
+    """
+    /tables/table_01/replicas/clickhouse01.ch_tools_test
+    /tables/table_01/replicas/clickhouse02.ch_tools_test
+    """
+    Then the list of children on clickhouse01 for zk node /tables/table_02/replicas is equal to
+    """
+    /tables/table_02/replicas/clickhouse02.ch_tools_test
+    """
+
   Scenario: Zookeeper recursive delete command
     When we execute chadmin create zk nodes on clickhouse01
     """

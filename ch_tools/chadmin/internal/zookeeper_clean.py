@@ -258,18 +258,12 @@ def clean_zk_metadata_for_hosts(
         zk_root_path: str,
         collect_tables: bool,
         collect_database: bool,
+        excluded_paths: List[str],
         max_workers: int = 4,
     ) -> Tuple[Dict[str, List[Tuple[str, str]]], Dict[str, List[str]]]:
         """
         Gets list of all replicated objects in zk, determine tables and databases for cleanup.
         """
-
-        excluded_paths = [
-            ".*clickhouse/task_queue",
-            ".*clickhouse/zero_copy",
-            ".*/blocks/.*",
-            ".*/block_numbers/.*",
-        ]
 
         replicated_objects: List[ZookeeperNode] = _traverse_zk_tree_and_find_objects(
             zk,
@@ -384,6 +378,7 @@ def clean_zk_metadata_for_hosts(
         min_wait_time_sec: int = clean_zk_metadata_config["retry_min_wait_sec"]
         max_wait_time_sec: int = clean_zk_metadata_config["retry_max_wait_sec"]
         max_retries: int = clean_zk_metadata_config["max_retries"]
+        excluded_paths: List[str] = clean_zk_metadata_config["excluded_paths"]
 
         retry_decorator = retry(
             retry=(
@@ -402,6 +397,7 @@ def clean_zk_metadata_for_hosts(
             zk_root_path,
             collect_database=cleanup_database,
             collect_tables=cleanup_tables,
+            excluded_paths=excluded_paths,
             max_workers=max_workers,
         )
 
