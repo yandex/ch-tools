@@ -197,44 +197,6 @@ LIFETIME(100)
             """
 <dictionaries>
   <dictionary>
-    <name>test_dict3</name>
-    <source>
-      <clickhouse>
-        <db>db</db>
-        <table>tab</table>
-      </clickhouse>
-    </source>
-    <layout><flat/></layout>
-    <lifetime>0</lifetime>
-    <structure>
-      <id><name>id</name></id>
-      <attribute>
-        <name>name</name>
-        <type>String</type>
-      </attribute>
-    </structure>
-  </dictionary>
-</dictionaries>
-            """,
-            [
-                """
-CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict3
-(
-    id UInt64,
-    name String
-)
-PRIMARY KEY id
-SOURCE(clickhouse(DB db TABLE tab))
-LAYOUT(FLAT())
-LIFETIME(0)
-                """
-            ],
-            id="no-null-value-attribute",
-        ),
-        pytest.param(
-            """
-<dictionaries>
-  <dictionary>
     <name>test_dict4</name>
     <source>
       <clickhouse>
@@ -297,7 +259,7 @@ LIFETIME(MIN 0 MAX 100)
       <attribute>
         <name>value</name>
         <type>Int32</type>
-        <null_value></null_value>
+        <null_value/>
       </attribute>
     </structure>
   </dictionary>
@@ -459,12 +421,13 @@ def test_parse_with_multiple_dictionaries(
       <attribute>
         <name>value</name>
         <type>String</type>
+        <null_value/>
       </attribute>
     </structure>
   </dictionary>
 </dictionaries>
 """,
-            id="missing-name",
+            id="missing-id",
         ),
         pytest.param(
             """
@@ -473,7 +436,7 @@ def test_parse_with_multiple_dictionaries(
     <name>dict_without_source</name>
   </dictionary>
 </dictionaries>
-""",
+            """,
             id="missing-source-or-structure",
         ),
         pytest.param(
@@ -501,12 +464,38 @@ def test_parse_with_multiple_dictionaries(
       <attribute>
         <name>value</name>
         <type>String</type>
+        <null_value/>
       </attribute>
     </structure>
   </dictionary>
 </dictionaries>
-""",
+          """,
             id="id-and-key-present",
+        ),
+        pytest.param(
+            """
+<dictionaries>
+  <dictionary>
+    <name>test_dict3</name>
+    <source>
+      <clickhouse>
+        <db>db</db>
+        <table>tab</table>
+      </clickhouse>
+    </source>
+    <layout><flat/></layout>
+    <lifetime>0</lifetime>
+    <structure>
+      <id><name>id</name></id>
+      <attribute>
+        <name>name</name>
+        <type>String</type>
+      </attribute>
+    </structure>
+  </dictionary>
+</dictionaries>
+            """,
+            id="no-null-value-attribute",
         ),
     ],
 )

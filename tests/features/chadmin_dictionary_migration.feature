@@ -33,6 +33,7 @@ Feature: chadmin dictionary migration command.
               <attribute>
                 <name>name</name>
                 <type>String</type>
+                <null_value/>
               </attribute>
             </structure>
           </dictionary>
@@ -54,6 +55,7 @@ Feature: chadmin dictionary migration command.
                 <attribute>
                   <name>name</name>
                   <type>String</type>
+                  <null_value/>
                 </attribute>
               </structure>
             </dictionary>
@@ -73,6 +75,7 @@ Feature: chadmin dictionary migration command.
                 <attribute>
                   <name>age</name>
                   <type>UInt64</type>
+                  <null_value/>
                 </attribute>
               </structure>
             </dictionary>
@@ -131,6 +134,7 @@ Feature: chadmin dictionary migration command.
               <attribute>
                 <name>name</name>
                 <type>String</type>
+                <null_value/>
               </attribute>
             </structure>
           </dictionary>
@@ -152,6 +156,7 @@ Feature: chadmin dictionary migration command.
                 <attribute>
                   <name>name</name>
                   <type>String</type>
+                  <null_value/>
                 </attribute>
               </structure>
             </dictionary>
@@ -171,6 +176,7 @@ Feature: chadmin dictionary migration command.
                 <attribute>
                   <name>age</name>
                   <type>UInt64</type>
+                  <null_value/>
                 </attribute>
               </structure>
             </dictionary>
@@ -229,6 +235,7 @@ Feature: chadmin dictionary migration command.
               <attribute>
                 <name>name</name>
                 <type>String</type>
+                <null_value/>
               </attribute>
             </structure>
           </dictionary>
@@ -250,6 +257,7 @@ Feature: chadmin dictionary migration command.
                 <attribute>
                   <name>name</name>
                   <type>String</type>
+                  <null_value/>
                 </attribute>
               </structure>
             </dictionary>
@@ -300,6 +308,7 @@ Feature: chadmin dictionary migration command.
               <attribute>
                 <name>name</name>
                 <type>String</type>
+                <null_value/>
               </attribute>
             </structure>
           </dictionary>
@@ -321,6 +330,7 @@ Feature: chadmin dictionary migration command.
                 <attribute>
                   <name>name</name>
                   <type>String</type>
+                  <null_value/>
                 </attribute>
               </structure>
             </dictionary>
@@ -371,6 +381,7 @@ Feature: chadmin dictionary migration command.
               <attribute>
                 <name>name</name>
                 <type>String</type>
+                <null_value/>
               </attribute>
             </structure>
           </dictionary>
@@ -392,6 +403,7 @@ Feature: chadmin dictionary migration command.
                 <attribute>
                   <name>name</name>
                   <type>String</type>
+                  <null_value/>
                 </attribute>
               </structure>
             </dictionary>
@@ -411,6 +423,7 @@ Feature: chadmin dictionary migration command.
                 <attribute>
                   <name>age</name>
                   <type>UInt64</type>
+                  <null_value/>
                 </attribute>
               </structure>
             </dictionary>

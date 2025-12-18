@@ -371,7 +371,7 @@ def _build_structure_and_primary_key(attrs: dict[str, Any]) -> tuple[str, str]:
 
         key_names: list[str] = []
         for attr in key_attrs:
-            attr_str = _build_attribute_definition(attr)
+            attr_str = _build_attribute_definition(attr, False)
             attribute_list.append(attr_str)
             key_names.append(attr.get("name"))
 
@@ -437,7 +437,9 @@ def _normalize_null_default_value(attr_type: str, null_value: str) -> str:
     return null_value
 
 
-def _build_attribute_definition(attr: dict[str, Any]) -> str:
+def _build_attribute_definition(
+    attr: dict[str, Any], require_null_value: bool = True
+) -> str:
     name = attr.get("name")
     attr_type = attr.get("type")
 
@@ -446,20 +448,23 @@ def _build_attribute_definition(attr: dict[str, Any]) -> str:
 
     parts = [name, attr_type]
 
+    if require_null_value and "null_value" not in attr:
+        raise RuntimeError("<null_value> is required for dictionary attributes")
+
     if "null_value" in attr:
         null_value = _normalize_null_default_value(attr_type, attr["null_value"])
         parts.append(f"DEFAULT {null_value}")
 
-    if attr.get("expression"):
+    if "expression" in attr:
         parts.append(f"EXPRESSION {attr['expression']}")
 
-    if attr.get("hierarchical") and attr["hierarchical"] not in ("0", "false", ""):
+    if "hierarchical" in attr and attr["hierarchical"] not in ("0", "false", ""):
         parts.append("HIERARCHICAL")
 
-    if attr.get("injective") and attr["injective"] not in ("0", "false", ""):
+    if "injective" in attr and attr["injective"] not in ("0", "false", ""):
         parts.append("INJECTIVE")
 
-    if attr.get("is_object_id") and attr["is_object_id"] not in ("0", "false", ""):
+    if "is_object_id" in attr and attr["is_object_id"] not in ("0", "false", ""):
         parts.append("IS_OBJECT_ID")
 
     return " ".join(parts)
