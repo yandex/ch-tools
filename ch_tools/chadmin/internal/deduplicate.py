@@ -25,6 +25,7 @@ from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfig
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
 
 ALWAYS_FETCH_ON_ATTACH_SETTING = "always_fetch_instead_of_attach_zero_copy"
+HARDLINK_ON_DETACH_SETTING = "copy_part_on_attach_instead_of_detach"
 DEDUPLICATION_ROOT_PATH = "deduplication"
 DEDUPLICATED_TABLES_PATH = os.path.join(DEDUPLICATION_ROOT_PATH, "done")
 
@@ -101,6 +102,9 @@ def _get_deduplication_tasks(
         set_table_setting(
             ctx, table_info, ALWAYS_FETCH_ON_ATTACH_SETTING, 1, dry_run=dry_run
         )
+        set_table_setting(
+            ctx, table_info, HARDLINK_ON_DETACH_SETTING, 1, dry_run=dry_run
+        )
 
         min_partition_id_actual = _get_min_partition_to_deduplicate(
             ctx, table_info, min_partition_id
@@ -146,6 +150,7 @@ def _get_deduplication_tasks(
         set_table_setting(
             ctx, table_info, ALWAYS_FETCH_ON_ATTACH_SETTING, dry_run=dry_run
         )
+        set_table_setting(ctx, table_info, HARDLINK_ON_DETACH_SETTING, dry_run=dry_run)
 
         if not dry_run:
             create_zk_nodes(
