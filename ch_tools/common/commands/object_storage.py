@@ -1074,7 +1074,7 @@ def _create_space_usage_table(
     )
 
     execute_query_on_shard(
-        ctx,  # , unique_frozen UInt64, unique_detached UInt64, orphaned UInt64)
+        ctx,
         f"""
             CREATE TABLE IF NOT EXISTS {space_usage_table_name}
                 (replica Array(String), state String, size UInt64)
