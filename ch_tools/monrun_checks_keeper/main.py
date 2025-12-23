@@ -114,7 +114,7 @@ class KeeperChecks(cloup.Group):
     "--timeout",
     "timeout",
     type=float,
-    default=0.5,
+    default=3,
     help="Connection timeout (in seconds)",
 )
 @cloup.option(
