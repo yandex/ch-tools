@@ -52,10 +52,14 @@ Feature: chadmin object-storage commands
     """
     Then we get response matches
     """
-    active: '?([1-9][0-9]*)'?
-    unique_frozen: '?(0)'?
-    unique_detached: '?([1-9][0-9]*)'?
-    orphaned: '?(1)'?
+    '\[''all_replicas''\]':
+      orphaned: '?(1)'?
+    '\[''clickhouse01''\]':
+      active: '?([1-9][0-9]*)'?
+      unique_detached: '?([1-9][0-9]*)'?
+    '\[''clickhouse02''\]':
+      active: '?([1-9][0-9]*)'?
+      unique_detached: '?([1-9][0-9]*)'?
     """
 
   @require_version_24.3
@@ -84,10 +88,14 @@ Feature: chadmin object-storage commands
     """
     Then we get response matches
     """
-    active: '?([1-9][0-9]*)'?
-    unique_frozen: '?([1-9][0-9]*)'?
-    unique_detached: '?([1-9][0-9]*)'?
-    orphaned: '?(1)'?
+    '\[''all_replicas''\]':
+      orphaned: '?(1)'?
+    '\[''clickhouse01''\]':
+      active: '?([1-9][0-9]*)'?
+      unique_frozen: '?([1-9][0-9]*)'?
+    '\[''clickhouse02''\]':
+      active: '?([1-9][0-9]*)'?
+      unique_detached: '?([1-9][0-9]*)'?
     """
 
   Scenario: Dry-run clean with guard period
