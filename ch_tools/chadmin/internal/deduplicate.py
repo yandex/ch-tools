@@ -133,8 +133,6 @@ def _get_deduplication_tasks(
                 detach_partition(
                     ctx, p["database"], p["table"], p["partition_id"], dry_run=dry_run
                 )
-                if p["partition_id"] == "3":
-                    raise RuntimeError("Fault injection")
                 attach_partition(
                     ctx, p["database"], p["table"], p["partition_id"], dry_run=dry_run
                 )
