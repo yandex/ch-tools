@@ -106,14 +106,16 @@ Feature: chadmin dictionary migration command.
       | toUInt64(2)  | age       | 2        |
       | toUInt64(3)  | age       | 3        |
       | toUInt64(4)  | age       | 0        |
-    And we execute command on clickhouse01:
+    
+    When we execute command on clickhouse01:
     """
       test -f /etc/clickhouse-server/prod_dictionary.xml
     """
     And we execute command on clickhouse01:
     """
-      test -f /etc/clickhouse-server/test_dictionary.xml
+      test -f /etc/clickhouse-server/prod_dictionary.xml
     """
+    Then it completes successfully
   
   Scenario: Migrate external dictionaries with removal.
     When we execute command on clickhouse01:
@@ -207,7 +209,8 @@ Feature: chadmin dictionary migration command.
       | toUInt64(2)  | age       | 2        |
       | toUInt64(3)  | age       | 3        |
       | toUInt64(4)  | age       | 0        |
-    And we execute command on clickhouse01:
+    
+    When we execute command on clickhouse01:
     """
       test ! -f /etc/clickhouse-server/prod_dictionary.xml
     """
@@ -215,6 +218,7 @@ Feature: chadmin dictionary migration command.
     """
       test ! -f /etc/clickhouse-server/test_dictionary.xml
     """
+    Then it completes successfully
 
   Scenario: Migrate with --include filter and removal.
     When we execute command on clickhouse01:
@@ -276,11 +280,14 @@ Feature: chadmin dictionary migration command.
       | toUInt64(2)  | name      | two      |
       | toUInt64(3)  | name      | three    |
       | toUInt64(4)  | name      |          |
-    And we execute command on clickhouse01 expecting failure:
+
+    When we execute command on clickhouse01:
     """
-      clickhouse-client -q "SELECT dictGet('_dictionaries.test_dict1'), 'age', toUInt64(1)"
+      clickhouse-client -q "SELECT dictGet('_dictionaries.test_dict1', 'age', toUInt64(1))"
     """
-    And we execute command on clickhouse01:
+    Then it fails
+
+    When we execute command on clickhouse01:
     """
       test ! -f /etc/clickhouse-server/prod_dictionary.xml
     """
@@ -288,6 +295,7 @@ Feature: chadmin dictionary migration command.
     """
       test -f /etc/clickhouse-server/test_dictionary.xml
     """
+    Then it completes successfully
   
   Scenario: Migrate with --exclude filter and removal.
     When we execute command on clickhouse01:
@@ -349,7 +357,8 @@ Feature: chadmin dictionary migration command.
       | toUInt64(2)  | name      | two      |
       | toUInt64(3)  | name      | three    |
       | toUInt64(4)  | name      |          |
-    And we execute command on clickhouse01 expecting failure:
+    
+    When we execute command on clickhouse01:
     """
       clickhouse-client -q "SELECT dictGet('_dictionaries.prod_dict'), 'age', toUInt64(1)"
     """
@@ -361,6 +370,7 @@ Feature: chadmin dictionary migration command.
     """
       test ! -f /etc/clickhouse-server/test_dictionary.xml
     """
+    Then it completes successfully
 
   Scenario: Migrate to custom database without removal.
     When we execute command on clickhouse01:
@@ -454,7 +464,8 @@ Feature: chadmin dictionary migration command.
       | toUInt64(2)  | age       | 2        |
       | toUInt64(3)  | age       | 3        |
       | toUInt64(4)  | age       | 0        |
-    And we execute command on clickhouse01:
+    
+    When we execute command on clickhouse01:
     """
       test -f /etc/clickhouse-server/prod_dictionary.xml
     """
@@ -462,3 +473,4 @@ Feature: chadmin dictionary migration command.
     """
       test -f /etc/clickhouse-server/test_dictionary.xml
     """
+    Then it completes successfully
