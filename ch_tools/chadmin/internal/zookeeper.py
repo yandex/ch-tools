@@ -17,7 +17,7 @@ from typing import (
 
 from click import Context
 from kazoo.client import KazooClient
-from kazoo.exceptions import NoNodeError, NotEmptyError
+from kazoo.exceptions import NodeExistsError, NoNodeError, NotEmptyError
 from kazoo.protocol.states import ZnodeStat
 
 from ch_tools.chadmin.internal.utils import chunked, replace_macros
@@ -56,6 +56,11 @@ def get_children(zk: KazooClient, path: str) -> List[str]:
         return []  # in the case ZK deletes a znode while we traverse the tree
 
 
+def list_children(ctx: Context, path: str) -> List[str]:
+    with zk_client(ctx) as zk:
+        return get_children(zk, path)
+
+
 def list_zk_nodes(
     ctx: Context, path: str, verbose: bool = False
 ) -> Union[List[str], List[Dict[str, Any]]]:
@@ -85,6 +90,7 @@ def create_zk_nodes(
     paths: List[str],
     value: Optional[Union[str, bytes]] = None,
     make_parents: bool = False,
+    exists_ok: bool = False,
 ) -> None:
     if isinstance(value, str):
         value = value.encode()
@@ -93,11 +99,16 @@ def create_zk_nodes(
 
     with zk_client(ctx) as zk:
         for path in paths:
-            zk.create(
-                format_path(ctx, path),
-                value,
-                makepath=make_parents,
-            )
+            try:
+                zk.create(
+                    format_path(ctx, path),
+                    value,
+                    makepath=make_parents,
+                )
+            except NodeExistsError:
+                if exists_ok:
+                    return
+                raise
 
 
 def update_zk_nodes(ctx: Context, paths: List[str], value: Union[str, bytes]) -> None:
