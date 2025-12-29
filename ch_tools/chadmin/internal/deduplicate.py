@@ -99,6 +99,9 @@ def _get_deduplication_tasks(
     dry_run: bool,
 ) -> list[WorkerTask]:
     def _task(table_info: TableInfo) -> None:
+        logging.info(
+            f"Table: {table_info['database']}.{table_info['name']}. Enabling settings: {ALWAYS_FETCH_ON_ATTACH_SETTING}, {HARDLINK_ON_DETACH_SETTING}"
+        )
         set_table_setting(
             ctx, table_info, ALWAYS_FETCH_ON_ATTACH_SETTING, 1, dry_run=dry_run
         )
@@ -106,8 +109,9 @@ def _get_deduplication_tasks(
             ctx, table_info, HARDLINK_ON_DETACH_SETTING, 1, dry_run=dry_run
         )
 
+        deduplication_path_in_zk = _get_table_deduplication_zk_path(table_info)
         min_partition_id_actual = _get_min_partition_to_deduplicate(
-            ctx, table_info, min_partition_id
+            ctx, deduplication_path_in_zk, min_partition_id
         )
 
         partitions = get_partitions(
@@ -121,15 +125,16 @@ def _get_deduplication_tasks(
             format_="JSON",
         )["data"]
 
-        delete_zk_node(
-            ctx, _get_table_deduplication_zk_path(table_info), dry_run=dry_run
-        )
+        if check_zk_node(ctx, deduplication_path_in_zk):
+            delete_zk_node(ctx, deduplication_path_in_zk, dry_run=dry_run)
 
         for p in partitions:
             try:
                 detach_partition(
                     ctx, p["database"], p["table"], p["partition_id"], dry_run=dry_run
                 )
+                if p["partition_id"] == "3":
+                    raise RuntimeError("Fault injection")
                 attach_partition(
                     ctx, p["database"], p["table"], p["partition_id"], dry_run=dry_run
                 )
@@ -137,15 +142,24 @@ def _get_deduplication_tasks(
                 if not dry_run:
                     create_zk_nodes(
                         ctx,
-                        [_get_table_deduplication_zk_path(table_info)],
-                        p["name"],
+                        [deduplication_path_in_zk],
+                        p["partition_id"],
+                        make_parents=True,
                     )
+                raise
 
+        logging.info(
+            f"Syncing replicas for table: {table_info['database']}.{table_info['name']}"
+        )
         execute_query_on_shard(
             ctx,
             f"SYSTEM SYNC REPLICA {table_info['database']}.{table_info['name']}",
             format_=None,
             dry_run=dry_run,
+        )
+
+        logging.info(
+            f"Table: {table_info['database']}.{table_info['name']}. Disabling settings: {ALWAYS_FETCH_ON_ATTACH_SETTING}, {HARDLINK_ON_DETACH_SETTING}"
         )
         set_table_setting(
             ctx, table_info, ALWAYS_FETCH_ON_ATTACH_SETTING, dry_run=dry_run
@@ -170,9 +184,11 @@ def _get_deduplication_tasks(
 
 
 def _get_min_partition_to_deduplicate(
-    ctx: Context, table: TableInfo, min_partition_id: Optional[str]
+    ctx: Context, deduplication_path: str, min_partition_id: Optional[str]
 ) -> Optional[str]:
-    min_partition_from_zk = _get_last_reattached_partition_from_zk(ctx, table)
+    min_partition_from_zk = _get_last_reattached_partition_from_zk(
+        ctx, deduplication_path
+    )
     if min_partition_id or min_partition_from_zk:
         if min_partition_id and min_partition_from_zk:
             return min(min_partition_id, min_partition_from_zk)
@@ -181,11 +197,10 @@ def _get_min_partition_to_deduplicate(
 
 
 def _get_last_reattached_partition_from_zk(
-    ctx: Context, table: TableInfo
+    ctx: Context, deduplication_path: str
 ) -> Optional[str]:
-    path = _get_table_deduplication_zk_path(table)
-    if check_zk_node(ctx, path):
-        return get_zk_node(ctx, path)
+    if check_zk_node(ctx, deduplication_path):
+        return get_zk_node(ctx, deduplication_path)
     return None
 
 

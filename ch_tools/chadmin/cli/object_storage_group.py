@@ -23,7 +23,11 @@ from ch_tools.chadmin.internal.object_storage.s3_cleanup_stats import (
     ResultStat,
     StatisticsPeriod,
 )
-from ch_tools.chadmin.internal.system import match_ch_version
+from ch_tools.chadmin.internal.system import (
+    get_version,
+    is_yandex_cloud_version,
+    match_ch_version,
+)
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
     create_zk_nodes,
@@ -416,7 +420,10 @@ def deduplicate_command(
     Requires custom ClickHouse build with copying of part's data on attach instead of detach.
     In case of errors saves state in ZK to use it on retry.
     """
-    # TODO: Check for custom version
+    if not is_yandex_cloud_version(ctx):
+        raise RuntimeError(
+            f"ClickHouse version {get_version(ctx)} doesn't look like it's from Yandex Cloud."
+        )
     deduplicate(
         ctx=ctx,
         database=database,

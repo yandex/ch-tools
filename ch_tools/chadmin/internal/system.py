@@ -1,3 +1,4 @@
+import re
 import subprocess
 
 from click import Context
@@ -43,3 +44,11 @@ def match_ch_backup_version(min_version: str) -> bool:
         )
 
     return version_ge(proc.stdout.decode(), min_version)
+
+
+def is_yandex_cloud_version(ctx: Context) -> bool:
+    """
+    Checks if Yandex Cloud build is used.
+    """
+    pattern = r"^([0-9.]+)-yc\.([0-9.]+)$"
+    return re.match(pattern, get_version(ctx)) is not None

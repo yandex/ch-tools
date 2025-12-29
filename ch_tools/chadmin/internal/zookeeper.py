@@ -107,7 +107,7 @@ def create_zk_nodes(
                 )
             except NodeExistsError:
                 if exists_ok:
-                    pass
+                    return
                 raise
 
 
