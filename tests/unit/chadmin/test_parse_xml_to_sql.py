@@ -60,7 +60,7 @@ CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict1
     name String DEFAULT ''
 )
 PRIMARY KEY id
-SOURCE(clickhouse(DB db TABLE tab))
+SOURCE(CLICKHOUSE(DB 'db' TABLE 'tab'))
 LAYOUT(FLAT())
 LIFETIME(MIN 0 MAX 100)
                 """
@@ -109,7 +109,7 @@ CREATE DICTIONARY IF NOT EXISTS _dictionaries.dictionary1
     value UInt64 DEFAULT 0
 )
 PRIMARY KEY id
-SOURCE(clickhouse(HOST name.db.yandex.net PORT 8123 USER default PASSWORD '' DB default TABLE test_dict))
+SOURCE(CLICKHOUSE(HOST 'name.db.yandex.net' PORT 8123 USER 'default' PASSWORD '' DB 'default' TABLE 'test_dict'))
 LAYOUT(FLAT())
 LIFETIME(50)
                 """
@@ -148,7 +148,7 @@ CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict1
     name String DEFAULT ''
 )
 PRIMARY KEY id
-SOURCE(clickhouse(DB db TABLE tab))
+SOURCE(CLICKHOUSE(DB 'db' TABLE 'tab'))
 LAYOUT(FLAT())
 LIFETIME(MIN 0 MAX 100)
                 """
@@ -186,7 +186,7 @@ CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict2
     name String DEFAULT 'Mama'
 )
 PRIMARY KEY id
-SOURCE(clickhouse(DB db TABLE tab))
+SOURCE(CLICKHOUSE(DB 'db' TABLE 'tab'))
 LAYOUT(FLAT())
 LIFETIME(100)
            """
@@ -225,7 +225,7 @@ CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict4
     name String DEFAULT ''
 )
 PRIMARY KEY id
-SOURCE(clickhouse(DB db TABLE tab))
+SOURCE(CLICKHOUSE(DB 'db' TABLE 'tab'))
 LAYOUT(FLAT())
 LIFETIME(MIN 0 MAX 100)
                 """
@@ -274,7 +274,7 @@ CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict5
     value Int32 DEFAULT 0
 )
 PRIMARY KEY id1, id2
-SOURCE(clickhouse(DB db TABLE tab))
+SOURCE(CLICKHOUSE(DB 'db' TABLE 'tab'))
 LAYOUT(HASHED())
 LIFETIME(MIN 0 MAX 100)
                 """
@@ -324,12 +324,70 @@ CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict6
     tags Array DEFAULT []
 )
 PRIMARY KEY id
-SOURCE(clickhouse(DB db TABLE tab))
+SOURCE(CLICKHOUSE(DB 'db' TABLE 'tab'))
 LAYOUT(FLAT())
 LIFETIME(MIN 0 MAX 100)
                 """
             ],
             id="multiple-types",
+        ),
+        pytest.param(
+            """
+<clickhouse>
+  <dictionary>
+    <name>test_dict</name>
+    <source>
+      <clickhouse>
+        <table>discounts</table>
+      </clickhouse>
+    </source>
+    <layout>
+      <range_hashed>
+        <range_lookup_strategy>min</range_lookup_strategy>
+      </range_hashed>
+    </layout>
+    <lifetime>
+      <min>1</min>
+      <max>1000</max>
+    </lifetime>
+    <structure>
+      <id>
+        <name>advertiser_id</name>
+      </id>
+      <attribute>
+        <name>amount</name>
+        <type>Float64</type>
+        <null_value/>
+      </attribute>
+      <range_min>
+          <name>discount_start_date</name>
+          <type>Date</type>
+      </range_min>
+      <range_max>
+          <name>discount_end_date</name>
+          <type>Date</type>
+      </range_max>
+    </structure>
+  </dictionary>
+</clickhouse>
+            """,
+            [
+                """
+CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict
+(
+    advertiser_id UInt64,
+    amount Float64 DEFAULT 0,
+    discount_end_date Date,
+    discount_start_date Date,
+)
+PRIMARY KEY advertiser_id
+SOURCE(CLICKHOUSE(TABLE 'discounts'))
+LAYOUT(RANGE_HASHED(RANGE_LOOKUP_STRATEGY 'min'))
+LIFETIME(MIN 1 MAX 1000)
+RANGE(MIN discount_start_date MAX discount_end_date)
+              """
+            ],
+            id="range-hashed",
         ),
     ],
 )

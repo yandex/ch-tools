@@ -111,4 +111,3 @@ def step_check_dict_values(context: ContextT, dict_name: str, node: str) -> None
 
     if errors:
         raise AssertionError("\n".join(errors))
-

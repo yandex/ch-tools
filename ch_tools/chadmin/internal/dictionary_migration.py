@@ -225,9 +225,19 @@ def _build_dictionary_ddl_from_config(
     lifetime = _build_xml_dictionary_lifetime_block(attrs)
     layout = _build_xml_dictionary_layout_block(attrs)
     primary_key, structure = _build_structure_and_primary_key(attrs)
+    range_definition = _build_range_block(attrs)
 
     return name, _build_create_dictionary_statement(
-        target_database, name, structure, primary_key, source, layout, lifetime, "", ""
+        target_database,
+        name,
+        structure,
+        primary_key,
+        source,
+        layout,
+        lifetime,
+        range_definition,
+        "",
+        "",
     )
 
 
@@ -257,13 +267,13 @@ def _build_xml_dictionary_source_block(attrs: dict[str, Any]) -> str:
             raise RuntimeError(
                 f"Value of <{param}> in <source><{source_type}> must be a string"
             )
-        params.append(f"{param.upper()} {value}")
+        params.append(f"{param.upper()} {_format_param_value(value)}")
 
     str_params = " ".join(params)
-    return f"SOURCE({source_type}({str_params}))"
+    return f"SOURCE({source_type.upper()}({str_params}))"
 
 
-def _format_layout_param_value(value: str) -> str:
+def _format_param_value(value: str) -> str:
     try:
         float(value)
         return value
@@ -297,7 +307,7 @@ def _build_xml_dictionary_layout_block(attrs: dict[str, Any]) -> str:
             raise RuntimeError(
                 f"Value of <{param}> in <layout><{layout_type}> must be a string, got {type(value)}"
             )
-        formated_value = _format_layout_param_value(value)
+        formated_value = _format_param_value(value)
         params.append(f"{param.upper()} {formated_value}")
 
     str_params = " ".join(params)
@@ -376,7 +386,39 @@ def _build_structure_and_primary_key(attrs: dict[str, Any]) -> tuple[str, str]:
     for attr in attributes:
         attribute_list.append(_build_attribute_definition(attr))
 
+    range_attrs = [structure.get(s) for s in ("range_min", "range_max")]
+    for attr in range_attrs:
+        if not isinstance(attr, dict):
+            continue
+        attribute_list.append(_build_attribute_definition(attr, False))
+
     return primary_key, ",\n\t".join(attribute_list)
+
+
+def _build_range_block(attrs: dict[str, Any]) -> Optional[str]:
+    structure = attrs.get("structure")
+    if structure is None:
+        raise RuntimeError("Dictionary config must contain a <structure> block")
+    if not isinstance(structure, dict):
+        return None
+
+    range_min = structure.get("range_min")
+    range_max = structure.get("range_max")
+
+    range_bounds = []
+    if isinstance(range_min, dict):
+        range_min_name = range_min.get("name")
+        if isinstance(range_min_name, str):
+            range_bounds.append(f"MIN {range_min_name}")
+    if isinstance(range_max, dict):
+        range_max_name = range_max.get("name")
+        if isinstance(range_max_name, str):
+            range_bounds.append(f"MAX {range_max_name}")
+
+    if not range_bounds:
+        return None
+
+    return f"RANGE({' '.join(range_bounds)})"
 
 
 def _normalize_null_default_value(attr_type: str, null_value: str) -> str:
@@ -470,6 +512,7 @@ def _build_create_dictionary_statement(
     source: str,
     layout: str,
     lifetime: str,
+    range_definition: Optional[str],
     settings: str,
     comment: str,
 ) -> str:
@@ -482,6 +525,7 @@ CREATE DICTIONARY IF NOT EXISTS {target_database}.{name}
 {source}
 {layout}
 {lifetime}
+{range_definition or ""}
 {settings}
 {comment}
            """
