@@ -1,9 +1,11 @@
 import os
 import re
+import traceback
 from pathlib import Path
 from typing import (
     Generator,
     Optional,
+    TypedDict,
 )
 
 from click import Context
@@ -23,21 +25,28 @@ from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfig
 from ch_tools.common.process_pool import WorkerTask
 
 
+class ZeroCopyLockInfo(TypedDict):
+    lock_path: str
+    part_path: str
+    replica: str
+
+
 def generate_zero_copy_lock_tasks(
     ctx: Context,
     disk: str,
     table: TableInfo,
     partition_id: Optional[str],
     part_name: Optional[str],
-    replica: str,
-    zookeeper_path: str,
+    replicas_to_lock: list[str],
+    table_zk_path: str,
     zk: KazooClient,
     dry_run: bool = False,
     zero_copy_path: Optional[str] = None,
     zero_copy_path_old: Optional[str] = None,
     copy_values: bool = False,
+    check_part_exist: bool = True,
 ) -> Generator[WorkerTask, None, None]:
-    """Generate tasks for creating zero-copy locks for given table/replica."""
+    """Generate tasks for creating zero-copy locks for given table/replicas."""
     storage_config = S3DiskConfiguration.from_config(
         get_clickhouse_config(ctx).storage_configuration,
         disk,
@@ -62,28 +71,36 @@ def generate_zero_copy_lock_tasks(
     )
 
     for part in part_info:
-        lock_path, lock_path_old = _get_zero_copy_lock_path(
-            storage_config.prefix,
-            zero_copy_path,
-            zero_copy_path_old,
-            table["uuid"],
-            part,
-            replica,
-        )
+        lock_infos = []
 
-        part_path = _get_part_path_in_zk(part["name"], zookeeper_path, replica)
+        for replica in replicas_to_lock:
+            lock_infos.append(
+                _get_zero_copy_lock_path(
+                    storage_config.prefix,
+                    table_zk_path,
+                    zero_copy_path,
+                    table["uuid"],
+                    part,
+                    replica,
+                )
+            )
 
-        task_id = f"{table['database']}.{table['name']}.{replica}.{part['name']}"
+        # Part name segment of zero-copy lock keeps hardlinked files
+        set_value_path = os.path.join(zero_copy_path, table["uuid"], part["name"])
+        old_value_path = os.path.join(zero_copy_path_old, table["uuid"], part["name"])
+
+        task_id = f"{table['database']}.{table['name']}.{part['name']}"
         yield WorkerTask(
             identifier=task_id,
             function=_create_single_zero_copy_lock,
             kwargs={
                 "zk": zk,
-                "lock_path": lock_path,
-                "lock_path_old": lock_path_old,
-                "part_path": part_path,
                 "dry_run": dry_run,
                 "copy_values": should_copy_lock_values,
+                "set_value_path": set_value_path,
+                "old_value_path": old_value_path,
+                "lock_infos": lock_infos,
+                "check_part_exist": check_part_exist,
             },
         )
 
@@ -104,19 +121,21 @@ def _get_first_checksums_blob_path(object_storage_prefix: str, part: dict) -> st
 
 def _get_zero_copy_lock_path(
     object_storage_prefix: str,
+    table_zk_path: str,
     zero_copy_path: str,
-    zero_copy_path_old: str,
     table_uuid: str,
     part: dict,
     replica: str,
-) -> tuple[str, str]:
+) -> ZeroCopyLockInfo:
     blob_path = _get_first_checksums_blob_path(object_storage_prefix, part)
     object_storage_path = blob_path.replace("/", "_")
 
-    return os.path.join(
-        zero_copy_path, table_uuid, part["name"], object_storage_path, replica
-    ), os.path.join(
-        zero_copy_path_old, table_uuid, part["name"], object_storage_path, replica
+    return ZeroCopyLockInfo(
+        lock_path=os.path.join(
+            zero_copy_path, table_uuid, part["name"], object_storage_path, replica
+        ),
+        part_path=_get_part_path_in_zk(part["name"], table_zk_path, replica),
+        replica=replica,
     )
 
 
@@ -168,37 +187,87 @@ def _get_zero_copy_zookeeper_path_for_disk_type(
 
 def _create_single_zero_copy_lock(
     zk: KazooClient,
-    lock_path: str,
-    lock_path_old: str,
-    part_path: str,
+    lock_infos: list[ZeroCopyLockInfo],
+    set_value_path: str,
+    old_value_path: str,
     dry_run: bool = False,
     copy_values: bool = False,
+    check_part_exist: bool = True,
 ) -> None:
-    """Create a single zero-copy lock."""
+    """Create zero-copy locks for multiple replicas in a single transaction."""
 
     # Some parent path may be deleted or created concurrently
     @retry(
         exception_types=(NoNodeError, NodeExistsError), max_attempts=3, max_interval=1
     )
-    def _create_lock_in_transaction(
-        zk: KazooClient,
-        lock_path: str,
-        value: bytes,
-        part_path: str,
-        part_node_version: int,
+    def _create_locks_in_transaction(
+        zk: KazooClient, lock_infos: list[ZeroCopyLockInfo]
     ) -> None:
-        parents_to_create = _get_parent_paths_to_create(zk, lock_path)
 
+        # Check existing locks and part paths
+        locks_to_create = []
+        part_checks = []
+
+        for lock_info in lock_infos:
+            if zk.exists(lock_info["lock_path"]):
+                logging.debug(
+                    f"Zero-copy lock path '{lock_info['lock_path']}' already exists. Skip it"
+                )
+                continue
+
+            part_stat = None
+            if check_part_exist:
+                part_stat = zk.exists(lock_info["part_path"])
+                if not part_stat:
+                    logging.debug(
+                        f"Part path '{lock_info['part_path']}' is already removed. Skip it"
+                    )
+                    continue
+
+            locks_to_create.append(lock_info["lock_path"])
+            if part_stat is not None:
+                part_checks.append((lock_info["part_path"], part_stat))
+
+        if not locks_to_create:
+            return
+
+        value = b""
+        if copy_values and zk.exists(old_value_path):
+            try:
+                value, _ = zk.get(old_value_path)
+                logging.debug(
+                    "Will copy old zero-copy lock value from {}",
+                    old_value_path,
+                )
+            except NoNodeError:
+                logging.debug(
+                    f"Old zero-copy lock '{old_value_path}' was removed concurrently. Continue"
+                )
+
+        # Collect all parent paths that need to be created
+        all_parents_to_create = set()
+        for lock_path in locks_to_create:
+            parents = _get_parent_paths_to_create(zk, lock_path)
+            all_parents_to_create.update(parents)
+
+        # Create transaction
         create_transaction = zk.transaction()
-        create_transaction.check(part_path, part_node_version)
 
-        for i, parent in enumerate(parents_to_create):
-            if len(parents_to_create) >= 2 and i == len(parents_to_create) - 2:
+        for part_path, part_stat in part_checks:
+            create_transaction.check(part_path, part_stat.version)
+
+        for parent in sorted(all_parents_to_create):
+            logging.debug(
+                f"Compare {parent} vs {set_value_path} is {parent == set_value_path}"
+            )
+            if parent.strip("/") == set_value_path.strip("/"):
                 create_transaction.create(parent, value)
             else:
                 create_transaction.create(parent)
 
-        create_transaction.create(lock_path)
+        for lock_path in locks_to_create:
+            create_transaction.create(lock_path)
+
         results = create_transaction.commit()
 
         for result in results:
@@ -207,42 +276,20 @@ def _create_single_zero_copy_lock(
             ):
                 raise result
 
-    if zk.exists(lock_path):
-        return
-
-    part_node = zk.exists(part_path)
-    # This means part is already deleted
-    if not part_node:
-        return
-
-    logging.info("Creating zero-copy lock at {}", lock_path)
-
-    value = b""
-    if copy_values and zk.exists(lock_path_old):
-        # Value is stored in 'part' node, full path is '.../part/blob_path/replica'
-        value_path = os.path.dirname(os.path.dirname(lock_path_old))
-        try:
-            value, _ = zk.get(value_path)
-            logging.debug(
-                "Found old lock at {}, will copy it's value from {}",
-                lock_path_old,
-                value_path,
-            )
-        except NoNodeError:
-            # Lock was concurrently removed
-            pass
-
+    replicas = [info["replica"] for info in lock_infos]
+    logging.info("Creating zero-copy locks for replicas: {}", ", ".join(replicas))
     if dry_run:
         return
 
     try:
-        _create_lock_in_transaction(zk, lock_path, value, part_path, part_node.version)
+        _create_locks_in_transaction(zk, lock_infos)
     except Exception as e:
         raise RuntimeError(
-            f"Failed to create zero-copy lock at {lock_path}, reason: {e}"
+            f"Failed to create zero-copy locks for replicas {replicas}, reason: {e}\n"
+            f"Traceback: {traceback.format_exc()}"
         )
 
-    logging.info("Created zero-copy lock at {}", lock_path)
+    logging.info("Created zero-copy locks for replicas: {}", ", ".join(replicas))
 
 
 def _get_parent_paths_to_create(zk: KazooClient, path: str) -> list[str]:

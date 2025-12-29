@@ -537,3 +537,44 @@ Feature: chadmin zero-copy related zookeeper commands.
     """
     count.txt
     """
+
+  Scenario: Create zero-copy locks for non-existing replica
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS test ON CLUSTER 'cluster';
+    CREATE DATABASE test ON CLUSTER 'cluster';
+    
+    CREATE TABLE test.table_no_check UUID '30000000-0000-0000-0000-000000000003' ON CLUSTER 'cluster' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_no_check', '{replica}') PARTITION BY n ORDER BY n
+    SETTINGS storage_policy='object_storage',allow_remote_fs_zero_copy_replication=1;
+    INSERT INTO test.table_no_check SELECT number FROM numbers(1);
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper delete /clickhouse/zero_copy/zero_copy_s3/30000000-0000-0000-0000-000000000003/0_0_0_0/
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper create-zero-copy-locks --disk object_storage --table table_no_check --database test --replicas dummy1,dummy2 --no-check-exist --include-replica-macro
+    """    
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper list $(chadmin zookeeper list /clickhouse/zero_copy/zero_copy_s3/30000000-0000-0000-0000-000000000003/0_0_0_0/)
+    """
+    Then we get response contains
+    """
+    dummy1
+    """
+    Then we get response contains
+    """
+    dummy2
+    """
+    Then we get response contains
+    """
+    clickhouse01.ch_tools_test
+    """
+

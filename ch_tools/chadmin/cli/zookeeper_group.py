@@ -580,10 +580,23 @@ def clean_zk_locks_command(
     constraint=mutually_exclusive,
 )
 @option(
+    "--include-replica-macro",
+    "include_replica_macro",
+    is_flag=True,
+    help=("Always include replica from macros even if --replicas is specified."),
+)
+@option(
     "--dry-run",
     "dry_run",
     is_flag=True,
     help=("Do not create objects."),
+)
+@option(
+    "--check-exist/--no-check-exist",
+    "check_exist",
+    is_flag=True,
+    default=True,
+    help=("Do not check existence of replicas and their parts."),
 )
 @option(
     "--max-workers",
@@ -617,10 +630,12 @@ def create_zk_locks_command(
     part_id: Optional[str] = None,
     replicas: Optional[str] = None,
     all_replicas: bool = False,
+    include_replica_macro: bool = False,
     dry_run: bool = False,
     max_workers: int = 4,
     keep_going: bool = False,
     copy_values: bool = False,
+    check_exist: bool = True,
 ) -> None:
     """
     Create zero copy locks.
@@ -638,7 +653,12 @@ def create_zk_locks_command(
     def generate_all_tasks(zk: KazooClient) -> Generator[WorkerTask, None, None]:
         for table_info in tables:
             zk_path, replicas_to_lock = _get_replicas_and_zk_path(
-                ctx, table_info, replicas, all_replicas
+                ctx,
+                table_info,
+                replicas,
+                all_replicas,
+                include_replica_macro,
+                check_exist,
             )
             if not replicas_to_lock:
                 logging.warning(
@@ -646,24 +666,24 @@ def create_zk_locks_command(
                 )
                 continue
 
-            for replica in replicas_to_lock:
-                logging.info(
-                    f"Preparing zero-copy lock tasks for table '{table_info['database']}'.'{table_info['name']}', replica '{replica}'"
-                )
-                yield from generate_zero_copy_lock_tasks(
-                    ctx,
-                    disk,
-                    table_info,
-                    partition_id,
-                    part_id,
-                    replica,
-                    zk_path,
-                    zk,
-                    dry_run,
-                    zero_copy_path,
-                    zero_copy_path_old,
-                    copy_values,
-                )
+            logging.info(
+                f"Preparing zero-copy lock tasks for table '{table_info['database']}'.'{table_info['name']}', replicas: {', '.join(replicas_to_lock)}"
+            )
+            yield from generate_zero_copy_lock_tasks(
+                ctx,
+                disk,
+                table_info,
+                partition_id,
+                part_id,
+                replicas_to_lock,
+                zk_path,
+                zk,
+                dry_run,
+                zero_copy_path,
+                zero_copy_path_old,
+                copy_values,
+                check_exist,
+            )
 
     total_tasks = 0
     # Use single zk client because it is thread safe
@@ -686,6 +706,8 @@ def _get_replicas_and_zk_path(
     table: TableInfo,
     replicas: Optional[str],
     all_replicas: bool,
+    include_replica_macro: bool = False,
+    check_replica_exist: bool = True,
 ) -> tuple[str, list[str]]:
     """
     Get table's zookeeper path and list of replicas. Also check that all required replicas are present.
@@ -706,18 +728,25 @@ def _get_replicas_and_zk_path(
     if all_replicas:
         return zookeeper_path, replicas_list
 
-    if not replicas:
+    if not replicas or include_replica_macro:
         macros = get_macros(ctx)
         if "replica" in macros:
-            replicas = macros["replica"]
+            replicas = (
+                ",".join([replicas, macros["replica"]])
+                if replicas
+                else macros["replica"]
+            )
         else:
             raise RuntimeError(
                 "The macro for replica is missing, specify --replicas explicitly."
             )
 
     replicas_ = [r.strip() for r in replicas.split(",")] if replicas else []
-    for replica in replicas_:
-        if replica not in replicas_list:
-            raise RuntimeError(f"Replica {replica} is not present at system.replicas")
+    if check_replica_exist:
+        missing_replicas = set(replicas_) - set(replicas_list)
+        if missing_replicas:
+            raise RuntimeError(
+                f"Replicas {', '.join(missing_replicas)} are not present at system.replicas"
+            )
 
     return zookeeper_path, replicas_
