@@ -8,7 +8,7 @@ from click import Context
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config.path import CLICKHOUSE_SERVER_CONFIG_PATH
-from ch_tools.common.clickhouse.config.utils import load_config_file
+from ch_tools.common.clickhouse.config.utils import load_config, load_config_file
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
 
 
@@ -193,19 +193,18 @@ def _generate_ddl_dictionaries_from_xml(
 
 
 def _get_dictionary_config_paths_pattern() -> str:
-    config_path = CLICKHOUSE_SERVER_CONFIG_PATH
-    parsed_config = load_config_file(CLICKHOUSE_SERVER_CONFIG_PATH)
-
+    parsed_config = load_config(CLICKHOUSE_SERVER_CONFIG_PATH)
     clickhouse = parsed_config.get("clickhouse")
+
     if clickhouse is None:
         raise RuntimeError(
-            f"Config '{config_path}' must contain <clickhouse> root element"
+            f"Config '{CLICKHOUSE_SERVER_CONFIG_PATH}' must contain <clickhouse> root element"
         )
 
     dictionaries_config = clickhouse.get("dictionaries_config")
     if not isinstance(dictionaries_config, str):
         raise RuntimeError(
-            f"Config '{config_path}' must contain <clickhouse><dictionaries_config> element of type string"
+            f"Config '{CLICKHOUSE_SERVER_CONFIG_PATH}' must contain <clickhouse><dictionaries_config> element of type string"
         )
 
     return dictionaries_config
