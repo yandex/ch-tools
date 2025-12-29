@@ -167,8 +167,6 @@ def _filter_dictionaries(
 
 def _get_dictionary_nodes_from_config(config: dict[str, Any]) -> list[dict[str, Any]]:
     dictionary_node_list = []
-    if not isinstance(config, dict):
-        return dictionary_node_list
 
     dictionary_node = config.get("dictionary")
     if dictionary_node is not None:
