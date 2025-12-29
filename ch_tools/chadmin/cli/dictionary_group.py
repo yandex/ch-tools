@@ -74,6 +74,13 @@ def _full_name(dictionary: Any) -> str:
     help="Decide if old dictionaries should be removed.",
 )
 @option(
+    "--force-reload",
+    "force_reload",
+    is_flag=True,
+    default=False,
+    help="Load dictionaries after migration.",
+)
+@option(
     "--include",
     "include_pattern",
     default=None,
@@ -99,6 +106,7 @@ def migrate_command(
     ctx: Context,
     dry_run: bool,
     should_remove: bool,
+    force_reload: bool,
     target_database: str,
     include_pattern: str,
     exclude_pattern: str,
@@ -110,6 +118,7 @@ def migrate_command(
         ctx,
         dry_run,
         should_remove,
+        force_reload,
         target_database,
         include_pattern,
         exclude_pattern,

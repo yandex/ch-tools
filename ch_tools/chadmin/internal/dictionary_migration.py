@@ -16,6 +16,7 @@ def migrate_dictionaries(
     ctx: Context,
     dry_run: bool,
     should_remove: bool,
+    force_reload: bool,
     target_database: str,
     include_pattern: Optional[str] = None,
     exclude_pattern: Optional[str] = None,
@@ -58,7 +59,7 @@ def migrate_dictionaries(
     if dry_run:
         _dry_run(all_dictionaries)
     else:
-        _run(ctx, target_database, all_dictionaries, should_remove)
+        _run(ctx, target_database, all_dictionaries, should_remove, force_reload)
 
 
 def _dry_run(filtered_dictionaries: list[tuple[Path, str, str]]) -> None:
@@ -77,6 +78,7 @@ def _run(
     target_database: str,
     filtered_dictionaries: list[tuple[Path, str, str]],
     should_remove: bool,
+    force_reload: bool,
     max_workers: int = 4,
 ) -> None:
     logging.info("Starting external dictionaries migration")
@@ -104,7 +106,7 @@ def _run(
     logging.info(f"Total dictionaries migrated: {len(results)}")
 
     if should_remove:
-        _remove_dictionaries(filtered_dictionaries)
+        _remove_dictionaries(ctx, filtered_dictionaries, force_reload)
 
 
 def _migrate_single_dictionary(
@@ -120,7 +122,9 @@ def _migrate_single_dictionary(
         ) from e
 
 
-def _remove_dictionaries(filtered_dictionaries: list[tuple[Path, str, str]]) -> None:
+def _remove_dictionaries(
+    ctx: Context, filtered_dictionaries: list[tuple[Path, str, str]], force_reload: bool
+) -> None:
     logging.info("Starting removing external dictionaries after migration")
 
     unique_files = {config_file for config_file, _, _ in filtered_dictionaries}
@@ -132,6 +136,9 @@ def _remove_dictionaries(filtered_dictionaries: list[tuple[Path, str, str]]) -> 
         except Exception as e:
             raise RuntimeError(f"Error while removing '{config_file}'") from e
     logging.info("Removing external dictionaries completed successfully")
+
+    if force_reload:
+        execute_query(ctx, "SYSTEM RELOAD DICTIONARIES", format_=None)
 
 
 def _matches_patterns(
