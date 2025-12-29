@@ -41,15 +41,13 @@ def migrate_dictionaries(
 
     all_dictionaries: list[tuple[Path, str, str]] = []
     for config_file in config_path_list:
+        if not _matches_patterns(config_file, include_pattern, exclude_pattern):
+            continue
         queries = _generate_ddl_dictionaries_from_xml(str(config_file), target_database)
         for dict_name, query in queries:
             all_dictionaries.append((config_file, dict_name, query))
 
-    filtered_dictionaries = _filter_dictionaries(
-        all_dictionaries, include_pattern, exclude_pattern
-    )
-
-    if not filtered_dictionaries:
+    if not all_dictionaries:
         logging.info(
             "No dictionary config files found matching include pattern '{}' and unmatching exclude pattern '{}'",
             include_pattern,
@@ -58,9 +56,9 @@ def migrate_dictionaries(
         return
 
     if dry_run:
-        _dry_run(filtered_dictionaries)
+        _dry_run(all_dictionaries)
     else:
-        _run(ctx, target_database, filtered_dictionaries, should_remove)
+        _run(ctx, target_database, all_dictionaries, should_remove)
 
 
 def _dry_run(filtered_dictionaries: list[tuple[Path, str, str]]) -> None:
@@ -136,33 +134,25 @@ def _remove_dictionaries(filtered_dictionaries: list[tuple[Path, str, str]]) -> 
     logging.info("Removing external dictionaries completed successfully")
 
 
-def _filter_dictionaries(
-    dictionaries: list[tuple[Path, str, str]],
+def _matches_patterns(
+    config_file: Path,
     include_pattern: Optional[str],
     exclude_pattern: Optional[str],
-) -> list[tuple[Path, str, str]]:
-    filtered = []
-    for config_file, dict_name, query in dictionaries:
-        config_file_str = str(config_file)
-        if include_pattern:
-            if not (
-                fnmatch(dict_name, include_pattern)
-                or fnmatch(config_file_str, include_pattern)
-                or fnmatch(config_file.name, include_pattern)
-            ):
-                logging.debug("Skipping '{}': doesn't match include pattern", dict_name)
-                continue
-        if exclude_pattern:
-            if (
-                fnmatch(dict_name, exclude_pattern)
-                or fnmatch(config_file_str, exclude_pattern)
-                or fnmatch(config_file.name, exclude_pattern)
-            ):
-                logging.debug("Skipping '{}': matches exclude pattern", dict_name)
-                continue
+) -> bool:
+    config_file_str = str(config_file)
+    if include_pattern:
+        if not (
+            fnmatch(config_file_str, include_pattern)
+            or fnmatch(config_file.name, include_pattern)
+        ):
+            return False
+    if exclude_pattern:
+        if fnmatch(config_file_str, exclude_pattern) or fnmatch(
+            config_file.name, exclude_pattern
+        ):
+            return False
 
-        filtered.append((config_file, dict_name, query))
-    return filtered
+    return True
 
 
 def _get_dictionary_nodes_from_config(config: dict[str, Any]) -> list[dict[str, Any]]:
@@ -343,8 +333,6 @@ def _build_structure_and_primary_key(attrs: dict[str, Any]) -> tuple[str, str]:
     attribute_list: list[str] = []
     attr_id = structure.get("id")
     key = structure.get("key")
-
-    attributes = structure.get("attribute", [])
 
     if (attr_id is None) == (key is None):
         raise RuntimeError(
