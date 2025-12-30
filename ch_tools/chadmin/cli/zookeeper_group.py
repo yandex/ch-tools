@@ -596,7 +596,7 @@ def clean_zk_locks_command(
     "check_exist",
     is_flag=True,
     default=True,
-    help=("Do not check existence of replicas and their parts."),
+    help=("Check existence of replicas and their parts."),
 )
 @option(
     "--max-workers",
@@ -722,11 +722,11 @@ def _get_replicas_and_zk_path(
     if not replica_description:
         return "", []
 
-    replicas_list = list(replica_description[0]["replica_is_active"].keys())
+    system_replicas = list(replica_description[0]["replica_is_active"].keys())
     zookeeper_path: str = replica_description[0]["zookeeper_path"]
 
     if all_replicas:
-        return zookeeper_path, replicas_list
+        return zookeeper_path, system_replicas
 
     if not replicas or include_replica_macro:
         macros = get_macros(ctx)
@@ -743,7 +743,7 @@ def _get_replicas_and_zk_path(
 
     replicas_ = [r.strip() for r in replicas.split(",")] if replicas else []
     if check_replica_exist:
-        missing_replicas = set(replicas_) - set(replicas_list)
+        missing_replicas = set(replicas_) - set(system_replicas)
         if missing_replicas:
             raise RuntimeError(
                 f"Replicas {', '.join(missing_replicas)} are not present at system.replicas"
