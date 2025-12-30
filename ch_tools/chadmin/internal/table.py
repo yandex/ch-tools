@@ -560,6 +560,7 @@ def check_table(
         echo=echo,
         dry_run=dry_run,
         format_=OutputFormat.JSON,
+        settings={"check_query_single_value_result": 1},
     )["data"]
     return bool(rows[0]["result"])
 
