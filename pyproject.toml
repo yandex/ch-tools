@@ -61,7 +61,7 @@ maintainers = [
 ]
 dependencies = [
     "boto3 >= 1.24, < 1.36",
-    "click >= 8.1, < 8.2",
+    "click >= 8.1, < 8.4",
     "cloup",
     "deepdiff >= 8.0",
     "dnspython",
