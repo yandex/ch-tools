@@ -61,11 +61,12 @@ Feature: chadmin zero-copy related zookeeper commands.
     <result2>
     """
   Examples:
-      | replicas                                                            | result1                     | result2                    |
-      | --replicas clickhouse01.ch_tools_test,clickhouse02.ch_tools_test    | clickhouse01.ch_tools_test  | clickhouse02.ch_tools_test |
-      | --replicas clickhouse02.ch_tools_test                               | clickhouse02.ch_tools_test  | clickhouse02.ch_tools_test |
-      | --all-replicas                                                      | clickhouse01.ch_tools_test  | clickhouse02.ch_tools_test |
-      |                                                                     | clickhouse01.ch_tools_test  | clickhouse01.ch_tools_test |
+      | replicas                                                                                                                        | result1                     | result2                    |
+      | --replicas clickhouse01.ch_tools_test,clickhouse02.ch_tools_test                                                                | clickhouse01.ch_tools_test  | clickhouse02.ch_tools_test |
+      | --replicas clickhouse01.ch_tools_test,clickhouse02.ch_tools_test --copy-values --zero-copy-path-old /clickhouse/zero_copy/fake  | clickhouse01.ch_tools_test  | clickhouse02.ch_tools_test |
+      | --replicas clickhouse02.ch_tools_test                                                                                           | clickhouse02.ch_tools_test  | clickhouse02.ch_tools_test |
+      | --all-replicas                                                                                                                  | clickhouse01.ch_tools_test  | clickhouse02.ch_tools_test |
+      |                                                                                                                                 | clickhouse01.ch_tools_test  | clickhouse01.ch_tools_test |
 
 
   Scenario: Create zero-copy lock options for all tables in database
@@ -433,7 +434,7 @@ Feature: chadmin zero-copy related zookeeper commands.
     Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
     When we execute command on clickhouse01
     """
-    chadmin zookeeper create-zero-copy-locks --disk object_storage --zero-copy-path /custom/zero_copy/zero_copy_s3 -t table_01
+    chadmin zookeeper create-zero-copy-locks --disk object_storage --zero-copy-path /custom/zero_copy -t table_01
     """
     Then the list of children on clickhouse01 for zk node /custom/zero_copy/zero_copy_s3 is equal to
     """
@@ -488,7 +489,7 @@ Feature: chadmin zero-copy related zookeeper commands.
     Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
     When we execute command on clickhouse01
     """
-    chadmin zookeeper create-zero-copy-locks --disk object_storage --max-workers 8 --zero-copy-path /custom_large/zero_copy/zero_copy_s3 -t table_many_parts
+    chadmin zookeeper create-zero-copy-locks --disk object_storage --max-workers 8 --zero-copy-path /custom_large/zero_copy -t table_many_parts
     """
     Then the list of children on clickhouse01 for zk node /custom_large/zero_copy/zero_copy_s3 is equal to
     """
@@ -503,3 +504,36 @@ Feature: chadmin zero-copy related zookeeper commands.
     100
     """
 
+
+  Scenario: Create zero-copy locks copies values of old locks
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS test ON CLUSTER 'cluster';
+    CREATE DATABASE test ON CLUSTER 'cluster';
+
+    CREATE TABLE test.table_01 UUID '10000000-0000-0000-0000-000000000001' ON CLUSTER 'cluster' (n Int32, v Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_01', '{replica}') PARTITION BY n ORDER BY n
+    SETTINGS storage_policy='object_storage',allow_remote_fs_zero_copy_replication=1,min_rows_for_wide_part = 0,min_bytes_for_wide_part = 0;
+    INSERT INTO test.table_01 VALUES (1, 2);
+    ALTER TABLE test.table_01 UPDATE v = 3 WHERE n = 1;
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper get /clickhouse/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/1_0_0_0
+    """
+    Then we get response contains
+    """
+    count.txt
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper create-zero-copy-locks --disk object_storage -t table_01 --zero-copy-path '/clickhouse/custom/zero_copy' --zero-copy-path-old '/clickhouse/zero_copy' --copy-values
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper get /clickhouse/custom/zero_copy/zero_copy_s3/10000000-0000-0000-0000-000000000001/1_0_0_0
+    """
+    Then we get response contains
+    """
+    count.txt
+    """
