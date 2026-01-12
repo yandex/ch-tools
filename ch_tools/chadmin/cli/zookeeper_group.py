@@ -506,6 +506,15 @@ def clean_zk_locks_command(
         "If not specified, will use 'remote_fs_zero_copy_zookeeper_path' value from ClickHouse."
     ),
 )
+@option(
+    "--zero-copy-path-old",
+    "zero_copy_path_old",
+    default=None,
+    help=(
+        "Custom prefix for already existing zero-copy locks path in ZooKeeper. "
+        "Will be used to copy the contents values from old locks."
+    ),
+)
 @option_group(
     "Disk selection options",
     option(
@@ -590,11 +599,18 @@ def clean_zk_locks_command(
     default=False,
     help=("Continue processing even if some tasks fail."),
 )
+@option(
+    "--copy-values",
+    "copy_values",
+    is_flag=True,
+    help=("Copy the contents of already existing zero-copy locks."),
+)
 @pass_context
 def create_zk_locks_command(
     ctx: Context,
     disk: str,
     zero_copy_path: Optional[str] = None,
+    zero_copy_path_old: Optional[str] = None,
     database: Optional[str] = None,
     table: Optional[str] = None,
     partition_id: Optional[str] = None,
@@ -604,6 +620,7 @@ def create_zk_locks_command(
     dry_run: bool = False,
     max_workers: int = 4,
     keep_going: bool = False,
+    copy_values: bool = False,
 ) -> None:
     """
     Create zero copy locks.
@@ -644,6 +661,8 @@ def create_zk_locks_command(
                     zk,
                     dry_run,
                     zero_copy_path,
+                    zero_copy_path_old,
+                    copy_values,
                 )
 
     total_tasks = 0
