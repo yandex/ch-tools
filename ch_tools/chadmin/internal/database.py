@@ -64,10 +64,10 @@ def list_databases(
         {% if database %}
         WHERE database {{ format_str_match(database) }}
         {% else %}
-        WHERE database NOT IN ('system', 'information_schema', 'INFORMATION_SCHEMA')
+        WHERE database NOT IN ('information_schema', 'INFORMATION_SCHEMA')
         {% endif %}
         {% if exclude_database %}
-          AND database != '{{ exclude_database }}'
+          AND database NOT {{ format_str_match(exclude_database) }}
         {% endif %}
         {% if engine_pattern %}
           AND engine {{ format_str_match(engine_pattern) }}

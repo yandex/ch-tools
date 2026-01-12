@@ -114,7 +114,7 @@ def list_tables(
             AND t.database {{ format_str_match(database_pattern) }}
         {% endif -%}
         {% if not database_name and not database_pattern  -%}
-            AND t.database NOT IN ('system', 'information_schema', 'INFORMATION_SCHEMA')
+            AND t.database NOT IN ('information_schema', 'INFORMATION_SCHEMA')
         {% endif -%}
         {% if exclude_database_pattern -%}
             AND t.database NOT {{ format_str_match(exclude_database_pattern) }}

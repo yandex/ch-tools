@@ -90,6 +90,12 @@ def part_group() -> None:
     "--reason",
     help="Filter in data parts to output by reason. Applicable only for detached data parts.",
 )
+@option(
+    "--exclude-database",
+    "exclude_database_pattern",
+    help="Filter out data parts to output by the specified database name pattern."
+    " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+)
 @option("--order-by", type=Choice(["size", "rows"]), help="Sorting order.")
 @option(
     "-l", "--limit", type=int, help="Limit the max number of objects in the output."

@@ -111,6 +111,12 @@ def partition_group() -> None:
     is_flag=True,
     help="Account only active data parts.",
 )
+@option(
+    "--exclude-database",
+    "exclude_database_pattern",
+    help="Filter out partitions to output by the specified database name pattern."
+    " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+)
 @option("--order-by", type=Choice(["size", "parts", "rows"]), help="Sorting order.")
 @option(
     "-l", "--limit", type=int, help="Limit the max number of objects in the output."
@@ -905,8 +911,9 @@ def get_partitions(
     limit: Optional[int] = None,
     format_: Optional[str] = None,
     use_partition_list_from_json: Optional[str] = None,
+    exclude_database_pattern: Optional[str] = None,
 ) -> Any:
-    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-locals,too-many-arguments
     if use_partition_list_from_json:
         return read_and_validate_partitions_from_json(use_partition_list_from_json)
 
@@ -928,7 +935,10 @@ def get_partitions(
             {% if database -%}
               WHERE database {{ format_str_match(database) }}
             {% else -%}
-              WHERE database NOT IN ('system', 'information_schema', 'INFORMATION_SCHEMA')
+              WHERE database NOT IN ('information_schema', 'INFORMATION_SCHEMA')
+            {% endif -%}
+            {% if exclude_database_pattern -%}
+              AND database NOT {{ format_str_match(exclude_database_pattern) }}
             {% endif -%}
             {% if table -%}
               AND table {{ format_str_match(table) }}
@@ -971,7 +981,10 @@ def get_partitions(
             {% if database -%}
             WHERE database {{ format_str_match(database) }}
             {% else -%}
-            WHERE database NOT IN ('system', 'information_schema', 'INFORMATION_SCHEMA')
+            WHERE database NOT IN ('information_schema', 'INFORMATION_SCHEMA')
+            {% endif -%}
+            {% if exclude_database_pattern -%}
+              AND database NOT {{ format_str_match(exclude_database_pattern) }}
             {% endif -%}
             {% if active_parts -%}
               AND active
@@ -1043,6 +1056,7 @@ def get_partitions(
         ctx,
         query,
         database=database,
+        exclude_database_pattern=exclude_database_pattern,
         table=table,
         partition_id=partition_id,
         min_partition_id=min_partition_id,
