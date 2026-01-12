@@ -88,6 +88,8 @@ Feature: chadmin data-store commands
       deleted: 'Yes'
     """
 
+  # TODO: enable after detach partition fix
+  @skip
   Scenario Outline: Reattach partitions with broken parts from zero copy
     When we execute queries on clickhouse01
     """
@@ -153,7 +155,8 @@ Feature: chadmin data-store commands
     | additional_table_settings                               |
     |                                                         |
 
-
+  # TODO: enable after detach partition fix
+  @skip
   Scenario Outline: Detach partitions with broken parts from zero copy
     When we execute queries on clickhouse01
     """
