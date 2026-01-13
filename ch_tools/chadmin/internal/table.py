@@ -760,7 +760,9 @@ def set_table_setting(
     dry_run: bool = False,
 ) -> None:
     setting_clause = (
-        f"MODIFY SETTING {setting}={value}" if value is not None else f"RESET SETTING {setting}"
+        f"MODIFY SETTING {setting}={value}"
+        if value is not None
+        else f"RESET SETTING {setting}"
     )
     query = f"ALTER TABLE {table['database']}.{table['name']} {setting_clause}"
     execute_query_on_shard(ctx, query, dry_run=dry_run)
