@@ -52,18 +52,14 @@ Feature: chadmin object-storage commands
     """
     Then we get response matches
     """
-    '\[''all_replicas''\]':
+    total:
+      active: '?([1-9][0-9]*)'?
+      unique_detached: '?([1-9][0-9]*)'?
       orphaned: '?(1)'?
-    '\[''clickhouse01''\]':
-      active: '?([1-9][0-9]*)'?
-      unique_detached: '?([1-9][0-9]*)'?
-    '\[''clickhouse02''\]':
-      active: '?([1-9][0-9]*)'?
-      unique_detached: '?([1-9][0-9]*)'?
     """
 
   @require_version_24.3
-  Scenario: Collect info with frozen parts
+  Scenario: Collect info with frozen parts for all replicas
     When we execute query on clickhouse01
     """
     ALTER TABLE test.table_s3_01 FREEZE
@@ -84,18 +80,23 @@ Feature: chadmin object-storage commands
     """
     And we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage space-usage
+    chadmin --format yaml object-storage space-usage -v
     """
     Then we get response matches
     """
-    '\[''all_replicas''\]':
-      orphaned: '?(1)'?
     '\[''clickhouse01''\]':
       active: '?([1-9][0-9]*)'?
       unique_frozen: '?([1-9][0-9]*)'?
     '\[''clickhouse02''\]':
       active: '?([1-9][0-9]*)'?
       unique_detached: '?([1-9][0-9]*)'?
+    '\[''unknown_replicas''\]':
+      orphaned: 1
+    total:
+      active: '?([1-9][0-9]*)'?
+      unique_frozen: '?([1-9][0-9]*)'?
+      unique_detached: '?([1-9][0-9]*)'?
+      orphaned: '?(1)'?
     """
 
   Scenario: Dry-run clean with guard period
