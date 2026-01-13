@@ -8,7 +8,7 @@ from ch_tools.chadmin.internal.utils import execute_query
 def list_databases(
     ctx: Context,
     database: Optional[str] = None,
-    exclude_database: Optional[str] = None,
+    exclude_database_pattern: Optional[str] = None,
     engine_pattern: Optional[str] = None,
     exclude_engine_pattern: Optional[str] = None,
     active_parts: Optional[bool] = None,
@@ -64,10 +64,10 @@ def list_databases(
         {% if database %}
         WHERE database {{ format_str_match(database) }}
         {% else %}
-        WHERE database NOT IN ('system', 'information_schema', 'INFORMATION_SCHEMA')
+        WHERE database NOT IN ('information_schema', 'INFORMATION_SCHEMA')
         {% endif %}
-        {% if exclude_database %}
-          AND database != '{{ exclude_database }}'
+        {% if exclude_database_pattern %}
+          AND database NOT {{ format_str_match(exclude_database_pattern) }}
         {% endif %}
         {% if engine_pattern %}
           AND engine {{ format_str_match(engine_pattern) }}
@@ -81,7 +81,7 @@ def list_databases(
         ctx,
         query,
         database=database,
-        exclude_database=exclude_database,
+        exclude_database_pattern=exclude_database_pattern,
         engine_pattern=engine_pattern,
         exclude_engine_pattern=exclude_engine_pattern,
         active_parts=active_parts,
