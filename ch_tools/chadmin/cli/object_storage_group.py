@@ -323,14 +323,28 @@ def collect_info_command(
     default=False,
     help="Output size in human readable format",
 )
+@option(
+    "--verbose",
+    "-v",
+    "verbose",
+    is_flag=True,
+    help="Print space usage for each replica",
+)
 @pass_context
 def space_usage_command(
-    ctx: Context, cluster_name: str, scope: str, human_readable: bool
+    ctx: Context, cluster_name: str, scope: str, human_readable: bool, verbose: bool
 ) -> None:
     """
-    Return object storage memory usage info from cluster.
+    Return object storage memory usage info from given scope.
+    Total contains all shared and unique data from all replicas in the scope.
+    Entries with more that one replica contain only data shared between them.
+    Single-replica entries contain data unique to the replica.
     """
     result = get_object_storage_space_usage(ctx, cluster_name, Scope(scope))
+
+    if not verbose:
+        result_tmp = result["total"]
+        result = {"total": result_tmp}
 
     field_formatters = {
         "active": format_bytes,
