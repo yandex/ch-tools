@@ -241,10 +241,8 @@ def get_object_storage_space_usage(
         format_="JSON",
     )["data"]
 
-    result: dict[str, dict[str, int]] = {}
+    result: dict[str, dict[str, int]] = defaultdict(dict)
     for row in query_result:
-        if row["replicas"] not in result:
-            result[row["replicas"]] = {}
         result[row["replicas"]][row["state"]] = row["size"]
 
     result["total"] = defaultdict(int)
@@ -254,7 +252,17 @@ def get_object_storage_space_usage(
         for state in result[replica]:
             result["total"][state] += result[replica][state]
 
-    return result
+    # Single replicas first, special keys last
+    # (special, replica count, replica name)
+    def sort_key(item: tuple[str, dict]) -> tuple[int, int, str]:
+        key = item[0]
+        if key in ("total", f"['{UNKNOWN_REPLICAS_NAME}']"):
+            return (1, 0, key)
+        replica_count = key.count("','") + 1 if key.startswith("[") else 0
+        return (0, replica_count, key)
+
+    sorted_result = dict(sorted(result.items(), key=sort_key))
+    return sorted_result
 
 
 def _calculate_size_limits(
