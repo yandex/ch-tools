@@ -111,11 +111,10 @@ def _run(
 
 def _migrate_single_dictionary(
     ctx: Context, config_file: Path, dict_name: str, query: str
-) -> bool:
+) -> None:
     try:
         execute_query(ctx, query, format_=None)
         logging.info("Successfully migrated dictionary '{}'", dict_name)
-        return True
     except Exception as e:
         raise RuntimeError(
             f"Dictionary migration failed for dictionary '{dict_name}' in config file '{config_file}'"
