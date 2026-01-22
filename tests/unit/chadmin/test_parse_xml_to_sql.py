@@ -10,7 +10,7 @@ from ch_tools.chadmin.internal.dictionary_migration import (
 
 @pytest.fixture
 def test_data_dir(tmp_path: Path) -> Path:
-    data_dir = tmp_path / "test_dictionary.xml"
+    data_dir = tmp_path / "test_dictionaries"
     data_dir.mkdir()
     return data_dir
 
