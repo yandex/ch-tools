@@ -185,7 +185,9 @@ def _get_dictionary_nodes_from_config(config: dict[str, Any]) -> list[dict[str, 
 
 
 def _generate_ddl_dictionaries_from_xml(
-    config_path: str, target_database: str
+    config_path: str,
+    target_database: str,
+    sort_attributes: bool = False,
 ) -> list[tuple[str, str]]:
     """
     Parse XML dictionary config and generate CREATE DICTIONARY statements.
@@ -194,7 +196,7 @@ def _generate_ddl_dictionaries_from_xml(
     dictionaries = _get_dictionary_nodes_from_config(config)
 
     return [
-        _build_dictionary_ddl_from_config(attrs, target_database)
+        _build_dictionary_ddl_from_config(attrs, target_database, sort_attributes)
         for attrs in dictionaries
     ]
 
@@ -218,13 +220,15 @@ def _get_dictionary_config_paths_pattern() -> str:
 
 
 def _build_dictionary_ddl_from_config(
-    attrs: dict[str, Any], target_database: str
+    attrs: dict[str, Any],
+    target_database: str,
+    sort_attributes: bool,
 ) -> tuple[str, str]:
     name = _get_xml_dictionary_name(attrs)
     source = _build_xml_dictionary_block(attrs, "source")
     lifetime = _build_xml_dictionary_lifetime_block(attrs)
     layout = _build_xml_dictionary_block(attrs, "layout")
-    primary_key, structure = _build_structure_and_primary_key(attrs)
+    primary_key, structure = _build_structure_and_primary_key(attrs, sort_attributes)
     range_definition = _build_range_block(attrs)
 
     return name, _build_create_dictionary_statement(
@@ -328,7 +332,10 @@ def _build_xml_dictionary_lifetime_block(attrs: dict[str, Any]) -> str:
     return f"LIFETIME(MIN {min_val} MAX {max_val})"
 
 
-def _build_structure_and_primary_key(attrs: dict[str, Any]) -> tuple[str, str]:
+def _build_structure_and_primary_key(
+    attrs: dict[str, Any],
+    sort_attributes: bool,
+) -> tuple[str, str]:
     structure = attrs.get("structure")
     if structure is None:
         raise RuntimeError("Dictionary config must contain a <structure> block")
@@ -350,7 +357,7 @@ def _build_structure_and_primary_key(attrs: dict[str, Any]) -> tuple[str, str]:
         if not name:
             raise RuntimeError("<id> must contain <name>")
         primary_key = f"PRIMARY KEY {name}"
-        attribute_list.append(f"\t{name} UInt64")
+        attribute_list.append(f"{name} UInt64")
     else:
         key_attrs = key.get("attribute", [])
         if isinstance(key_attrs, dict):
@@ -365,6 +372,8 @@ def _build_structure_and_primary_key(attrs: dict[str, Any]) -> tuple[str, str]:
             attribute_list.append(attr_str)
             key_names.append(attr.get("name"))
 
+        if sort_attributes:
+            key_names.sort()
         primary_key = f"PRIMARY KEY {', '.join(key_names)}"
 
     attributes = structure.get("attribute", [])
@@ -380,7 +389,10 @@ def _build_structure_and_primary_key(attrs: dict[str, Any]) -> tuple[str, str]:
             continue
         attribute_list.append(_build_attribute_definition(attr, False))
 
-    return primary_key, ",\n\t".join(attribute_list)
+    if sort_attributes:
+        attribute_list.sort()
+
+    return primary_key, ",\n".join(["\t" + attr for attr in attribute_list])
 
 
 def _build_range_block(attrs: dict[str, Any]) -> Optional[str]:

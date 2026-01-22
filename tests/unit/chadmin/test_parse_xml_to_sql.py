@@ -318,9 +318,9 @@ LIFETIME(MIN 0 MAX 100)
                 """
 CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict6
 (
+    date Date DEFAULT 1970-01-01,
     id UInt64,
     score Float64 DEFAULT 0,
-    date Date DEFAULT 1970-01-01,
     tags Array DEFAULT []
 )
 PRIMARY KEY id
@@ -378,7 +378,7 @@ CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict
     advertiser_id UInt64,
     amount Float64 DEFAULT 0,
     discount_end_date Date,
-    discount_start_date Date,
+    discount_start_date Date
 )
 PRIMARY KEY advertiser_id
 SOURCE(CLICKHOUSE(TABLE 'discounts'))
@@ -400,7 +400,7 @@ def test_parse_xml_to_sql(
     results = [
         query
         for dict_name, query in _generate_ddl_dictionaries_from_xml(
-            filepath, target_database="_dictionaries"
+            filepath, target_database="_dictionaries", sort_attributes=True
         )
     ]
 
@@ -457,7 +457,7 @@ def test_parse_with_multiple_dictionaries(
 ) -> None:
     filepath = create_xml_file("test_multiple.xml", xml_content)
     results = _generate_ddl_dictionaries_from_xml(
-        filepath, target_database="_dictionaries"
+        filepath, target_database="_dictionaries", sort_attributes=True
     )
     assert len(results) == expected_count
 
@@ -564,4 +564,6 @@ def test_parse_xml_with_invalid_config(
     filepath = create_xml_file("invalid_dictionary.xml", xml_content)
 
     with pytest.raises(RuntimeError):
-        _generate_ddl_dictionaries_from_xml(filepath, target_database="_dictionaries")
+        _generate_ddl_dictionaries_from_xml(
+            filepath, target_database="_dictionaries", sort_attributes=True
+        )
