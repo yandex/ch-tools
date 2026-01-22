@@ -315,7 +315,10 @@ def _build_xml_dictionary_layout_block(attrs: dict[str, Any]) -> str:
 
 
 def _build_xml_dictionary_lifetime_block(attrs: dict[str, Any]) -> str:
-    lifetime = attrs.get("lifetime")
+    if "lifetime" not in attrs:
+        raise RuntimeError("<lifetime> block is missing")
+
+    lifetime = attrs["lifetime"]
     if lifetime is None:
         return "LIFETIME(0)"
     if isinstance(lifetime, str):
@@ -325,17 +328,14 @@ def _build_xml_dictionary_lifetime_block(attrs: dict[str, Any]) -> str:
         raise RuntimeError("Dictionary config has invalid <lifetime> block")
 
     min_val = lifetime.get("min")
-    if min_val == "" or min_val is None:
-        min_val = None
     max_val = lifetime.get("max")
-    if max_val == "" or max_val is None:
-        max_val = None
 
-    if min_val is None and max_val is None:
-        return "LIFETIME(0)"
-
-    if max_val is None:
-        return f"LIFETIME({min_val})"
+    if not isinstance(min_val, str) or not isinstance(max_val, str):
+        raise RuntimeError(
+            "Incorrect lifetime block structure"
+            "Use <lifetime>{value}</lifetime> for fixed interval"
+            "or <lifetime><min>{value1}</min><max>{value2}</max></lifetime> for range"
+        )
 
     return f"LIFETIME(MIN {min_val} MAX {max_val})"
 
