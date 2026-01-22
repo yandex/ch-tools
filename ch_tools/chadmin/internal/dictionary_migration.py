@@ -221,9 +221,9 @@ def _build_dictionary_ddl_from_config(
     attrs: dict[str, Any], target_database: str
 ) -> tuple[str, str]:
     name = _get_xml_dictionary_name(attrs)
-    source = _build_xml_dictionary_source_block(attrs)
+    source = _build_xml_dictionary_block(attrs, "source")
     lifetime = _build_xml_dictionary_lifetime_block(attrs)
-    layout = _build_xml_dictionary_layout_block(attrs)
+    layout = _build_xml_dictionary_block(attrs, "layout")
     primary_key, structure = _build_structure_and_primary_key(attrs)
     range_definition = _build_range_block(attrs)
 
@@ -248,31 +248,6 @@ def _get_xml_dictionary_name(attrs: dict[str, Any]) -> str:
     return name
 
 
-def _build_xml_dictionary_source_block(attrs: dict[str, Any]) -> str:
-    source_name = attrs.get("source")
-    if source_name is None or not isinstance(source_name, dict):
-        raise RuntimeError("Missing <source> block in dictionary config")
-    source_type = list(source_name.keys())[0]
-    source_params = source_name[source_type]
-
-    if not isinstance(source_params, dict):
-        raise RuntimeError("Invalid <source> block in dictionary config")
-
-    params: list[str] = []
-    for param, value in source_params.items():
-        if value is None:
-            params.append(f"{param.upper()} ''")
-            continue
-        if not isinstance(value, str):
-            raise RuntimeError(
-                f"Value of <{param}> in <source><{source_type}> must be a string"
-            )
-        params.append(f"{param.upper()} {_format_param_value(value)}")
-
-    str_params = " ".join(params)
-    return f"SOURCE({source_type.upper()}({str_params}))"
-
-
 def _format_param_value(value: str) -> str:
     try:
         float(value)
@@ -281,37 +256,50 @@ def _format_param_value(value: str) -> str:
         return f"'{value}'"
 
 
-def _build_xml_dictionary_layout_block(attrs: dict[str, Any]) -> str:
-    layout = attrs.get("layout")
-    if layout is None:
-        raise RuntimeError("Dictionary config must contain a <layout> block")
-    if not isinstance(layout, dict) or len(layout) != 1:
-        raise RuntimeError("<layout> element must contain exactly one layout type")
+def _build_xml_dictionary_block(
+    attrs: dict[str, Any],
+    block_name: str,
+    quote_values: bool = True,
+) -> str:
+    """
+    Generate SOURCE or LAYOUT part of SQL statement for CREATE DICTIONARY.
+    """
+    if block_name not in attrs:
+        raise RuntimeError(f"<{block_name}> is missing")
 
-    layout_type = list(layout.keys())[0]
-    layout_value = layout[layout_type]
+    block_data = attrs[block_name]
+    if not isinstance(block_data, dict) or len(block_data) != 1:
+        raise RuntimeError(f"Invalid <{block_name}> block in dictionary config")
 
-    if layout_value is None:
-        return f"LAYOUT({layout_type.upper()}())"
-    if isinstance(layout_value, dict) and not layout_value:
-        return f"LAYOUT({layout_type.upper()}())"
+    block_type = list(block_data.keys())[0]
+    block_params = block_data[block_type]
 
-    if not isinstance(layout_value, dict):
+    if block_params is None or (isinstance(block_params, dict) and not block_params):
+        return f"{block_name.upper()}({block_type.upper()}())"
+
+    if not isinstance(block_params, dict):
         raise RuntimeError(
-            f"Invalid <layout> block: expected dict or None, got {type(layout_value)}"
+            f"Invalid <{block_name}><{block_type}> block in dictionary config"
         )
 
     params: list[str] = []
-    for param, value in layout_value.items():
-        if not isinstance(value, str):
+    for param_name, param_value in block_params.items():
+        if param_value is None or param_value == "":
+            params.append(f"{param_name.upper()} ''")
+            continue
+
+        if not isinstance(param_value, str):
             raise RuntimeError(
-                f"Value of <{param}> in <layout><{layout_type}> must be a string, got {type(value)}"
+                f"<{block_name}><{block_type}><{param_name}> must be a single value"
             )
-        formated_value = _format_param_value(value)
-        params.append(f"{param.upper()} {formated_value}")
+
+        formated_value = (
+            _format_param_value(param_value) if quote_values else param_value
+        )
+        params.append(f"{param_name.upper()} {formated_value}")
 
     str_params = " ".join(params)
-    return f"LAYOUT({layout_type.upper()}({str_params}))"
+    return f"{block_name.upper()}({block_type.upper()}({str_params}))"
 
 
 def _build_xml_dictionary_lifetime_block(attrs: dict[str, Any]) -> str:
