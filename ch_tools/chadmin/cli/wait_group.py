@@ -3,6 +3,7 @@ import time
 from datetime import timedelta
 from typing import Any, Optional
 
+import psutil
 import requests
 from click import Context, FloatRange, group, option, pass_context
 from tenacity import (
@@ -32,6 +33,7 @@ BASE_TIMEOUT = 600
 LOCAL_PART_LOAD_SPEED = 10  # in data parts per second
 S3_PART_LOAD_SPEED = 0.5  # in data parts per second
 CLICKHOUSE_TIMEOUT_EXCEEDED_MSG = "TIMEOUT_EXCEEDED"
+PID_CREATED_MAX_TRIES = 90
 
 
 @group("wait", cls=Chadmin)
@@ -215,26 +217,26 @@ def wait_replication_sync_command(
 )
 @option("-q", "--quiet", "quiet", is_flag=True, default=False, help="Quiet mode.")
 @option(
-    "--wait-dictionaries",
-    "wait_dictionaries",
-    is_flag=True,
-    default=False,
-    help="Shoud we wait for dictionaries loading.",
-)
-@option(
     "--wait-failed-dictionaries",
     "wait_failed_dictionaries",
     is_flag=True,
     default=False,
     help="Should we wait for dictionaries in FAILED or FAILED_AND_RELOADING status.",
 )
+@option(
+    "--track-pid-file",
+    "track_pid_file",
+    type=str,
+    default="",
+    help="Path to PID file. Exit if pid from pidfile not running.",
+)
 @pass_context
 def wait_started_command(
     ctx: Context,
     timeout: Optional[int],
     quiet: bool,
-    wait_dictionaries: bool,
     wait_failed_dictionaries: bool,
+    track_pid_file: str,
 ) -> None:
     """Wait for ClickHouse server to start up."""
     if quiet:
@@ -245,23 +247,29 @@ def wait_started_command(
     deadline = time.time() + timeout
 
     ch_is_alive = False
+    num_tries = 0
     while time.time() < deadline:
+        num_tries += 1
+
         if is_clickhouse_alive():
             ch_is_alive = True
             break
+
         time.sleep(1)
+        exit_if_pid_not_running(track_pid_file, num_tries)
 
     if not ch_is_alive:
         raise ConnectionError("ClickHouse is dead")
 
     warmup_system_users(ctx)
 
-    if wait_dictionaries or wait_failed_dictionaries:
-        while time.time() < deadline:
-            if is_initial_dictionaries_load_completed(ctx, wait_failed_dictionaries):
-                return
-            time.sleep(1)
-        raise RuntimeError("Timeout while waiting for dictionaries to load.")
+    num_tries = 0
+    while time.time() < deadline:
+        num_tries += 1
+        if is_initial_dictionaries_load_completed(ctx, wait_failed_dictionaries):
+            return
+        time.sleep(1)
+        exit_if_pid_not_running(track_pid_file, num_tries)
 
 
 def get_timeout() -> int:
@@ -341,6 +349,40 @@ def is_initial_dictionaries_load_completed(
         logging.error("Failed to get status of ClickHouse dictionaries: {!r}", e)
 
     return False
+
+
+def is_pid_file_valid(pid_file_to_check: str) -> bool:
+    """
+    Verify that PID file exists and the process is running.
+    """
+    if not pid_file_to_check:
+        return True
+
+    try:
+        with open(pid_file_to_check, "r", encoding="utf-8") as f:
+            pid = int(f.read())
+    except FileNotFoundError:
+        logging.debug("ClickHouse pid file ({}) not found.", pid_file_to_check)
+        return False
+
+    if not psutil.pid_exists(pid):
+        logging.debug("ClickHouse pid ({}) not running.", pid)
+        return False
+
+    return True
+
+
+def exit_if_pid_not_running(track_pid_file: str, num_tries: int) -> None:
+    """
+    Check PID file and raise exception if proccess is not running.
+    """
+    is_valid = is_pid_file_valid(track_pid_file)
+    if is_valid or num_tries < PID_CREATED_MAX_TRIES:
+        return
+
+    raise RuntimeError(
+        f'ClickHouse pid file creation out of max tries "{PID_CREATED_MAX_TRIES}"'
+    )
 
 
 def sync_replica_with_retries(
