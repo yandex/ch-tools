@@ -33,7 +33,7 @@ BASE_TIMEOUT = 600
 LOCAL_PART_LOAD_SPEED = 10  # in data parts per second
 S3_PART_LOAD_SPEED = 0.5  # in data parts per second
 CLICKHOUSE_TIMEOUT_EXCEEDED_MSG = "TIMEOUT_EXCEEDED"
-PID_CREATED_MAX_TRIES = 90
+PID_MAX_CHECK_ATTEMPTS = 90
 
 
 @group("wait", cls=Chadmin)
@@ -247,29 +247,29 @@ def wait_started_command(
     deadline = time.time() + timeout
 
     ch_is_alive = False
-    num_tries = 0
+    pid_check_attempts = 0
     while time.time() < deadline:
-        num_tries += 1
+        pid_check_attempts += 1
 
         if is_clickhouse_alive():
             ch_is_alive = True
             break
 
         time.sleep(1)
-        exit_if_pid_not_running(track_pid_file, num_tries)
+        exit_if_pid_not_running(track_pid_file, pid_check_attempts)
 
     if not ch_is_alive:
         raise ConnectionError("ClickHouse is dead")
 
     warmup_system_users(ctx)
 
-    num_tries = 0
+    pid_check_attempts = 0
     while time.time() < deadline:
-        num_tries += 1
+        pid_check_attempts += 1
         if is_initial_dictionaries_load_completed(ctx, wait_failed_dictionaries):
             return
         time.sleep(1)
-        exit_if_pid_not_running(track_pid_file, num_tries)
+        exit_if_pid_not_running(track_pid_file, pid_check_attempts)
 
 
 def get_timeout() -> int:
@@ -372,16 +372,16 @@ def is_pid_file_valid(pid_file_to_check: str) -> bool:
     return True
 
 
-def exit_if_pid_not_running(track_pid_file: str, num_tries: int) -> None:
+def exit_if_pid_not_running(track_pid_file: str, pid_check_attempts: int) -> None:
     """
     Check PID file and raise exception if proccess is not running.
     """
     is_valid = is_pid_file_valid(track_pid_file)
-    if is_valid or num_tries < PID_CREATED_MAX_TRIES:
+    if is_valid or pid_check_attempts < PID_MAX_CHECK_ATTEMPTS:
         return
 
     raise RuntimeError(
-        f'ClickHouse pid file creation out of max tries "{PID_CREATED_MAX_TRIES}"'
+        f'ClickHouse pid file creation out of max tries "{PID_MAX_CHECK_ATTEMPTS}"'
     )
 
 
