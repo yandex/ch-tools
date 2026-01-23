@@ -43,6 +43,23 @@ def optimize_partition(
     _execute_query(ctx, query, dry_run)
 
 
+def move_partition(
+    ctx: Context,
+    src_database: str,
+    src_table: str,
+    partition: str,
+    dst_database: str,
+    dst_table: str,
+    dry_run: bool = False,
+) -> None:
+    """
+    Move the specified table partition between tables.
+    """
+    partition_expr = f"'{partition}'" if partition != "tuple()" else partition
+    query = f"ALTER TABLE `{src_database}`.`{src_table}` MOVE PARTITION {partition_expr} TO TABLE `{dst_database}`.`{dst_table}`"
+    _execute_query(ctx, query, dry_run)
+
+
 def materialize_ttl_in_partition(
     ctx: Context, database: str, table: str, partition_id: str, dry_run: bool = False
 ) -> None:

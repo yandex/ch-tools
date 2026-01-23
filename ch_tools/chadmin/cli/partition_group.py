@@ -13,6 +13,7 @@ from ch_tools.chadmin.internal.partition import (
     detach_partition,
     drop_partition,
     materialize_ttl_in_partition,
+    move_partition,
     optimize_partition,
 )
 from ch_tools.chadmin.internal.table import check_table
@@ -20,6 +21,7 @@ from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response
 from ch_tools.common.cli.parameters import BytesParamType
+from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
 
 
 @group("partition", cls=Chadmin)
@@ -806,8 +808,8 @@ def read_and_validate_partitions_from_json(json_path: str) -> Dict[str, Any]:
                 raise ValueError(base_exception_str.format("database"))
             if "table" not in p:
                 raise ValueError(base_exception_str.format("table"))
-            if "partition_id" not in p:
-                raise ValueError(base_exception_str.format("partition_id"))
+            if "partition_id" not in p and "partition" not in p:
+                raise ValueError(base_exception_str.format("partition_id/partition"))
     return json_obj
 
 
@@ -882,6 +884,109 @@ def check_command(
             }
         )
     print_response(ctx, result, default_format="table")
+
+
+@partition_group.command("move")
+@option("-D", "--dst-database", required=True, help="The destinatiton database.")
+@option("-T", "--dst-table", required=True, help="The destinatiton table")
+@option_group(
+    "Partition selection options",
+    option(
+        "-a",
+        "--all",
+        "_all",
+        is_flag=True,
+        help="Filter in all partitions.",
+    ),
+    option(
+        "-d",
+        "--src-database",
+        help="Filter in partitions to move by the specified database."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "-t",
+        "--src-table",
+        help="Filter in partitions to move by the specified table."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "--id",
+        "--partition",
+        "partition_id",
+        help="Filter in partitions to move by the specified partition."
+        " Multiple values can be specified through a comma.",
+    ),
+    option("--min-partition", "min_partition_id"),
+    option("--max-partition", "max_partition_id"),
+    option(
+        "--disk",
+        "disk_name",
+        help="Filter in partitions to move by the specified disk.",
+    ),
+    option(
+        "--use-partition-list-from-json",
+        default=None,
+        type=str,
+        help="Use list of partitions from the file. Example 'SELECT database, table, partition_id ... FORMAT JSON' > file && chadmin partition move --use-partition-list-from-json <file>.",
+    ),
+    constraint=If(
+        IsSet("use_partition_list_from_json"),
+        then=RequireExactly(1),
+        else_=RequireAtLeast(1),
+    ),
+)
+@option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
+@option(
+    "-n",
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Enable dry run mode and do not perform any modifying actions.",
+)
+@option("-w", "--workers", default=4, help="Number of workers.")
+@pass_context
+def move_partitions_command(
+    ctx: Context,
+    dst_database: str,
+    dst_table: str,
+    _all: bool,
+    src_database: Optional[str],
+    src_table: Optional[str],
+    partition_id: Optional[str],
+    keep_going: bool,
+    dry_run: bool,
+    workers: int,
+    **kwargs: Any,
+) -> None:
+    """Move one or severral"""
+    partitions = get_partitions(
+        ctx,
+        src_database,
+        src_table,
+        partition_id=partition_id,
+        format_="JSON",
+        **kwargs,
+    )["data"]
+    tasks: List[WorkerTask] = []
+    for p in partitions:
+        tasks.append(
+            WorkerTask(
+                f'move_part_{p["database"]}.{p["table"]}_{p["partition"]}',
+                move_partition,
+                {
+                    "ctx": ctx,
+                    "src_database": p["database"],
+                    "src_table": p["table"],
+                    "partition": p["partition"],
+                    "dst_database": dst_database,
+                    "dst_table": dst_table,
+                    "dry_run": dry_run,
+                },
+            )
+        )
+
+    execute_tasks_in_parallel(tasks, max_workers=workers, keep_going=keep_going)
 
 
 def get_partitions(
@@ -971,6 +1076,7 @@ def get_partitions(
                 database,
                 table,
                 partition_id,
+                partition,
                 count() "parts",
                 min(min_time) "min_time",
                 max(max_time) "max_time",
@@ -992,7 +1098,7 @@ def get_partitions(
             {% if table -%}
               AND table {{ format_str_match(table) }}
             {% endif -%}
-            GROUP BY database, table, partition_id
+            GROUP BY database, table, partition_id, partition
             HAVING 1
             {% if disk_name -%}
                AND has(groupUniqArray(disk_name), '{{ disk_name }}')

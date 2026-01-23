@@ -128,3 +128,42 @@ Feature: chadmin partitions commands.
     """
     0
     """
+
+  @require_version_23.1
+  Scenario: Move partitions.
+    When we execute queries on clickhouse01
+    """
+    CREATE DATABASE db;
+    CREATE TABLE db.src1 (a UInt32) ORDER by a PARTITION BY a;
+    CREATE TABLE db.src2 (a UInt32) ORDER by a;
+    CREATE TABLE db.dst1 (a UInt32) ORDER by a PARTITION BY a;
+    CREATE TABLE db.dst2 (a UInt32) ORDER by a;
+
+
+    INSERT INTO db.src1 SELECT number FROM numbers(5);
+    INSERT INTO db.src2 SELECT number FROM numbers(5);
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin partition move -D db -T dst1 -d db -t src1
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT count() FROM db.dst1
+    """
+    Then we get response
+    """
+    5
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin partition move -D db -T dst2 -d db -t src2
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT count() FROM db.dst2
+    """
+    Then we get response
+    """
+    5
+    """
