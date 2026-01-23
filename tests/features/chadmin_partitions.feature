@@ -134,10 +134,10 @@ Feature: chadmin partitions commands.
     When we execute queries on clickhouse01
     """
     CREATE DATABASE db;
-    CREATE TABLE db.src1 (a UInt32) ORDER by a PARTITION BY a;
-    CREATE TABLE db.src2 (a UInt32) ORDER by a;
-    CREATE TABLE db.dst1 (a UInt32) ORDER by a PARTITION BY a;
-    CREATE TABLE db.dst2 (a UInt32) ORDER by a;
+    CREATE TABLE db.src1 (a UInt32) ENGINE=MergeTree() ORDER by a PARTITION BY a;
+    CREATE TABLE db.src2 (a UInt32) ENGINE=MergeTree() ORDER by a;
+    CREATE TABLE db.dst1 (a UInt32) ENGINE=MergeTree() ORDER by a PARTITION BY a;
+    CREATE TABLE db.dst2 (a UInt32) ENGINE=MergeTree() ORDER by a;
 
 
     INSERT INTO db.src1 SELECT number FROM numbers(5);

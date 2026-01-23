@@ -887,8 +887,8 @@ def check_command(
 
 
 @partition_group.command("move")
-@option("-D", "--dst-database", required=True, help="The destinatiton database.")
-@option("-T", "--dst-table", required=True, help="The destinatiton table")
+@option("-D", "--dst-database", required=True, help="The destination database.")
+@option("-T", "--dst-table", required=True, help="The destination table")
 @option_group(
     "Partition selection options",
     option(
@@ -959,7 +959,7 @@ def move_partitions_command(
     workers: int,
     **kwargs: Any,
 ) -> None:
-    """Move one or severral"""
+    """Move one or several partitions."""
     partitions = get_partitions(
         ctx,
         src_database,
