@@ -36,6 +36,10 @@ def step_try_command(context: ContextT, node: str) -> None:
 @when("we execute command on {node:w}")
 def step_command(context: ContextT, node: str) -> None:
     step_try_command(context, node)
+    assert context.exit_code == 0, (
+        f'"{context.command}" failed with exit code {context.exit_code},'
+        f" output:\n {context.response}"
+    )
 
 
 @then("it completes successfully")
