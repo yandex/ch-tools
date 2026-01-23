@@ -129,7 +129,7 @@ Feature: chadmin partitions commands.
     0
     """
 
-  @require_version_23.1
+
   Scenario: Move partitions.
     When we execute queries on clickhouse01
     """
