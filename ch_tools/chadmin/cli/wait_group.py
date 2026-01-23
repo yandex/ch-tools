@@ -208,13 +208,34 @@ def wait_replication_sync_command(
 @wait_group.command("started")
 @option(
     "--timeout",
+    "timeout",
     type=int,
     help="Max amount of time to wait, in seconds. If not set, the timeout is determined dynamically"
     " based on data part count.",
 )
-@option("-q", "--quiet", is_flag=True, default=False, help="Quiet mode.")
+@option("-q", "--quiet", "quiet", is_flag=True, default=False, help="Quiet mode.")
+@option(
+    "--wait-dictionaries",
+    "wait_dictionaries",
+    is_flag=True,
+    default=False,
+    help="Shoud we wait for dictionaries loading.",
+)
+@option(
+    "--wait-failed-dictionaries",
+    "wait_failed_dictionaries",
+    is_flag=True,
+    default=False,
+    help="Should we wait for dictionaries in FAILED or FAILED_AND_RELOADING status.",
+)
 @pass_context
-def wait_started_command(ctx: Context, timeout: Optional[int], quiet: bool) -> None:
+def wait_started_command(
+    ctx: Context,
+    timeout: Optional[int],
+    quiet: bool,
+    wait_dictionaries: bool,
+    wait_failed_dictionaries: bool,
+) -> None:
     """Wait for ClickHouse server to start up."""
     if quiet:
         logging.disable_stdout_logger()
@@ -230,11 +251,17 @@ def wait_started_command(ctx: Context, timeout: Optional[int], quiet: bool) -> N
             break
         time.sleep(1)
 
-    if ch_is_alive:
-        warmup_system_users(ctx)
-        return
+    if not ch_is_alive:
+        raise ConnectionError("ClickHouse is dead")
 
-    raise ConnectionError("ClickHouse is dead")
+    warmup_system_users(ctx)
+
+    if wait_dictionaries or wait_failed_dictionaries:
+        while time.time() < deadline:
+            if is_initial_dictionaries_load_completed(ctx, wait_failed_dictionaries):
+                return
+            time.sleep(1)
+        raise RuntimeError("Timeout while waiting for dictionaries to load.")
 
 
 def get_timeout() -> int:
@@ -290,6 +317,30 @@ def is_clickhouse_alive() -> bool:
 
 def warmup_system_users(ctx: Context) -> None:
     execute_query(ctx, "SELECT count() FROM system.users", timeout=300)
+
+
+def is_initial_dictionaries_load_completed(
+    ctx: Context, wait_failed_dictionaries: bool
+) -> bool:
+    """
+    Check that initial load of ClickHouse dictionaries completed.
+    """
+    try:
+        if wait_failed_dictionaries:
+            query = (
+                "SELECT count() FROM system.dictionaries WHERE status IN "
+                "('LOADING','FAILED','LOADED_AND_RELOADING','FAILED_AND_RELOADING')"
+            )
+        else:
+            query = "SELECT count() FROM system.dictionaries WHERE status IN ('LOADING', 'LOADED_AND_RELOADING')"
+        output = execute_query(ctx, query, timeout=300, format_="TabSeparated")
+        if output == "0":
+            return True
+
+    except Exception as e:
+        logging.error("Failed to get status of ClickHouse dictionaries: {!r}", e)
+
+    return False
 
 
 def sync_replica_with_retries(
