@@ -281,9 +281,9 @@ Feature: chadmin dictionary migration command.
       | toUInt64(3)  | name      | three    |
       | toUInt64(4)  | name      |          |
 
-    When we execute command on clickhouse01:
+    When we try to execute command on clickhouse01:
     """
-      clickhouse-client -q "SELECT dictGet('_dictionaries.test_dict1', 'age', toUInt64(1))"
+      clickhouse-client -q "SELECT dictGet('_dictionaries.test_dict1', 'name', toUInt64(1))"
     """
     Then it fails
 
@@ -358,11 +358,13 @@ Feature: chadmin dictionary migration command.
       | toUInt64(3)  | name      | three    |
       | toUInt64(4)  | name      |          |
     
+    When we try to execute command on clickhouse01:
+    """
+      clickhouse-client -q "SELECT dictGet('_dictionaries.prod_dict'), 'name', toUInt64(1)"
+    """
+    Then it fails
+
     When we execute command on clickhouse01:
-    """
-      clickhouse-client -q "SELECT dictGet('_dictionaries.prod_dict'), 'age', toUInt64(1)"
-    """
-    And we execute command on clickhouse01:
     """
       test -f /etc/clickhouse-server/prod_dictionary.xml
     """
