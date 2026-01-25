@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 
 from click import Context, group, option, pass_context
 
@@ -101,6 +101,13 @@ def _full_name(dictionary: Any) -> str:
     type=str,
     help="Target database for migrated dictionaries.",
 )
+@option(
+    "--max-workers",
+    "max_workers",
+    default=4,
+    type=int,
+    help="Number of parallel workers.",
+)
 @pass_context
 def migrate_command(
     ctx: Context,
@@ -108,8 +115,9 @@ def migrate_command(
     should_remove: bool,
     force_reload: bool,
     target_database: str,
-    include_pattern: str,
-    exclude_pattern: str,
+    max_workers: int,
+    include_pattern: Optional[str],
+    exclude_pattern: Optional[str],
 ) -> None:
     """
     Migrate XML-dictionaries to DDL.
@@ -120,6 +128,7 @@ def migrate_command(
         should_remove,
         force_reload,
         target_database,
+        max_workers,
         include_pattern,
         exclude_pattern,
     )

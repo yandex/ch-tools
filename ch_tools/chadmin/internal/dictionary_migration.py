@@ -50,7 +50,6 @@ DEFAULT_NULL_VALUES = {
     "Polygon": "[]",
     "MultiPolygon": "[]",
 }
-MAX_WORKERS = 4
 
 
 def migrate_dictionaries(
@@ -59,6 +58,7 @@ def migrate_dictionaries(
     should_remove: bool,
     force_reload: bool,
     target_database: str,
+    max_workers: int,
     include_pattern: Optional[str] = None,
     exclude_pattern: Optional[str] = None,
 ) -> None:
@@ -100,7 +100,14 @@ def migrate_dictionaries(
     if dry_run:
         _dry_run(all_dictionaries)
     else:
-        _run(ctx, target_database, all_dictionaries, should_remove, force_reload)
+        _run(
+            ctx,
+            target_database,
+            all_dictionaries,
+            should_remove,
+            force_reload,
+            max_workers,
+        )
 
 
 def _dry_run(filtered_dictionaries: list[tuple[Path, str, str]]) -> None:
@@ -122,6 +129,7 @@ def _run(
     filtered_dictionaries: list[tuple[Path, str, str]],
     should_remove: bool,
     force_reload: bool,
+    max_workers: int,
 ) -> None:
     logging.info("Starting external dictionaries migration")
     logging.info("Creating '{}' database", target_database)
@@ -142,7 +150,7 @@ def _run(
     ]
 
     results = execute_tasks_in_parallel(
-        tasks, max_workers=MAX_WORKERS, keep_going=False
+        tasks, max_workers=max_workers, keep_going=False
     )
     logging.info("External dictionaries migration completed successfully")
     logging.info("Total dictionaries migrated: {}", len(results))
