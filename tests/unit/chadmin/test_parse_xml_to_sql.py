@@ -318,7 +318,7 @@ LIFETIME(MIN 0 MAX 100)
                 """
 CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict6
 (
-    date Date DEFAULT 1970-01-01,
+    date Date DEFAULT '1970-01-01',
     id UInt64,
     score Float64 DEFAULT 0,
     tags Array DEFAULT []
