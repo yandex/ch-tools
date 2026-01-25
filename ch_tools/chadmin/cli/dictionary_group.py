@@ -78,21 +78,21 @@ def _full_name(dictionary: Any) -> str:
     "force_reload",
     is_flag=True,
     default=False,
-    help="Load dictionaries after migration.",
+    help="Reload dictionaries after migration.",
 )
 @option(
     "--include",
     "include_pattern",
     default=None,
     type=str,
-    help="Regex pattern to filter dictionaries by name.",
+    help="Glob pattern to filter dictionaries by name.",
 )
 @option(
     "--exclude",
     "exclude_pattern",
     default=None,
     type=str,
-    help="Regex pattern to exclude dictionaries by name.",
+    help="Glob pattern to exclude dictionaries by name.",
 )
 @option(
     "--database",
