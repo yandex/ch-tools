@@ -11,6 +11,47 @@ from ch_tools.common.clickhouse.config.path import CLICKHOUSE_SERVER_CONFIG_PATH
 from ch_tools.common.clickhouse.config.utils import load_config, load_config_file
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
 
+DEFAULT_NULL_VALUES = {
+    "Int8": "0",
+    "Int16": "0",
+    "Int32": "0",
+    "Int64": "0",
+    "Int128": "0",
+    "Int256": "0",
+    "UInt8": "0",
+    "UInt16": "0",
+    "UInt32": "0",
+    "UInt64": "0",
+    "UInt128": "0",
+    "UInt256": "0",
+    "Float32": "0",
+    "Float64": "0",
+    "Decimal": "0",
+    "Decimal32": "0",
+    "Decimal64": "0",
+    "Decimal128": "0",
+    "Decimal256": "0",
+    "String": "''",
+    "FixedString": "''",
+    "Date": "'1970-01-01'",
+    "Date32": "'1900-01-01'",
+    "DateTime": "'1970-01-01 00:00:00'",
+    "DateTime64": "'1970-01-01 00:00:00.000'",
+    "Bool": "0",
+    "UUID": "'00000000-0000-0000-0000-000000000000'",
+    "IPv4": "'0.0.0.0'",
+    "IPv6": "'::'",
+    "Array": "[]",
+    "Tuple": "()",
+    "Map": "{}",
+    "Nullable": "NULL",
+    "Point": "(0, 0)",
+    "Ring": "[]",
+    "Polygon": "[]",
+    "MultiPolygon": "[]",
+}
+MAX_WORKERS = 4
+
 
 def migrate_dictionaries(
     ctx: Context,
@@ -65,11 +106,13 @@ def migrate_dictionaries(
 def _dry_run(filtered_dictionaries: list[tuple[Path, str, str]]) -> None:
     logging.info("Starting dry external dictionaries migration")
     for i, (config_file, dict_name, query) in enumerate(filtered_dictionaries, start=1):
-        logging.info(f"config file '{config_file}' | dictionary name = '{dict_name}'")
-        logging.info(f"query #{i}:\n{query}")
+        logging.info(
+            "config file '{}' | dictionary name = '{}'", config_file, dict_name
+        )
+        logging.info("query #{}:\n{}", i, query)
 
     logging.info(
-        f"Total dictionaries that ready to migration: {len(filtered_dictionaries)}"
+        "Total dictionaries that ready to migration: {}", len(filtered_dictionaries)
     )
 
 
@@ -79,7 +122,6 @@ def _run(
     filtered_dictionaries: list[tuple[Path, str, str]],
     should_remove: bool,
     force_reload: bool,
-    max_workers: int = 4,
 ) -> None:
     logging.info("Starting external dictionaries migration")
     logging.info("Creating '{}' database", target_database)
@@ -100,10 +142,10 @@ def _run(
     ]
 
     results = execute_tasks_in_parallel(
-        tasks, max_workers=max_workers, keep_going=False
+        tasks, max_workers=MAX_WORKERS, keep_going=False
     )
     logging.info("External dictionaries migration completed successfully")
-    logging.info(f"Total dictionaries migrated: {len(results)}")
+    logging.info("Total dictionaries migrated: {}", len(results))
 
     if should_remove:
         _remove_dictionaries(ctx, filtered_dictionaries, force_reload)
@@ -131,7 +173,7 @@ def _remove_dictionaries(
     for config_file in unique_files:
         try:
             config_file.unlink()
-            logging.info(f"Deleted config file '{config_file}'")
+            logging.info("Deleted config file '{}'", config_file)
         except Exception as e:
             raise RuntimeError(f"Error while removing '{config_file}'") from e
     logging.info("Removing external dictionaries completed successfully")
@@ -239,8 +281,6 @@ def _build_dictionary_ddl_from_config(
         layout,
         lifetime,
         range_definition,
-        "",
-        "",
     )
 
 
@@ -422,46 +462,7 @@ def _build_range_block(attrs: dict[str, Any]) -> Optional[str]:
 
 def _normalize_null_default_value(attr_type: str, null_value: str) -> str:
     if null_value is None:
-        defaults = {
-            "Int8": "0",
-            "Int16": "0",
-            "Int32": "0",
-            "Int64": "0",
-            "Int128": "0",
-            "Int256": "0",
-            "UInt8": "0",
-            "UInt16": "0",
-            "UInt32": "0",
-            "UInt64": "0",
-            "UInt128": "0",
-            "UInt256": "0",
-            "Float32": "0",
-            "Float64": "0",
-            "Decimal": "0",
-            "Decimal32": "0",
-            "Decimal64": "0",
-            "Decimal128": "0",
-            "Decimal256": "0",
-            "String": "''",
-            "FixedString": "''",
-            "Date": "'1970-01-01'",
-            "Date32": "'1900-01-01'",
-            "DateTime": "'1970-01-01 00:00:00'",
-            "DateTime64": "'1970-01-01 00:00:00.000'",
-            "Bool": "0",
-            "UUID": "'00000000-0000-0000-0000-000000000000'",
-            "IPv4": "'0.0.0.0'",
-            "IPv6": "'::'",
-            "Array": "[]",
-            "Tuple": "()",
-            "Map": "{}",
-            "Nullable": "NULL",
-            "Point": "(0, 0)",
-            "Ring": "[]",
-            "Polygon": "[]",
-            "MultiPolygon": "[]",
-        }
-        result = defaults.get(attr_type)
+        result = DEFAULT_NULL_VALUES.get(attr_type)
         if result is None:
             raise RuntimeError(f"Type '{attr_type}' doesn't support a default value")
         return result
@@ -512,19 +513,18 @@ def _build_create_dictionary_statement(
     layout: str,
     lifetime: str,
     range_definition: Optional[str],
-    settings: str,
-    comment: str,
+    settings: str = "",
+    comment: str = "",
 ) -> str:
-    return f"""
-CREATE DICTIONARY IF NOT EXISTS {target_database}.{name}
-(
-    {structure}
-)
-{primary_key}
-{source}
-{layout}
-{lifetime}
-{range_definition or ""}
-{settings}
-{comment}
-           """
+    statement_parts = [
+        f"CREATE DICTIONARY IF NOT EXISTS {target_database}.{name}",
+        f"(\n{structure}\n)",
+        primary_key,
+        source,
+        layout,
+        lifetime,
+        range_definition or "",
+        settings,
+        comment,
+    ]
+    return "\n".join(part for part in statement_parts if part)
