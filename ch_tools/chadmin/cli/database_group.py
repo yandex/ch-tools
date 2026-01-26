@@ -48,8 +48,18 @@ def get_database_command(ctx: Context, database: str, active_parts: bool) -> Non
 
 
 @database_group.command("list")
-@option("-d", "--database")
-@option("--exclude-database")
+@option(
+    "-d",
+    "--database",
+    help="Filter in databases to output by the specified database name pattern."
+    " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+)
+@option(
+    "--exclude-database",
+    "exclude_database_pattern",
+    help="Filter out databases to output by the specified database name pattern."
+    " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+)
 @option(
     "--active",
     "--active-parts",
@@ -66,8 +76,18 @@ def list_databases_command(ctx: Context, **kwargs: Any) -> None:
 @option_group(
     "Database selection options",
     option("-a", "--all", "_all", is_flag=True, help="Delete all databases."),
-    option("-d", "--database"),
-    option("--exclude-database"),
+    option(
+        "-d",
+        "--database",
+        help="Filter in databases to delete by the specified database name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
+    option(
+        "--exclude-database",
+        "exclude_database_pattern",
+        help="Filter out databases to delete by the specified database name pattern."
+        " The value can be either a pattern in the LIKE clause format or a comma-separated list of items to match.",
+    ),
     constraint=RequireAtLeast(1),
 )
 @option(
@@ -89,7 +109,7 @@ def delete_databases_command(
     ctx: Context,
     _all: bool,
     database: str,
-    exclude_database: str,
+    exclude_database_pattern: str,
     on_cluster: bool,
     dry_run: bool,
 ) -> None:
@@ -98,7 +118,7 @@ def delete_databases_command(
     for d in list_databases(
         ctx,
         database=database,
-        exclude_database=exclude_database,
+        exclude_database_pattern=exclude_database_pattern,
     ):
         query = """
             DROP DATABASE `{{ database }}`

@@ -17,6 +17,7 @@ def list_parts(
     ctx: Context,
     *,
     database: Optional[str] = None,
+    exclude_database_pattern: Optional[str] = None,
     table: Optional[str] = None,
     partition_id: Optional[str] = None,
     min_partition_id: Optional[str] = None,
@@ -90,7 +91,10 @@ def list_parts(
         {% if database -%}
         WHERE database {{ format_str_match(database) }}
         {% else -%}
-        WHERE database NOT IN ('system', 'information_schema', 'INFORMATION_SCHEMA')
+        WHERE database NOT IN ('information_schema', 'INFORMATION_SCHEMA')
+        {% endif -%}
+        {% if exclude_database_pattern -%}
+          AND database NOT {{ format_str_match(exclude_database_pattern) }}
         {% endif -%}
         {% if partition_id -%}
           AND partition_id {{ format_str_match(partition_id) }}
@@ -139,6 +143,7 @@ def list_parts(
         ctx,
         query,
         database=database,
+        exclude_database_pattern=exclude_database_pattern,
         table=table,
         parts_table=parts_table,
         partition_id=partition_id,
@@ -162,6 +167,7 @@ def list_detached_parts(
     ctx: Context,
     *,
     database: Optional[str] = None,
+    exclude_database_pattern: Optional[str] = None,
     table: Optional[str] = None,
     partition_id: Optional[str] = None,
     min_partition_id: Optional[str] = None,
@@ -200,7 +206,10 @@ def list_detached_parts(
         {% if database -%}
         WHERE database {{ format_str_match(database) }}
         {% else -%}
-        WHERE database NOT IN ('system', 'information_schema', 'INFORMATION_SCHEMA')
+        WHERE database NOT IN ('information_schema', 'INFORMATION_SCHEMA')
+        {% endif -%}
+        {% if exclude_database_pattern -%}
+          AND database NOT {{ format_str_match(exclude_database_pattern) }}
         {% endif -%}
         {% if partition_id -%}
           AND partition_id {{ format_str_match(partition_id) }}
@@ -241,6 +250,7 @@ def list_detached_parts(
         ctx,
         query,
         database=database,
+        exclude_database_pattern=exclude_database_pattern,
         table=table,
         partition_id=partition_id,
         min_partition_id=min_partition_id,
@@ -406,6 +416,7 @@ def list_part_log(
     ctx: Context,
     cluster: Optional[str] = None,
     database: Optional[str] = None,
+    exclude_database_pattern: Optional[str] = None,
     table: Optional[str] = None,
     partition: Optional[str] = None,
     part: Optional[str] = None,
@@ -457,7 +468,10 @@ def list_part_log(
         {% if database %}
         WHERE database {{ format_str_match(database) }}
         {% else %}
-        WHERE database NOT IN ('system', 'information_schema', 'INFORMATION_SCHEMA')
+        WHERE database NOT IN ('information_schema', 'INFORMATION_SCHEMA')
+        {% endif %}
+        {% if exclude_database_pattern %}
+          AND database NOT {{ format_str_match(exclude_database_pattern) }}
         {% endif %}
         {% if table %}
           AND table {{ format_str_match(table) }}
@@ -508,6 +522,7 @@ def list_part_log(
         query,
         cluster=cluster,
         database=database,
+        exclude_database_pattern=exclude_database_pattern,
         table=table,
         partition=partition,
         part=part,
