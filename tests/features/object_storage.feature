@@ -107,6 +107,25 @@ Feature: chadmin object-storage commands
       orphaned: '?(1)'?
     """
 
+  @require_version_23.3
+  Scenario: Detect different space usage table schema
+    When we execute command on clickhouse01
+    """
+    chadmin object-storage collect-info --to-time 0h --traverse-remote
+    """
+    And we execute query on clickhouse02
+    """
+    DROP TABLE test.space_usage_from_object_storage SYNC;
+    """
+    And we try to execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage space-usage
+    """
+    Then it fails with response contains
+    """
+    Table schema for 'test.space_usage_from_object_storage' on replica 'clickhouse02' is different from local schema
+    """
+
   Scenario: Dry-run clean with guard period
     When we execute command on clickhouse01
     """
