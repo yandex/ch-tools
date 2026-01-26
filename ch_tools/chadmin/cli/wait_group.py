@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 import psutil
 import requests
-from click import Context, FloatRange, group, option, pass_context
+from click import Choice, Context, FloatRange, group, option, pass_context
 from tenacity import (
     RetryCallState,
     retry,
@@ -34,6 +34,9 @@ LOCAL_PART_LOAD_SPEED = 10  # in data parts per second
 S3_PART_LOAD_SPEED = 0.5  # in data parts per second
 CLICKHOUSE_TIMEOUT_EXCEEDED_MSG = "TIMEOUT_EXCEEDED"
 PID_MAX_CHECK_ATTEMPTS = 90
+DEFAULT_FILE_PROCESSING_SPEED = 100  # files per second
+DEFAULT_MIN_TIMEOUT = 2 * 60 * 60  # in seconds
+DEFAULT_MAX_TIMEOUT = 6 * 60 * 60  # in seconds
 
 
 @group("wait", cls=Chadmin)
@@ -208,13 +211,6 @@ def wait_replication_sync_command(
 
 
 @wait_group.command("started")
-@option(
-    "--timeout",
-    "timeout",
-    type=int,
-    help="Max amount of time to wait, in seconds. If not set, the timeout is determined dynamically"
-    " based on data part count.",
-)
 @option("-q", "--quiet", "quiet", is_flag=True, default=False, help="Quiet mode.")
 @option(
     "--wait-failed-dictionaries",
@@ -230,19 +226,64 @@ def wait_replication_sync_command(
     default="",
     help="Path to PID file. Exit if pid from pidfile not running.",
 )
+@option(
+    "--timeout-strategy",
+    "timeout_strategy",
+    type=Choice(["files", "parts"]),
+    default="files",
+    help="Strategy to calculate timeout.",
+)
+@option(
+    "--file-processing-speed",
+    "file_processing_speed",
+    type=int,
+    help="Number of files, which expected to be processed in one second.",
+)
+@option(
+    "--min-timeout",
+    "min_timeout",
+    type=int,
+    help="Minimal amount of time to wait, in seconds.",
+)
+@option(
+    "--max-timeout",
+    "max_timeout",
+    type=int,
+    help="Maximal amount of time to wait, in seconds.",
+)
+@option(
+    "-w",
+    "--wait",
+    "--timeout",
+    "wait",
+    type=int,
+    help="Time to wait, in seconds. If not set, the timeout is determined dynamically based on chosen timeout strategy.",
+)
 @pass_context
 def wait_started_command(
     ctx: Context,
-    timeout: Optional[int],
     quiet: bool,
     wait_failed_dictionaries: bool,
     track_pid_file: str,
+    timeout_strategy: str,
+    file_procesing_speed: Optional[int],
+    min_timeout: Optional[int],
+    max_timeout: Optional[int],
+    wait: Optional[int],
 ) -> None:
     """Wait for ClickHouse server to start up."""
     if quiet:
         logging.disable_stdout_logger()
-    if not timeout:
-        timeout = get_timeout()
+
+    timeout: int
+    if wait:
+        timeout = wait
+    elif timeout_strategy == "files":
+        timeout = get_timeout_by_files(file_procesing_speed, min_timeout, max_timeout)
+    elif timeout_strategy == "parts":
+        timeout = get_timeout_by_parts()
+    else:
+        raise RuntimeError("--timeout-startegy must be equal to 'files' or 'parts'")
 
     deadline = time.time() + timeout
 
@@ -272,14 +313,37 @@ def wait_started_command(
         exit_if_pid_not_running(track_pid_file, pid_check_attempts)
 
 
-def get_timeout() -> int:
+def get_timeout_by_parts() -> int:
     """
-    Calculate and return timeout.
+    Calculate and return timeout by parts.
     """
     timeout = BASE_TIMEOUT
     timeout += int(get_local_data_part_count() / LOCAL_PART_LOAD_SPEED)
     timeout += int(get_s3_data_part_count() / S3_PART_LOAD_SPEED)
     return timeout
+
+
+def get_timeout_by_files(
+    file_processing_speed: Optional[int],
+    min_timeout: Optional[int],
+    max_timeout: Optional[int],
+) -> int:
+    """
+    Calculate and return timeout by files.
+    """
+    file_processing_speed = file_processing_speed or DEFAULT_FILE_PROCESSING_SPEED
+    min_timeout = min_timeout or DEFAULT_MIN_TIMEOUT
+    max_timeout = max_timeout or DEFAULT_MAX_TIMEOUT
+
+    file_processing_timeout = get_file_count() // file_processing_speed
+    return max(min_timeout, min(file_processing_timeout, max_timeout))
+
+
+def get_file_count() -> int:
+    """
+    Return number of files stored on data disk.
+    """
+    return int(execute("df --output=iused /var/lib/clickhouse/ | tail -1"))
 
 
 def get_local_data_part_count() -> int:
@@ -374,7 +438,7 @@ def is_pid_file_valid(pid_file_to_check: str) -> bool:
 
 def exit_if_pid_not_running(track_pid_file: str, pid_check_attempts: int) -> None:
     """
-    Check PID file and raise exception if proccess is not running.
+    Check PID file and raise exception if process is not running.
     """
     is_valid = is_pid_file_valid(track_pid_file)
     if is_valid or pid_check_attempts < PID_MAX_CHECK_ATTEMPTS:
