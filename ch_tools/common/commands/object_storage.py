@@ -35,10 +35,12 @@ from ch_tools.chadmin.internal.table import (
 )
 from ch_tools.chadmin.internal.utils import (
     DATETIME_FORMAT,
+    Scope,
+    assert_equal_table_schema_on_cluster,
     chunked,
     execute_query,
     execute_query_on_shard,
-    get_remote_table_for_hosts,
+    get_table_function_for_scope,
 )
 from ch_tools.chadmin.internal.zookeeper import has_zk
 from ch_tools.common import logging
@@ -49,7 +51,6 @@ from ch_tools.common.clickhouse.client.clickhouse_client import (
 )
 from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
-from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
 # Batch size for inserts in a listing table
 # Set not very big value due to default ClickHouse 'http_max_field_value_size' settings value 128Kb
@@ -80,16 +81,6 @@ TIMESTAMP_FORMAT = "%Y%m%d_%H%M%S"
 # Can be used to check if schema is changed and table needs to be recreated forcefully
 REMOTE_BLOBS_COLUMNS = "last_modified DateTime, obj_path String, obj_size UInt64"
 UNKNOWN_REPLICAS_NAME = "unknown_replicas"
-
-
-class Scope(str, Enum):
-    """
-    Define a local metadata search scope.
-    """
-
-    HOST = "host"
-    SHARD = "shard"
-    CLUSTER = "cluster"
 
 
 class State(str, Enum):
@@ -222,14 +213,20 @@ def get_object_storage_space_usage(
 ) -> dict:
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
     config = ctx.obj["config"]["object_storage"]["space_usage"]
-    space_usage_table = (
-        f"{config['database']}.{config['space_usage_table_prefix']}{disk_conf.name}"
-    )
+
+    database = config["database"]
+    table = f"{config['space_usage_table_prefix']}{disk_conf.name}"
 
     # Table is replicated
     if scope == Scope.SHARD:
         scope = Scope.HOST
-    space_usage_table = _get_table_function(ctx, space_usage_table, scope, cluster_name)
+    elif scope == Scope.CLUSTER:
+        assert_equal_table_schema_on_cluster(ctx, database, table, cluster_name)
+
+    full_name = f"{database}.{table}"
+    space_usage_table = get_table_function_for_scope(
+        ctx, full_name, scope, cluster_name
+    )
 
     parts_usage_query = Query(
         f"SELECT toString(replica) replicas, state, size FROM {space_usage_table} ORDER BY replica, state"
@@ -479,7 +476,7 @@ def _local_blobs_table(
                 drop_existing_table=True,
             )
 
-            remote_data_paths_table = _get_table_function(
+            remote_data_paths_table = get_table_function_for_scope(
                 ctx, REMOTE_DATA_PATHS_TABLE, Scope.SHARD, cluster_name=None
             )
 
@@ -1137,21 +1134,6 @@ def _create_space_usage_table(
         """,
         format_=None,
     )
-
-
-def _get_table_function(
-    ctx: Context,
-    table: str,
-    scope: Scope,
-    cluster_name: Optional[str] = None,
-) -> str:
-    if scope == Scope.CLUSTER:
-        assert cluster_name
-        return f"cluster('{cluster_name}', {table})"
-    elif scope == Scope.SHARD:
-        return get_remote_table_for_hosts(ctx, table, ClickhouseInfo.get_replicas(ctx))
-
-    return table
 
 
 def _get_fill_local_blobs_table_query(
