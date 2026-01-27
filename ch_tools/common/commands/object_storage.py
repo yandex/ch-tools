@@ -1192,7 +1192,7 @@ def _get_fill_space_usage_query(
             WITH
             aggregated_blobs AS (
                 SELECT
-                    groupArraySorted(10)(replica) as replica,
+                    arraySort(groupArray(replica)) as replica,
                     obj_path,
                     state,
                     sum(obj_size) as sum_size,
@@ -1249,7 +1249,7 @@ def _get_fill_space_usage_query(
                     sum(sum_size / ref_count)
                 FROM (
                     SELECT
-                        groupArraySorted(10)(replica) as replica,
+                        arraySort(groupArray(replica)) as replica,
                         obj_path,
                         state,
                         sum(obj_size) as sum_size,
@@ -1268,7 +1268,7 @@ def _get_fill_space_usage_query(
                     sum(sum_size / ref_count)
                 FROM (
                     SELECT
-                        groupArraySorted(10)(replica) as replica,
+                        arraySort(groupArray(replica)) as replica,
                         obj_path,
                         state,
                         sum(obj_size) as sum_size,
@@ -1290,7 +1290,7 @@ def _get_fill_space_usage_query(
                     sum(sum_size / ref_count)
                 FROM (
                     SELECT
-                        groupArraySorted(10)(replica) as replica,
+                        arraySort(groupArray(replica)) as replica,
                         obj_path,
                         state,
                         sum(obj_size) as sum_size,
