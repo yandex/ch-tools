@@ -254,6 +254,7 @@ DEFAULT_CONFIG = {
     # Settings specific for cloud deployments.
     "cloud": {
         "metadata_service_endpoint": "http://169.254.169.254",
+        "metadata_service_timeout": 120,
     },
 }
 
