@@ -282,8 +282,6 @@ def wait_started_command(
         timeout = get_timeout_by_files(file_procesing_speed, min_timeout, max_timeout)
     elif timeout_strategy == "parts":
         timeout = get_timeout_by_parts()
-    else:
-        raise RuntimeError("--timeout-startegy must be equal to 'files' or 'parts'")
 
     deadline = time.time() + timeout
 
