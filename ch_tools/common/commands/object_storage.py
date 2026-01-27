@@ -240,7 +240,7 @@ def get_object_storage_space_usage(
 
     result: dict[str, dict[str, int]] = defaultdict(dict)
     for row in query_result:
-        result[row["replicas"]][row["state"]] = row["size"]
+        result[row["replicas"]][row["state"]] = int(row["size"])
 
     result["total"] = defaultdict(int)
     for replica in result:
