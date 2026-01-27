@@ -5,7 +5,21 @@ from typing import Any, Optional
 
 import psutil
 import requests
-from click import Choice, Context, FloatRange, group, option, pass_context
+from cloup import (
+    Choice,
+    Context,
+    FloatRange,
+    group,
+    option,
+    pass_context,
+)
+from cloup.constraints import (
+    AcceptAtMost,
+    Equal,
+    If,
+    accept_none,
+    constraint,
+)
 from tenacity import (
     RetryCallState,
     retry,
@@ -210,7 +224,7 @@ def wait_replication_sync_command(
     raise RuntimeError("Timeout while waiting on replication-lag command.")
 
 
-@wait_group.command("started")
+@wait_group.command("started", show_constraints=True)
 @option("-q", "--quiet", "quiet", is_flag=True, default=False, help="Quiet mode.")
 @option(
     "--wait-failed-dictionaries",
@@ -259,6 +273,14 @@ def wait_replication_sync_command(
     type=int,
     help="Time to wait, in seconds. If not set, the timeout is determined dynamically based on chosen timeout strategy.",
 )
+@constraint(
+    If(Equal("timeout_strategy", "parts"), then=AcceptAtMost(1), else_=accept_none),
+    ["wait"],
+)
+@constraint(
+    If(Equal("timeout_strategy", "files"), then=AcceptAtMost(3), else_=accept_none),
+    ["file_processing_speed", "min_timeout", "max_timeout"],
+)
 @pass_context
 def wait_started_command(
     ctx: Context,
@@ -266,7 +288,7 @@ def wait_started_command(
     wait_failed_dictionaries: bool,
     track_pid_file: str,
     timeout_strategy: str,
-    file_procesing_speed: Optional[int],
+    file_processing_speed: Optional[int],
     min_timeout: Optional[int],
     max_timeout: Optional[int],
     wait: Optional[int],
@@ -279,7 +301,7 @@ def wait_started_command(
     if wait:
         timeout = wait
     elif timeout_strategy == "files":
-        timeout = get_timeout_by_files(file_procesing_speed, min_timeout, max_timeout)
+        timeout = get_timeout_by_files(file_processing_speed, min_timeout, max_timeout)
     elif timeout_strategy == "parts":
         timeout = get_timeout_by_parts()
 
