@@ -1,5 +1,6 @@
 import os
-from typing import Optional
+from contextlib import contextmanager
+from typing import Generator, Optional
 
 from click import Context
 
@@ -99,70 +100,61 @@ def _get_deduplication_tasks(
     dry_run: bool,
 ) -> list[WorkerTask]:
     def _task(table_info: TableInfo) -> None:
-        logging.info(
-            f"Table: {table_info['database']}.{table_info['name']}. Enabling settings: {ALWAYS_FETCH_ON_ATTACH_SETTING}, {HARDLINK_ON_DETACH_SETTING}"
-        )
-        set_table_setting(
-            ctx, table_info, ALWAYS_FETCH_ON_ATTACH_SETTING, 1, dry_run=dry_run
-        )
-        set_table_setting(
-            ctx, table_info, HARDLINK_ON_DETACH_SETTING, 1, dry_run=dry_run
-        )
+        with _set_deduplication_settings(ctx, table_info, dry_run):
+            deduplication_path_in_zk = _get_table_deduplication_zk_path(table_info)
+            min_partition_id_actual = _get_min_partition_to_deduplicate(
+                ctx, deduplication_path_in_zk, min_partition_id
+            )
 
-        deduplication_path_in_zk = _get_table_deduplication_zk_path(table_info)
-        min_partition_id_actual = _get_min_partition_to_deduplicate(
-            ctx, deduplication_path_in_zk, min_partition_id
-        )
+            partitions = get_partitions(
+                ctx,
+                table_info["database"],
+                table_info["name"],
+                partition_id=partition_id,
+                min_partition_id=min_partition_id_actual,
+                max_partition_id=max_partition_id,
+                disk_name=disk.name,
+                format_="JSON",
+            )["data"]
 
-        partitions = get_partitions(
-            ctx,
-            table_info["database"],
-            table_info["name"],
-            partition_id=partition_id,
-            min_partition_id=min_partition_id_actual,
-            max_partition_id=max_partition_id,
-            disk_name=disk.name,
-            format_="JSON",
-        )["data"]
+            if check_zk_node(ctx, deduplication_path_in_zk):
+                delete_zk_node(ctx, deduplication_path_in_zk, dry_run=dry_run)
 
-        if check_zk_node(ctx, deduplication_path_in_zk):
-            delete_zk_node(ctx, deduplication_path_in_zk, dry_run=dry_run)
-
-        for p in partitions:
-            try:
-                detach_partition(
-                    ctx, p["database"], p["table"], p["partition_id"], dry_run=dry_run
-                )
-                attach_partition(
-                    ctx, p["database"], p["table"], p["partition_id"], dry_run=dry_run
-                )
-            except Exception:
-                if not dry_run:
-                    create_zk_nodes(
+            for p in partitions:
+                try:
+                    detach_partition(
                         ctx,
-                        [deduplication_path_in_zk],
+                        p["database"],
+                        p["table"],
                         p["partition_id"],
-                        make_parents=True,
+                        dry_run=dry_run,
                     )
-                raise
+                    attach_partition(
+                        ctx,
+                        p["database"],
+                        p["table"],
+                        p["partition_id"],
+                        dry_run=dry_run,
+                    )
+                except Exception:
+                    if not dry_run:
+                        create_zk_nodes(
+                            ctx,
+                            [deduplication_path_in_zk],
+                            p["partition_id"],
+                            make_parents=True,
+                        )
+                    raise
 
-        logging.info(
-            f"Syncing replicas for table: {table_info['database']}.{table_info['name']}"
-        )
-        execute_query_on_shard(
-            ctx,
-            f"SYSTEM SYNC REPLICA {table_info['database']}.{table_info['name']}",
-            format_=None,
-            dry_run=dry_run,
-        )
-
-        logging.info(
-            f"Table: {table_info['database']}.{table_info['name']}. Disabling settings: {ALWAYS_FETCH_ON_ATTACH_SETTING}, {HARDLINK_ON_DETACH_SETTING}"
-        )
-        set_table_setting(
-            ctx, table_info, ALWAYS_FETCH_ON_ATTACH_SETTING, dry_run=dry_run
-        )
-        set_table_setting(ctx, table_info, HARDLINK_ON_DETACH_SETTING, dry_run=dry_run)
+            logging.info(
+                f"Syncing replicas for table: {table_info['database']}.{table_info['name']}"
+            )
+            execute_query_on_shard(
+                ctx,
+                f"SYSTEM SYNC REPLICA {table_info['database']}.{table_info['name']}",
+                format_=None,
+                dry_run=dry_run,
+            )
 
         if not dry_run:
             create_zk_nodes(
@@ -181,17 +173,34 @@ def _get_deduplication_tasks(
     ]
 
 
+@contextmanager
+def _set_deduplication_settings(
+    ctx: Context, table: TableInfo, dry_run: bool
+) -> Generator[None, None, None]:
+    logging.info(
+        f"Table: {table['database']}.{table['name']}. Enabling settings: {ALWAYS_FETCH_ON_ATTACH_SETTING}, {HARDLINK_ON_DETACH_SETTING}"
+    )
+    set_table_setting(ctx, table, ALWAYS_FETCH_ON_ATTACH_SETTING, 1, dry_run=dry_run)
+    set_table_setting(ctx, table, HARDLINK_ON_DETACH_SETTING, 1, dry_run=dry_run)
+    try:
+        yield
+    finally:
+        logging.info(
+            f"Table: {table['database']}.{table['name']}. Disabling settings: {ALWAYS_FETCH_ON_ATTACH_SETTING}, {HARDLINK_ON_DETACH_SETTING}"
+        )
+        set_table_setting(ctx, table, ALWAYS_FETCH_ON_ATTACH_SETTING, dry_run=dry_run)
+        set_table_setting(ctx, table, HARDLINK_ON_DETACH_SETTING, dry_run=dry_run)
+
+
 def _get_min_partition_to_deduplicate(
     ctx: Context, deduplication_path: str, min_partition_id: Optional[str]
 ) -> Optional[str]:
     min_partition_from_zk = _get_last_reattached_partition_from_zk(
         ctx, deduplication_path
     )
-    if min_partition_id or min_partition_from_zk:
-        if min_partition_id and min_partition_from_zk:
-            return min(min_partition_id, min_partition_from_zk)
-        return min_partition_from_zk if min_partition_from_zk else min_partition_id
-    return None
+    if min_partition_id and min_partition_from_zk:
+        return min(min_partition_id, min_partition_from_zk)
+    return min_partition_from_zk or min_partition_id
 
 
 def _get_last_reattached_partition_from_zk(
