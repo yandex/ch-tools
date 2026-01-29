@@ -79,8 +79,9 @@ def _get_token(ctx: Context) -> str:
 
 def _request_token(ctx: Context) -> requests.Response:
     endpoint = ctx.obj["config"]["cloud"]["metadata_service_endpoint"]
+    timeout = ctx.obj["config"]["cloud"]["metadata_service_timeout"]
     return requests.get(
         f"{endpoint}/computeMetadata/v1/instance/service-accounts/default/token",
         headers={"Metadata-Flavor": "Google"},
-        timeout=60,
+        timeout=timeout,
     )
