@@ -11,9 +11,11 @@ from click import (
     option,
     pass_context,
 )
+from cloup import option_group
 from humanfriendly import format_size
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
+from ch_tools.chadmin.internal.deduplicate import deduplicate
 from ch_tools.chadmin.internal.object_storage.orphaned_objects_state import (
     OrphanedObjectsState,
 )
@@ -21,7 +23,11 @@ from ch_tools.chadmin.internal.object_storage.s3_cleanup_stats import (
     ResultStat,
     StatisticsPeriod,
 )
-from ch_tools.chadmin.internal.system import match_ch_version
+from ch_tools.chadmin.internal.system import (
+    get_version,
+    is_yandex_cloud_version,
+    match_ch_version,
+)
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
     create_zk_nodes,
@@ -41,9 +47,7 @@ from ch_tools.common.commands.object_storage import (
 
 # Use big enough timeout for stream HTTP query
 STREAM_TIMEOUT = 10 * 60
-
 STATE_LOCAL_PATH = "/tmp/object_storage_cleanup_state.json"
-
 DEFAULT_CLUSTER_NAME = "{cluster}"
 
 
@@ -227,7 +231,11 @@ def clean_command(
         state = OrphanedObjectsState(total_size, error_msg)
 
         if store_state_zk_path:
-            _store_state_zk_save(ctx, store_state_zk_path, state)
+            _store_state_zk_save(
+                ctx,
+                store_state_zk_path,
+                state,
+            )
 
         if store_state_local:
             _store_state_local_save(ctx, state)
@@ -355,6 +363,91 @@ def space_usage_command(
 
     print_response(
         ctx, result, field_formatters=field_formatters if human_readable else None
+    )
+
+
+@object_storage_group.command("deduplicate")
+@option_group(
+    "Partition selection options",
+    option(
+        "-a",
+        "--all",
+        "_all",
+        is_flag=True,
+        help="Filter in all partitions.",
+    ),
+    option(
+        "-d",
+        "--database",
+        help="Filter in partitions to reattach by the specified database."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "-t",
+        "--table",
+        help="Filter in partitions to reattach by the specified table."
+        " Multiple values can be specified through a comma.",
+    ),
+    option(
+        "--id",
+        "--partition",
+        "partition_id",
+        help="Filter in partitions to reattach by the specified partition."
+        " Multiple values can be specified through a comma.",
+    ),
+    option("--min-partition", "min_partition_id"),
+    option("--max-partition", "max_partition_id"),
+)
+@option(
+    "--max-workers",
+    "max_workers",
+    default=4,
+    help="Max concurrent tables to deduplicate.",
+)
+@option(
+    "--ignore-saved-state",
+    "ignore_saved_state",
+    is_flag=True,
+    help=("Remove saved processed tables and partitions from ZK before executing."),
+)
+@option(
+    "--dry-run",
+    "dry_run",
+    is_flag=True,
+    help=("Do not delete objects. Show only statistics."),
+)
+@pass_context
+def deduplicate_command(
+    ctx: Context,
+    _all: bool,
+    database: Optional[str],
+    table: Optional[str],
+    partition_id: Optional[str],
+    min_partition_id: Optional[str],
+    max_partition_id: Optional[str],
+    max_workers: int,
+    ignore_saved_state: bool,
+    dry_run: bool,
+) -> None:
+    """
+    Reattach all partitions with 'always_fetch_instead_of_attach_zero_copy' setting to deduplicate zero-copy parts.
+    Requires custom ClickHouse build with copying of part's data on attach instead of detach.
+    In case of errors saves state in ZK to use it on retry.
+    """
+    if not is_yandex_cloud_version(ctx):
+        raise RuntimeError(
+            f"ClickHouse version {get_version(ctx)} doesn't look like it's from Yandex Cloud."
+        )
+    deduplicate(
+        ctx=ctx,
+        database=database,
+        table=table,
+        partition_id=partition_id,
+        min_partition_id=min_partition_id,
+        max_partition_id=max_partition_id,
+        max_workers=max_workers,
+        ignore_saved_state=ignore_saved_state,
+        dry_run=dry_run,
     )
 
 
