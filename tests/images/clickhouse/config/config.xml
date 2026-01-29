@@ -106,4 +106,6 @@
     </macros>
 
     <enable_system_unfreeze>1</enable_system_unfreeze>
+
+    <dictionaries_config>*dictionary.xml</dictionaries_config>
 </clickhouse>
