@@ -4,6 +4,7 @@ import subprocess
 import tarfile
 import threading
 import uuid
+from collections import defaultdict
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -34,10 +35,12 @@ from ch_tools.chadmin.internal.table import (
 )
 from ch_tools.chadmin.internal.utils import (
     DATETIME_FORMAT,
+    Scope,
+    assert_equal_table_schema_on_cluster,
     chunked,
     execute_query,
     execute_query_on_shard,
-    get_remote_table_for_hosts,
+    get_table_function_for_scope,
 )
 from ch_tools.chadmin.internal.zookeeper import has_zk
 from ch_tools.common import logging
@@ -48,7 +51,6 @@ from ch_tools.common.clickhouse.client.clickhouse_client import (
 )
 from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
-from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
 # Batch size for inserts in a listing table
 # Set not very big value due to default ClickHouse 'http_max_field_value_size' settings value 128Kb
@@ -78,16 +80,28 @@ UNIQUE_TABLE_SUFFIX_REGEX = re.compile(UNIQUE_TABLE_SUFFIX_PATTERN)
 TIMESTAMP_FORMAT = "%Y%m%d_%H%M%S"
 # Can be used to check if schema is changed and table needs to be recreated forcefully
 REMOTE_BLOBS_COLUMNS = "last_modified DateTime, obj_path String, obj_size UInt64"
+UNKNOWN_REPLICAS_NAME = "unknown_replicas"
 
 
-class Scope(str, Enum):
+class State(str, Enum):
     """
-    Define a local metadata search scope.
+    Possible states for blobls.
     """
 
-    HOST = "host"
-    SHARD = "shard"
-    CLUSTER = "cluster"
+    ACTIVE = "active"
+    UNIQUE_FROZEN = "unique_frozen"
+    UNIQUE_DETACHED = "unique_detached"
+    ORPHANED = "orphaned"
+
+
+class LocalState(str, Enum):
+    """
+    Possible directories for s3 parts.
+    """
+
+    ACTIVE = "active"
+    SHADOW = "shadow"
+    DETACHED = "detached"
 
 
 def clean(
@@ -199,35 +213,53 @@ def get_object_storage_space_usage(
 ) -> dict:
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
     config = ctx.obj["config"]["object_storage"]["space_usage"]
-    space_usage_table = (
-        f"{config['database']}.{config['space_usage_table_prefix']}{disk_conf.name}"
-    )
+
+    database = config["database"]
+    table = f"{config['space_usage_table_prefix']}{disk_conf.name}"
 
     # Table is replicated
     if scope == Scope.SHARD:
         scope = Scope.HOST
-    space_usage_table = _get_table_function(ctx, space_usage_table, scope, cluster_name)
+    elif scope == Scope.CLUSTER:
+        assert_equal_table_schema_on_cluster(ctx, database, table, cluster_name)
 
-    parts_usage_query = Query(
-        f"""
-            SELECT
-                sum(active) AS active,
-                sum(unique_frozen) AS unique_frozen,
-                sum(unique_detached) AS unique_detached,
-                sum(orphaned) AS orphaned
-            FROM {space_usage_table}
-        """
+    full_name = f"{database}.{table}"
+    space_usage_table = get_table_function_for_scope(
+        ctx, full_name, scope, cluster_name
     )
 
-    res = execute_query(
+    parts_usage_query = Query(
+        f"SELECT toString(replica) replicas, state, size FROM {space_usage_table} ORDER BY replica, state"
+    )
+
+    query_result = execute_query(
         ctx,
         parts_usage_query,
         format_="JSON",
-    )[
-        "data"
-    ][0]
+    )["data"]
 
-    return res
+    result: dict[str, dict[str, int]] = defaultdict(dict)
+    for row in query_result:
+        result[row["replicas"]][row["state"]] = int(row["size"])
+
+    result["total"] = defaultdict(int)
+    for replica in result:
+        if replica == "total":
+            continue
+        for state in result[replica]:
+            result["total"][state] += result[replica][state]
+
+    # Single replicas first, special keys last
+    # (special, replica count, replica name)
+    def sort_key(item: tuple[str, dict]) -> tuple[int, int, str]:
+        key = item[0]
+        if key in ("total", f"['{UNKNOWN_REPLICAS_NAME}']"):
+            return (1, 0, key)
+        replica_count = key.count("','") + 1 if key.startswith("[") else 0
+        return (0, replica_count, key)
+
+    sorted_result = dict(sorted(result.items(), key=sort_key))
+    return sorted_result
 
 
 def _calculate_size_limits(
@@ -444,7 +476,7 @@ def _local_blobs_table(
                 drop_existing_table=True,
             )
 
-            remote_data_paths_table = _get_table_function(
+            remote_data_paths_table = get_table_function_for_scope(
                 ctx, REMOTE_DATA_PATHS_TABLE, Scope.SHARD, cluster_name=None
             )
 
@@ -492,7 +524,14 @@ def _insert_missing_s3_backups_blobs(
         for metadata_list in chunked(
             _generate_blobs_from_tar_files(), INSERT_BATCH_SIZE
         ):
-            _insert_local_blobs_batch(ctx, metadata_list, local_blobs_table, disk_conf)
+            _insert_local_blobs_batch(
+                ctx,
+                metadata_list,
+                local_blobs_table,
+                UNKNOWN_REPLICAS_NAME,
+                LocalState.SHADOW,
+                disk_conf,
+            )
 
     missing_backups = get_missing_chs3_backups(disk_conf.name)
 
@@ -728,19 +767,20 @@ def _collect_space_usage(
         drop_existing_table=False,
     )
 
-    space_usage_query = _get_fill_space_usage_query(
+    space_usage_queries = _get_fill_space_usage_query(
         ctx, local_blobs_table, orphaned_blobs_table, space_usage_table_new
     )
 
     # TODO: should probably use different setting for timeout
     timeout = config["antijoin_timeout"]
     query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
-    execute_query(
-        ctx,
-        space_usage_query,
-        timeout=timeout,
-        settings=query_settings,
-    )
+    for query in space_usage_queries:
+        execute_query(
+            ctx,
+            query,
+            timeout=timeout,
+            settings=query_settings,
+        )
 
     execute_query(ctx, f"TRUNCATE TABLE {space_usage_table} SYNC")
     execute_query(
@@ -963,18 +1003,20 @@ def _insert_local_blobs_batch(
     ctx: Context,
     obj_paths_batch: List[S3ObjectLocalInfo],
     local_blobs_table: str,
+    replica: str,
+    state: LocalState,
     disk_conf: S3DiskConfiguration,
 ) -> None:
     """
     Insert batch of object names to the listing table.
     """
     batch_values = ",".join(
-        f"('{item.key if item.key_is_full else os.path.join(disk_conf.prefix, item.key)}','shadow',{item.size},1)"
+        f"('{replica}','{item.key if item.key_is_full else os.path.join(disk_conf.prefix, item.key)}','{state}',{item.size},1)"
         for item in obj_paths_batch
     )
     execute_query(
         ctx,
-        f"INSERT INTO {local_blobs_table} (obj_path, state, obj_size, ref_count) VALUES {batch_values}",
+        f"INSERT INTO {local_blobs_table} (replica, obj_path, state, obj_size, ref_count) VALUES {batch_values}",
         format_=None,
     )
 
@@ -1025,9 +1067,13 @@ def _create_local_blobs_table(
         ctx,
         f"""
             CREATE TABLE IF NOT EXISTS {table_name}
-                (obj_path String, state String, obj_size UInt64, ref_count UInt32)
-                ENGINE SummingMergeTree
-                ORDER BY (obj_path, state)
+                (replica String,
+                obj_path String,
+                state Enum('{LocalState.ACTIVE}', '{LocalState.SHADOW}', '{LocalState.DETACHED}'),
+                obj_size UInt64,
+                ref_count UInt32)
+                ENGINE MergeTree
+                ORDER BY (replica, obj_path, state)
                 SETTINGS storage_policy = '{storage_policy}'
         """,
         format_=None,
@@ -1079,28 +1125,15 @@ def _create_space_usage_table(
         ctx,
         f"""
             CREATE TABLE IF NOT EXISTS {space_usage_table_name}
-                (active UInt64, unique_frozen UInt64, unique_detached UInt64, orphaned UInt64)
+                (replica Array(String),
+                state Enum('{State.ACTIVE}', '{State.UNIQUE_FROZEN}', '{State.UNIQUE_DETACHED}', '{State.ORPHANED}'),
+                size UInt64)
                 ENGINE {engine}
-                ORDER BY active
+                ORDER BY (replica, state)
                 SETTINGS storage_policy = '{storage_policy}'
         """,
         format_=None,
     )
-
-
-def _get_table_function(
-    ctx: Context,
-    table: str,
-    scope: Scope,
-    cluster_name: Optional[str] = None,
-) -> str:
-    if scope == Scope.CLUSTER:
-        assert cluster_name
-        return f"cluster('{cluster_name}', {table})"
-    elif scope == Scope.SHARD:
-        return get_remote_table_for_hosts(ctx, table, ClickhouseInfo.get_replicas(ctx))
-
-    return table
 
 
 def _get_fill_local_blobs_table_query(
@@ -1125,11 +1158,12 @@ def _get_fill_local_blobs_table_query(
     query = f"""
         INSERT INTO {local_blobs_table}
             SELECT
+                hostName(),
                 remote_path,
                 multiIf(
-                    position(local_path, 'shadow/') > 0, 'shadow',
-                    position(local_path, 'detached/') > 0, 'detached',
-                    'active'
+                    position(local_path, 'shadow/') > 0, '{LocalState.SHADOW}',
+                    position(local_path, 'detached/') > 0, '{LocalState.DETACHED}',
+                    '{LocalState.ACTIVE}'
                 ) AS status,
                 {size} AS obj_size,
                 1 AS ref_count
@@ -1146,99 +1180,141 @@ def _get_fill_space_usage_query(
     local_blobs_table: str,
     orphaned_blobs_table: str,
     space_usage_table_new: str,
-) -> Query:
+) -> list[Query]:
     """
     CTE with INSERT supported since 25.3.
     """
     user_password = clickhouse_client(ctx).password or ""
 
     if match_ch_version(ctx, "25.3"):
-        query = f"""
-            WITH active AS
-                (SELECT sum(size / count) as size
-                    FROM (SELECT sum(obj_size) size, sum(ref_count) count
-                        FROM {local_blobs_table}
-                        WHERE state = 'active'
-                        GROUP BY obj_path)
-                ),
-            unique_frozen AS
-                (SELECT sum(shadow.obj_size / shadow.ref_count) AS size
-                    FROM {local_blobs_table} AS shadow
-                    LEFT ANTI JOIN
-                    (
-                        SELECT DISTINCT obj_path
-                        FROM {local_blobs_table}
-                        WHERE state = 'active'
-                    ) AS has_other
-                        ON shadow.obj_path = has_other.obj_path
-                        WHERE
-                            shadow.state = 'shadow'
-                ),
-            unique_detached AS
-                (SELECT sum(detached.obj_size / detached.ref_count) AS size
-                    FROM {local_blobs_table} AS detached
-                    LEFT ANTI JOIN
-                    (
-                        SELECT DISTINCT obj_path
-                        FROM {local_blobs_table}
-                        WHERE state IN ('active', 'shadow')
-                    ) AS has_other
-                        ON detached.obj_path = has_other.obj_path
-                        WHERE
-                            detached.state = 'detached'
-                ),
-            orphaned AS
-                (SELECT sum(obj_size) AS size
-                    FROM {orphaned_blobs_table}
+        queries = [
+            f"""
+            WITH
+            aggregated_blobs AS (
+                SELECT
+                    arraySort(groupArray(replica)) as replica,
+                    obj_path,
+                    state,
+                    sum(obj_size) as sum_size,
+                    sum(ref_count) as ref_count
+                FROM {local_blobs_table}
+                GROUP BY obj_path, state
+            ),
+            active AS (
+                SELECT
+                    replica,
+                    sum(sum_size / ref_count) as size
+                FROM aggregated_blobs
+                WHERE state = '{LocalState.ACTIVE}'
+                GROUP BY replica
+            ),
+            unique_frozen AS (
+                SELECT
+                    replica,
+                    sum(sum_size / ref_count) as size
+                FROM aggregated_blobs
+                WHERE state = '{LocalState.SHADOW}'
+                AND obj_path NOT IN (
+                    SELECT obj_path FROM aggregated_blobs WHERE state = '{LocalState.ACTIVE}'
                 )
-            INSERT INTO {space_usage_table_new}
+                GROUP BY replica
+            ),
+            unique_detached AS (
                 SELECT
-                    (SELECT size FROM active),
-                    (SELECT size FROM unique_frozen),
-                    (SELECT size FROM unique_detached),
-                    (SELECT size FROM orphaned)
+                    replica,
+                    sum(sum_size / ref_count) as size
+                FROM aggregated_blobs
+                WHERE state = '{LocalState.DETACHED}'
+                AND obj_path NOT IN (
+                    SELECT obj_path FROM aggregated_blobs WHERE state IN ('{LocalState.ACTIVE}', '{LocalState.SHADOW}')
+                )
+                GROUP BY replica
+            )
+            INSERT INTO {space_usage_table_new} (replica, state, size)
+                SELECT replica, '{State.ACTIVE}', size FROM active
+                UNION ALL
+                SELECT replica, '{State.UNIQUE_FROZEN}', size FROM unique_frozen
+                UNION ALL
+                SELECT replica, '{State.UNIQUE_DETACHED}', size FROM unique_detached
+                UNION ALL
+                SELECT ['{UNKNOWN_REPLICAS_NAME}'], '{State.ORPHANED}', toFloat64(sum(obj_size)) FROM {orphaned_blobs_table}
         """
+        ]
     else:
-        query = f"""
+        query_active = f"""
             INSERT INTO {space_usage_table_new}
                 SELECT
-                    (SELECT sum(size / count)
-                        FROM (SELECT sum(obj_size) size, sum(ref_count) count
-                            FROM {local_blobs_table}
-                            WHERE state = 'active'
-                            GROUP BY obj_path)
-                    ) AS active,
-                    (SELECT sum(shadow.obj_size / shadow.ref_count)
-                        FROM {local_blobs_table} AS shadow
-                        LEFT ANTI JOIN
-                        (
-                            SELECT DISTINCT obj_path
-                            FROM {local_blobs_table}
-                            WHERE state = 'active'
-                        ) AS has_other
-                            ON shadow.obj_path = has_other.obj_path
-                            WHERE
-                                shadow.state = 'shadow'
-                    ) AS unique_frozen,
-                    (SELECT sum(detached.obj_size / detached.ref_count)
-                        FROM {local_blobs_table} AS detached
-                        LEFT ANTI JOIN
-                        (
-                            SELECT DISTINCT obj_path
-                            FROM {local_blobs_table}
-                            WHERE state IN ('active', 'shadow')
-                        ) AS has_other
-                            ON detached.obj_path = has_other.obj_path
-                            WHERE
-                                detached.state = 'detached'
-                    ) AS unique_detached,
-                    (SELECT sum(obj_size)FROM {orphaned_blobs_table}) AS orphaned
+                    replica,
+                    '{State.ACTIVE}',
+                    sum(sum_size / ref_count)
+                FROM (
+                    SELECT
+                        arraySort(groupArray(replica)) as replica,
+                        obj_path,
+                        state,
+                        sum(obj_size) as sum_size,
+                        sum(ref_count) as ref_count
+                    FROM {local_blobs_table}
+                    WHERE state = '{LocalState.ACTIVE}'
+                    GROUP BY obj_path, state
+                )
+                GROUP BY replica
+        """
+        query_frozen = f"""
+            INSERT INTO {space_usage_table_new}
+                SELECT
+                    replica,
+                    '{State.UNIQUE_FROZEN}',
+                    sum(sum_size / ref_count)
+                FROM (
+                    SELECT
+                        arraySort(groupArray(replica)) as replica,
+                        obj_path,
+                        state,
+                        sum(obj_size) as sum_size,
+                        sum(ref_count) as ref_count
+                    FROM {local_blobs_table}
+                    WHERE state = '{LocalState.SHADOW}'
+                    AND obj_path NOT IN (
+                        SELECT obj_path FROM {local_blobs_table} WHERE state = '{LocalState.ACTIVE}'
+                    )
+                    GROUP BY obj_path, state
+                )
+                GROUP BY replica
+        """
+        query_detached = f"""
+            INSERT INTO {space_usage_table_new}
+                SELECT
+                    replica,
+                    '{State.UNIQUE_DETACHED}',
+                    sum(sum_size / ref_count)
+                FROM (
+                    SELECT
+                        arraySort(groupArray(replica)) as replica,
+                        obj_path,
+                        state,
+                        sum(obj_size) as sum_size,
+                        sum(ref_count) as ref_count
+                    FROM {local_blobs_table}
+                    WHERE state = '{LocalState.DETACHED}'
+                    AND obj_path NOT IN (
+                        SELECT obj_path FROM {local_blobs_table} WHERE state IN ('{LocalState.ACTIVE}', '{LocalState.SHADOW}')
+                    )
+                    GROUP BY obj_path, state
+                )
+                GROUP BY replica
+        """
+        query_orphaned = f"""
+            INSERT INTO {space_usage_table_new}
+                SELECT ['{UNKNOWN_REPLICAS_NAME}'], '{State.ORPHANED}', toFloat64(sum(obj_size)) FROM {orphaned_blobs_table}
         """
 
-    return Query(
-        query,
-        sensitive_args={"user_password": user_password},
-    )
+        queries = [query_active, query_frozen, query_detached, query_orphaned]
+
+    return [
+        Query(query, sensitive_args={"user_password": user_password})
+        for query in queries
+    ]
 
 
 def _check_schema_mismatch_for_remote_blobs(create_query: str) -> bool:

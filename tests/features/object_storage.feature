@@ -52,17 +52,23 @@ Feature: chadmin object-storage commands
     """
     Then we get response matches
     """
-    active: '?([1-9][0-9]*)'?
-    unique_frozen: '?(0)'?
-    unique_detached: '?([1-9][0-9]*)'?
-    orphaned: '?(1)'?
+    total:
+      active: '?([1-9][0-9]*)'?
+      unique_detached: '?([1-9][0-9]*)'?
+      orphaned: '?(1)'?
     """
 
   @require_version_24.3
-  Scenario: Collect info with frozen parts
-    When we execute query on clickhouse01
+  Scenario: Collect info with frozen parts for all replicas
+    When we execute queries on clickhouse01
     """
-    ALTER TABLE test.table_s3_01 FREEZE
+    CREATE TABLE IF NOT EXISTS test.table_s3_02 ON CLUSTER '{cluster}' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_s3_02', '{replica}') ORDER BY n PARTITION BY (n%10)
+    SETTINGS storage_policy = 'object_storage', allow_remote_fs_zero_copy_replication = 1;
+
+    INSERT INTO test.table_s3_02 (n) SELECT number FROM system.numbers LIMIT 10;
+
+    ALTER TABLE test.table_s3_01 FREEZE;
     """
     And we execute query on clickhouse01
     """
@@ -80,14 +86,44 @@ Feature: chadmin object-storage commands
     """
     And we execute command on clickhouse01
     """
-    chadmin --format yaml object-storage space-usage
+    chadmin --format yaml object-storage space-usage -v
     """
     Then we get response matches
     """
-    active: '?([1-9][0-9]*)'?
-    unique_frozen: '?([1-9][0-9]*)'?
-    unique_detached: '?([1-9][0-9]*)'?
-    orphaned: '?(1)'?
+    '\[''clickhouse01''\]':
+      active: '?([1-9][0-9]*)'?
+      unique_frozen: '?([1-9][0-9]*)'?
+    '\[''clickhouse02''\]':
+      active: '?([1-9][0-9]*)'?
+      unique_detached: '?([1-9][0-9]*)'?
+    '\[''clickhouse01'',''clickhouse02''\]':
+      active: '?([1-9][0-9]*)'?
+    '\[''unknown_replicas''\]':
+      orphaned: 1
+    total:
+      active: '?([1-9][0-9]*)'?
+      unique_frozen: '?([1-9][0-9]*)'?
+      unique_detached: '?([1-9][0-9]*)'?
+      orphaned: '?(1)'?
+    """
+
+  @require_version_23.3
+  Scenario: Detect different space usage table schema
+    When we execute command on clickhouse01
+    """
+    chadmin object-storage collect-info --to-time 0h --traverse-remote
+    """
+    And we execute query on clickhouse02
+    """
+    DROP TABLE test.space_usage_from_object_storage SYNC;
+    """
+    And we try to execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage space-usage
+    """
+    Then it fails with response contains
+    """
+    Table schema for 'test.space_usage_from_object_storage' on replica 'clickhouse02' is different from local schema
     """
 
   Scenario: Dry-run clean with guard period
