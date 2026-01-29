@@ -497,9 +497,9 @@ def _insert_missing_s3_backups_blobs(
     missing_backups = get_missing_chs3_backups(disk_conf.name)
 
     for backup in missing_backups:
-        if not match_ch_backup_version("2.651.159295191"):
+        if not match_ch_backup_version("2.664.124298363"):
             logging.warning(
-                "Skip downloading missing backups. Reason: Download metadata command is available since ch-backup 2.651.159295191"
+                "Skip downloading missing backups. Reason: Download metadata command is available since ch-backup 2.664.124298363"
             )
             return
 
