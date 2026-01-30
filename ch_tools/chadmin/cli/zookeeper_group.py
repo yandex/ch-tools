@@ -350,10 +350,21 @@ def delete_ddl_task_command(ctx: Context, tasks: list) -> None:
     help="Perform ddl query cleanup.",
     type=bool,
 )
+@option(
+    "--delete-zero-copy-locks",
+    "delete_locks",
+    is_flag=True,
+    help="Delete zero-copy locks for removed hosts.",
+    type=bool,
+)
 @argument("fqdn", type=ListParamType())
 @pass_context
 def clickhouse_hosts_command(
-    ctx: Context, fqdn: list, clean_ddl_queue: bool, dry_run: bool
+    ctx: Context,
+    fqdn: list,
+    clean_ddl_queue: bool,
+    dry_run: bool,
+    delete_locks: bool,
 ) -> None:
     # We can't get the ddl queue path from clickhouse config,
     # because in some cases we are changing this path while performing cluster resetup.
@@ -365,12 +376,13 @@ def clickhouse_hosts_command(
         zk_ddl_query_path=config["clickhouse"]["distributed_ddl_path"],
         dry_run=dry_run,
     )
-    for replica in fqdn:
-        delete_zero_copy_locks(
-            ctx,
-            replica_name=replica,
-            dry_run=dry_run,
-        )
+    if delete_locks:
+        for replica in fqdn:
+            delete_zero_copy_locks(
+                ctx,
+                replica_name=replica,
+                dry_run=dry_run,
+            )
 
 
 @zookeeper_group.command(
@@ -384,11 +396,22 @@ def clickhouse_hosts_command(
     default=False,
     help="Enable dry run mode and do not perform any modifying actions.",
 )
+@option(
+    "--delete-zero-copy-locks",
+    "delete_locks",
+    is_flag=True,
+    help="Delete zero-copy locks for removed hosts.",
+    type=bool,
+)
 @argument("zookeeper-table-path")
 @argument("fqdn", type=ListParamType())
 @pass_context
 def remove_hosts_from_table(
-    ctx: Context, zookeeper_table_path: str, fqdn: list, dry_run: bool
+    ctx: Context,
+    zookeeper_table_path: str,
+    fqdn: list,
+    dry_run: bool,
+    delete_locks: bool,
 ) -> None:
     clean_zk_metadata_for_hosts(
         ctx,
@@ -398,12 +421,13 @@ def remove_hosts_from_table(
         cleanup_ddl_queue=False,
         dry_run=dry_run,
     )
-    for replica in fqdn:
-        delete_zero_copy_locks(
-            ctx,
-            replica_name=replica,
-            dry_run=dry_run,
-        )
+    if delete_locks:
+        for replica in fqdn:
+            delete_zero_copy_locks(
+                ctx,
+                replica_name=replica,
+                dry_run=dry_run,
+            )
 
 
 @zookeeper_group.command("cleanup-zero-copy-locks")
