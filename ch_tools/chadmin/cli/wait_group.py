@@ -3,8 +3,23 @@ import time
 from datetime import timedelta
 from typing import Any, Optional
 
+import psutil
 import requests
-from click import Context, FloatRange, group, option, pass_context
+from cloup import (
+    Choice,
+    Context,
+    FloatRange,
+    group,
+    option,
+    pass_context,
+)
+from cloup.constraints import (
+    AcceptAtMost,
+    Equal,
+    If,
+    accept_none,
+    constraint,
+)
 from tenacity import (
     RetryCallState,
     retry,
@@ -32,6 +47,10 @@ BASE_TIMEOUT = 600
 LOCAL_PART_LOAD_SPEED = 10  # in data parts per second
 S3_PART_LOAD_SPEED = 0.5  # in data parts per second
 CLICKHOUSE_TIMEOUT_EXCEEDED_MSG = "TIMEOUT_EXCEEDED"
+PID_MAX_CHECK_ATTEMPTS = 90
+DEFAULT_FILE_PROCESSING_SPEED = 100  # files per second
+DEFAULT_MIN_TIMEOUT = 2 * 60 * 60  # in seconds
+DEFAULT_MAX_TIMEOUT = 6 * 60 * 60  # in seconds
 
 
 @group("wait", cls=Chadmin)
@@ -206,45 +225,145 @@ def wait_replication_sync_command(
 
 
 @wait_group.command("started")
+@option("-q", "--quiet", "quiet", is_flag=True, default=False, help="Quiet mode.")
 @option(
-    "--timeout",
-    type=int,
-    help="Max amount of time to wait, in seconds. If not set, the timeout is determined dynamically"
-    " based on data part count.",
+    "--wait-failed-dictionaries",
+    "wait_failed_dictionaries",
+    is_flag=True,
+    default=False,
+    help="Should we wait for dictionaries in FAILED or FAILED_AND_RELOADING status.",
 )
-@option("-q", "--quiet", is_flag=True, default=False, help="Quiet mode.")
+@option(
+    "--track-pid-file",
+    "track_pid_file",
+    type=str,
+    default="",
+    help="Path to PID file. Exit if pid from pidfile not running.",
+)
+@option(
+    "--timeout-strategy",
+    "timeout_strategy",
+    type=Choice(["files", "parts"]),
+    default="files",
+    help="Strategy to calculate timeout.",
+)
+@option(
+    "--file-processing-speed",
+    "file_processing_speed",
+    type=int,
+    help="Number of files, which expected to be processed in one second.",
+)
+@option(
+    "--min-timeout",
+    "min_timeout",
+    type=int,
+    help="Minimal amount of time to wait, in seconds.",
+)
+@option(
+    "--max-timeout",
+    "max_timeout",
+    type=int,
+    help="Maximal amount of time to wait, in seconds.",
+)
+@option(
+    "-w",
+    "--wait",
+    "--timeout",
+    "wait",
+    type=int,
+    help="Time to wait, in seconds. If not set, the timeout is determined dynamically based on chosen timeout strategy.",
+)
+@constraint(
+    If(Equal("timeout_strategy", "parts"), then=AcceptAtMost(1), else_=accept_none),
+    ["wait"],
+)
+@constraint(
+    If(Equal("timeout_strategy", "files"), then=AcceptAtMost(3), else_=accept_none),
+    ["file_processing_speed", "min_timeout", "max_timeout"],
+)
 @pass_context
-def wait_started_command(ctx: Context, timeout: Optional[int], quiet: bool) -> None:
+def wait_started_command(
+    ctx: Context,
+    quiet: bool,
+    wait_failed_dictionaries: bool,
+    track_pid_file: str,
+    timeout_strategy: str,
+    file_processing_speed: Optional[int],
+    min_timeout: Optional[int],
+    max_timeout: Optional[int],
+    wait: Optional[int],
+) -> None:
     """Wait for ClickHouse server to start up."""
     if quiet:
         logging.disable_stdout_logger()
-    if not timeout:
-        timeout = get_timeout()
+
+    timeout: int
+    if wait:
+        timeout = wait
+    elif timeout_strategy == "files":
+        timeout = get_timeout_by_files(file_processing_speed, min_timeout, max_timeout)
+    elif timeout_strategy == "parts":
+        timeout = get_timeout_by_parts()
 
     deadline = time.time() + timeout
 
     ch_is_alive = False
+    pid_check_attempts = 0
     while time.time() < deadline:
+        pid_check_attempts += 1
+
         if is_clickhouse_alive():
             ch_is_alive = True
             break
+
         time.sleep(1)
+        exit_if_pid_not_running(track_pid_file, pid_check_attempts)
 
-    if ch_is_alive:
-        warmup_system_users(ctx)
-        return
+    if not ch_is_alive:
+        raise ConnectionError("ClickHouse is dead")
 
-    raise ConnectionError("ClickHouse is dead")
+    warmup_system_users(ctx)
+
+    pid_check_attempts = 0
+    while time.time() < deadline:
+        pid_check_attempts += 1
+        if is_initial_dictionaries_load_completed(ctx, wait_failed_dictionaries):
+            return
+        time.sleep(1)
+        exit_if_pid_not_running(track_pid_file, pid_check_attempts)
 
 
-def get_timeout() -> int:
+def get_timeout_by_parts() -> int:
     """
-    Calculate and return timeout.
+    Calculate and return timeout by parts.
     """
     timeout = BASE_TIMEOUT
     timeout += int(get_local_data_part_count() / LOCAL_PART_LOAD_SPEED)
     timeout += int(get_s3_data_part_count() / S3_PART_LOAD_SPEED)
     return timeout
+
+
+def get_timeout_by_files(
+    file_processing_speed: Optional[int],
+    min_timeout: Optional[int],
+    max_timeout: Optional[int],
+) -> int:
+    """
+    Calculate and return timeout by files.
+    """
+    file_processing_speed = file_processing_speed or DEFAULT_FILE_PROCESSING_SPEED
+    min_timeout = min_timeout or DEFAULT_MIN_TIMEOUT
+    max_timeout = max_timeout or DEFAULT_MAX_TIMEOUT
+
+    file_processing_timeout = get_file_count() // file_processing_speed
+    return max(min_timeout, min(file_processing_timeout, max_timeout))
+
+
+def get_file_count() -> int:
+    """
+    Return number of files stored on data disk.
+    """
+    return int(execute("df --output=iused /var/lib/clickhouse/ | tail -1"))
 
 
 def get_local_data_part_count() -> int:
@@ -290,6 +409,64 @@ def is_clickhouse_alive() -> bool:
 
 def warmup_system_users(ctx: Context) -> None:
     execute_query(ctx, "SELECT count() FROM system.users", timeout=300)
+
+
+def is_initial_dictionaries_load_completed(
+    ctx: Context, wait_failed_dictionaries: bool
+) -> bool:
+    """
+    Check that initial load of ClickHouse dictionaries completed.
+    """
+    try:
+        if wait_failed_dictionaries:
+            query = (
+                "SELECT count() FROM system.dictionaries WHERE status IN "
+                "('LOADING','FAILED','LOADED_AND_RELOADING','FAILED_AND_RELOADING')"
+            )
+        else:
+            query = "SELECT count() FROM system.dictionaries WHERE status IN ('LOADING', 'LOADED_AND_RELOADING')"
+        output = execute_query(ctx, query, timeout=300, format_="TabSeparated")
+        if output == "0":
+            return True
+
+    except Exception as e:
+        logging.error("Failed to get status of ClickHouse dictionaries: {!r}", e)
+
+    return False
+
+
+def is_pid_file_valid(pid_file_to_check: str) -> bool:
+    """
+    Verify that PID file exists and the process is running.
+    """
+    if not pid_file_to_check:
+        return True
+
+    try:
+        with open(pid_file_to_check, "r", encoding="utf-8") as f:
+            pid = int(f.read())
+    except FileNotFoundError:
+        logging.debug("ClickHouse pid file ({}) not found.", pid_file_to_check)
+        return False
+
+    if not psutil.pid_exists(pid):
+        logging.debug("ClickHouse pid ({}) not running.", pid)
+        return False
+
+    return True
+
+
+def exit_if_pid_not_running(track_pid_file: str, pid_check_attempts: int) -> None:
+    """
+    Check PID file and raise exception if process is not running.
+    """
+    is_valid = is_pid_file_valid(track_pid_file)
+    if is_valid or pid_check_attempts < PID_MAX_CHECK_ATTEMPTS:
+        return
+
+    raise RuntimeError(
+        f'ClickHouse pid file creation out of max tries "{PID_MAX_CHECK_ATTEMPTS}"'
+    )
 
 
 def sync_replica_with_retries(
