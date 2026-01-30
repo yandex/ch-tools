@@ -224,7 +224,7 @@ def wait_replication_sync_command(
     raise RuntimeError("Timeout while waiting on replication-lag command.")
 
 
-@wait_group.command("started", show_constraints=True)
+@wait_group.command("started")
 @option("-q", "--quiet", "quiet", is_flag=True, default=False, help="Quiet mode.")
 @option(
     "--wait-failed-dictionaries",
