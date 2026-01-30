@@ -13,7 +13,7 @@ class WorkerTask:
 
 
 def execute_tasks_in_parallel(
-    tasks: List[WorkerTask], max_workers: int = 4, keep_going: bool = False
+    tasks: List[WorkerTask], max_workers: int = 4, keep_going: bool = False,  callback = None,
 ) -> Dict[str, Any]:
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Can't use map function here. The map method returns a generator
@@ -31,6 +31,8 @@ def execute_tasks_in_parallel(
             idf = futures_to_indedifier[future]
             try:
                 result[idf] = future.result()
+                if callback:
+                    callback(idf)
             except Exception as e:
                 if keep_going:
                     logging.warning(
