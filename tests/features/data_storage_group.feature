@@ -59,6 +59,7 @@ Feature: chadmin data-store commands
       deleted: 'Yes'
     """
 
+  @require_version_less_than_26.1
   Scenario: Check remove orphaned sql object single table.
     When we execute queries on clickhouse01
     """
