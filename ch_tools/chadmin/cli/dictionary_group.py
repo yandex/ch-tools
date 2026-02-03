@@ -97,7 +97,7 @@ def _full_name(dictionary: Any) -> str:
 @option(
     "--database",
     "target_database",
-    default="_dictionaries",
+    default=None,
     type=str,
     help="Target database for migrated dictionaries.",
 )
@@ -114,7 +114,7 @@ def migrate_command(
     dry_run: bool,
     should_remove: bool,
     force_reload: bool,
-    target_database: str,
+    target_database: Optional[str],
     max_workers: int,
     include_pattern: Optional[str],
     exclude_pattern: Optional[str],

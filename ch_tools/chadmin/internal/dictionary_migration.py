@@ -6,6 +6,7 @@ from typing import Any, Optional
 from click import Context
 
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config.path import CLICKHOUSE_SERVER_CONFIG_PATH
 from ch_tools.common.clickhouse.config.utils import load_config, load_config_file
@@ -57,7 +58,7 @@ def migrate_dictionaries(
     dry_run: bool,
     should_remove: bool,
     force_reload: bool,
-    target_database: str,
+    target_database: Optional[str],
     max_workers: int,
     include_pattern: Optional[str] = None,
     exclude_pattern: Optional[str] = None,
@@ -80,6 +81,18 @@ def migrate_dictionaries(
             "No dictionary config files found matching pattern '{}", config_glob_pattern
         )
         return
+
+    if target_database is None:
+        target_database = _get_default_dictionary_database(ctx)
+        logging.info(
+            "Using target database from ClickHouse settings: {}", target_database
+        )
+    if not target_database:
+        raise RuntimeError(
+            "Target database must be specified via --database option or "
+            "configured in ClickHouse as 'default_dictionary_database' setting "
+            "(requires ClickHouse >= 26.2)"
+        )
 
     all_dictionaries: list[tuple[Path, str, str]] = []
     for config_file in config_path_list:
@@ -108,6 +121,21 @@ def migrate_dictionaries(
             force_reload,
             max_workers,
         )
+
+
+def _get_default_dictionary_database(ctx: Context) -> str:
+    if not match_ch_version(ctx, "26.2"):
+        raise RuntimeError(
+            "Please upgrade ClickHouse to 26.2 or specify --database explicitly."
+        )
+    query = (
+        "SELECT value FROM system.settings WHERE name = 'default_dictionary_database'"
+    )
+    result = execute_query(ctx, query, format_="TabSeparated")
+    if not result or not result.strip():
+        raise RuntimeError("Setting 'default_dictionary_database' not found or empty. ")
+
+    return result.strip()
 
 
 def _dry_run(filtered_dictionaries: list[tuple[Path, str, str]]) -> None:
