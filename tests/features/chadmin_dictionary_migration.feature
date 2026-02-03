@@ -85,7 +85,7 @@ Feature: chadmin dictionary migration command.
     """
     And we execute command on clickhouse01:
     """
-      chadmin dictionary migrate
+      chadmin dictionary migrate --database _dictionaries
     """
     Then it completes successfully
     And dictionary "_dictionaries.prod_dict" returns expected values on clickhouse01
@@ -188,7 +188,7 @@ Feature: chadmin dictionary migration command.
     """
     And we execute command on clickhouse01:
     """
-      chadmin dictionary migrate --remove
+      chadmin dictionary migrate --remove --database _dictionaries
     """
     Then it completes successfully
     And dictionary "_dictionaries.prod_dict" returns expected values on clickhouse01
@@ -271,7 +271,7 @@ Feature: chadmin dictionary migration command.
     """
     And we execute command on clickhouse01:
     """
-      chadmin dictionary migrate --include "prod_*" --remove
+      chadmin dictionary migrate --include "prod_*" --remove --database _dictionaries
     """
     Then it completes successfully
     And dictionary "_dictionaries.prod_dict" returns expected values on clickhouse01
@@ -348,7 +348,7 @@ Feature: chadmin dictionary migration command.
     """
     And we execute command on clickhouse01:
     """
-      chadmin dictionary migrate --exclude "prod_*" --remove
+      chadmin dictionary migrate --exclude "prod_*" --remove --database _dictionaries
     """
     Then it completes successfully
     And dictionary "_dictionaries.test_dict1" returns expected values on clickhouse01
