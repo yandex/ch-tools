@@ -5,8 +5,8 @@ from typing import Any, Optional
 
 from click import Context
 
-from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.system import match_ch_version
+from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config.path import CLICKHOUSE_SERVER_CONFIG_PATH
 from ch_tools.common.clickhouse.config.utils import load_config, load_config_file
