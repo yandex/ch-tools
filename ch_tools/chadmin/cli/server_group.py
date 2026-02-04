@@ -1,0 +1,93 @@
+"""
+Commands for manipulating ClickHouse server.
+"""
+
+import time
+from typing import Optional
+
+from cloup import Context, group, option, pass_context
+
+from ch_tools.chadmin.cli.chadmin_group import Chadmin
+from ch_tools.chadmin.cli.wait_group import (
+    is_initial_dictionaries_load_completed,
+    warmup_system_users,
+)
+from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common import logging
+from ch_tools.common.clickhouse.client.error import ClickhouseError
+from ch_tools.common.utils import execute
+
+
+@group("server", cls=Chadmin)
+def server_group() -> None:
+    """Commands for manipulating ClickHouse server (restart|etc.)."""
+    pass
+
+
+@server_group.command("restart")
+@option(
+    "--timeout",
+    type=int,
+    help="Maximum time to wait for server restart, in seconds.",
+)
+@pass_context
+def restart_command(ctx: Context, timeout: Optional[int]) -> None:
+    """Restart ClickHouse server and wait for it to start."""
+    config = ctx.obj["config"]
+
+    # Получить параметры из конфига
+    restart_cmd = config["chadmin"]["server"]["restart"]["command"]
+    timeout = timeout or config["chadmin"]["server"]["restart"]["timeout"]
+    check_interval = config["chadmin"]["server"]["restart"]["check_interval"]
+
+    logging.info(f"Restarting ClickHouse server with command: {restart_cmd}")
+    start_time = time.time()
+
+    # Выполнить команду перезапуска
+    try:
+        execute(restart_cmd)
+    except Exception as e:
+        raise RuntimeError(f"Failed to execute restart command: {e}")
+
+    logging.info("Waiting for ClickHouse server to start...")
+    deadline = start_time + timeout
+
+    # Ожидать, пока сервер станет доступен
+    while time.time() < deadline:
+        try:
+            execute_query(ctx, "SELECT 1", format_="TabSeparated", timeout=5)
+            break
+        except (ClickhouseError, Exception):
+            pass
+        time.sleep(check_interval)
+    else:
+        raise RuntimeError(f"ClickHouse server didn't start within {timeout} seconds")
+
+    # Проверить uptime
+    while time.time() < deadline:
+        try:
+            uptime_result = execute_query(
+                ctx, "SELECT uptime()", format_="TabSeparated"
+            )
+            uptime = int(uptime_result.strip())
+            elapsed = time.time() - start_time
+
+            if uptime < elapsed:
+                logging.info(
+                    f"ClickHouse server restarted successfully (uptime: {uptime}s)"
+                )
+
+                # Прогреть системные пользователи и дождаться загрузки словарей
+                warmup_system_users(ctx)
+
+                if is_initial_dictionaries_load_completed(
+                    ctx, wait_failed_dictionaries=False
+                ):
+                    logging.info("Server is fully operational")
+                    return
+        except Exception as e:
+            logging.debug(f"Server not ready yet: {e}")
+
+        time.sleep(check_interval)
+
+    raise RuntimeError(f"Server didn't fully start within {timeout} seconds")

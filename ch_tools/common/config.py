@@ -76,6 +76,13 @@ DEFAULT_CONFIG = {
     },
     # Configuration of chadmin tool commands and options.
     "chadmin": {
+        "server": {
+            "restart": {
+                "command": "supervisorctl restart clickhouse-server",
+                "timeout": 600,  # секунды
+                "check_interval": 10,  # интервал проверки в секундах
+            },
+        },
         "wait": {
             "replication-sync": {
                 "replica_timeout": "1h",
