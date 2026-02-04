@@ -1,3 +1,11 @@
+"""
+ZooKeeper utilities for ClickHouse administration.
+
+Provides tools for managing ZooKeeper nodes, transactions, and client connections.
+Includes transaction builder for atomic operations, path formatting with macro support,
+and optimized recursive deletion for large node hierarchies.
+"""
+
 import os
 import re
 from collections import deque
@@ -24,6 +32,104 @@ from ch_tools.chadmin.internal.utils import chunked, replace_macros
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
 from ch_tools.common.clickhouse.config.clickhouse import ClickhouseConfig
+
+
+class ZKTransactionBuilder:
+    """
+    Builder for ZooKeeper transactions with path tracking.
+
+    Provides methods to create and delete nodes within a transaction,
+    tracks all operations, and validates results on commit.
+
+    Supports context manager protocol for automatic cleanup.
+
+    Example:
+        with ZKTransactionBuilder(ctx, zk) as builder:
+            builder.create_node("/path1", "value1")
+            builder.create_node("/path2", "value2")
+            builder.commit()
+    """
+
+    def __init__(self, ctx: Context, zk: KazooClient) -> None:
+        self.ctx = ctx
+        self.zk = zk
+        self.txn = zk.transaction()
+        self.path_to_nodes: List[str] = []
+        self._committed = False
+
+    def __enter__(self) -> "ZKTransactionBuilder":
+        """Enter context manager."""
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Exit context manager, reset state."""
+        self.reset()
+
+    def create_node(self, path: str, value: str = "") -> "ZKTransactionBuilder":
+        """Add create operation to transaction. Returns self for method chaining."""
+        if self._committed:
+            raise RuntimeError("Cannot add operations to committed transaction")
+        self.path_to_nodes.append(path)
+        self.txn.create(path=format_path(self.ctx, path), value=value.encode())
+        return self
+
+    def delete_node(self, path: str) -> "ZKTransactionBuilder":
+        """Add delete operation to transaction. Returns self for method chaining."""
+        if self._committed:
+            raise RuntimeError("Cannot add operations to committed transaction")
+        self.path_to_nodes.append(path)
+        self.txn.delete(path=format_path(self.ctx, path))
+        return self
+
+    def commit(self) -> None:
+        """Execute transaction and validate results."""
+        if self._committed:
+            raise RuntimeError("Transaction already committed")
+
+        result = self.txn.commit()
+        self._committed = True
+
+        # Log errors if validation fails (keep original format for external logic)
+        if not self._check_result_txn(result, no_throw=True):
+            for status in zip(self.path_to_nodes, result):
+                logging.error(f"{status}")
+
+        # Raise exception if there were errors
+        self._check_result_txn(result, no_throw=False)
+
+    def reset(self) -> None:
+        """Reset transaction state for reuse."""
+        self.path_to_nodes = []
+        self.txn = self.zk.transaction()
+        self._committed = False
+
+    @staticmethod
+    def _check_result_txn(results: List, no_throw: bool = False) -> bool:
+        """
+        Validate transaction results.
+
+        Args:
+            results: List of transaction results
+            no_throw: If True, return False on error instead of raising
+
+        Returns:
+            True if all operations succeeded, False otherwise (only if no_throw=True)
+
+        Raises:
+            NodeExistsError: If node already exists (only if no_throw=False)
+            Exception: Any other exception from transaction (only if no_throw=False)
+        """
+        for result in results:
+            if isinstance(result, NodeExistsError):
+                if no_throw:
+                    return False
+                raise NodeExistsError()
+            if isinstance(result, Exception):
+                if no_throw:
+                    return False
+                logging.error(f"Transaction error: {result}, type={type(result)}")
+                raise result
+        return True
 
 
 def has_zk() -> bool:
