@@ -1831,17 +1831,7 @@ Feature: chadmin database migrate command
     """
     Then it fails with response contains
     """
-    ('/clickhouse/non_repl_db/log/query-0000000003', RolledBackError())
-    ('/clickhouse/non_repl_db/log/query-0000000003/committed', RolledBackError())
-    ('/clickhouse/non_repl_db/log/query-0000000003/active', RolledBackError())
-    ('/clickhouse/non_repl_db/log/query-0000000003/finished', RolledBackError())
-    ('/clickhouse/non_repl_db/log/query-0000000003/synced', RolledBackError())
-    ('/clickhouse/non_repl_db/log/query-0000000001/finished/shard1|clickhouse01.ch_tools_test', NodeExistsError())
-    ('/clickhouse/non_repl_db/replicas/shard1|clickhouse01.ch_tools_test', RuntimeInconsistency())
-    ('/clickhouse/non_repl_db/replicas/shard1|clickhouse01.ch_tools_test/active', RuntimeInconsistency())
-    ('/clickhouse/non_repl_db/replicas/shard1|clickhouse01.ch_tools_test/digest', RuntimeInconsistency())
-    ('/clickhouse/non_repl_db/replicas/shard1|clickhouse01.ch_tools_test/log_ptr', RuntimeInconsistency())
-    ('/clickhouse/non_repl_db/replicas/shard1|clickhouse01.ch_tools_test/max_log_ptr_at_creation', RuntimeInconsistency())
+    Replica node '/clickhouse/non_repl_db/replicas/shard1|clickhouse01.ch_tools_test/digest' in ZooKeeper already exists and contains unexpected value
     """
 
   @require_version_24.8
