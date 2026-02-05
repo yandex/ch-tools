@@ -51,11 +51,11 @@ def test_restart_success(
 ) -> None:
     """Test successful server restart."""
     # Simulate time progression
-    mock_time.time.side_effect = [0, 1, 2, 3]
+    mock_time.time.side_effect = [0, 1, 2]
     mock_time.sleep = MagicMock()
 
-    # Server responds to queries and uptime check
-    mock_query.side_effect = ["1", "1"]  # First for alive check, second for uptime
+    # Server responds with low uptime (indicating restart)
+    mock_query.return_value = "1"
 
     # Dictionaries loaded
     mock_dict.return_value = True
@@ -75,14 +75,14 @@ def test_restart_success(
 @patch("ch_tools.chadmin.cli.server_group.execute")
 @patch("ch_tools.chadmin.cli.server_group.execute_query")
 @patch("ch_tools.chadmin.cli.server_group.time")
-def test_restart_timeout_server_not_alive(
+def test_restart_timeout_server_not_responding(
     mock_time: MagicMock,
     mock_query: MagicMock,
     mock_execute: MagicMock,
     cli_runner: CliRunner,
     cli_context: dict,
 ) -> None:
-    """Test timeout when server doesn't become alive."""
+    """Test timeout when server doesn't respond."""
     # Simulate timeout
     mock_time.time.side_effect = [0] + [100] * 10
     mock_time.sleep = MagicMock()
@@ -97,7 +97,7 @@ def test_restart_timeout_server_not_alive(
     )
 
     assert result.exit_code != 0
-    assert "didn't start" in result.output.lower()
+    assert "didn't fully start" in result.output.lower()
 
 
 @patch("ch_tools.chadmin.cli.server_group.execute")
@@ -116,7 +116,7 @@ def test_restart_timeout_uptime_check(
     mock_time.sleep = MagicMock()
 
     # Server responds but uptime check always shows high uptime (server didn't restart)
-    mock_query.side_effect = ["1", "1000", "1000"]
+    mock_query.return_value = "1000"
 
     result = cli_runner.invoke(
         server_group,
@@ -163,9 +163,9 @@ def test_restart_with_custom_timeout(
     cli_context: dict,
 ) -> None:
     """Test restart with custom timeout parameter."""
-    mock_time.time.side_effect = [0, 1, 2, 3]
+    mock_time.time.side_effect = [0, 1, 2]
     mock_time.sleep = MagicMock()
-    mock_query.side_effect = ["1", "1"]
+    mock_query.return_value = "1"
     mock_dict.return_value = True
 
     result = cli_runner.invoke(
@@ -177,4 +177,4 @@ def test_restart_with_custom_timeout(
 
     assert result.exit_code == 0
     # Verify custom timeout was used
-    assert mock_time.time.call_count >= 3
+    assert mock_time.time.call_count >= 2

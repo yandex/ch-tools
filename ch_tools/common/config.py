@@ -78,9 +78,9 @@ DEFAULT_CONFIG = {
     "chadmin": {
         "server": {
             "restart": {
-                "command": "supervisorctl restart clickhouse-server",
-                "timeout": 600,  # секунды
-                "check_interval": 10,  # интервал проверки в секундах
+                "command": "sudo systemctl restart clickhouse-server",
+                "timeout": 600,  # seconds
+                "check_interval": 10,  # check interval in seconds
             },
         },
         "wait": {

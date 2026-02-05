@@ -14,7 +14,6 @@ from ch_tools.chadmin.cli.wait_group import (
 )
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
-from ch_tools.common.clickhouse.client.error import ClickhouseError
 from ch_tools.common.utils import execute
 
 
@@ -35,49 +34,39 @@ def restart_command(ctx: Context, timeout: Optional[int]) -> None:
     """Restart ClickHouse server and wait for it to start."""
     config = ctx.obj["config"]
 
-    # Получить параметры из конфига
+    # Get parameters from config
     restart_cmd = config["chadmin"]["server"]["restart"]["command"]
-    timeout = timeout or config["chadmin"]["server"]["restart"]["timeout"]
+    timeout_value = timeout or config["chadmin"]["server"]["restart"]["timeout"]
     check_interval = config["chadmin"]["server"]["restart"]["check_interval"]
 
     logging.info(f"Restarting ClickHouse server with command: {restart_cmd}")
     start_time = time.time()
 
-    # Выполнить команду перезапуска
+    # Execute restart command
     try:
         execute(restart_cmd)
     except Exception as e:
         raise RuntimeError(f"Failed to execute restart command: {e}")
 
-    logging.info("Waiting for ClickHouse server to start...")
-    deadline = start_time + timeout
+    logging.info("Waiting for ClickHouse server to restart...")
+    deadline = start_time + timeout_value
 
-    # Ожидать, пока сервер станет доступен
-    while time.time() < deadline:
-        try:
-            execute_query(ctx, "SELECT 1", format_="TabSeparated", timeout=5)
-            break
-        except (ClickhouseError, Exception):
-            pass
-        time.sleep(check_interval)
-    else:
-        raise RuntimeError(f"ClickHouse server didn't start within {timeout} seconds")
-
-    # Проверить uptime
+    # Wait for server to restart by checking uptime
     while time.time() < deadline:
         try:
             uptime_result = execute_query(
-                ctx, "SELECT uptime()", format_="TabSeparated"
+                ctx, "SELECT uptime()", format_="TabSeparated", timeout=5
             )
             uptime = int(uptime_result.strip())
             elapsed = time.time() - start_time
 
+            # If uptime is less than elapsed time, server has restarted
             if uptime < elapsed:
                 logging.info(
                     f"ClickHouse server restarted successfully (uptime: {uptime}s)"
                 )
 
-                # Прогреть системные пользователи и дождаться загрузки словарей
+                # Warm up system users and wait for dictionaries to load
                 warmup_system_users(ctx)
 
                 if is_initial_dictionaries_load_completed(
@@ -90,4 +79,4 @@ def restart_command(ctx: Context, timeout: Optional[int]) -> None:
 
         time.sleep(check_interval)
 
-    raise RuntimeError(f"Server didn't fully start within {timeout} seconds")
+    raise RuntimeError(f"Server didn't fully start within {timeout_value} seconds")

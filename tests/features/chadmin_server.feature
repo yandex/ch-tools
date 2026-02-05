@@ -6,8 +6,15 @@ Feature: chadmin server commands
     And a working zookeeper
     And a working clickhouse on clickhouse01
     And a working clickhouse on clickhouse02
+    And merged clickhouse-tools configuration on clickhouse01
+    """
+    chadmin:
+      server:
+        restart:
+          command: supervisorctl restart clickhouse-server
+    """
 
-  Scenario: Restart ClickHouse server
+  Scenario: Restart ClickHouse server and verify it's operational
     When we execute command on clickhouse01
     """
     chadmin server restart --timeout 120
@@ -18,25 +25,6 @@ Feature: chadmin server commands
     SELECT 1
     """
     Then query was completed successfully
-
-  Scenario: Restart with custom timeout
-    When we execute command on clickhouse01
-    """
-    chadmin server restart --timeout 60
-    """
-    Then it completes successfully
-    When we execute query on clickhouse01
-    """
-    SELECT uptime()
-    """
-    Then query was completed successfully
-
-  Scenario: Verify server is operational after restart
-    When we execute command on clickhouse01
-    """
-    chadmin server restart --timeout 120
-    """
-    Then it completes successfully
     When we execute query on clickhouse01
     """
     SELECT count() FROM system.dictionaries WHERE status IN ('LOADING', 'LOADED_AND_RELOADING')
@@ -45,3 +33,4 @@ Feature: chadmin server commands
     """
     0
     """
+    
