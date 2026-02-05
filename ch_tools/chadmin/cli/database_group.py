@@ -3,7 +3,6 @@ from typing import Any
 from click import Context
 from cloup import argument, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
-from kazoo.exceptions import NodeExistsError
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.cli.database_metadata import (
@@ -12,8 +11,9 @@ from ch_tools.chadmin.cli.database_metadata import (
 )
 from ch_tools.chadmin.internal.database import is_database_exists, list_databases
 from ch_tools.chadmin.internal.database_replica import (
-    create_database_nodes,
-    restore_replica,
+    _restore_replica_fallback,
+    restore_replica_with_system_command,
+    supports_system_restore_database_replica,
 )
 from ch_tools.chadmin.internal.migration import (
     migrate_database_to_atomic,
@@ -168,6 +168,14 @@ def migrate_engine_command(
 @option("-d", "--database", required=True)
 @pass_context
 def restore_replica_command(ctx: Context, database: str) -> None:
+    """
+    Restore database replica using SYSTEM RESTORE DATABASE REPLICA command.
+
+    For ClickHouse >= 25.8, uses the built-in SYSTEM RESTORE DATABASE REPLICA command.
+    For older versions, falls back to manual ZooKeeper structure creation.
+    """
+
+    # Validation checks
     if not is_database_exists(ctx, database):
         raise RuntimeError(f"Database {database} does not exists, skip restore")
 
@@ -176,27 +184,15 @@ def restore_replica_command(ctx: Context, database: str) -> None:
     if not db_metadata.database_engine.is_replicated():
         raise RuntimeError(f"Database {database} is not Replicated, stop restore")
 
-    first_replica = True
-    try:
-        create_database_nodes(
-            ctx,
-            database_name=database,
-            db_replica_path=db_metadata.zookeeper_path,
-        )
-    except NodeExistsError as ex:
-        logging.info(
-            "create_database_nodes failed with NodeExistsError. {}, type={}. Restore as second replica",
-            ex,
-            type(ex),
-        )
-        first_replica = False
-    except Exception as ex:
-        logging.info("create_database_nodes failed with ex={}", type(ex))
-        raise ex
+    # Try using SYSTEM RESTORE DATABASE REPLICA for CH >= 25.8
+    if supports_system_restore_database_replica(ctx):
+        try:
+            restore_replica_with_system_command(ctx, database)
+            return
+        except Exception as e:
+            logging.error(f"SYSTEM RESTORE DATABASE REPLICA failed: {e}")
+            raise
 
-    restore_replica(
-        ctx,
-        database,
-        first_replica=first_replica,
-        db_replica_path=db_metadata.zookeeper_path,
-    )
+    # Fallback for older versions
+    logging.info("Using fallback method for ClickHouse < 25.8")
+    _restore_replica_fallback(ctx, database, db_metadata.zookeeper_path)
