@@ -32,14 +32,18 @@ def server_group() -> None:
 @pass_context
 def restart_command(ctx: Context, timeout: Optional[int]) -> None:
     """Restart ClickHouse server and wait for it to start."""
-    config = ctx.obj["config"]
 
-    # Get parameters from config
-    restart_cmd = config["chadmin"]["server"]["restart"]["command"]
-    timeout_value = timeout or config["chadmin"]["server"]["restart"]["timeout"]
-    check_interval = config["chadmin"]["server"]["restart"]["check_interval"]
+    # Get parameters from config with safe defaults
+    restart_config = ctx.obj["config"]["chadmin"]["server"]["restart"]
+    restart_cmd = restart_config["command"]
+    default_timeout = restart_config["timeout"]
+    check_interval = restart_config["check_interval"]
+
+    # Apply CLI timeout override if provided
+    timeout_value = timeout if timeout is not None else default_timeout
 
     logging.info(f"Restarting ClickHouse server with command: {restart_cmd}")
+    logging.info(f"Using timeout: {timeout_value}s, check interval: {check_interval}s")
     start_time = time.time()
 
     # Execute restart command
@@ -77,6 +81,10 @@ def restart_command(ctx: Context, timeout: Optional[int]) -> None:
         except Exception as e:
             logging.debug(f"Server not ready yet: {e}")
 
-        time.sleep(check_interval)
+        # Avoid oversleeping past the deadline
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            break
+        time.sleep(min(check_interval, remaining))
 
     raise RuntimeError(f"Server didn't fully start within {timeout_value} seconds")
