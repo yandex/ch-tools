@@ -10,7 +10,7 @@ from typing import Optional, Tuple
 
 from click import Context
 from kazoo.client import KazooClient
-from kazoo.exceptions import NoNodeError
+from kazoo.exceptions import NodeExistsError, NoNodeError
 
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
 from ch_tools.chadmin.internal.system import match_ch_version
@@ -49,13 +49,36 @@ initiator:
 """  # noqa: W291
 
 
-class ZookeeperDatabaseManager:
-    """
-    Manages ZooKeeper structure for Replicated databases.
+def supports_system_restore_database_replica(ctx: Context) -> bool:
+    """Check if ClickHouse version supports SYSTEM RESTORE DATABASE REPLICA command."""
+    return match_ch_version(ctx, "25.8")
 
-    Handles creation of database nodes, replica registration,
-    and metadata synchronization in ZooKeeper.
-    """
+
+def _check_database_exists_in_zk(
+    ctx: Context, database_name: str, db_replica_path: Optional[str] = None
+) -> bool:
+    """Check if database structure exists in ZooKeeper."""
+    zk_path = db_replica_path or f"{DEFAULT_ZK_ROOT}/{database_name}"
+
+    with zk_client(ctx) as zk:
+        return zk.exists(format_path(ctx, zk_path)) is not None
+
+
+def restore_replica_with_system_command(
+    ctx: Context, database_name: str, timeout: int = 300
+) -> None:
+    """Restore database replica using SYSTEM RESTORE DATABASE REPLICA command. Preferred method for CH >= 25.8."""
+
+    query = f"SYSTEM RESTORE DATABASE REPLICA {database_name}"
+
+    execute_query(ctx, query, timeout=timeout, echo=True, format_=None)
+    logging.info(
+        f"Successfully restored replica for {database_name} using SYSTEM RESTORE DATABASE REPLICA"
+    )
+
+
+class ZookeeperDatabaseManager:
+    """Manages ZooKeeper structure for Replicated databases. DEPRECATED: Use SYSTEM RESTORE DATABASE REPLICA for CH >= 25.8."""
 
     def __init__(self, ctx: Context):
         self.ctx = ctx
@@ -66,20 +89,7 @@ class ZookeeperDatabaseManager:
     def create_database_structure(
         self, database_name: str, db_replica_path: Optional[str] = None
     ) -> None:
-        """
-        Create ZooKeeper structure for Replicated database.
-
-        Creates the following structure:
-        - /{db_path} - root node with "DatabaseReplicated" value
-        - /{db_path}/log - query log
-        - /{db_path}/replicas - replica nodes
-        - /{db_path}/counter - counter for log entries
-        - /{db_path}/metadata - table metadata storage
-        - /{db_path}/max_log_ptr - maximum log pointer
-        - /{db_path}/logs_to_keep - number of logs to retain
-
-        Reference: https://github.com/ClickHouse/ClickHouse/blob/master/src/Databases/DatabaseReplicated.cpp#L581
-        """
+        """Create ZooKeeper structure for Replicated database with all required nodes."""
         with zk_client(self.ctx) as zk:
             prefix_db_zk_path = db_replica_path or self.get_default_db_path(
                 database_name
@@ -122,12 +132,7 @@ class ZookeeperDatabaseManager:
         first_replica: bool,
         db_replica_path: Optional[str] = None,
     ) -> None:
-        """
-        Register database replica in ZooKeeper.
-
-        Creates replica-specific nodes and query log entries.
-        For first replica, also creates database name and metadata nodes.
-        """
+        """Register database replica in ZooKeeper with replica-specific nodes."""
         prefix_db_zk_path = db_replica_path or self.get_default_db_path(database_name)
 
         with zk_client(self.ctx) as zk:
@@ -152,11 +157,7 @@ class ZookeeperDatabaseManager:
                 builder.commit()
 
     def get_tables_metadata(self, database_name: str) -> dict[str, str]:
-        """
-        Retrieve table metadata from ZooKeeper for Replicated database.
-
-        Returns dict mapping table names to their CREATE statements.
-        """
+        """Retrieve table metadata from ZooKeeper, returns dict mapping table names to CREATE statements."""
         zk_tables_metadata: dict[str, str] = {}
 
         with zk_client(self.ctx) as zk:
@@ -209,12 +210,7 @@ class ZookeeperDatabaseManager:
     def create_query_log_entry(
         self, builder: ZKTransactionBuilder, prefix_db_zk_path: str, counter: str
     ) -> None:
-        """
-        Create query log entry in ZooKeeper.
-
-        Reference link: https://github.com/ClickHouse/ClickHouse/blob/master/src/Databases/DatabaseReplicatedWorker.cpp#L380
-        Reference code: DatabaseReplicatedDDLWorker::enqueueQueryImpl
-        """
+        """Create query log entry in ZooKeeper."""
         shard, replica = self._get_shard_and_replica()
 
         builder.create_node(
@@ -241,13 +237,7 @@ class ZookeeperDatabaseManager:
         database_name: str,
         prefix_db_zk_path: str,
     ) -> None:
-        """
-        Register replica in ZooKeeper.
-
-        Creates replica node with host information and tracking nodes.
-        Reference link: https://github.com/ClickHouse/ClickHouse/blob/master/src/Databases/DatabaseReplicated.cpp#L800
-        Reference code: DatabaseReplicated::createReplicaNodesInZooKeeper
-        """
+        """Register replica in ZooKeeper with host information and tracking nodes."""
         shard, replica = self._get_shard_and_replica()
 
         # Mark initial log entry as finished for this replica
@@ -301,11 +291,7 @@ class ZookeeperDatabaseManager:
                 )
 
     def _get_host_id(self, database_name: str, replica: str) -> str:
-        """
-        Generate host ID for replica registration.
-
-        Format: {escaped_hostname}:{tcp_port}:{database_uuid}
-        """
+        """Generate host ID for replica registration in format: {escaped_hostname}:{tcp_port}:{database_uuid}."""
         query = """
             SELECT uuid FROM system.databases WHERE database='{{ database_name }}'
         """
@@ -348,9 +334,7 @@ class ZookeeperDatabaseManager:
 def system_database_drop_replica(
     ctx: Context, database_zk_path: str, replica: str, dry_run: bool = False
 ) -> None:
-    """
-    Perform "SYSTEM DROP DATABASE REPLICA" query.
-    """
+    """Perform SYSTEM DROP DATABASE REPLICA query."""
     timeout = ctx.obj["config"]["clickhouse"]["drop_replica_timeout"]
     query = f"SYSTEM DROP DATABASE REPLICA '{replica}' FROM ZKPATH '{database_zk_path}'"
     execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
@@ -361,13 +345,47 @@ def create_database_nodes(
     database_name: str,
     db_replica_path: Optional[str] = None,
 ) -> None:
-    """
-    Create ZooKeeper structure for Replicated database.
-
-    Public interface for creating database nodes in ZooKeeper.
-    """
+    """Create ZooKeeper structure for Replicated database."""
     zk_manager = ZookeeperDatabaseManager(ctx)
     zk_manager.create_database_structure(database_name, db_replica_path)
+
+
+def _restore_replica_fallback(
+    ctx: Context,
+    database_name: str,
+    db_replica_path: Optional[str] = None,
+) -> None:
+    """Fallback method for restoring database replica on older ClickHouse versions (< 25.8)."""
+    logging.info(
+        f"Using legacy ZookeeperDatabaseManager for restore of {database_name}"
+    )
+
+    zk_manager = ZookeeperDatabaseManager(ctx)
+
+    # Determine if this is the first replica
+    first_replica = not _check_database_exists_in_zk(
+        ctx, database_name, db_replica_path
+    )
+
+    if first_replica:
+        logging.info(
+            f"Restoring {database_name} as first replica (creating database structure)"
+        )
+        try:
+            zk_manager.create_database_structure(database_name, db_replica_path)
+        except NodeExistsError:
+            logging.info(
+                "Database nodes created concurrently, continuing as non-first replica"
+            )
+            first_replica = False
+    else:
+        logging.info(f"Restoring {database_name} as non-first replica")
+
+    # Create replica nodes
+    zk_manager.create_replica_nodes(database_name, first_replica, db_replica_path)
+    logging.info(
+        f"Successfully restored replica for {database_name} using fallback method"
+    )
 
 
 def restore_replica(
@@ -376,12 +394,7 @@ def restore_replica(
     first_replica: bool,
     db_replica_path: Optional[str] = None,
 ) -> None:
-    """
-    Restore database replica in ZooKeeper.
-
-    Creates necessary ZK nodes for replica registration.
-    Used both for migration and manual replica restoration.
-    """
+    """Restore database replica in ZooKeeper. DEPRECATED: Use new restore flow through CLI commands."""
     logging.info(f"Restoring replica for {database_name} (first={first_replica})")
 
     zk_manager = ZookeeperDatabaseManager(ctx)
