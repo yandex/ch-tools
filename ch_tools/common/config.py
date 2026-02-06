@@ -76,7 +76,14 @@ DEFAULT_CONFIG = {
     },
     # Configuration of chadmin tool commands and options.
     "chadmin": {
+        "server": {
+            "restart": {
+                "command": "sudo systemctl restart clickhouse-server",
+                "timeout": 600,  # seconds
+            },
+        },
         "wait": {
+            "ping_command": "timeout 5 sudo -u monitor /usr/bin/ch-monitoring ping",
             "replication-sync": {
                 "replica_timeout": "1h",
                 "total_timeout": "3d",

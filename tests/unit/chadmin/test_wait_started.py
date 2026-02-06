@@ -27,7 +27,16 @@ def cli_runner() -> CliRunner:
 
 @pytest.fixture
 def cli_context() -> dict:
-    return {"config": {"loguru": {"handlers": {}}}}
+    return {
+        "config": {
+            "loguru": {"handlers": {}},
+            "chadmin": {
+                "wait": {
+                    "ping_command": "timeout 5 sudo -u monitor /usr/bin/ch-monitoring ping"
+                }
+            },
+        }
+    }
 
 
 @pytest.mark.parametrize(
@@ -130,11 +139,21 @@ def test_clickhouse_alive_check(
     raises: bool,
     expected: bool,
 ) -> None:
+    mock_ctx = MagicMock()
+    mock_ctx.obj = {
+        "config": {
+            "chadmin": {
+                "wait": {
+                    "ping_command": "timeout 5 sudo -u monitor /usr/bin/ch-monitoring ping"
+                }
+            }
+        }
+    }
     if raises:
         mock_execute.side_effect = Exception("Connection failed")
     else:
         mock_execute.return_value = ping_output
-    assert is_clickhouse_alive() == expected
+    assert is_clickhouse_alive(mock_ctx) == expected
 
 
 @pytest.mark.parametrize(

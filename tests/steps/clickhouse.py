@@ -202,3 +202,18 @@ def step_check_number_ro_replicas(context: ContextT, count: int, node: str) -> N
 
     ret_code, response = get_response(context, node, query)
     assert_that(response, equal_to(str(count)))
+
+
+@then("we get response with uptime less than {seconds:d} seconds")
+def step_check_uptime_less_than(context: ContextT, seconds: int) -> None:
+    """
+    Check that server uptime is less than specified seconds.
+    This verifies that the server has actually restarted.
+    """
+    assert (
+        context.ret_code == HTTPStatus.OK
+    ), f"Query failed with code {context.ret_code}"
+    uptime = int(context.response.strip())
+    assert (
+        uptime < seconds
+    ), f"Server uptime {uptime}s is not less than {seconds}s, server may not have restarted"
