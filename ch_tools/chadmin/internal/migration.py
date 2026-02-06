@@ -104,6 +104,7 @@ class DatabaseMigrator:
 
         # Step 4: Attach database
         if need_restart:
+            # TODO: Replace server restart command with proper restart functionality once it's merged
             logging.info("restart clickhouse-server")
             execute("supervisorctl restart clickhouse-server")
         else:
