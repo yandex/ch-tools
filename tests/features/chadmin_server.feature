@@ -12,14 +12,21 @@ Feature: chadmin server commands
       server:
         restart:
           command: supervisorctl restart clickhouse-server
+      wait:
+        ping_command: ch-monitoring ping
     """
 
   Scenario: Restart ClickHouse server and verify it's operational
     When we execute command on clickhouse01
     """
-    chadmin server restart --timeout 120
+    chadmin server restart --timeout 30
     """
     Then it completes successfully
+    When we execute query on clickhouse01
+    """
+    SELECT uptime()
+    """
+    Then we get response with uptime less than 30 seconds
     When we execute query on clickhouse01
     """
     SELECT 1
