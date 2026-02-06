@@ -7,7 +7,7 @@ Feature: chadmin database migrate command
     And a working clickhouse on clickhouse01
     And a working clickhouse on clickhouse02
     
-  @require_version_24.8
+  @require_version_25.8
   Scenario: Migrate empty database in host
     When we execute query on clickhouse01
     """
@@ -43,7 +43,7 @@ Feature: chadmin database migrate command
     bar2
     """
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario: Migrate non exists database
     When we try to execute command on clickhouse01
     """
@@ -54,7 +54,22 @@ Feature: chadmin database migrate command
     Database non_exists_db does not exists, skip migrating
     """
 
-  @require_version_24.8
+  @require_version_less_than_25.8
+  Scenario: Migrate database on unsupported version
+    When we execute query on clickhouse01
+    """
+    CREATE DATABASE non_repl_db;
+    """
+    When we try to execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db --engine Replicated
+    """
+    Then it fails with response contains
+    """
+    Migration requires ClickHouse version 25.8 or above
+    """
+
+  @require_version_25.8
   Scenario Outline: Migrate database with different tables in host created by hosts
     When we execute query on clickhouse01
     """
@@ -103,7 +118,7 @@ Feature: chadmin database migrate command
     | MergeTree                                                    |
     | ReplicatedMergeTree('/clickhouse/foo', '{replica}')          |
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario Outline: Migrate database with different tables in host created on cluster
     When we execute query on clickhouse01
     """
@@ -153,7 +168,7 @@ Feature: chadmin database migrate command
     | MergeTree                                                    |
     | ReplicatedMergeTree('/clickhouse/foo', '{replica}')          |
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario: Migrate empty database in cluster
     When we execute query on clickhouse01
     """
@@ -177,17 +192,6 @@ Feature: chadmin database migrate command
     chadmin database migrate -d non_repl_db -e Replicated
     """
 
-    When we execute command on clickhouse01
-    """
-    supervisorctl restart clickhouse-server
-    """
-
-    When we execute command on clickhouse02
-    """
-    supervisorctl restart clickhouse-server
-    """
-    When we sleep for 10 seconds
-    
     When we execute query on clickhouse02
     """
     SYSTEM SYNC DATABASE REPLICA non_repl_db
@@ -228,7 +232,7 @@ Feature: chadmin database migrate command
     bar2
     """
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario: Migrate database with MergeTree table by hosts
     When we execute query on clickhouse01
     """
@@ -293,11 +297,6 @@ Feature: chadmin database migrate command
     """
     chadmin database migrate -d non_repl_db -e Replicated
     """
-    When we execute command on clickhouse02
-    """
-    supervisorctl restart clickhouse-server
-    """
-    When we sleep for 10 seconds
 
     When we execute query on clickhouse02
     """
@@ -351,7 +350,7 @@ Feature: chadmin database migrate command
     (42,'value')
     """
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario: Migrate database with ReplicatedMergeTree table with stopped first replica
     When we execute query on clickhouse01
     """
@@ -396,12 +395,6 @@ Feature: chadmin database migrate command
     """
     Then it completes successfully
 
-    When we execute command on clickhouse02
-    """
-    supervisorctl restart clickhouse-server
-    """
-    When we sleep for 10 seconds
-
     When we execute query on clickhouse02
     """
     SELECT engine FROM system.databases WHERE database='non_repl_db'
@@ -420,7 +413,7 @@ Feature: chadmin database migrate command
     (42)
     """
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario Outline: Migrate database with ReplicatedMergeTree table createed by hosts
     When we execute query on clickhouse01
     """
@@ -481,11 +474,6 @@ Feature: chadmin database migrate command
     """
     chadmin database migrate -d non_repl_db -e Replicated
     """
-    When we execute command on clickhouse02
-    """
-    supervisorctl restart clickhouse-server
-    """
-    When we sleep for 10 seconds
 
     When we execute query on clickhouse02
     """
@@ -581,7 +569,7 @@ Feature: chadmin database migrate command
       | ReplicatedMergeTree('/clickhouse/foo', '{replica}')          | /clickhouse/foo         |
 
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario Outline: Migrate database with ReplicatedMergeTree table created on cluster
     When we execute query on clickhouse01
     """
@@ -728,7 +716,7 @@ Feature: chadmin database migrate command
       | ReplicatedMergeTree('/clickhouse/foo/{shard}', '{replica}')  | /clickhouse/foo/shard1  |
       | ReplicatedMergeTree('/clickhouse/foo', '{replica}')          | /clickhouse/foo         |
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario: Migrate database with Distributed table created by hosts
     When we execute query on clickhouse01
     """
@@ -801,11 +789,6 @@ Feature: chadmin database migrate command
     """
     chadmin database migrate -d non_repl_db -e Replicated
     """
-    When we execute command on clickhouse02
-    """
-    supervisorctl restart clickhouse-server
-    """
-    When we sleep for 10 seconds
 
     When we execute query on clickhouse02
     """
@@ -832,7 +815,7 @@ Feature: chadmin database migrate command
     (42)
     """
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario: Migrate database with Distributed table created on cluster
     When we execute query on clickhouse01
     """
@@ -923,7 +906,7 @@ Feature: chadmin database migrate command
     (42)
     """
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario: Migrate database with VIEW by host
     When we execute query on clickhouse01
     """
@@ -976,7 +959,7 @@ Feature: chadmin database migrate command
     42
     """
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario: Migrate database with VIEW by hosts
     When we execute query on clickhouse01
     """
@@ -1034,11 +1017,6 @@ Feature: chadmin database migrate command
     """
     chadmin database migrate -d non_repl_db -e Replicated
     """
-    When we execute command on clickhouse02
-    """
-    supervisorctl restart clickhouse-server
-    """
-    When we sleep for 10 seconds
     
     When we execute query on clickhouse02
     """
@@ -1054,7 +1032,7 @@ Feature: chadmin database migrate command
     42
     """
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario: Migrate database with VIEW by cluster
     When we execute query on clickhouse01
     """
@@ -1100,11 +1078,6 @@ Feature: chadmin database migrate command
     """
     chadmin database migrate -d non_repl_db -e Replicated
     """
-    When we execute command on clickhouse02
-    """
-    supervisorctl restart clickhouse-server
-    """
-    When we sleep for 10 seconds
     
     When we execute query on clickhouse02
     """
@@ -1120,7 +1093,7 @@ Feature: chadmin database migrate command
     42
     """
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario: Migrate database with MATERIALIZED VIEW by host
     When we execute query on clickhouse01
     """
@@ -1172,7 +1145,7 @@ Feature: chadmin database migrate command
     (42)
     """
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario: Migrate database with MATERIALIZED VIEW by hosts
     When we execute query on clickhouse01
     """
@@ -1238,11 +1211,6 @@ Feature: chadmin database migrate command
     """
     chadmin database migrate -d non_repl_db -e Replicated
     """
-    When we execute command on clickhouse02
-    """
-    supervisorctl restart clickhouse-server
-    """
-    When we sleep for 10 seconds
 
     When we execute query on clickhouse02
     """
@@ -1282,7 +1250,7 @@ Feature: chadmin database migrate command
     (43)
     """
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario: Migrate database with MATERIALIZED VIEW by cluster
     When we execute query on clickhouse01
     """
@@ -1383,7 +1351,7 @@ Feature: chadmin database migrate command
     (43)
     """
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario: Migrate database with different table_shared_id
     When we execute query on clickhouse01
     """
@@ -1542,7 +1510,7 @@ Feature: chadmin database migrate command
     Then it completes successfully
 
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario: Migrate from Replicated to Atomic
     When we execute query on clickhouse01
     """
@@ -1631,7 +1599,7 @@ Feature: chadmin database migrate command
     kazoo.exceptions.NoNodeError
     """
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario: Restore table replica after migration to Replicated
     Given we have executed queries on clickhouse01
     """
@@ -1789,7 +1757,7 @@ Feature: chadmin database migrate command
     (42),(43)
     """
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario: Double migration
     Given we have executed queries on clickhouse01
     """
@@ -1834,7 +1802,7 @@ Feature: chadmin database migrate command
     Replica node '/clickhouse/non_repl_db/replicas/shard1|clickhouse01.ch_tools_test/digest' in ZooKeeper already exists and contains unexpected value
     """
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario: Prohibited migration
     Given we have executed queries on clickhouse01
     """
