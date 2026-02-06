@@ -1,8 +1,16 @@
+"""
+Database management utilities for ClickHouse.
+
+Provides functions for listing databases with statistics and checking database existence.
+Supports filtering by database name patterns, engine types, and active parts.
+"""
+
 from typing import Any, Optional, Union
 
 from click import Context
 
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 
 
 def list_databases(
@@ -88,3 +96,14 @@ def list_databases(
         format_=format_,
     )
     return res["data"] if format_ == "JSON" else res
+
+
+def is_database_exists(ctx: Context, database_name: str) -> bool:
+    """Check if database exists in ClickHouse."""
+    query = """
+        SELECT 1 FROM system.databases WHERE database='{{ database_name }}'
+    """
+    rows = execute_query(
+        ctx, query, database_name=database_name, format_=OutputFormat.JSON
+    )
+    return len(rows["data"]) == 1
