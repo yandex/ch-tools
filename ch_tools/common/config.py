@@ -80,10 +80,10 @@ DEFAULT_CONFIG = {
             "restart": {
                 "command": "sudo systemctl restart clickhouse-server",
                 "timeout": 600,  # seconds
-                "check_interval": 10,  # check interval in seconds
             },
         },
         "wait": {
+            "ping_command": "timeout 5 sudo -u monitor /usr/bin/ch-monitoring ping",
             "replication-sync": {
                 "replica_timeout": "1h",
                 "total_timeout": "3d",
