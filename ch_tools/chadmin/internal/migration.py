@@ -18,13 +18,14 @@ from ch_tools.chadmin.cli.database_metadata import (
 )
 from ch_tools.chadmin.internal.database_replica import (
     ZookeeperDatabaseManager,
-    _check_database_exists_in_zk,
-    restore_replica_with_system_command,
+    check_database_exists_in_zk,
+    get_default_table_in_db_path,
+    get_tables_metadata,
     supports_system_restore_database_replica,
+    system_restore_database_replica,
 )
 from ch_tools.chadmin.internal.table import (
     change_table_uuid,
-    detach_table,
     list_tables,
     read_local_table_metadata,
 )
@@ -69,52 +70,61 @@ class DatabaseMigrator:
         self.ctx = ctx
         self.zk_manager = ZookeeperDatabaseManager(ctx)
 
+    def migrate_to_atomic(self, database: str, clean_zookeeper: bool) -> None:
+        """Migrate Replicated database to Atomic engine with optional ZooKeeper cleanup."""
+        metadata_repl_db = parse_database_metadata(database)
+        if metadata_repl_db.database_engine != DatabaseEngine.REPLICATED:
+            raise RuntimeError(
+                f"Database {database} has engine {metadata_repl_db.database_engine}. "
+                "Migration to Atomic from Replicated only is supported."
+            )
+
+        with AttacherContext(self.ctx, database):
+            zookeeper_path = metadata_repl_db.zookeeper_path
+            metadata_repl_db.set_atomic()
+
+            if clean_zookeeper and zookeeper_path:
+                logging.info(f"Cleaning ZooKeeper nodes: {zookeeper_path}")
+                delete_zk_node(self.ctx, zookeeper_path)
+
+        logging.info(f"Database {database} migrated to Atomic")
+
     def migrate_to_replicated(self, database: str) -> None:
         """Migrate Atomic database to Replicated engine with automatic UUID sync and replica restoration."""
-        # Validate ClickHouse version
         self._validate_version_support()
-
-        # Validate database engine
         metadata_db = self._validate_database_engine(database)
 
-        # Determine if this is first replica
-        first_replica = not _check_database_exists_in_zk(
+        first_replica = not check_database_exists_in_zk(
             self.ctx, database, metadata_db.zookeeper_path
         )
-
         logging.info(
             f"Migrating database {database} as {'first' if first_replica else 'non-first'} replica"
         )
-        tables = list_tables(self.ctx, database_name=database)
 
-        # Step 1: Detach database
+        tables = (
+            list_tables(self.ctx, database_name=database) if not first_replica else []
+        )
+
         _detach_dbs(self.ctx, dbs=[database])
         logging.info(f"Detached database {database}")
 
-        # Step 2: For non-first replica, sync table UUIDs with ZooKeeper
         need_restart = False
         if not first_replica:
             self._check_tables_consistent(database, tables)
             need_restart = self._sync_table_uuids(tables)
 
-        # Step 3: Change database engine to Replicated
-        metadata_db = parse_database_metadata(database)
         metadata_db.set_replicated()
         logging.info(f"Changed {database} engine to Replicated in metadata")
 
-        # Step 4: Attach database
         if need_restart:
             # TODO: Replace server restart command with proper restart functionality once it's merged
             logging.info("restart clickhouse-server")
             execute("supervisorctl restart clickhouse-server")
         else:
-            logging.info(f"Attached database {database}")
             _attach_dbs(self.ctx, dbs=[database])
+            logging.info(f"Attached database {database}")
 
-        # Step 5: Execute SYSTEM RESTORE DATABASE REPLICA
-        # This ensures proper synchronization with ZooKeeper
-        restore_replica_with_system_command(self.ctx, database)
-
+        system_restore_database_replica(self.ctx, database)
         logging.info(f"Successfully migrated database {database} to Replicated")
 
     def _validate_version_support(self) -> None:
@@ -135,30 +145,11 @@ class DatabaseMigrator:
             )
         return metadata_db
 
-    def migrate_to_atomic(self, database: str, clean_zookeeper: bool) -> None:
-        """Migrate Replicated database to Atomic engine with optional ZooKeeper cleanup."""
-        metadata_repl_db = parse_database_metadata(database)
-        if metadata_repl_db.database_engine != DatabaseEngine.REPLICATED:
-            raise RuntimeError(
-                f"Database {database} has engine {metadata_repl_db.database_engine}. "
-                "Migration to Atomic from Replicated only is supported."
-            )
-
-        with AttacherContext(self.ctx, database):
-            zookeeper_path = metadata_repl_db.zookeeper_path
-            metadata_repl_db.set_atomic()
-
-            if clean_zookeeper and zookeeper_path:
-                logging.info(f"Cleaning ZooKeeper nodes: {zookeeper_path}")
-                delete_zk_node(self.ctx, zookeeper_path)
-
-        logging.info(f"Database {database} migrated to Atomic")
-
     def _check_tables_consistent(
         self, database_name: str, local_tables: list[TableInfo]
     ) -> None:
         """Verify local tables match ZooKeeper metadata."""
-        zk_tables = self.zk_manager.get_tables_metadata(database_name)
+        zk_tables = get_tables_metadata(self.ctx, database_name)
         missing_in_zk = []
         schema_mismatches = []
 
@@ -215,9 +206,7 @@ class DatabaseMigrator:
             database_name = table["database"]
             old_table_uuid = table["uuid"]
 
-            zk_metadata_path = self.zk_manager.get_default_table_in_db_path(
-                database_name, table_name
-            )
+            zk_metadata_path = get_default_table_in_db_path(database_name, table_name)
             zk_table_metadata = get_zk_node(self.ctx, zk_metadata_path)
             zk_table_uuid = metadata.parse_uuid(zk_table_metadata)
 
@@ -259,12 +248,6 @@ def _attach_dbs(ctx: Context, dbs: list[str]) -> None:
     for db in dbs:
         query = f"ATTACH DATABASE {db}"
         execute_query(ctx, query, echo=True)
-
-
-def _detach_tables(ctx: Context, tables: list[TableInfo], permanently: bool) -> None:
-    """Detach tables from database."""
-    for table in tables:
-        detach_table(ctx, table["database"], table["name"], permanently)
 
 
 # Public API functions

@@ -12,8 +12,8 @@ from ch_tools.chadmin.cli.database_metadata import (
 from ch_tools.chadmin.internal.database import is_database_exists, list_databases
 from ch_tools.chadmin.internal.database_replica import (
     _restore_replica_fallback,
-    restore_replica_with_system_command,
     supports_system_restore_database_replica,
+    system_restore_database_replica,
 )
 from ch_tools.chadmin.internal.migration import (
     migrate_database_to_atomic,
@@ -168,12 +168,7 @@ def migrate_engine_command(
 @option("-d", "--database", required=True)
 @pass_context
 def restore_replica_command(ctx: Context, database: str) -> None:
-    """
-    Restore database replica using SYSTEM RESTORE DATABASE REPLICA command.
-
-    For ClickHouse >= 25.8, uses the built-in SYSTEM RESTORE DATABASE REPLICA command.
-    For older versions, falls back to manual ZooKeeper structure creation.
-    """
+    """Restore database replica using SYSTEM RESTORE DATABASE REPLICA command."""
 
     # Validation checks
     if not is_database_exists(ctx, database):
@@ -187,7 +182,7 @@ def restore_replica_command(ctx: Context, database: str) -> None:
     # Try using SYSTEM RESTORE DATABASE REPLICA for CH >= 25.8
     if supports_system_restore_database_replica(ctx):
         try:
-            restore_replica_with_system_command(ctx, database)
+            system_restore_database_replica(ctx, database)
             return
         except Exception as e:
             logging.error(f"SYSTEM RESTORE DATABASE REPLICA failed: {e}")
