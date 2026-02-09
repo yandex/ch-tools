@@ -19,6 +19,7 @@ from cloup.constraints import (
     If,
     accept_none,
     constraint,
+    require_all,
 )
 from tenacity import (
     RetryCallState,
@@ -241,6 +242,19 @@ def wait_replication_sync_command(
     help="Path to PID file. Exit if pid from pidfile not running.",
 )
 @option(
+    "--track-restart",
+    "track_restart",
+    is_flag=True,
+    default=False,
+    help="Track server restart by checking uptime. Used after restart command.",
+)
+@option(
+    "--restart-start-time",
+    "restart_start_time",
+    type=float,
+    help="Timestamp when restart was initiated. Used with --track-restart.",
+)
+@option(
     "--timeout-strategy",
     "timeout_strategy",
     type=Choice(["files", "parts"]),
@@ -281,12 +295,15 @@ def wait_replication_sync_command(
     If(Equal("timeout_strategy", "files"), then=AcceptAtMost(3), else_=accept_none),
     ["file_processing_speed", "min_timeout", "max_timeout"],
 )
+@constraint(If("track_restart", then=require_all), ["restart_start_time"])
 @pass_context
 def wait_started_command(
     ctx: Context,
     quiet: bool,
     wait_failed_dictionaries: bool,
     track_pid_file: str,
+    track_restart: bool,
+    restart_start_time: float,
     timeout_strategy: str,
     file_processing_speed: Optional[int],
     min_timeout: Optional[int],
@@ -297,7 +314,7 @@ def wait_started_command(
     if quiet:
         logging.disable_stdout_logger()
 
-    timeout: int
+    timeout: int = BASE_TIMEOUT
     if wait:
         timeout = wait
     elif timeout_strategy == "files":
@@ -308,19 +325,31 @@ def wait_started_command(
     deadline = time.time() + timeout
 
     ch_is_alive = False
+    ch_restarted = True  # Assume restarted unless we're tracking and it hasn't
     pid_check_attempts = 0
+
+    # Wait for server to be alive (and optionally verify restart)
     while time.time() < deadline:
         pid_check_attempts += 1
 
-        if is_clickhouse_alive():
+        if is_clickhouse_alive(ctx):
             ch_is_alive = True
-            break
+            # If tracking restart, verify that server actually restarted
+            if track_restart:
+                ch_restarted = check_server_restarted(ctx, restart_start_time)
+                if ch_restarted:
+                    break
+            else:
+                break
 
         time.sleep(1)
         exit_if_pid_not_running(track_pid_file, pid_check_attempts)
 
     if not ch_is_alive:
         raise ConnectionError("ClickHouse is dead")
+
+    if not ch_restarted:
+        raise RuntimeError("ClickHouse server is alive but has not restarted yet")
 
     warmup_system_users(ctx)
 
@@ -331,6 +360,35 @@ def wait_started_command(
             return
         time.sleep(1)
         exit_if_pid_not_running(track_pid_file, pid_check_attempts)
+
+
+def check_server_restarted(ctx: Context, restart_start_time: float) -> bool:
+    """
+    Check if server has restarted by comparing uptime with elapsed time.
+
+    Returns True if server uptime is less than elapsed time since restart was initiated,
+    indicating that the server has actually restarted.
+    """
+    try:
+        uptime_result = execute_query(
+            ctx, "SELECT uptime()", format_="TabSeparated", timeout=5
+        )
+        uptime = int(uptime_result.strip())
+        elapsed = time.time() - restart_start_time
+
+        # If uptime is less than elapsed time, server has restarted
+        if uptime < elapsed:
+            logging.info(
+                f"Server restart detected (uptime: {uptime}s, elapsed: {elapsed:.1f}s)"
+            )
+            return True
+        logging.debug(
+            f"Server not yet restarted (uptime: {uptime}s >= elapsed: {elapsed:.1f}s)"
+        )
+        return False
+    except Exception as e:
+        logging.debug(f"Failed to check server uptime: {e}")
+        return False
 
 
 def get_timeout_by_parts() -> int:
@@ -391,13 +449,14 @@ def get_s3_data_part_count() -> int:
     )
 
 
-def is_clickhouse_alive() -> bool:
+def is_clickhouse_alive(ctx: Context) -> bool:
     """
     Check if ClickHouse server is alive or not.
     """
     try:
+        ping_command = ctx.obj["config"]["chadmin"]["wait"]["ping_command"]
         os.chdir("/")
-        output = execute("timeout 5 sudo -u monitor /usr/bin/ch-monitoring ping")
+        output = execute(ping_command)
         if output == "0;OK\n":
             return True
 

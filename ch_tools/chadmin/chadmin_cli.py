@@ -47,6 +47,7 @@ from ch_tools.chadmin.cli.replicated_fetch_group import replicated_fetch_group
 from ch_tools.chadmin.cli.replication_queue_group import replication_queue_group
 from ch_tools.chadmin.cli.restore_replica_command import restore_replica_command
 from ch_tools.chadmin.cli.s3_credentials_config_group import s3_credentials_config_group
+from ch_tools.chadmin.cli.server_group import server_group
 from ch_tools.chadmin.cli.stack_trace_command import stack_trace_command
 from ch_tools.chadmin.cli.table_group import table_group
 from ch_tools.chadmin.cli.thread_log_group import thread_log_group
@@ -145,6 +146,7 @@ groups: List[Any] = [
     query_log_group,
     replicated_fetch_group,
     replication_queue_group,
+    server_group,
     table_group,
     replica_group,
     thread_log_group,
