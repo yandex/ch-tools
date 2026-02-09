@@ -146,6 +146,60 @@ class ZookeeperDatabaseManager:
     """
     Manages ZooKeeper structure for Replicated databases.
     DEPRECATED: Use SYSTEM RESTORE DATABASE REPLICA for CH >= 25.8
+
+    ZooKeeper Structure for Replicated Database
+    ===========================================
+
+    Root Database Nodes ({zookeeper_path}/):
+    ----------------------------------------
+    /                                       # Root path for database
+    ├── [value: "DatabaseReplicated"]      # Database engine type marker
+    ├── log/                                # DDL replication log
+    │   └── query-{counter}/               # Individual DDL log entry
+    │       ├── [value: YAML]              # DDL entry (query, hosts, initiator)
+    │       ├── committed                  # Marks entry as committed (persistent)
+    │       ├── try                        # Ephemeral node for execution attempt
+    │       ├── active/                    # Active executors directory
+    │       ├── finished/                  # Execution completion markers
+    │       │   └── {shard}|{replica}     # Execution status per replica
+    │       └── synced/                    # Synchronization markers
+    │           └── {shard}|{replica}     # Sync status per replica
+    ├── replicas/                          # All database replicas
+    │   └── {shard}|{replica}/            # Individual replica node
+    │       ├── [value: host_id]          # Format: {escaped_host}:{port}:{db_uuid}
+    │       ├── active                    # Ephemeral node (created by DDLWorker)
+    │       ├── digest                    # Metadata hash (UInt64)
+    │       ├── log_ptr                   # Last processed log entry number
+    │       ├── max_log_ptr_at_creation  # max_log_ptr value at replica creation
+    │       └── replica_group             # Replica group name (for filtering)
+    ├── counter/                           # Atomic counter for log entry IDs
+    │   └── cnt-{seq}                     # Ephemeral sequential nodes
+    ├── metadata/                          # Table metadata storage
+    │   └── {escaped_table_name}          # CREATE TABLE statement per table
+    ├── max_log_ptr                       # Latest log entry number (UInt32)
+    ├── logs_to_keep                      # Number of log entries to retain (UInt32)
+    └── first_replica_database_name       # Database name on first replica
+
+    Replica Registration Process:
+    -----------------------------
+    1. First replica creates database structure (create_database_structure)
+    2. Each replica creates its own nodes (create_replica_nodes):
+       - Generates unique counter for log entry
+       - Creates initial log entry (query-0000000001)
+       - Registers replica with host_id
+       - Creates tracking nodes (digest, log_ptr, etc.)
+    3. DDLWorker creates ephemeral 'active' node on startup
+
+    Name Escaping:
+    -------------
+    - Table names: escaped using escapeForFileName() logic
+    - Hostnames: escaped using same logic for ZooKeeper compatibility
+    - Replica names: format is "{shard}|{replica}" (pipe separator)
+
+    References:
+    ----------
+    - ClickHouse source: src/Databases/DatabaseReplicated.cpp
+    - Documentation: docs/en/engines/database-engines/replicated.md
     """
 
     def __init__(self, ctx: Context):
@@ -154,7 +208,22 @@ class ZookeeperDatabaseManager:
     def create_database_structure(
         self, database_name: str, db_replica_path: Optional[str] = None
     ) -> None:
-        """Create ZooKeeper structure for Replicated database with all required nodes."""
+        """
+        Create ZooKeeper structure for Replicated database with all required nodes.
+
+        Creates the following ZooKeeper structure:
+        {zk_path}/
+        ├── [value: "DatabaseReplicated"]      # Database type marker
+        ├── log/                                # DDL replication log
+        ├── replicas/                           # All database replicas
+        ├── counter/                            # Atomic counter for log entry IDs
+        ├── metadata/                           # Table CREATE statements
+        ├── max_log_ptr                        # Latest log entry number (default: "1")
+        └── logs_to_keep                       # Number of log entries to retain (default: "1000")
+
+        Note: The counter/cnt- node is created and immediately deleted to initialize
+        the sequence counter, ensuring log entry numbers start from 1 (not 0).
+        """
         with zk_client(self.ctx) as zk:
             prefix_db_zk_path = db_replica_path or self._get_default_db_path(
                 database_name
@@ -197,7 +266,30 @@ class ZookeeperDatabaseManager:
         first_replica: bool,
         db_replica_path: Optional[str] = None,
     ) -> None:
-        """Register database replica in ZooKeeper with replica-specific nodes."""
+        """
+        Register database replica in ZooKeeper with replica-specific nodes.
+
+        Creates the following structure for each replica:
+        {zk_path}/replicas/{shard}|{replica}/
+        ├── [value: host_id]               # Format: {escaped_host}:{port}:{db_uuid}
+        ├── active                         # Ephemeral node (created by DDLWorker)
+        ├── digest                         # Metadata hash (UInt64, initially "0")
+        ├── log_ptr                        # Last processed log entry (initially "0")
+        └── max_log_ptr_at_creation       # max_log_ptr value at replica creation
+
+        Also creates initial log entry:
+        {zk_path}/log/query-{counter}/
+        ├── [value: YAML template]         # Empty DDL entry
+        ├── committed                      # Marks entry as committed
+        ├── active/                        # Directory for active executors
+        ├── finished/                      # Directory for completion markers
+        │   └── {shard}|{replica}         # Initial completion marker
+        └── synced/                        # Directory for sync markers
+
+        For first replica only:
+        - Creates first_replica_database_name node
+        - Stores table metadata in {zk_path}/metadata/
+        """
         prefix_db_zk_path = db_replica_path or self._get_default_db_path(database_name)
 
         with zk_client(self.ctx) as zk:
@@ -241,7 +333,14 @@ class ZookeeperDatabaseManager:
     def _create_first_replica_name_node(
         self, builder: ZKTransactionBuilder, prefix_db_zk_path: str, database_name: str
     ) -> None:
-        """Store original database name for first replica."""
+        """
+        Store original database name for first replica.
+
+        Creates node: {zk_path}/first_replica_database_name = database_name
+
+        This node is used for introspection purposes, as technically the database
+        may have different names on different replicas (though this is not common).
+        """
         builder.create_node(
             path=f"{prefix_db_zk_path}/{ZK_FIRST_REPLICA_DB_NAME_SUBPATH}",
             value=database_name,
@@ -250,7 +349,23 @@ class ZookeeperDatabaseManager:
     def _create_query_log_entry(
         self, builder: ZKTransactionBuilder, prefix_db_zk_path: str, counter: str
     ) -> None:
-        """Create query log entry in ZooKeeper."""
+        """
+        Create initial query log entry in ZooKeeper.
+
+        Creates structure:
+        {zk_path}/log/query-{counter}/
+        ├── [value: YAML template]     # Empty DDL entry
+        ├── committed                  # Marks entry as committed
+        │   └── [value: {shard}|{replica}]
+        ├── active/                    # Directory for active executors
+        ├── finished/                  # Directory for completion markers
+        └── synced/                    # Directory for sync markers
+
+        The initial entry (query-0000000001) is created empty to:
+        1. Initialize the log sequence
+        2. Ensure log_ptr starts from 1 (not 0)
+        3. Provide a baseline for replica synchronization
+        """
         shard, replica = self._get_shard_and_replica()
 
         builder.create_node(
@@ -277,7 +392,22 @@ class ZookeeperDatabaseManager:
         database_name: str,
         prefix_db_zk_path: str,
     ) -> None:
-        """Register replica in ZooKeeper with host information and tracking nodes."""
+        """
+        Register replica in ZooKeeper with host information and tracking nodes.
+
+        Creates:
+        1. Completion marker for initial log entry:
+           {zk_path}/log/query-0000000001/finished/{shard}|{replica} = "0"
+
+        2. Replica node with host_id:
+           {zk_path}/replicas/{shard}|{replica} = {escaped_host}:{port}:{db_uuid}
+
+        3. Replica tracking nodes:
+           - active: Server UUID (ephemeral, recreated by DDLWorker)
+           - digest: Metadata hash (initially "0")
+           - log_ptr: Last processed log entry (initially "0")
+           - max_log_ptr_at_creation: max_log_ptr value at replica creation
+        """
         shard, replica = self._get_shard_and_replica()
 
         # Mark initial log entry as finished for this replica
@@ -307,7 +437,19 @@ class ZookeeperDatabaseManager:
         database_name: str,
         prefix_db_zk_path: str,
     ) -> None:
-        """Store table metadata in ZooKeeper for first replica."""
+        """
+        Store table metadata in ZooKeeper for first replica.
+
+        Creates nodes:
+        {zk_path}/metadata/{escaped_table_name} = CREATE TABLE statement
+
+        Table names are escaped using escapeForFileName() logic to handle
+        special characters in ZooKeeper node names. This ensures compatibility
+        with ClickHouse's internal naming conventions.
+
+        Only called for the first replica to initialize the metadata storage.
+        Subsequent replicas will read metadata from ZooKeeper during recovery.
+        """
         query = """
             SELECT name, create_table_query, metadata_path FROM system.tables WHERE database='{{ database_name }}'
         """
@@ -325,13 +467,22 @@ class ZookeeperDatabaseManager:
             with open(metadata_path, "r", encoding="utf-8") as metadata_file:
                 local_table_metadata = metadata_file.read()
 
+                # Escape table name for ZooKeeper node (same as ClickHouse escapeForFileName)
+                escaped_table_name = escape_for_zookeeper(table_name)
+
                 builder.create_node(
-                    path=f"{prefix_db_zk_path}/{ZK_METADATA_SUBPATH}/{table_name}",
+                    path=f"{prefix_db_zk_path}/{ZK_METADATA_SUBPATH}/{escaped_table_name}",
                     value=local_table_metadata,
                 )
 
     def _get_host_id(self, database_name: str, replica: str) -> str:
-        """Generate host ID for replica registration in format: {escaped_hostname}:{tcp_port}:{database_uuid}."""
+        """
+        Generate host ID for replica registration.
+
+        Format: {escaped_hostname}:{tcp_port}:{database_uuid}
+
+        Example: "host%2Dname:9000:550e8400-e29b-41d4-a716-446655440000"
+        """
         query = """
             SELECT uuid FROM system.databases WHERE database='{{ database_name }}'
         """
@@ -354,7 +505,16 @@ class ZookeeperDatabaseManager:
         return rows["data"][0]["id"]
 
     def _get_shard_and_replica(self) -> Tuple[str, str]:
-        """Extract shard and replica from macros."""
+        """
+        Extract shard and replica names from ClickHouse macros.
+
+        Returns tuple: (shard_name, replica_name)
+
+        These values are used to form the replica identifier in ZooKeeper
+        as "{shard}|{replica}" (pipe-separated format).
+
+        Raises RuntimeError if required macros are not defined.
+        """
         macros = get_macros(self.ctx)
 
         missing = [macro for macro in ["shard", "replica"] if macro not in macros]
