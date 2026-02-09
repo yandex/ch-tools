@@ -19,6 +19,7 @@ from cloup.constraints import (
     If,
     accept_none,
     constraint,
+    require_all,
 )
 from tenacity import (
     RetryCallState,
@@ -251,7 +252,6 @@ def wait_replication_sync_command(
     "--restart-start-time",
     "restart_start_time",
     type=float,
-    default=None,
     help="Timestamp when restart was initiated. Used with --track-restart.",
 )
 @option(
@@ -295,6 +295,7 @@ def wait_replication_sync_command(
     If(Equal("timeout_strategy", "files"), then=AcceptAtMost(3), else_=accept_none),
     ["file_processing_speed", "min_timeout", "max_timeout"],
 )
+@constraint(If("track_restart", then=require_all), ["restart_start_time"])
 @pass_context
 def wait_started_command(
     ctx: Context,
@@ -302,7 +303,7 @@ def wait_started_command(
     wait_failed_dictionaries: bool,
     track_pid_file: str,
     track_restart: bool,
-    restart_start_time: Optional[float],
+    restart_start_time: float,
     timeout_strategy: str,
     file_processing_speed: Optional[int],
     min_timeout: Optional[int],
@@ -324,6 +325,7 @@ def wait_started_command(
     deadline = time.time() + timeout
 
     ch_is_alive = False
+    ch_restarted = True  # Assume restarted unless we're tracking and it hasn't
     pid_check_attempts = 0
 
     # Wait for server to be alive (and optionally verify restart)
@@ -331,13 +333,13 @@ def wait_started_command(
         pid_check_attempts += 1
 
         if is_clickhouse_alive(ctx):
+            ch_is_alive = True
             # If tracking restart, verify that server actually restarted
-            if track_restart and restart_start_time is not None:
-                if check_server_restarted(ctx, restart_start_time):
-                    ch_is_alive = True
+            if track_restart:
+                ch_restarted = check_server_restarted(ctx, restart_start_time)
+                if ch_restarted:
                     break
             else:
-                ch_is_alive = True
                 break
 
         time.sleep(1)
@@ -345,6 +347,9 @@ def wait_started_command(
 
     if not ch_is_alive:
         raise ConnectionError("ClickHouse is dead")
+
+    if not ch_restarted:
+        raise RuntimeError("ClickHouse server is alive but has not restarted yet")
 
     warmup_system_users(ctx)
 
