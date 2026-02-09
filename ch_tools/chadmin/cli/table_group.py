@@ -1,8 +1,10 @@
 # pylint: disable=too-many-lines
 import os
+import sys
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional
 
+from click import ClickException
 from cloup import Choice, Context, argument, group, option, option_group, pass_context
 from cloup.constraints import (
     AnySet,
@@ -38,6 +40,9 @@ from ch_tools.chadmin.internal.table import (
 from ch_tools.chadmin.internal.table_metadata import (
     get_table_shared_id,
     parse_table_metadata,
+)
+from ch_tools.chadmin.internal.table_schema_diff import (
+    compare_schemas,
 )
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
@@ -1060,3 +1065,94 @@ def check_table_command(
         )
 
     print_response(ctx, result, default_format="table")
+
+
+@table_group.command("schema-diff")
+@argument("source1", metavar="SOURCE1")
+@argument("source2", metavar="SOURCE2")
+@option(
+    "--format",
+    "diff_format",
+    type=Choice(["unified", "side-by-side", "normal"]),
+    default="unified",
+    help="Diff output format: unified (default, like diff -u), side-by-side (like diff -y), or normal.",
+)
+@option(
+    "--no-color",
+    is_flag=True,
+    help="Disable colored output.",
+)
+@option(
+    "--normalize/--no-normalize",
+    default=True,
+    help="Normalize schemas before comparison (remove ReplicatedMergeTree params, extra whitespace).",
+)
+@option(
+    "--context-lines",
+    type=int,
+    default=3,
+    help="Number of context lines for unified diff (default: 3).",
+)
+@pass_context
+def schema_diff_command(
+    ctx: Context,
+    source1: str,
+    source2: str,
+    diff_format: str,
+    no_color: bool,
+    normalize: bool,
+    context_lines: int,
+) -> None:
+    """
+    Compare schemas of two tables from different sources.
+
+    SOURCE can be one of:
+
+    \b
+    - database.table          - ClickHouse table
+    - /path/to/file.sql       - File with CREATE TABLE statement
+    - zk:/path/in/zookeeper   - ZooKeeper path to table metadata
+
+    \b
+    Examples:
+
+    \b
+    # Compare two tables in ClickHouse
+    chadmin table schema-diff db1.table1 db2.table2
+
+    \b
+    # Compare table with file
+    chadmin table schema-diff db1.table1 /tmp/table_schema.sql
+
+    \b
+    # Compare two files
+    chadmin table schema-diff /tmp/schema1.sql /tmp/schema2.sql
+
+    \b
+    # Compare table with ZooKeeper
+    chadmin table schema-diff db1.table1 zk:/clickhouse/tables/shard1/table1
+
+    \b
+    # Side-by-side format
+    chadmin table schema-diff db1.table1 db2.table2 --format side-by-side
+
+    \b
+    # Without colors
+    chadmin table schema-diff db1.table1 db2.table2 --no-color
+    """
+
+    colored_output = not no_color and sys.stdout.isatty()
+
+    try:
+        diff_output = compare_schemas(
+            ctx=ctx,
+            source1=source1,
+            source2=source2,
+            diff_format=diff_format,
+            colored_output=colored_output,
+            normalize=normalize,
+            context_lines=context_lines,
+        )
+        print(diff_output)
+    except Exception as e:
+        raise ClickException(str(e))
