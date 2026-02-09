@@ -49,49 +49,114 @@ initiator:
 """  # noqa: W291
 
 
+def check_database_exists_in_zk(
+    ctx: Context, database_name: str, db_replica_path: Optional[str] = None
+) -> bool:
+    zk_path = db_replica_path or f"{DEFAULT_ZK_ROOT}/{database_name}"
+    with zk_client(ctx) as zk:
+        return zk.exists(format_path(ctx, zk_path)) is not None
+
+
+def get_default_table_in_db_path(database_name: str, table_name: str) -> str:
+    return f"{DEFAULT_ZK_ROOT}/{database_name}/{ZK_METADATA_SUBPATH}/{table_name}"
+
+
+def get_tables_metadata(ctx: Context, database_name: str) -> dict[str, str]:
+    """Retrieve table metadata from ZooKeeper, returns dict mapping table names to CREATE statements."""
+    zk_tables_metadata: dict[str, str] = {}
+
+    with zk_client(ctx) as zk:
+        zk_metadata_path = f"{DEFAULT_ZK_ROOT}/{database_name}/{ZK_METADATA_SUBPATH}"
+        children = zk.get_children(zk_metadata_path)
+        if not children:
+            return zk_tables_metadata
+
+        for table_name in children:
+            try:
+                table_metadata_path = f"{zk_metadata_path}/{table_name}"
+                metadata_data = zk.get(table_metadata_path)
+                if metadata_data and metadata_data[0]:
+                    zk_tables_metadata[table_name] = metadata_data[0].decode().strip()
+            except NoNodeError:
+                logging.warning(f"Table {table_name} metadata removed concurrently")
+
+    return zk_tables_metadata
+
+
+def system_database_drop_replica(
+    ctx: Context, database_zk_path: str, replica: str, dry_run: bool = False
+) -> None:
+    """Perform SYSTEM DROP DATABASE REPLICA query."""
+    timeout = ctx.obj["config"]["clickhouse"]["drop_replica_timeout"]
+    query = f"SYSTEM DROP DATABASE REPLICA '{replica}' FROM ZKPATH '{database_zk_path}'"
+    execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
+
+
 def supports_system_restore_database_replica(ctx: Context) -> bool:
     """Check if ClickHouse version supports SYSTEM RESTORE DATABASE REPLICA command."""
     return match_ch_version(ctx, "25.8")
 
 
-def _check_database_exists_in_zk(
-    ctx: Context, database_name: str, db_replica_path: Optional[str] = None
-) -> bool:
-    """Check if database structure exists in ZooKeeper."""
-    zk_path = db_replica_path or f"{DEFAULT_ZK_ROOT}/{database_name}"
-
-    with zk_client(ctx) as zk:
-        return zk.exists(format_path(ctx, zk_path)) is not None
-
-
-def restore_replica_with_system_command(
-    ctx: Context, database_name: str, timeout: int = 300
-) -> None:
-    """Restore database replica using SYSTEM RESTORE DATABASE REPLICA command. Preferred method for CH >= 25.8."""
-
+def system_restore_database_replica(ctx: Context, database_name: str) -> None:
+    """Restore database replica using SYSTEM RESTORE DATABASE REPLICA command."""
     query = f"SYSTEM RESTORE DATABASE REPLICA {database_name}"
-
-    execute_query(ctx, query, timeout=timeout, echo=True, format_=None)
+    execute_query(ctx, query, echo=True, format_=None)
     logging.info(
         f"Successfully restored replica for {database_name} using SYSTEM RESTORE DATABASE REPLICA"
     )
 
 
+def _restore_replica_fallback(
+    ctx: Context,
+    database_name: str,
+    db_replica_path: Optional[str] = None,
+) -> None:
+    """Fallback method for restoring database replica on older ClickHouse versions (< 25.8)."""
+    logging.info(
+        f"Using legacy ZookeeperDatabaseManager for restore of {database_name}"
+    )
+
+    zk_manager = ZookeeperDatabaseManager(ctx)
+
+    # Determine if this is the first replica
+    first_replica = not check_database_exists_in_zk(ctx, database_name, db_replica_path)
+
+    if first_replica:
+        logging.info(
+            f"Restoring {database_name} as first replica (creating database structure)"
+        )
+        try:
+            zk_manager.create_database_structure(database_name, db_replica_path)
+        except NodeExistsError:
+            logging.info(
+                "Database nodes created concurrently, continuing as non-first replica"
+            )
+            first_replica = False
+    else:
+        logging.info(f"Restoring {database_name} as non-first replica")
+
+    # Create replica nodes
+    zk_manager.create_replica_nodes(database_name, first_replica, db_replica_path)
+    logging.info(
+        f"Successfully restored replica for {database_name} using fallback method"
+    )
+
+
 class ZookeeperDatabaseManager:
-    """Manages ZooKeeper structure for Replicated databases. DEPRECATED: Use SYSTEM RESTORE DATABASE REPLICA for CH >= 25.8."""
+    """
+    Manages ZooKeeper structure for Replicated databases.
+    DEPRECATED: Use SYSTEM RESTORE DATABASE REPLICA for CH >= 25.8
+    """
 
     def __init__(self, ctx: Context):
         self.ctx = ctx
-
-    def get_default_table_in_db_path(self, database_name: str, table_name: str) -> str:
-        return f"{DEFAULT_ZK_ROOT}/{database_name}/{ZK_METADATA_SUBPATH}/{table_name}"
 
     def create_database_structure(
         self, database_name: str, db_replica_path: Optional[str] = None
     ) -> None:
         """Create ZooKeeper structure for Replicated database with all required nodes."""
         with zk_client(self.ctx) as zk:
-            prefix_db_zk_path = db_replica_path or self.get_default_db_path(
+            prefix_db_zk_path = db_replica_path or self._get_default_db_path(
                 database_name
             )
 
@@ -133,55 +198,30 @@ class ZookeeperDatabaseManager:
         db_replica_path: Optional[str] = None,
     ) -> None:
         """Register database replica in ZooKeeper with replica-specific nodes."""
-        prefix_db_zk_path = db_replica_path or self.get_default_db_path(database_name)
+        prefix_db_zk_path = db_replica_path or self._get_default_db_path(database_name)
 
         with zk_client(self.ctx) as zk:
-            counter = self.generate_counter(zk, prefix_db_zk_path)
+            counter = self._generate_counter(zk, prefix_db_zk_path)
 
             with ZKTransactionBuilder(self.ctx, zk) as builder:
                 if first_replica:
-                    self.create_first_replica_name_node(
+                    self._create_first_replica_name_node(
                         builder, prefix_db_zk_path, database_name
                     )
 
-                self.create_query_log_entry(builder, prefix_db_zk_path, counter)
-                self.create_replica_registration(
+                self._create_query_log_entry(builder, prefix_db_zk_path, counter)
+                self._create_replica_registration(
                     builder, database_name, prefix_db_zk_path
                 )
 
                 if first_replica:
-                    self.create_table_metadata_nodes(
+                    self._create_table_metadata_nodes(
                         builder, database_name, prefix_db_zk_path
                     )
 
                 builder.commit()
 
-    def get_tables_metadata(self, database_name: str) -> dict[str, str]:
-        """Retrieve table metadata from ZooKeeper, returns dict mapping table names to CREATE statements."""
-        zk_tables_metadata: dict[str, str] = {}
-
-        with zk_client(self.ctx) as zk:
-            zk_metadata_path = (
-                f"{DEFAULT_ZK_ROOT}/{database_name}/{ZK_METADATA_SUBPATH}"
-            )
-            children = zk.get_children(zk_metadata_path)
-            if not children:
-                return zk_tables_metadata
-
-            for table_name in children:
-                try:
-                    table_metadata_path = f"{zk_metadata_path}/{table_name}"
-                    metadata_data = zk.get(table_metadata_path)
-                    if metadata_data and metadata_data[0]:
-                        zk_tables_metadata[table_name] = (
-                            metadata_data[0].decode().strip()
-                        )
-                except NoNodeError:
-                    logging.warning(f"Table {table_name} metadata removed concurrently")
-
-        return zk_tables_metadata
-
-    def generate_counter(self, zk: KazooClient, db_zk_path: str) -> str:
+    def _generate_counter(self, zk: KazooClient, db_zk_path: str) -> str:
         """Generate unique counter for log entries using ZK sequence."""
         path_counter = zk.create(
             format_path(self.ctx, f"{db_zk_path}/{ZK_COUNTER_SUBPATH}/cnt-"),
@@ -198,7 +238,7 @@ class ZookeeperDatabaseManager:
         logging.debug(f"Generated counter: {counter}")
         return counter
 
-    def create_first_replica_name_node(
+    def _create_first_replica_name_node(
         self, builder: ZKTransactionBuilder, prefix_db_zk_path: str, database_name: str
     ) -> None:
         """Store original database name for first replica."""
@@ -207,7 +247,7 @@ class ZookeeperDatabaseManager:
             value=database_name,
         )
 
-    def create_query_log_entry(
+    def _create_query_log_entry(
         self, builder: ZKTransactionBuilder, prefix_db_zk_path: str, counter: str
     ) -> None:
         """Create query log entry in ZooKeeper."""
@@ -231,7 +271,7 @@ class ZookeeperDatabaseManager:
             path=f"{prefix_db_zk_path}/{ZK_LOG_SUBPATH}/query-{counter}/synced"
         )
 
-    def create_replica_registration(
+    def _create_replica_registration(
         self,
         builder: ZKTransactionBuilder,
         database_name: str,
@@ -261,7 +301,7 @@ class ZookeeperDatabaseManager:
             path=f"{replica_node}/max_log_ptr_at_creation", value=DEFAULT_MAX_LOG_PTR
         )
 
-    def create_table_metadata_nodes(
+    def _create_table_metadata_nodes(
         self,
         builder: ZKTransactionBuilder,
         database_name: str,
@@ -326,76 +366,6 @@ class ZookeeperDatabaseManager:
 
         return shard, replica
 
-    def get_default_db_path(self, database_name: str) -> str:
+    def _get_default_db_path(self, database_name: str) -> str:
         """Get default ZooKeeper path for database."""
         return f"{DEFAULT_ZK_ROOT}/{database_name}"
-
-
-def system_database_drop_replica(
-    ctx: Context, database_zk_path: str, replica: str, dry_run: bool = False
-) -> None:
-    """Perform SYSTEM DROP DATABASE REPLICA query."""
-    timeout = ctx.obj["config"]["clickhouse"]["drop_replica_timeout"]
-    query = f"SYSTEM DROP DATABASE REPLICA '{replica}' FROM ZKPATH '{database_zk_path}'"
-    execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
-
-
-def create_database_nodes(
-    ctx: Context,
-    database_name: str,
-    db_replica_path: Optional[str] = None,
-) -> None:
-    """Create ZooKeeper structure for Replicated database."""
-    zk_manager = ZookeeperDatabaseManager(ctx)
-    zk_manager.create_database_structure(database_name, db_replica_path)
-
-
-def _restore_replica_fallback(
-    ctx: Context,
-    database_name: str,
-    db_replica_path: Optional[str] = None,
-) -> None:
-    """Fallback method for restoring database replica on older ClickHouse versions (< 25.8)."""
-    logging.info(
-        f"Using legacy ZookeeperDatabaseManager for restore of {database_name}"
-    )
-
-    zk_manager = ZookeeperDatabaseManager(ctx)
-
-    # Determine if this is the first replica
-    first_replica = not _check_database_exists_in_zk(
-        ctx, database_name, db_replica_path
-    )
-
-    if first_replica:
-        logging.info(
-            f"Restoring {database_name} as first replica (creating database structure)"
-        )
-        try:
-            zk_manager.create_database_structure(database_name, db_replica_path)
-        except NodeExistsError:
-            logging.info(
-                "Database nodes created concurrently, continuing as non-first replica"
-            )
-            first_replica = False
-    else:
-        logging.info(f"Restoring {database_name} as non-first replica")
-
-    # Create replica nodes
-    zk_manager.create_replica_nodes(database_name, first_replica, db_replica_path)
-    logging.info(
-        f"Successfully restored replica for {database_name} using fallback method"
-    )
-
-
-def restore_replica(
-    ctx: Context,
-    database_name: str,
-    first_replica: bool,
-    db_replica_path: Optional[str] = None,
-) -> None:
-    """Restore database replica in ZooKeeper. DEPRECATED: Use new restore flow through CLI commands."""
-    logging.info(f"Restoring replica for {database_name} (first={first_replica})")
-
-    zk_manager = ZookeeperDatabaseManager(ctx)
-    zk_manager.create_replica_nodes(database_name, first_replica, db_replica_path)

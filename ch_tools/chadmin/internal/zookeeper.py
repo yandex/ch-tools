@@ -36,18 +36,8 @@ from ch_tools.common.clickhouse.config.clickhouse import ClickhouseConfig
 
 class ZKTransactionBuilder:
     """
-    Builder for ZooKeeper transactions with path tracking.
-
-    Provides methods to create and delete nodes within a transaction,
-    tracks all operations, and validates results on commit.
-
-    Supports context manager protocol for automatic cleanup.
-
-    Example:
-        with ZKTransactionBuilder(ctx, zk) as builder:
-            builder.create_node("/path1", "value1")
-            builder.create_node("/path2", "value2")
-            builder.commit()
+    Builder for ZooKeeper transactions with path tracking and automatic validation.
+    Supports context manager protocol for creating/deleting nodes atomically.
     """
 
     def __init__(self, ctx: Context, zk: KazooClient) -> None:
@@ -58,15 +48,12 @@ class ZKTransactionBuilder:
         self._committed = False
 
     def __enter__(self) -> "ZKTransactionBuilder":
-        """Enter context manager."""
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        """Exit context manager, reset state."""
         self.reset()
 
     def create_node(self, path: str, value: str = "") -> "ZKTransactionBuilder":
-        """Add create operation to transaction. Returns self for method chaining."""
         if self._committed:
             raise RuntimeError("Cannot add operations to committed transaction")
         self.path_to_nodes.append(path)
@@ -74,7 +61,6 @@ class ZKTransactionBuilder:
         return self
 
     def delete_node(self, path: str) -> "ZKTransactionBuilder":
-        """Add delete operation to transaction. Returns self for method chaining."""
         if self._committed:
             raise RuntimeError("Cannot add operations to committed transaction")
         self.path_to_nodes.append(path)
@@ -82,7 +68,6 @@ class ZKTransactionBuilder:
         return self
 
     def commit(self) -> None:
-        """Execute transaction and validate results."""
         if self._committed:
             raise RuntimeError("Transaction already committed")
 
@@ -98,27 +83,13 @@ class ZKTransactionBuilder:
         self._check_result_txn(result, no_throw=False)
 
     def reset(self) -> None:
-        """Reset transaction state for reuse."""
         self.path_to_nodes = []
         self.txn = self.zk.transaction()
         self._committed = False
 
     @staticmethod
     def _check_result_txn(results: List, no_throw: bool = False) -> bool:
-        """
-        Validate transaction results.
-
-        Args:
-            results: List of transaction results
-            no_throw: If True, return False on error instead of raising
-
-        Returns:
-            True if all operations succeeded, False otherwise (only if no_throw=True)
-
-        Raises:
-            NodeExistsError: If node already exists (only if no_throw=False)
-            Exception: Any other exception from transaction (only if no_throw=False)
-        """
+        """Validate transaction results, returning True if all succeeded or raising exceptions unless no_throw=True."""
         for result in results:
             if isinstance(result, NodeExistsError):
                 if no_throw:
