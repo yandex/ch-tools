@@ -16,6 +16,7 @@ from ch_tools.chadmin.cli.database_metadata import (
     parse_database_metadata,
     remove_uuid_from_metadata,
 )
+from ch_tools.chadmin.cli.server_group import restart_command
 from ch_tools.chadmin.internal.database_replica import (
     ZookeeperDatabaseManager,
     check_database_exists_in_zk,
@@ -36,7 +37,6 @@ from ch_tools.chadmin.internal.zookeeper import (
     get_zk_node,
 )
 from ch_tools.common import logging
-from ch_tools.common.utils import execute
 
 
 class AttacherContext:
@@ -117,9 +117,8 @@ class DatabaseMigrator:
         logging.info(f"Changed {database} engine to Replicated in metadata")
 
         if need_restart:
-            # TODO: Replace server restart command with proper restart functionality once it's merged
-            logging.info("restart clickhouse-server")
-            execute("supervisorctl restart clickhouse-server")
+            logging.info("Restarting ClickHouse server due to UUID changes")
+            self.ctx.invoke(restart_command, timeout=None)
         else:
             _attach_dbs(self.ctx, dbs=[database])
             logging.info(f"Attached database {database}")

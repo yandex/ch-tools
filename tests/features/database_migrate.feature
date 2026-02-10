@@ -6,6 +6,25 @@ Feature: chadmin database migrate command
     And a working zookeeper
     And a working clickhouse on clickhouse01
     And a working clickhouse on clickhouse02
+    And merged clickhouse-tools configuration on clickhouse01
+    """
+    chadmin:
+      server:
+        restart:
+          command: supervisorctl restart clickhouse-server
+      wait:
+        ping_command: ch-monitoring ping
+    """
+    And merged clickhouse-tools configuration on clickhouse02
+    """
+    chadmin:
+      server:
+        restart:
+          command: supervisorctl restart clickhouse-server
+      wait:
+        ping_command: ch-monitoring ping
+    """
+    
   @require_version_25.8
   Scenario: Migrate empty database in host
     When we execute query on clickhouse01
