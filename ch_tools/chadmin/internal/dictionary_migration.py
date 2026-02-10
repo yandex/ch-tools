@@ -5,7 +5,6 @@ from typing import Any, Optional
 
 from click import Context
 
-from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config.path import CLICKHOUSE_SERVER_CONFIG_PATH
@@ -62,6 +61,7 @@ def migrate_dictionaries(
     max_workers: int,
     include_pattern: Optional[str] = None,
     exclude_pattern: Optional[str] = None,
+    keep_going: bool = False,
 ) -> None:
     """
     Migrate external dictionaries to DDL.
@@ -76,9 +76,17 @@ def migrate_dictionaries(
         config_directory = config_path.parent
         config_path_list = list(config_directory.glob(config_glob_pattern))
 
-    if not config_path_list:
+    configs_with_dicts: list[Path] = [
+        config_file
+        for config_file in config_path_list
+        if _matches_patterns(config_file, include_pattern, exclude_pattern)
+    ]
+
+    if not configs_with_dicts:
         logging.info(
-            "No dictionary config files found matching pattern '{}", config_glob_pattern
+            "No dictionary config files found matching include pattern '{}' and unmatching exclude pattern '{}'",
+            include_pattern,
+            exclude_pattern,
         )
         return
 
@@ -94,40 +102,19 @@ def migrate_dictionaries(
             "(requires ClickHouse >= 26.2)"
         )
 
-    all_dictionaries: list[tuple[Path, str, str]] = []
-    for config_file in config_path_list:
-        if not _matches_patterns(config_file, include_pattern, exclude_pattern):
-            continue
-        queries = _generate_ddl_dictionaries_from_xml(str(config_file), target_database)
-        for dict_name, query in queries:
-            all_dictionaries.append((config_file, dict_name, query))
-
-    if not all_dictionaries:
-        logging.info(
-            "No dictionary config files found matching include pattern '{}' and unmatching exclude pattern '{}'",
-            include_pattern,
-            exclude_pattern,
-        )
-        return
-
-    if dry_run:
-        _dry_run(all_dictionaries)
-    else:
-        _run(
-            ctx,
-            target_database,
-            all_dictionaries,
-            should_remove,
-            force_reload,
-            max_workers,
-        )
+    _run(
+        ctx,
+        target_database,
+        configs_with_dicts,
+        should_remove,
+        force_reload,
+        max_workers,
+        dry_run,
+        keep_going,
+    )
 
 
 def _get_default_dictionary_database(ctx: Context) -> str:
-    if not match_ch_version(ctx, "26.2"):
-        raise RuntimeError(
-            "Please upgrade ClickHouse to 26.2 or specify --database explicitly."
-        )
     query = (
         "SELECT value FROM system.settings WHERE name = 'default_dictionary_database'"
     )
@@ -138,84 +125,74 @@ def _get_default_dictionary_database(ctx: Context) -> str:
     return result.strip()
 
 
-def _dry_run(filtered_dictionaries: list[tuple[Path, str, str]]) -> None:
-    logging.info("Starting dry external dictionaries migration")
-    for i, (config_file, dict_name, query) in enumerate(filtered_dictionaries, start=1):
-        logging.info(
-            "config file '{}' | dictionary name = '{}'", config_file, dict_name
-        )
-        logging.info("query #{}:\n{}", i, query)
-
-    logging.info(
-        "Total dictionaries that ready to migration: {}", len(filtered_dictionaries)
-    )
-
-
 def _run(
     ctx: Context,
     target_database: str,
-    filtered_dictionaries: list[tuple[Path, str, str]],
+    configs_with_dicts: list[Path],
     should_remove: bool,
     force_reload: bool,
     max_workers: int,
+    dry_run: bool,
+    keep_going: bool,
 ) -> None:
     logging.info("Starting external dictionaries migration")
     logging.info("Creating '{}' database", target_database)
-    execute_query(ctx, f"CREATE DATABASE IF NOT EXISTS {target_database}", format_=None)
+    execute_query(
+        ctx,
+        f"CREATE DATABASE IF NOT EXISTS {target_database}",
+        format_=None,
+        dry_run=dry_run,
+    )
 
     tasks = [
         WorkerTask(
-            dict_name,
-            _migrate_single_dictionary,
+            str(config_file),
+            _migrate_dictionaries_from_config,
             {
                 "ctx": ctx,
+                "target_database": target_database,
                 "config_file": config_file,
-                "dict_name": dict_name,
-                "query": query,
+                "should_remove": should_remove,
+                "dry_run": dry_run,
             },
         )
-        for config_file, dict_name, query in filtered_dictionaries
+        for config_file in configs_with_dicts
     ]
 
     results = execute_tasks_in_parallel(
-        tasks, max_workers=max_workers, keep_going=False
+        tasks, max_workers=max_workers, keep_going=keep_going
     )
-    logging.info("External dictionaries migration completed successfully")
-    logging.info("Total dictionaries migrated: {}", len(results))
-
-    if should_remove:
-        _remove_dictionaries(ctx, filtered_dictionaries, force_reload)
-
-
-def _migrate_single_dictionary(
-    ctx: Context, config_file: Path, dict_name: str, query: str
-) -> None:
-    try:
-        execute_query(ctx, query, format_=None)
-        logging.info("Successfully migrated dictionary '{}'", dict_name)
-    except Exception as e:
-        raise RuntimeError(
-            f"Dictionary migration failed for dictionary '{dict_name}' in config file '{config_file}'"
-        ) from e
-
-
-def _remove_dictionaries(
-    ctx: Context, filtered_dictionaries: list[tuple[Path, str, str]], force_reload: bool
-) -> None:
-    logging.info("Starting removing external dictionaries after migration")
-
-    unique_files = {config_file for config_file, _, _ in filtered_dictionaries}
-
-    for config_file in unique_files:
-        try:
-            config_file.unlink()
-            logging.info("Deleted config file '{}'", config_file)
-        except Exception as e:
-            raise RuntimeError(f"Error while removing '{config_file}'") from e
-    logging.info("Removing external dictionaries completed successfully")
+    logging.info(
+        f"External dictionaries migration completed successfully. Total dictionaries migrated: {len(results)}"
+    )
 
     if force_reload:
         execute_query(ctx, "SYSTEM RELOAD DICTIONARIES", format_=None)
+
+
+def _migrate_dictionaries_from_config(
+    ctx: Context,
+    target_database: str,
+    config_file: Path,
+    should_remove: bool,
+    dry_run: bool,
+) -> None:
+    queries: list[tuple[str, str]] = _generate_ddl_dictionaries_from_xml(
+        str(config_file), target_database
+    )
+
+    for dict_name, query in queries:
+        try:
+            execute_query(ctx, query, format_=None, dry_run=dry_run)
+            logging.info("Successfully migrated dictionary '{}'", dict_name)
+        except Exception as e:
+            raise RuntimeError(
+                f"Dictionary migration failed for dictionary '{dict_name}' in config file '{config_file}'. Error message: {e}"
+            ) from e
+
+    if not dry_run and should_remove:
+        config_file.unlink()
+        logging.info("Deleted config file '{}'", config_file)
 
 
 def _matches_patterns(

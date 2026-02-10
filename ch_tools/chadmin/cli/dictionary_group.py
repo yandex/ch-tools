@@ -108,6 +108,14 @@ def _full_name(dictionary: Any) -> str:
     type=int,
     help="Number of parallel workers.",
 )
+@option(
+    "--keep-going",
+    "--k",
+    "keep_going",
+    is_flag=True,
+    default=False,
+    help="Do not stop on the first error.",
+)
 @pass_context
 def migrate_command(
     ctx: Context,
@@ -118,6 +126,7 @@ def migrate_command(
     max_workers: int,
     include_pattern: Optional[str],
     exclude_pattern: Optional[str],
+    keep_going: bool,
 ) -> None:
     """
     Migrate XML-dictionaries to DDL.
@@ -131,4 +140,5 @@ def migrate_command(
         max_workers,
         include_pattern,
         exclude_pattern,
+        keep_going,
     )
