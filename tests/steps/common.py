@@ -90,6 +90,11 @@ def step_get_response_not_contains(context: ContextT, entry: str) -> None:
     assert_that(context.response, is_not(contains_string(entry)))  # type: ignore
 
 
+@then("we get response does not contain")
+def step_get_response_does_not_contain(context: ContextT) -> None:
+    assert_that(context.response, is_not(contains_string(context.text)))  # type: ignore
+
+
 @when('we create file {file_path} with data "{data}"')
 def step_create_file(context: ContextT, file_path: str, data: str) -> None:
     container = docker.get_container(context, "clickhouse01")
@@ -97,6 +102,20 @@ def step_create_file(context: ContextT, file_path: str, data: str) -> None:
         ["bash", "-c", f'echo "{data}" > {file_path}'], user="root"
     )
     assert result.exit_code == 0
+
+
+@when("we create file {file_path} on {node:w} with content")
+def step_create_file_with_content(context: ContextT, file_path: str, node: str) -> None:
+    """Create a file with multiline content from context.text"""
+    container = docker.get_container(context, node)
+    content = context.text
+    # Escape single quotes and use cat with heredoc for multiline content
+    result = container.exec_run(
+        ["bash", "-c", f"cat > {file_path} << 'EOF'\n{content}\nEOF"], user="root"
+    )
+    assert (
+        result.exit_code == 0
+    ), f"Failed to create file {file_path}: {result.output.decode()}"
 
 
 @then("we get file {file_path}")

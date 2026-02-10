@@ -16,7 +16,8 @@ ORDER BY id"""
     lines = normalize_schema(schema, remove_replicated=False)
 
     assert len(lines) > 0
-    assert lines[0] == "CREATE TABLE test ("
+    # Table name is normalized to <table>
+    assert lines[0] == "CREATE TABLE <table> ("
 
 
 def test_normalize_schema_remove_replicated_params() -> None:
@@ -50,12 +51,10 @@ ORDER BY id"""
     lines1 = normalize_schema(schema1, remove_replicated=False, ignore_uuid=True)
     lines2 = normalize_schema(schema2, remove_replicated=False, ignore_uuid=True)
 
-    # Both should have the same UUID placeholder
-    uuid_line1 = [line for line in lines1 if "UUID" in line][0]
-    uuid_line2 = [line for line in lines2 if "UUID" in line][0]
-
-    assert uuid_line1 == uuid_line2
-    assert "<ignored>" in uuid_line1
+    # Both should be identical after UUID removal
+    assert lines1 == lines2
+    # UUID should not be present in normalized output
+    assert not any("UUID" in line for line in lines1)
 
 
 def test_normalize_schema_ignore_engine() -> None:
@@ -121,14 +120,14 @@ ORDER BY id"""
     lines1 = normalize_schema(
         schema1,
         remove_replicated=False,
-        ignore_uuid=True,
         ignore_engine=True,
+        ignore_uuid=True,
     )
     lines2 = normalize_schema(
         schema2,
         remove_replicated=False,
-        ignore_uuid=True,
         ignore_engine=True,
+        ignore_uuid=True,
     )
 
     # Schemas should be identical after normalization
@@ -183,16 +182,16 @@ ORDER BY id
     lines = normalize_schema(
         schema,
         remove_replicated=True,
-        ignore_uuid=True,
         ignore_engine=True,
+        ignore_uuid=True,
     )
 
     # Check that all normalizations are applied
     assert lines[0] != ""  # No empty lines at start
     assert lines[-1] != ""  # No empty lines at end
 
-    uuid_line = [line for line in lines if "UUID" in line][0]
-    assert "<ignored>" in uuid_line
+    # UUID should be removed
+    assert not any("UUID" in line for line in lines)
 
     engine_line = [line for line in lines if "ENGINE" in line][0]
     assert "<ignored>" in engine_line

@@ -57,15 +57,10 @@ def get_schema_from_clickhouse(ctx: Context, database: str, table: str) -> str:
         raise ClickException(f"Table `{database}`.`{table}` not found in ClickHouse")
 
     query = f"SHOW CREATE TABLE `{database}`.`{table}`"
-    result = execute_query(ctx, query, format_="TabSeparated")
+    result = execute_query(ctx, query, format_="TSVRaw")
 
-    # Result is a plain string when format is TabSeparated
     if isinstance(result, str):
-        return result.strip()
-
-    # Fallback for other formats
-    if isinstance(result, dict) and "data" in result:
-        return result["data"][0]["statement"]
+        return result
 
     return str(result).strip()
 
@@ -134,6 +129,8 @@ def normalize_schema(
     Normalize CREATE TABLE statement for comparison.
 
     Normalization includes:
+    - Converting ATTACH TABLE to CREATE TABLE
+    - Normalizing table names to a common placeholder
     - Removing extra whitespace
     - Consistent formatting
     - Optionally removing ReplicatedMergeTree parameters
@@ -149,13 +146,22 @@ def normalize_schema(
     Returns:
         List of normalized lines
     """
+    # Normalize ATTACH TABLE to CREATE TABLE
+    schema = re.sub(r"^ATTACH TABLE", "CREATE TABLE", schema, flags=re.MULTILINE)
+
+    # Normalize table name to a placeholder (handles both CREATE TABLE name and CREATE TABLE db.name)
+    # This regex captures the table name after CREATE TABLE and replaces it with a placeholder
+    schema = re.sub(
+        r"(CREATE TABLE\s+)(?:`?[\w.]+`?|_)", r"\1<table>", schema, flags=re.MULTILINE
+    )
+
     # Remove ReplicatedMergeTree parameters if requested
     if remove_replicated:
         schema = remove_replicated_params(schema)
 
     # Remove UUID if requested
     if ignore_uuid:
-        schema = re.sub(r"UUID\s+'[^']+'", "UUID '<ignored>'", schema)
+        schema = re.sub(r"UUID\s+'[^']+'", "", schema)
 
     # Remove engine if requested
     if ignore_engine:
