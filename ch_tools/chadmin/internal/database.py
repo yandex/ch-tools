@@ -107,3 +107,15 @@ def is_database_exists(ctx: Context, database_name: str) -> bool:
         ctx, query, database_name=database_name, format_=OutputFormat.JSON
     )
     return len(rows["data"]) == 1
+
+
+def detach_database(ctx: Context, database: str) -> None:
+    """Detach database from ClickHouse."""
+    query = f"DETACH DATABASE `{database}`"
+    execute_query(ctx, query, echo=True, format_=None)
+
+
+def attach_database(ctx: Context, database: str) -> None:
+    """Attach database to ClickHouse."""
+    query = f"ATTACH DATABASE `{database}`"
+    execute_query(ctx, query, echo=True, format_=None)
