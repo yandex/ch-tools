@@ -19,6 +19,7 @@ from ch_tools.chadmin.internal.zookeeper import (
     ZKTransactionBuilder,
     escape_for_zookeeper,
     format_path,
+    unescape_from_zookeeper,
     zk_client,
 )
 from ch_tools.common import logging
@@ -58,7 +59,11 @@ def check_database_exists_in_zk(
 
 
 def get_default_table_in_db_path(database_name: str, table_name: str) -> str:
-    return f"{DEFAULT_ZK_ROOT}/{database_name}/{ZK_METADATA_SUBPATH}/{table_name}"
+    """Get ZooKeeper path for table metadata"""
+    escaped_table_name = escape_for_zookeeper(table_name)
+    return (
+        f"{DEFAULT_ZK_ROOT}/{database_name}/{ZK_METADATA_SUBPATH}/{escaped_table_name}"
+    )
 
 
 def get_tables_metadata(ctx: Context, database_name: str) -> dict[str, str]:
@@ -71,14 +76,27 @@ def get_tables_metadata(ctx: Context, database_name: str) -> dict[str, str]:
         if not children:
             return zk_tables_metadata
 
-        for table_name in children:
+        for escaped_table_name in children:
+            table_metadata_path = f"{zk_metadata_path}/{escaped_table_name}"
+            # Unescape table name to get original name for dictionary key
+            table_name = unescape_from_zookeeper(escaped_table_name)
             try:
-                table_metadata_path = f"{zk_metadata_path}/{table_name}"
                 metadata_data = zk.get(table_metadata_path)
                 if metadata_data and metadata_data[0]:
                     zk_tables_metadata[table_name] = metadata_data[0].decode().strip()
+                else:
+                    # Node exists but is empty or unreadable; log for easier diagnosis of partial failures.
+                    logging.warning(
+                        "Empty or missing ZooKeeper metadata for table %s at path %s",
+                        table_name,
+                        table_metadata_path,
+                    )
             except NoNodeError:
-                logging.warning(f"Table {table_name} metadata removed concurrently")
+                logging.warning(
+                    "ZooKeeper metadata node for table %s was removed concurrently at path %s",
+                    table_name,
+                    table_metadata_path,
+                )
 
     return zk_tables_metadata
 
@@ -99,7 +117,8 @@ def supports_system_restore_database_replica(ctx: Context) -> bool:
 
 def system_restore_database_replica(ctx: Context, database_name: str) -> None:
     """Restore database replica using SYSTEM RESTORE DATABASE REPLICA command."""
-    query = f"SYSTEM RESTORE DATABASE REPLICA {database_name}"
+    # Wrap database name in backticks to handle special characters
+    query = f"SYSTEM RESTORE DATABASE REPLICA `{database_name}`"
     execute_query(ctx, query, echo=True, format_=None)
     logging.info(
         f"Successfully restored replica for {database_name} using SYSTEM RESTORE DATABASE REPLICA"
@@ -258,8 +277,6 @@ class ZookeeperDatabaseManager:
                     value=DEFAULT_LOGS_TO_KEEP,
                 )
 
-                builder.commit()
-
     def create_replica_nodes(
         self,
         database_name: str,
@@ -310,8 +327,6 @@ class ZookeeperDatabaseManager:
                     self._create_table_metadata_nodes(
                         builder, database_name, prefix_db_zk_path
                     )
-
-                builder.commit()
 
     def _generate_counter(self, zk: KazooClient, db_zk_path: str) -> str:
         """Generate unique counter for log entries using ZK sequence."""
