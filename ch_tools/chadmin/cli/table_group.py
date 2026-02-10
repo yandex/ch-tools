@@ -1088,6 +1088,16 @@ def check_table_command(
     help="Normalize schemas before comparison (remove ReplicatedMergeTree params, extra whitespace).",
 )
 @option(
+    "--ignore-engine",
+    is_flag=True,
+    help="Ignore table engine differences when comparing schemas.",
+)
+@option(
+    "--ignore-uuid",
+    is_flag=True,
+    help="Ignore UUID differences when comparing schemas.",
+)
+@option(
     "--context-lines",
     type=int,
     default=3,
@@ -1101,6 +1111,8 @@ def schema_diff_command(
     diff_format: str,
     no_color: bool,
     normalize: bool,
+    ignore_engine: bool,
+    ignore_uuid: bool,
     context_lines: int,
 ) -> None:
     """
@@ -1152,6 +1164,8 @@ def schema_diff_command(
             colored_output=colored_output,
             normalize=normalize,
             context_lines=context_lines,
+            ignore_engine=ignore_engine,
+            ignore_uuid=ignore_uuid,
         )
         print(diff_output)
     except Exception as e:

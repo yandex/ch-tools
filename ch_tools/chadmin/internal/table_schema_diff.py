@@ -3,6 +3,7 @@ Module for comparing table schemas from different sources.
 """
 
 import os
+import re
 from difflib import unified_diff
 from typing import Dict, List, Tuple
 
@@ -123,7 +124,12 @@ def get_schema_from_zookeeper(ctx: Context, zk_path: str) -> str:
         raise ClickException(f"Failed to read from ZooKeeper {zk_path}: {e}")
 
 
-def normalize_schema(schema: str, remove_replicated: bool = True) -> List[str]:
+def normalize_schema(
+    schema: str,
+    remove_replicated: bool = True,
+    ignore_engine: bool = False,
+    ignore_uuid: bool = False,
+) -> List[str]:
     """
     Normalize CREATE TABLE statement for comparison.
 
@@ -131,10 +137,14 @@ def normalize_schema(schema: str, remove_replicated: bool = True) -> List[str]:
     - Removing extra whitespace
     - Consistent formatting
     - Optionally removing ReplicatedMergeTree parameters
+    - Optionally ignoring engine differences
+    - Optionally ignoring UUID differences
 
     Args:
         schema: CREATE TABLE statement
         remove_replicated: Whether to remove ReplicatedMergeTree parameters
+        ignore_engine: Whether to ignore engine differences
+        ignore_uuid: Whether to ignore UUID differences
 
     Returns:
         List of normalized lines
@@ -142,6 +152,20 @@ def normalize_schema(schema: str, remove_replicated: bool = True) -> List[str]:
     # Remove ReplicatedMergeTree parameters if requested
     if remove_replicated:
         schema = remove_replicated_params(schema)
+
+    # Remove UUID if requested
+    if ignore_uuid:
+        schema = re.sub(r"UUID\s+'[^']+'", "UUID '<ignored>'", schema)
+
+    # Remove engine if requested
+    if ignore_engine:
+        # Replace ENGINE = ... with ENGINE = <ignored>
+        # Match ENGINE = followed by engine name and optional parameters
+        schema = re.sub(
+            r"ENGINE\s*=\s*\w+(?:\([^)]*\))?",
+            "ENGINE = <ignored>",
+            schema,
+        )
 
     # Split into lines and strip whitespace
     lines = [line.rstrip() for line in schema.split("\n")]
@@ -327,6 +351,8 @@ def compare_schemas(
     colored_output: bool = True,
     normalize: bool = True,
     context_lines: int = 3,
+    ignore_engine: bool = False,
+    ignore_uuid: bool = False,
 ) -> str:
     """
     Compare schemas from two sources.
@@ -339,6 +365,8 @@ def compare_schemas(
         colored_output: Whether to use colored output
         normalize: Whether to normalize schemas before comparison
         context_lines: Number of context lines for unified diff
+        ignore_engine: Whether to ignore engine differences
+        ignore_uuid: Whether to ignore UUID differences
 
     Returns:
         Formatted diff as string
@@ -366,8 +394,18 @@ def compare_schemas(
 
     # Normalize if requested
     if normalize:
-        schema1_lines = normalize_schema(schema1)
-        schema2_lines = normalize_schema(schema2)
+        schema1_lines = normalize_schema(
+            schema1,
+            remove_replicated=True,
+            ignore_engine=ignore_engine,
+            ignore_uuid=ignore_uuid,
+        )
+        schema2_lines = normalize_schema(
+            schema2,
+            remove_replicated=True,
+            ignore_engine=ignore_engine,
+            ignore_uuid=ignore_uuid,
+        )
     else:
         schema1_lines = schema1.split("\n")
         schema2_lines = schema2.split("\n")
