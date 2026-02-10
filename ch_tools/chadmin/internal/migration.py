@@ -17,6 +17,7 @@ from ch_tools.chadmin.cli.database_metadata import (
     remove_uuid_from_metadata,
 )
 from ch_tools.chadmin.cli.server_group import restart_command
+from ch_tools.chadmin.internal.database import attach_database, detach_database
 from ch_tools.chadmin.internal.database_replica import (
     ZookeeperDatabaseManager,
     check_database_exists_in_zk,
@@ -31,7 +32,6 @@ from ch_tools.chadmin.internal.table import (
     read_local_table_metadata,
 )
 from ch_tools.chadmin.internal.table_info import TableInfo
-from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import (
     delete_zk_node,
     get_zk_node,
@@ -47,7 +47,7 @@ class AttacherContext:
         self.database = database
 
     def __enter__(self) -> None:
-        _detach_dbs(self.ctx, dbs=[self.database])
+        detach_database(self.ctx, self.database)
 
     def __exit__(
         self,
@@ -55,7 +55,7 @@ class AttacherContext:
         exc_value: Optional[Exception],
         traceback: Optional[Any],
     ) -> Literal[False]:
-        _attach_dbs(self.ctx, dbs=[self.database])
+        attach_database(self.ctx, self.database)
         if exc_type is not None:
             logging.error(
                 f"Exception in AttacherContext: {exc_type.__name__}: {exc_value}"
@@ -105,7 +105,7 @@ class DatabaseMigrator:
             list_tables(self.ctx, database_name=database) if not first_replica else []
         )
 
-        _detach_dbs(self.ctx, dbs=[database])
+        detach_database(self.ctx, database)
         logging.info(f"Detached database {database}")
 
         need_restart = False
@@ -120,7 +120,7 @@ class DatabaseMigrator:
             logging.info("Restarting ClickHouse server due to UUID changes")
             self.ctx.invoke(restart_command, timeout=None)
         else:
-            _attach_dbs(self.ctx, dbs=[database])
+            attach_database(self.ctx, database)
             logging.info(f"Attached database {database}")
 
         system_restore_database_replica(self.ctx, database)
@@ -230,23 +230,6 @@ class DatabaseMigrator:
             )
 
         return was_changed
-
-
-# Internal helper functions
-
-
-def _detach_dbs(ctx: Context, dbs: list[str]) -> None:
-    """Detach databases from ClickHouse."""
-    for db in dbs:
-        query = f"DETACH DATABASE {db}"
-        execute_query(ctx, query, echo=True)
-
-
-def _attach_dbs(ctx: Context, dbs: list[str]) -> None:
-    """Attach databases to ClickHouse."""
-    for db in dbs:
-        query = f"ATTACH DATABASE {db}"
-        execute_query(ctx, query, echo=True)
 
 
 # Public API functions

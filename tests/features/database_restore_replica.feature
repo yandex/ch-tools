@@ -40,15 +40,6 @@ Feature: chadmin database restore-replica command
     """
     Then it completes successfully
 
-    When we execute query on clickhouse01
-    """
-    DETACH DATABASE repl_db
-    """
-    When we execute query on clickhouse01
-    """
-    ATTACH DATABASE repl_db
-    """
-
     When we execute command on clickhouse02
     """
     chadmin database restore-replica -d repl_db
@@ -56,14 +47,6 @@ Feature: chadmin database restore-replica command
     When we execute query on clickhouse02
     """
     SYSTEM SYNC DATABASE REPLICA repl_db
-    """
-    When we execute query on clickhouse02
-    """
-    DETACH DATABASE repl_db
-    """
-    When we execute query on clickhouse02
-    """
-    ATTACH DATABASE repl_db
     """
 
     When we execute query on clickhouse01
@@ -154,15 +137,6 @@ Feature: chadmin database restore-replica command
     """
     Then it completes successfully
 
-    When we execute query on clickhouse01
-    """
-    DETACH DATABASE repl_db
-    """
-    When we execute query on clickhouse01
-    """
-    ATTACH DATABASE repl_db
-    """
-
     When we execute command on clickhouse02
     """
     chadmin database restore-replica -d repl_db
@@ -171,14 +145,6 @@ Feature: chadmin database restore-replica command
     When we execute query on clickhouse02
     """
     SYSTEM SYNC DATABASE REPLICA repl_db
-    """
-    When we execute query on clickhouse02
-    """
-    DETACH DATABASE repl_db
-    """
-    When we execute query on clickhouse02
-    """
-    ATTACH DATABASE repl_db
     """
 
     When we execute query on clickhouse01
@@ -276,14 +242,6 @@ Feature: chadmin database restore-replica command
     chadmin database restore-replica -d repl_db
     """
     Then it completes successfully
-    When we execute query on clickhouse01
-    """
-    DETACH DATABASE repl_db
-    """
-    When we execute query on clickhouse01
-    """
-    ATTACH DATABASE repl_db
-    """
     When we execute command on clickhouse02
     """
     chadmin database restore-replica -d repl_db
