@@ -19,7 +19,6 @@ from ch_tools.chadmin.cli.database_metadata import (
 from ch_tools.chadmin.cli.server_group import restart_command
 from ch_tools.chadmin.internal.database import attach_database, detach_database
 from ch_tools.chadmin.internal.database_replica import (
-    ZookeeperDatabaseManager,
     check_database_exists_in_zk,
     get_default_table_in_db_path,
     get_tables_metadata,
@@ -68,7 +67,6 @@ class DatabaseMigrator:
 
     def __init__(self, ctx: Context):
         self.ctx = ctx
-        self.zk_manager = ZookeeperDatabaseManager(ctx)
 
     def migrate_to_atomic(self, database: str, clean_zookeeper: bool) -> None:
         """Migrate Replicated database to Atomic engine with optional ZooKeeper cleanup."""

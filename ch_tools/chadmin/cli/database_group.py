@@ -175,9 +175,6 @@ def migrate_engine_command(
 def restore_replica_command(ctx: Context, database: str) -> None:
     """
     Restore database replica using SYSTEM RESTORE DATABASE REPLICA command.
-
-    After restore, automatically performs DETACH and ATTACH operations
-    to ensure proper synchronization.
     """
 
     # Validation checks
@@ -193,13 +190,14 @@ def restore_replica_command(ctx: Context, database: str) -> None:
     if supports_system_restore_database_replica(ctx):
         try:
             system_restore_database_replica(ctx, database)
+            return
         except Exception as e:
             logging.error(f"SYSTEM RESTORE DATABASE REPLICA failed: {e}")
             raise
-    else:
-        # Fallback for older versions
-        logging.info("Using fallback method for ClickHouse < 25.8")
-        _restore_replica_fallback(ctx, database, db_metadata.zookeeper_path)
+
+    # Fallback for older versions
+    logging.info("Using fallback method for ClickHouse < 25.8")
+    _restore_replica_fallback(ctx, database, db_metadata.zookeeper_path)
 
     # Perform detach/attach operations to ensure proper synchronization
     logging.info(f"Detaching database {database}")
