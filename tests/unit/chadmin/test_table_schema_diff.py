@@ -2,7 +2,10 @@
 Unit tests for table schema diff functionality.
 """
 
-from ch_tools.chadmin.internal.table_schema_diff import normalize_schema
+from ch_tools.chadmin.internal.table_schema_diff import (
+    highlight_line_differences,
+    normalize_schema,
+)
 
 
 def test_normalize_schema_basic() -> None:
@@ -199,3 +202,79 @@ ORDER BY id
     # Check no trailing whitespace
     for line in lines:
         assert line == line.rstrip()
+
+
+def test_highlight_line_differences_identical() -> None:
+    """Test highlighting when lines are identical."""
+    line1 = "CREATE TABLE test ("
+    line2 = "CREATE TABLE test ("
+
+    result1, result2, markers = highlight_line_differences(
+        line1, line2, colored_output=False
+    )
+
+    assert result1 == line1
+    assert result2 == line2
+    assert markers == ""
+
+
+def test_highlight_line_differences_replace() -> None:
+    """Test highlighting replaced text."""
+    line1 = "ENGINE = MergeTree()"
+    line2 = "ENGINE = ReplacingMergeTree()"
+
+    result1, result2, markers = highlight_line_differences(
+        line1, line2, colored_output=False
+    )
+
+    # Markers should indicate differences
+    assert "^" in markers
+    # Results should contain the original text (without colors in this test)
+    assert "MergeTree" in result1
+    assert "ReplacingMergeTree" in result2
+
+
+def test_highlight_line_differences_insert() -> None:
+    """Test highlighting inserted text."""
+    line1 = "id UInt64"
+    line2 = "id UInt64, name String"
+
+    result1, result2, markers = highlight_line_differences(
+        line1, line2, colored_output=False
+    )
+
+    # Markers should indicate the insertion
+    assert "^" in markers
+    assert "name String" in result2
+
+
+def test_highlight_line_differences_delete() -> None:
+    """Test highlighting deleted text."""
+    line1 = "id UInt64, name String"
+    line2 = "id UInt64"
+
+    result1, result2, markers = highlight_line_differences(
+        line1, line2, colored_output=False
+    )
+
+    # Markers should indicate the deletion
+    assert "^" in markers
+    assert "name String" in result1
+
+
+def test_highlight_line_differences_multiple_changes() -> None:
+    """Test highlighting multiple changes in one line."""
+    line1 = "CREATE TABLE old_name (id Int32)"
+    line2 = "CREATE TABLE new_name (id Int64)"
+
+    result1, result2, markers = highlight_line_differences(
+        line1, line2, colored_output=False
+    )
+
+    # Should have markers for both changes
+    assert "^" in markers
+    # Both differences should be present
+    assert "old_name" in result1
+    assert "new_name" in result2
+    assert "Int32" in result1
+    assert "Int64" in result2

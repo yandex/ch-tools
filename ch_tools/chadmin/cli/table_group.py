@@ -1123,7 +1123,6 @@ def schema_diff_command(
     \b
     - database.table          - ClickHouse table
     - /path/to/file.sql       - File with CREATE TABLE statement
-    - zk:/path/in/zookeeper   - ZooKeeper path to table metadata
 
     \b
     Examples:
@@ -1139,10 +1138,6 @@ def schema_diff_command(
     \b
     # Compare two files
     chadmin table schema-diff /tmp/schema1.sql /tmp/schema2.sql
-
-    \b
-    # Compare table with ZooKeeper
-    chadmin table schema-diff db1.table1 zk:/clickhouse/tables/shard1/table1
 
     \b
     # Side-by-side format

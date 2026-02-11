@@ -4,7 +4,7 @@ Module for comparing table schemas from different sources.
 
 import os
 import re
-from difflib import unified_diff
+from difflib import SequenceMatcher, unified_diff
 from typing import Dict, List, Tuple
 
 from click import ClickException, Context
@@ -13,7 +13,6 @@ from termcolor import colored
 from ch_tools.chadmin.internal.table import table_exists
 from ch_tools.chadmin.internal.table_metadata import remove_replicated_params
 from ch_tools.chadmin.internal.utils import execute_query
-from ch_tools.chadmin.internal.zookeeper import check_zk_node, get_zk_node
 from ch_tools.common import logging
 
 
@@ -22,16 +21,13 @@ def parse_source(source: str) -> Tuple[str, Dict[str, str]]:
     Parse source string and determine its type.
 
     Args:
-        source: Source identifier (e.g., "db.table", "/path/file.sql", "zk:/path")
+        source: Source identifier (e.g., "db.table", "/path/file.sql")
 
     Returns:
         Tuple of (source_type, parameters)
         - ("clickhouse", {"database": "db", "table": "table"})
         - ("file", {"path": "/path/file.sql"})
-        - ("zookeeper", {"path": "/clickhouse/tables/..."})
     """
-    if source.startswith("zk:"):
-        return ("zookeeper", {"path": source[3:]})
     if "." in source and not source.startswith("/") and not source.startswith("~"):
         parts = source.split(".", 1)
         return ("clickhouse", {"database": parts[0], "table": parts[1]})
@@ -86,37 +82,6 @@ def get_schema_from_file(file_path: str) -> str:
             return f.read()
     except Exception as e:
         raise ClickException(f"Failed to read file {file_path}: {e}")
-
-
-def get_schema_from_zookeeper(ctx: Context, zk_path: str) -> str:
-    """
-    Get CREATE TABLE statement from ZooKeeper.
-
-    For ReplicatedMergeTree tables, the schema is stored in ZooKeeper
-    at the replica path + "/metadata".
-
-    Args:
-        ctx: Click context
-        zk_path: ZooKeeper path (can be replica path or direct metadata path)
-
-    Returns:
-        CREATE TABLE statement as string
-
-    Raises:
-        ClickException: If ZooKeeper node doesn't exist
-    """
-    # Try direct path first
-    if not check_zk_node(ctx, zk_path):
-        # Try appending /metadata
-        metadata_path = os.path.join(zk_path, "metadata")
-        if not check_zk_node(ctx, metadata_path):
-            raise ClickException(f"ZooKeeper node not found: {zk_path}")
-        zk_path = metadata_path
-
-    try:
-        return get_zk_node(ctx, zk_path)
-    except Exception as e:
-        raise ClickException(f"Failed to read from ZooKeeper {zk_path}: {e}")
 
 
 def normalize_schema(
@@ -185,7 +150,86 @@ def normalize_schema(
     return lines
 
 
-def format_unified_diff(
+def highlight_line_differences(
+    line1: str, line2: str, colored_output: bool = True
+) -> Tuple[str, str, str]:
+    """
+    Highlight character-level differences between two lines.
+
+    Args:
+        line1: First line
+        line2: Second line
+        colored_output: Whether to use colored output
+
+    Returns:
+        Tuple of (highlighted_line1, highlighted_line2, marker_line)
+        marker_line contains "^" symbols under differing characters
+    """
+    if line1 == line2:
+        return line1, line2, ""
+
+    matcher = SequenceMatcher(None, line1, line2)
+
+    result1 = []
+    result2 = []
+    markers = []
+
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            # Equal parts - keep base color but no bold
+            text1 = line1[i1:i2]
+            text2 = line2[j1:j2]
+            if colored_output:
+                result1.append(colored(text1, "red"))
+                result2.append(colored(text2, "green"))
+            else:
+                # In non-colored mode, just append plain text
+                result1.append(text1)
+                result2.append(text2)
+            markers.append(" " * (i2 - i1))
+        elif tag == "replace":
+            # Highlight replaced text with bold on colored background
+            text1 = line1[i1:i2]
+            text2 = line2[j1:j2]
+            if colored_output:
+                # Use bold for emphasis on top of base color
+                result1.append(colored(text1, "red", attrs=["bold"]))
+                result2.append(colored(text2, "green", attrs=["bold"]))
+            else:
+                # In non-colored mode, just append plain text (markers will show differences)
+                result1.append(text1)
+                result2.append(text2)
+            # Add markers for the longer segment
+            max_len = max(i2 - i1, j2 - j1)
+            markers.append("^" * max_len)
+        elif tag == "delete":
+            # Text only in line1 - bold on red background
+            text1 = line1[i1:i2]
+            if colored_output:
+                result1.append(colored(text1, "red", attrs=["bold"]))
+            else:
+                # In non-colored mode, just append plain text
+                result1.append(text1)
+            markers.append("^" * (i2 - i1))
+        elif tag == "insert":
+            # Text only in line2 - bold on green background
+            text2 = line2[j1:j2]
+            if colored_output:
+                result2.append(colored(text2, "green", attrs=["bold"]))
+            else:
+                # In non-colored mode, just append plain text
+                result2.append(text2)
+            # For inserts, we need to pad result1 and add markers
+            pad_len = j2 - j1
+            result1.append(" " * pad_len)
+            markers.append("^" * pad_len)
+
+    marker_line = "".join(markers).rstrip()
+
+    return "".join(result1), "".join(result2), marker_line
+
+
+def format_unified_diff(  # pylint: disable=too-many-branches
     schema1_lines: List[str],
     schema2_lines: List[str],
     name1: str,
@@ -194,7 +238,7 @@ def format_unified_diff(
     context_lines: int = 3,
 ) -> str:
     """
-    Format schemas as unified diff.
+    Format schemas as unified diff with character-level highlighting.
 
     Args:
         schema1_lines: First schema as list of lines
@@ -221,24 +265,95 @@ def format_unified_diff(
     if not diff_lines:
         return "Schemas are identical"
 
-    if not colored_output:
-        return "\n".join(diff_lines)
-
-    # Apply colors
+    # Apply colors and character-level highlighting
     result = []
-    for line in diff_lines:
+    i = 0
+    while i < len(diff_lines):
+        line = diff_lines[i]
+
         if line.startswith("---") or line.startswith("+++"):
-            result.append(colored(line, "cyan", attrs=["bold"]))
+            if colored_output:
+                result.append(colored(line, "cyan", attrs=["bold"]))
+            else:
+                result.append(line)
         elif line.startswith("@@"):
-            result.append(colored(line, "cyan"))
+            if colored_output:
+                result.append(colored(line, "cyan"))
+            else:
+                result.append(line)
+        elif (
+            line.startswith("-")
+            and i + 1 < len(diff_lines)
+            and diff_lines[i + 1].startswith("+")
+        ):
+            # We have a pair of changed lines - highlight character differences
+            line1 = line[1:]  # Remove '-' prefix
+            line2 = diff_lines[i + 1][1:]  # Remove '+' prefix
+
+            highlighted1, highlighted2, markers = highlight_line_differences(
+                line1, line2, colored_output
+            )
+
+            result.append("-" + highlighted1)
+            result.append("+" + highlighted2)
+            # Show markers only in non-colored mode
+            if not colored_output and markers:
+                result.append(" " + markers)
+
+            i += 2  # Skip next line as we've processed it
+            continue
         elif line.startswith("-"):
-            result.append(colored(line, "red"))
+            if colored_output:
+                result.append(colored(line, "red"))
+            else:
+                result.append(line)
         elif line.startswith("+"):
-            result.append(colored(line, "green"))
+            if colored_output:
+                result.append(colored(line, "green"))
+            else:
+                result.append(line)
         else:
             result.append(line)
 
+        i += 1
+
     return "\n".join(result)
+
+
+def _visible_length(text: str) -> int:
+    """
+    Calculate the visible length of a string, excluding ANSI escape sequences.
+
+    Args:
+        text: String that may contain ANSI escape sequences
+
+    Returns:
+        Visible length of the string
+    """
+    # Remove ANSI escape sequences
+    ansi_escape = re.compile(r"\x1b\[[0-9;]*m")
+    return len(ansi_escape.sub("", text))
+
+
+def _pad_to_width(text: str, width: int) -> str:
+    """
+    Pad a string to the specified width, accounting for ANSI escape sequences.
+
+    Args:
+        text: String that may contain ANSI escape sequences
+        width: Target width
+
+    Returns:
+        Padded string
+    """
+    visible_len = _visible_length(text)
+    if visible_len >= width:
+        # Truncate if too long - need to be careful with escape sequences
+        # For now, just return as is if it's too long
+        return text
+    # Add padding
+    padding = " " * (width - visible_len)
+    return text + padding
 
 
 def format_side_by_side_diff(
@@ -250,7 +365,7 @@ def format_side_by_side_diff(
     width: int = 160,
 ) -> str:
     """
-    Format schemas as side-by-side diff.
+    Format schemas as side-by-side diff with character-level highlighting.
 
     Args:
         schema1_lines: First schema as list of lines
@@ -283,21 +398,61 @@ def format_side_by_side_diff(
         line1 = schema1_lines[i] if i < len(schema1_lines) else ""
         line2 = schema2_lines[i] if i < len(schema2_lines) else ""
 
-        # Truncate or pad lines
-        line1_display = line1[:col_width].ljust(col_width)
-        line2_display = line2[:col_width].ljust(col_width)
+        # Apply character-level highlighting if lines differ
+        if line1 != line2 and line1 and line2:
+            highlighted1, highlighted2, markers = highlight_line_differences(
+                line1, line2, colored_output
+            )
+            # Truncate to column width based on visible length
+            if colored_output:
+                if _visible_length(highlighted1) > col_width:
+                    highlighted1 = line1[:col_width]
+                    highlighted1, _, _ = highlight_line_differences(
+                        highlighted1,
+                        line2[:col_width] if len(line2) > col_width else line2,
+                        colored_output,
+                    )
+                if _visible_length(highlighted2) > col_width:
+                    highlighted2 = line2[:col_width]
+                    _, highlighted2, _ = highlight_line_differences(
+                        line1[:col_width] if len(line1) > col_width else line1,
+                        highlighted2,
+                        colored_output,
+                    )
+                line1_display = _pad_to_width(highlighted1, col_width)
+                line2_display = _pad_to_width(highlighted2, col_width)
+            else:
+                # In non-colored mode, show markers under differences
+                line1_display = highlighted1[:col_width].ljust(col_width)
+                line2_display = highlighted2[:col_width].ljust(col_width)
 
-        # Apply colors if lines differ
-        if colored_output and line1 != line2:
-            if line1 and not line2:
-                line1_display = colored(line1_display, "red")
-            elif line2 and not line1:
-                line2_display = colored(line2_display, "green")
-            elif line1 != line2:
-                line1_display = colored(line1_display, "red")
-                line2_display = colored(line2_display, "green")
+            result.append(f"{line1_display} | {line2_display}")
 
-        result.append(f"{line1_display} | {line2_display}")
+            # Add marker line in non-colored mode (only under the line with differences)
+            if not colored_output and markers:
+                markers_truncated = markers[:col_width]
+                # Show markers in both columns for clarity
+                markers_display = markers_truncated.ljust(col_width)
+                result.append(f"{markers_display} | {markers_display}")
+        else:
+            # Truncate or pad lines
+            line1_truncated = line1[:col_width]
+            line2_truncated = line2[:col_width]
+
+            line1_display = line1_truncated.ljust(col_width)
+            line2_display = line2_truncated.ljust(col_width)
+
+            # Apply colors if lines differ (but no character highlighting)
+            if colored_output and line1 != line2:
+                if line1 and not line2:
+                    line1_display = colored(line1_display, "red")
+                elif line2 and not line1:
+                    line2_display = colored(line2_display, "green")
+                elif line1 != line2:
+                    line1_display = colored(line1_display, "red")
+                    line2_display = colored(line2_display, "green")
+
+            result.append(f"{line1_display} | {line2_display}")
 
     return "\n".join(result)
 
@@ -331,20 +486,45 @@ def format_normal_diff(
         line2 = schema2_lines[i] if i < len(schema2_lines) else None
 
         if line1 != line2:
-            if line1 is not None:
-                prefix = f"< {line1}"
-                if colored_output:
-                    prefix = colored(prefix, "red")
-                result.append(prefix)
-
-            if line2 is not None:
-                prefix = f"> {line2}"
-                if colored_output:
-                    prefix = colored(prefix, "green")
-                result.append(prefix)
-
             if line1 is not None and line2 is not None:
+                # Both lines exist - show character-level differences
+                highlighted1, highlighted2, markers = highlight_line_differences(
+                    line1, line2, colored_output
+                )
+
+                prefix1 = f"< {highlighted1}"
+                prefix2 = f"> {highlighted2}"
+
+                if colored_output:
+                    # Already colored by highlight_line_differences
+                    result.append(prefix1)
+                    result.append(prefix2)
+                else:
+                    # In non-colored mode, show markers
+                    result.append(prefix1)
+                    result.append(prefix2)
+                    if markers:
+                        result.append(
+                            "  " + markers
+                        )  # 2 spaces to align with "< " and "> "
+
                 result.append("---")
+            else:
+                # Only one line exists
+                if line1 is not None:
+                    prefix = f"< {line1}"
+                    if colored_output:
+                        prefix = colored(prefix, "red")
+                    result.append(prefix)
+
+                if line2 is not None:
+                    prefix = f"> {line2}"
+                    if colored_output:
+                        prefix = colored(prefix, "green")
+                    result.append(prefix)
+
+                if line1 is not None or line2 is not None:
+                    result.append("---")
 
     return "\n".join(result) if result else "Schemas are identical"
 
@@ -365,8 +545,8 @@ def compare_schemas(
 
     Args:
         ctx: Click context
-        source1: First source (db.table, /path/file.sql, or zk:/path)
-        source2: Second source (db.table, /path/file.sql, or zk:/path)
+        source1: First source (db.table or /path/file.sql)
+        source2: Second source (db.table or /path/file.sql)
         diff_format: Output format ("unified", "side-by-side", or "normal")
         colored_output: Whether to use colored output
         normalize: Whether to normalize schemas before comparison
@@ -385,18 +565,14 @@ def compare_schemas(
     logging.info(f"Getting schema from {type1}: {source1}")
     if type1 == "clickhouse":
         schema1 = get_schema_from_clickhouse(ctx, params1["database"], params1["table"])
-    elif type1 == "file":
+    else:  # file
         schema1 = get_schema_from_file(params1["path"])
-    else:  # zookeeper
-        schema1 = get_schema_from_zookeeper(ctx, params1["path"])
 
     logging.info(f"Getting schema from {type2}: {source2}")
     if type2 == "clickhouse":
         schema2 = get_schema_from_clickhouse(ctx, params2["database"], params2["table"])
-    elif type2 == "file":
+    else:  # file
         schema2 = get_schema_from_file(params2["path"])
-    else:  # zookeeper
-        schema2 = get_schema_from_zookeeper(ctx, params2["path"])
 
     # Normalize if requested
     if normalize:
