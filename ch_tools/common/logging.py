@@ -6,6 +6,7 @@ import inspect
 import logging
 import sys
 import traceback
+from functools import partial
 from logging import (  # noqa # pylint:disable=unused-import
     CRITICAL,
     DEBUG,
@@ -46,6 +47,23 @@ def make_filter(name: str) -> Filter:
     """
 
     return Filter(name)
+
+
+def _format(fmt: str, record: dict) -> str:
+    message_head = 800
+    message_tail = 300
+    result_fmt = fmt
+    message_length = len(record["message"])
+    if message_length > message_head + message_tail:
+        tail_length = min(message_length - message_head, message_tail)
+        record["extra"]["message_tail"] = record["message"][-tail_length:]
+        record["message"] = record["message"][:message_head]
+        skipped_characters = message_length - message_head - tail_length
+        result_fmt += (
+            f" ...(skipped {skipped_characters} characters)... {{extra[message_tail]}}"
+        )
+    # Adding '\n{exception}' to dynamic formatters is required by loguru docs
+    return result_fmt + "\n{exception}"
 
 
 class InterceptHandler(logging.Handler):
@@ -91,7 +109,7 @@ def configure(
     loguru_handlers = []
 
     for name, value in config_loguru["handlers"].get(module, {}).items():
-        format_ = config_loguru["formatters"][value["format"]]
+        format_ = partial(_format, config_loguru["formatters"][value["format"]])
         handler = {
             "sink": value["sink"],
             "format": format_,
