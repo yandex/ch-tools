@@ -22,6 +22,9 @@ from loguru import logger
 
 from ch_tools.common import result
 
+MESSAGE_HEAD_LIMIT = 800
+MESSAGE_TAIL_LIMIT = 300
+
 logger_config: Dict[str, Any] = {}
 
 
@@ -50,8 +53,8 @@ def make_filter(name: str) -> Filter:
 
 
 def _format(fmt: str, record: dict) -> str:
-    message_head = 800
-    message_tail = 300
+    message_head = MESSAGE_HEAD_LIMIT
+    message_tail = MESSAGE_TAIL_LIMIT
     result_fmt = fmt
     message_length = len(record["message"])
     if message_length > message_head + message_tail:
