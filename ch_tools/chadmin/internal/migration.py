@@ -166,10 +166,6 @@ def _check_tables_consistent(
 
         local_metadata = read_local_table_metadata(ctx, table["metadata_path"])
         zk_metadata = zk_tables[table["name"]]
-        
-        logging.info("local_metadata: {}", local_metadata)
-        logging.info("zk_metadata: {}", zk_metadata)
-
         if not compare_schemas_simple(
             local_metadata,
             zk_metadata,
