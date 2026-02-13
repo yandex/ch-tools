@@ -2,10 +2,8 @@
 Unit tests for table schema diff functionality.
 """
 
-from ch_tools.chadmin.internal.table_schema_diff import (
-    highlight_line_differences,
-    normalize_schema,
-)
+from ch_tools.chadmin.internal.schema_comparison import normalize_schema
+from ch_tools.chadmin.internal.schema_formatters import UnifiedDiffFormatter
 
 
 def test_normalize_schema_basic() -> None:
@@ -209,9 +207,8 @@ def test_highlight_line_differences_identical() -> None:
     line1 = "CREATE TABLE test ("
     line2 = "CREATE TABLE test ("
 
-    result1, result2, markers = highlight_line_differences(
-        line1, line2, colored_output=False
-    )
+    formatter = UnifiedDiffFormatter(colored_output=False)
+    result1, result2, markers = formatter.highlight_line_differences(line1, line2)
 
     assert result1 == line1
     assert result2 == line2
@@ -223,9 +220,8 @@ def test_highlight_line_differences_replace() -> None:
     line1 = "ENGINE = MergeTree()"
     line2 = "ENGINE = ReplacingMergeTree()"
 
-    result1, result2, markers = highlight_line_differences(
-        line1, line2, colored_output=False
-    )
+    formatter = UnifiedDiffFormatter(colored_output=False)
+    result1, result2, markers = formatter.highlight_line_differences(line1, line2)
 
     # Markers should indicate differences
     assert "^" in markers
@@ -239,9 +235,8 @@ def test_highlight_line_differences_insert() -> None:
     line1 = "id UInt64"
     line2 = "id UInt64, name String"
 
-    result1, result2, markers = highlight_line_differences(
-        line1, line2, colored_output=False
-    )
+    formatter = UnifiedDiffFormatter(colored_output=False)
+    result1, result2, markers = formatter.highlight_line_differences(line1, line2)
 
     # Markers should indicate the insertion
     assert "^" in markers
@@ -253,9 +248,8 @@ def test_highlight_line_differences_delete() -> None:
     line1 = "id UInt64, name String"
     line2 = "id UInt64"
 
-    result1, result2, markers = highlight_line_differences(
-        line1, line2, colored_output=False
-    )
+    formatter = UnifiedDiffFormatter(colored_output=False)
+    result1, result2, markers = formatter.highlight_line_differences(line1, line2)
 
     # Markers should indicate the deletion
     assert "^" in markers
@@ -267,9 +261,8 @@ def test_highlight_line_differences_multiple_changes() -> None:
     line1 = "CREATE TABLE old_name (id Int32)"
     line2 = "CREATE TABLE new_name (id Int64)"
 
-    result1, result2, markers = highlight_line_differences(
-        line1, line2, colored_output=False
-    )
+    formatter = UnifiedDiffFormatter(colored_output=False)
+    result1, result2, markers = formatter.highlight_line_differences(line1, line2)
 
     # Should have markers for both changes
     assert "^" in markers

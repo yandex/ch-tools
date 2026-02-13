@@ -706,7 +706,7 @@ Feature: chadmin table change and check-uuid-equal
     """
     Then it fails with response contains
     """
-    Table test_table_3 has schemas: ['CREATE TABLE test_db.test_table_3 (`a` Int32) ENGINE = MergeTree ORDER BY a SETTINGS index_granularity = 8192', 'CREATE TABLE test_db.test_table_3 (`b` Int32) ENGINE = MergeTree ORDER BY b SETTINGS index_granularity = 8192']
+    Table test_table_3 has different schema in cluster
     """
 
     When we try to execute command on clickhouse01
@@ -715,7 +715,7 @@ Feature: chadmin table change and check-uuid-equal
     """
     Then it fails with response contains
     """
-    Table test_table_3 has schemas: ['CREATE TABLE test_db.test_table_3 (`a` Int32) ENGINE = MergeTree ORDER BY a SETTINGS index_granularity = 8192', 'CREATE TABLE test_db.test_table_3 (`b` Int32) ENGINE = MergeTree ORDER BY b SETTINGS index_granularity = 8192']
+    Table test_table_3 has different schema in cluster
     """
 
     
