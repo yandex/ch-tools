@@ -8,47 +8,6 @@ Feature: chadmin database migrate command
     And a working clickhouse on clickhouse02
 
   @require_version_24.8
-  Scenario: Fail on database migration with inconsistent tables
-    When we execute query on clickhouse01
-    """
-    CREATE DATABASE non_repl_db ON CLUSTER '{cluster}';
-    """
-    When we execute query on clickhouse01
-    """
-    CREATE TABLE non_repl_db.foo
-    (
-        `a` Int64
-    )
-    ENGINE = MergeTree
-    ORDER BY a
-    """
-    When we execute query on clickhouse02
-    """
-    CREATE TABLE non_repl_db.foo
-    (
-        `b` Int32
-    )
-    ENGINE = MergeTree
-    ORDER BY b
-    """
-    When we execute command on clickhouse01
-    """
-    chadmin database migrate -d non_repl_db -e Replicated
-    """
-    When we try to execute command on clickhouse02
-    """
-    chadmin database migrate -d non_repl_db -e Replicated
-    """
-    Then it fails with response contains
-    """
-    Database 'non_repl_db' tables are inconsistent
-    """
-    And we get response contains
-    """
-    Schema mismatches: ['foo']
-    """
-
-  @require_version_24.8
   Scenario: Migrate empty database in host
     When we execute query on clickhouse01
     """
@@ -1911,4 +1870,45 @@ Feature: chadmin database migrate command
     Then it fails with response contains
     """
     Database non_repl_db has engine Replicated. Migration to Replicated from Atomic only is supported.
+    """
+
+  @require_version_24.8
+  Scenario: Fail on database migration with inconsistent tables
+    When we execute query on clickhouse01
+    """
+    CREATE DATABASE non_repl_db ON CLUSTER '{cluster}';
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE non_repl_db.foo
+    (
+        `a` Int64
+    )
+    ENGINE = MergeTree
+    ORDER BY a
+    """
+    When we execute query on clickhouse02
+    """
+    CREATE TABLE non_repl_db.foo
+    (
+        `b` Int32
+    )
+    ENGINE = MergeTree
+    ORDER BY b
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin database migrate -d non_repl_db -e Replicated
+    """
+    When we try to execute command on clickhouse02
+    """
+    chadmin database migrate -d non_repl_db -e Replicated
+    """
+    Then it fails with response contains
+    """
+    Database 'non_repl_db' tables are inconsistent
+    """
+    And we get response contains
+    """
+    Schema mismatches: ['foo']
     """
