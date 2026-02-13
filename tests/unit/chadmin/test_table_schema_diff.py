@@ -21,6 +21,24 @@ ORDER BY id"""
     assert lines[0] == "CREATE TABLE <table> ("
 
 
+def test_normalize_schema_attach_table() -> None:
+    """Test ATTACH TABLE normalization behavior."""
+    schema = """ATTACH TABLE db.test (
+    id UInt64,
+    name String
+) ENGINE = MergeTree()
+ORDER BY id"""
+
+    lines = normalize_schema(schema, remove_replicated=False)
+
+    assert len(lines) > 0
+    # ATTACH TABLE should be converted to CREATE TABLE
+    assert lines[0] == "CREATE TABLE <table> ("
+    # Verify the rest of the schema is preserved
+    assert "id UInt64," in lines[1]
+    assert "name String" in lines[2]
+
+
 def test_normalize_schema_remove_replicated_params() -> None:
     """Test removing ReplicatedMergeTree parameters."""
     schema = """CREATE TABLE test (

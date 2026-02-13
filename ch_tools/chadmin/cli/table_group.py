@@ -1046,7 +1046,7 @@ def check_schema_equal(
                     schema,
                     ignore_uuid=True,
                     ignore_engine=False,
-                    remove_replicated=False,
+                    remove_replicated=True,
                 ):
                     has_differences = True
 
@@ -1167,30 +1167,23 @@ def schema_diff_command(
 
     SOURCE can be one of:
 
-    \b
     - database.table          - ClickHouse table
     - /path/to/file.sql       - File with CREATE TABLE statement
 
-    \b
     Examples:
 
-    \b
     # Compare two tables in ClickHouse
     chadmin table schema-diff db1.table1 db2.table2
 
-    \b
     # Compare table with file
     chadmin table schema-diff db1.table1 /tmp/table_schema.sql
 
-    \b
     # Compare two files
     chadmin table schema-diff /tmp/schema1.sql /tmp/schema2.sql
 
-    \b
     # Side-by-side format
     chadmin table schema-diff db1.table1 db2.table2 --format side-by-side
 
-    \b
     # Without colors
     chadmin table schema-diff db1.table1 db2.table2 --no-color
     """

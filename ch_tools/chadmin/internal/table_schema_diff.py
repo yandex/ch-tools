@@ -31,9 +31,23 @@ def parse_source(source: str) -> Tuple[str, Dict[str, str]]:
         - ("clickhouse", {"database": "db", "table": "table"})
         - ("file", {"path": "/path/file.sql"})
     """
-    if "." in source and not source.startswith("/") and not source.startswith("~"):
+    # Check if it's a file path (absolute, relative, or with tilde)
+    # Relative paths like ./file.sql or ../file.sql should be treated as files
+    if (
+        source.startswith("/")
+        or source.startswith("~")
+        or source.startswith("./")
+        or source.startswith("../")
+        or os.path.exists(source)
+    ):
+        return ("file", {"path": os.path.expanduser(source)})
+    
+    # If it contains a dot and is not a file path, treat as database.table
+    if "." in source:
         parts = source.split(".", 1)
         return ("clickhouse", {"database": parts[0], "table": parts[1]})
+    
+    # Default to file path
     return ("file", {"path": os.path.expanduser(source)})
 
 
