@@ -9,9 +9,12 @@ from ch_tools.chadmin.cli import metadata
 from ch_tools.chadmin.cli.database_metadata import (
     DatabaseEngine,
     parse_database_metadata,
-    remove_uuid_from_metadata,
 )
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
+from ch_tools.chadmin.internal.schema_comparison import (
+    compare_schemas_simple,
+    generate_schema_diff,
+)
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.table import (
     change_table_uuid,
@@ -146,21 +149,47 @@ def _get_zk_tables_metadata(ctx: Context, database_name: str) -> dict[str, str]:
 def _check_tables_consistent(
     ctx: Context, database_name: str, local_tables: list[TableInfo]
 ) -> None:
+    """
+    Check that local tables are consistent with ZooKeeper metadata.
+
+    Provides detailed colored diff output for schema mismatches.
+    """
     zk_tables = _get_zk_tables_metadata(ctx, database_name)
     missing_in_zk = []
     schema_mismatches = []
+    diff_outputs = []
 
     for table in local_tables:
         if table["name"] not in zk_tables:
             missing_in_zk.append(table["name"])
             continue
 
-        if not _compare_table_schemas(
-            table["name"],
-            read_local_table_metadata(ctx, table["metadata_path"]),
-            zk_tables[table["name"]],
+        local_metadata = read_local_table_metadata(ctx, table["metadata_path"])
+        zk_metadata = zk_tables[table["name"]]
+        if not compare_schemas_simple(
+            local_metadata,
+            zk_metadata,
+            ignore_uuid=True,
+            ignore_engine=False,
+            remove_replicated=True,
         ):
             schema_mismatches.append(table["name"])
+
+            # Generate colored diff for better visibility
+            diff_output = generate_schema_diff(
+                local_metadata,
+                zk_metadata,
+                f"Local: {table['name']}",
+                f"ZooKeeper: {table['name']}",
+                colored_output=True,
+                ignore_uuid=True,
+                ignore_engine=False,
+                remove_replicated=False,
+            )
+
+            diff_outputs.append(
+                f"Table {table['name']}: schema mismatch detected.\n{diff_output}"
+            )
 
     if missing_in_zk or schema_mismatches:
         error_msg = f"Database '{database_name}' tables are inconsistent."
@@ -169,40 +198,15 @@ def _check_tables_consistent(
         if schema_mismatches:
             error_msg += f"\nSchema mismatches: {schema_mismatches}."
 
+        # Output all collected diff information
+        for diff_msg in diff_outputs:
+            logging.error(diff_msg)
+
         logging.error(error_msg)
         logging.error("Local tables: {}", sorted(local_tables, key=itemgetter("name")))
         logging.error("ZooKeeper tables: {}", sorted(zk_tables))
 
         raise RuntimeError(error_msg)
-
-
-def _compare_table_schemas(
-    table_name: str,
-    local_table_metadata: str,
-    zk_table_metadata: str,
-) -> bool:
-    """
-    Compare local table schema with ZooKeeper metadata except for UUID.
-    """
-    zk_table_metadata = zk_table_metadata.rstrip()
-    local_table_metadata = local_table_metadata.rstrip()
-    logging.debug(
-        f"Table {table_name} has local metadata={local_table_metadata} and zookeeper metadata={zk_table_metadata}"
-    )
-
-    local_table_metadata = remove_uuid_from_metadata(local_table_metadata)
-    zk_table_metadata = remove_uuid_from_metadata(zk_table_metadata)
-
-    if local_table_metadata != zk_table_metadata:
-        logging.warning(
-            "Table {}: local metadata differs from zookeeper metadata", table_name
-        )
-        return False
-
-    logging.info(
-        "Table {}: local metadata is the same as zookeeper metadata", table_name
-    )
-    return True
 
 
 def _generate_counter(ctx: Context, zk: KazooClient, db_zk_path: str) -> str:

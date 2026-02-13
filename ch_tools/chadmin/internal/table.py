@@ -597,20 +597,15 @@ def get_table_schema_from_cluster(
     result = {}
     for table in tables:
         query = f"""
-            SELECT
-                table,
-                groupArray(create_table_query) as create_table_queries
-            FROM (
-                SELECT DISTINCT
-                    table,
-                    create_table_query
-                FROM clusterAllReplicas('{{cluster}}', system.tables)
-                WHERE database='{database}' AND table='{table}'
-            )
-            GROUP BY table
+            SELECT DISTINCT
+                hostName() as host,
+                create_table_query
+            FROM clusterAllReplicas('{{cluster}}', system.tables)
+            WHERE database='{database}' AND table='{table}'
         """
         rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)["data"]
-        result[table] = rows[0]["create_table_queries"]
+        # Create a dict mapping host to schema
+        result[table] = {row["host"]: row["create_table_query"] for row in rows}
     return result
 
 
