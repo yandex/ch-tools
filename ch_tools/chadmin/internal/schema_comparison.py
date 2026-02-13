@@ -1,8 +1,8 @@
 """
-Модуль для сравнения схем таблиц ClickHouse.
+Module for comparing ClickHouse table schemas.
 
-Предоставляет унифицированные функции для нормализации и сравнения схем таблиц,
-которые могут быть использованы в различных модулях проекта.
+Provides unified functions for normalizing and comparing table schemas
+that can be used across different project modules.
 """
 
 import re
@@ -16,13 +16,13 @@ from ch_tools.chadmin.internal.table_metadata import remove_replicated_params
 @dataclass
 class SchemaComparisonResult:
     """
-    Результат сравнения двух схем таблиц.
+    Result of comparing two table schemas.
 
     Attributes:
-        are_equal: True если схемы идентичны после нормализации
-        normalized_schema1: Нормализованные строки первой схемы
-        normalized_schema2: Нормализованные строки второй схемы
-        differences: Список различий в формате (номер_строки, строка1, строка2)
+        are_equal: True if schemas are identical after normalization
+        normalized_schema1: Normalized lines of the first schema
+        normalized_schema2: Normalized lines of the second schema
+        differences: List of differences in format (line_number, line1, line2)
     """
 
     are_equal: bool
@@ -38,55 +38,55 @@ def normalize_schema(
     ignore_uuid: bool = False,
 ) -> List[str]:
     """
-    Нормализовать CREATE TABLE statement для сравнения.
+    Normalize CREATE TABLE statement for comparison.
 
-    Нормализация включает:
-    - Преобразование ATTACH TABLE в CREATE TABLE
-    - Нормализацию имен таблиц в общий placeholder
-    - Удаление лишних пробелов
-    - Опционально: удаление параметров ReplicatedMergeTree
-    - Опционально: игнорирование различий в engine
-    - Опционально: игнорирование различий в UUID
+    Normalization includes:
+    - Converting ATTACH TABLE to CREATE TABLE
+    - Normalizing table names to a common placeholder
+    - Removing extra whitespace
+    - Optionally: removing ReplicatedMergeTree parameters
+    - Optionally: ignoring engine differences
+    - Optionally: ignoring UUID differences
 
     Args:
         schema: CREATE TABLE statement
-        remove_replicated: Удалить параметры ReplicatedMergeTree
-        ignore_engine: Игнорировать различия в engine
-        ignore_uuid: Игнорировать различия в UUID
+        remove_replicated: Remove ReplicatedMergeTree parameters
+        ignore_engine: Ignore engine differences
+        ignore_uuid: Ignore UUID differences
 
     Returns:
-        Список нормализованных строк
+        List of normalized lines
     """
-    # Нормализация ATTACH TABLE в CREATE TABLE
+    # Normalize ATTACH TABLE to CREATE TABLE
     schema = re.sub(r"^ATTACH TABLE", "CREATE TABLE", schema, flags=re.MULTILINE)
 
-    # Нормализация имени таблицы в placeholder
+    # Normalize table name to placeholder
     schema = re.sub(
         r"(CREATE TABLE\s+)(?:`?[\w.]+`?|_)", r"\1<table>", schema, flags=re.MULTILINE
     )
 
-    # Удаление параметров ReplicatedMergeTree если запрошено
+    # Remove ReplicatedMergeTree parameters if requested
     if remove_replicated:
         schema = remove_replicated_params(schema)
 
-    # Удаление UUID если запрошено
+    # Remove UUID if requested
     if ignore_uuid:
-        # Удаляем UUID из любой позиции в схеме (не только из ATTACH)
+        # Remove UUID from any position in schema (not just from ATTACH)
         schema = re.sub(r"UUID\s+'[^']+'", "", schema)
 
-    # Удаление engine если запрошено
+    # Remove engine if requested
     if ignore_engine:
-        # Заменить ENGINE = ... на ENGINE = <ignored>
+        # Replace ENGINE = ... with ENGINE = <ignored>
         schema = re.sub(
             r"ENGINE\s*=\s*\w+(?:\([^)]*\))?",
             "ENGINE = <ignored>",
             schema,
         )
 
-    # Разбить на строки и удалить trailing whitespace
+    # Split into lines and remove trailing whitespace
     lines = [line.rstrip() for line in schema.split("\n")]
 
-    # Удалить пустые строки в начале и конце
+    # Remove empty lines at the beginning and end
     while lines and not lines[0]:
         lines.pop(0)
     while lines and not lines[-1]:
@@ -103,21 +103,21 @@ def compare_schemas_simple(
     remove_replicated: bool = True,
 ) -> bool:
     """
-    Простое сравнение двух схем таблиц.
+    Simple comparison of two table schemas.
 
-    Эта функция предназначена для использования в случаях, когда нужен
-    только булев результат сравнения (равны/не равны), без детальной
-    информации о различиях.
+    This function is intended for use cases where only a boolean
+    comparison result (equal/not equal) is needed, without detailed
+    information about differences.
 
     Args:
-        schema1: Первая схема (CREATE TABLE statement)
-        schema2: Вторая схема (CREATE TABLE statement)
-        ignore_uuid: Игнорировать различия в UUID
-        ignore_engine: Игнорировать различия в engine
-        remove_replicated: Удалить параметры ReplicatedMergeTree
+        schema1: First schema (CREATE TABLE statement)
+        schema2: Second schema (CREATE TABLE statement)
+        ignore_uuid: Ignore UUID differences
+        ignore_engine: Ignore engine differences
+        remove_replicated: Remove ReplicatedMergeTree parameters
 
     Returns:
-        True если схемы идентичны после нормализации, False иначе
+        True if schemas are identical after normalization, False otherwise
 
     Example:
         >>> schema1 = "CREATE TABLE test UUID '123' (id UInt64) ENGINE = MergeTree()"
@@ -146,15 +146,15 @@ def get_schema_differences(
     schema2_lines: List[str],
 ) -> List[Tuple[int, str, str]]:
     """
-    Получить список различий между двумя нормализованными схемами.
+    Get list of differences between two normalized schemas.
 
     Args:
-        schema1_lines: Строки первой схемы
-        schema2_lines: Строки второй схемы
+        schema1_lines: Lines of the first schema
+        schema2_lines: Lines of the second schema
 
     Returns:
-        Список кортежей (номер_строки, строка1, строка2) для различающихся строк.
-        Если одна схема короче, недостающие строки представлены как пустые строки.
+        List of tuples (line_number, line1, line2) for differing lines.
+        If one schema is shorter, missing lines are represented as empty strings.
 
     Example:
         >>> lines1 = ["CREATE TABLE test (", "  id UInt64", ")"]
@@ -184,20 +184,20 @@ def compare_schemas_detailed(
     remove_replicated: bool = True,
 ) -> SchemaComparisonResult:
     """
-    Детальное сравнение двух схем таблиц.
+    Detailed comparison of two table schemas.
 
-    Эта функция возвращает полную информацию о сравнении, включая
-    нормализованные схемы и список различий.
+    This function returns complete information about the comparison, including
+    normalized schemas and a list of differences.
 
     Args:
-        schema1: Первая схема (CREATE TABLE statement)
-        schema2: Вторая схема (CREATE TABLE statement)
-        ignore_uuid: Игнорировать различия в UUID
-        ignore_engine: Игнорировать различия в engine
-        remove_replicated: Удалить параметры ReplicatedMergeTree
+        schema1: First schema (CREATE TABLE statement)
+        schema2: Second schema (CREATE TABLE statement)
+        ignore_uuid: Ignore UUID differences
+        ignore_engine: Ignore engine differences
+        remove_replicated: Remove ReplicatedMergeTree parameters
 
     Returns:
-        SchemaComparisonResult с детальной информацией о сравнении
+        SchemaComparisonResult with detailed comparison information
 
     Example:
         >>> schema1 = "CREATE TABLE test (id UInt64) ENGINE = MergeTree()"

@@ -1,8 +1,8 @@
 """
-Форматеры для вывода различий между схемами таблиц ClickHouse.
+Formatters for displaying differences between ClickHouse table schemas.
 
-Предоставляет базовый класс и конкретные реализации форматеров
-для отображения различий в разных стилях (unified, side-by-side, normal).
+Provides base class and concrete formatter implementations
+for displaying differences in various styles (unified, side-by-side, normal).
 """
 
 import re
@@ -12,36 +12,36 @@ from typing import List, Tuple
 
 from termcolor import colored
 
-# Константы
+# Constants
 DEFAULT_SIDE_BY_SIDE_WIDTH = 160
 
 
 class BaseSchemaFormatter(ABC):
     """
-    Базовый класс для форматеров схем.
+    Base class for schema formatters.
 
-    Предоставляет общую функциональность для всех форматеров,
-    включая подсветку различий на уровне символов и применение цветов.
+    Provides common functionality for all formatters,
+    including character-level difference highlighting and color application.
     """
 
     def __init__(self, colored_output: bool = True):
         """
         Args:
-            colored_output: Использовать ли цветной вывод
+            colored_output: Whether to use colored output
         """
         self.colored_output = colored_output
 
     def format_line_with_color(self, line: str, color: str, bold: bool = False) -> str:
         """
-        Применить цвет к строке.
+        Apply color to a line.
 
         Args:
-            line: Строка для форматирования
-            color: Цвет (red, green, cyan и т.д.)
-            bold: Использовать ли жирный шрифт
+            line: Line to format
+            color: Color (red, green, cyan, etc.)
+            bold: Whether to use bold font
 
         Returns:
-            Отформатированная строка (с цветом если colored_output=True)
+            Formatted line (with color if colored_output=True)
         """
         if not self.colored_output:
             return line
@@ -53,15 +53,15 @@ class BaseSchemaFormatter(ABC):
         self, line1: str, line2: str
     ) -> Tuple[str, str, str]:
         """
-        Подсветить различия между двумя строками на уровне символов.
+        Highlight differences between two lines at character level.
 
         Args:
-            line1: Первая строка
-            line2: Вторая строка
+            line1: First line
+            line2: Second line
 
         Returns:
-            Кортеж (highlighted_line1, highlighted_line2, marker_line)
-            где marker_line содержит символы "^" под различающимися символами
+            Tuple (highlighted_line1, highlighted_line2, marker_line)
+            where marker_line contains "^" characters under differing characters
         """
         if line1 == line2:
             return line1, line2, ""
@@ -74,7 +74,7 @@ class BaseSchemaFormatter(ABC):
 
         for tag, i1, i2, j1, j2 in matcher.get_opcodes():
             if tag == "equal":
-                # Одинаковые части - базовый цвет без жирного
+                # Equal parts - base color without bold
                 text1 = line1[i1:i2]
                 text2 = line2[j1:j2]
                 if self.colored_output:
@@ -85,7 +85,7 @@ class BaseSchemaFormatter(ABC):
                     result2.append(text2)
                 markers.append(" " * (i2 - i1))
             elif tag == "replace":
-                # Замененный текст - жирный на цветном фоне
+                # Replaced text - bold on colored background
                 text1 = line1[i1:i2]
                 text2 = line2[j1:j2]
                 if self.colored_output:
@@ -94,11 +94,11 @@ class BaseSchemaFormatter(ABC):
                 else:
                     result1.append(text1)
                     result2.append(text2)
-                # Маркеры для более длинного сегмента
+                # Markers for the longer segment
                 max_len = max(i2 - i1, j2 - j1)
                 markers.append("^" * max_len)
             elif tag == "delete":
-                # Текст только в line1 - жирный красный
+                # Text only in line1 - bold red
                 text1 = line1[i1:i2]
                 if self.colored_output:
                     result1.append(colored(text1, "red", attrs=["bold"]))
@@ -106,13 +106,13 @@ class BaseSchemaFormatter(ABC):
                     result1.append(text1)
                 markers.append("^" * (i2 - i1))
             elif tag == "insert":
-                # Текст только в line2 - жирный зеленый
+                # Text only in line2 - bold green
                 text2 = line2[j1:j2]
                 if self.colored_output:
                     result2.append(colored(text2, "green", attrs=["bold"]))
                 else:
                     result2.append(text2)
-                # Для вставок нужно добавить отступ в result1 и маркеры
+                # For insertions, need to add padding in result1 and markers
                 pad_len = j2 - j1
                 result1.append(" " * pad_len)
                 markers.append("^" * pad_len)
@@ -131,26 +131,26 @@ class BaseSchemaFormatter(ABC):
         **kwargs: int,
     ) -> str:
         """
-        Отформатировать различия между схемами.
+        Format differences between schemas.
 
         Args:
-            schema1_lines: Строки первой схемы
-            schema2_lines: Строки второй схемы
-            name1: Имя/метка первой схемы
-            name2: Имя/метка второй схемы
-            **kwargs: Дополнительные параметры форматирования
+            schema1_lines: Lines of the first schema
+            schema2_lines: Lines of the second schema
+            name1: Name/label of the first schema
+            name2: Name/label of the second schema
+            **kwargs: Additional formatting parameters
 
         Returns:
-            Отформатированная строка с различиями
+            Formatted string with differences
         """
         pass
 
 
 class UnifiedDiffFormatter(BaseSchemaFormatter):
     """
-    Форматер в стиле unified diff (как diff -u).
+    Unified diff style formatter (like diff -u).
 
-    Показывает различия в компактном формате с контекстными строками.
+    Shows differences in compact format with context lines.
     """
 
     def format(
@@ -163,17 +163,17 @@ class UnifiedDiffFormatter(BaseSchemaFormatter):
         **kwargs: int,
     ) -> str:
         """
-        Отформатировать в стиле unified diff.
+        Format in unified diff style.
 
         Args:
-            schema1_lines: Строки первой схемы
-            schema2_lines: Строки второй схемы
-            name1: Имя первой схемы
-            name2: Имя второй схемы
-            context_lines: Количество контекстных строк
+            schema1_lines: Lines of the first schema
+            schema2_lines: Lines of the second schema
+            name1: Name of the first schema
+            name2: Name of the second schema
+            context_lines: Number of context lines
 
         Returns:
-            Отформатированный unified diff
+            Formatted unified diff
         """
         diff_lines = list(
             unified_diff(
@@ -189,7 +189,7 @@ class UnifiedDiffFormatter(BaseSchemaFormatter):
         if not diff_lines:
             return "Schemas are identical"
 
-        # Применить цвета и подсветку на уровне символов
+        # Apply colors and character-level highlighting
         result = []
         i = 0
         while i < len(diff_lines):
@@ -204,9 +204,9 @@ class UnifiedDiffFormatter(BaseSchemaFormatter):
                 and i + 1 < len(diff_lines)
                 and diff_lines[i + 1].startswith("+")
             ):
-                # Пара измененных строк - подсветить различия на уровне символов
-                line1 = line[1:]  # Убрать префикс '-'
-                line2 = diff_lines[i + 1][1:]  # Убрать префикс '+'
+                # Pair of changed lines - highlight differences at character level
+                line1 = line[1:]  # Remove '-' prefix
+                line2 = diff_lines[i + 1][1:]  # Remove '+' prefix
 
                 highlighted1, highlighted2, markers = self.highlight_line_differences(
                     line1, line2
@@ -214,11 +214,11 @@ class UnifiedDiffFormatter(BaseSchemaFormatter):
 
                 result.append("-" + highlighted1)
                 result.append("+" + highlighted2)
-                # Показать маркеры только в не-цветном режиме
+                # Show markers only in non-colored mode
                 if not self.colored_output and markers:
                     result.append(" " + markers)
 
-                i += 2  # Пропустить следующую строку, так как мы её обработали
+                i += 2  # Skip next line as we've already processed it
                 continue
             elif line.startswith("-"):
                 result.append(self.format_line_with_color(line, "red"))
@@ -234,34 +234,34 @@ class UnifiedDiffFormatter(BaseSchemaFormatter):
 
 class SideBySideDiffFormatter(BaseSchemaFormatter):
     """
-    Форматер side-by-side (как diff -y).
+    Side-by-side formatter (like diff -y).
 
-    Показывает схемы рядом друг с другом для легкого сравнения.
+    Shows schemas side by side for easy comparison.
     """
 
     def _visible_length(self, text: str) -> int:
         """
-        Вычислить видимую длину строки, исключая ANSI escape-последовательности.
+        Calculate visible length of string, excluding ANSI escape sequences.
 
         Args:
-            text: Строка, которая может содержать ANSI escape-последовательности
+            text: String that may contain ANSI escape sequences
 
         Returns:
-            Видимая длина строки
+            Visible length of the string
         """
         ansi_escape = re.compile(r"\x1b\[[0-9;]*m")
         return len(ansi_escape.sub("", text))
 
     def _pad_to_width(self, text: str, width: int) -> str:
         """
-        Дополнить строку до указанной ширины с учетом ANSI escape-последовательностей.
+        Pad string to specified width accounting for ANSI escape sequences.
 
         Args:
-            text: Строка для дополнения
-            width: Целевая ширина
+            text: String to pad
+            width: Target width
 
         Returns:
-            Дополненная строка
+            Padded string
         """
         visible_len = self._visible_length(text)
         if visible_len >= width:
@@ -279,23 +279,23 @@ class SideBySideDiffFormatter(BaseSchemaFormatter):
         **kwargs: int,
     ) -> str:
         """
-        Отформатировать в стиле side-by-side.
+        Format in side-by-side style.
 
         Args:
-            schema1_lines: Строки первой схемы
-            schema2_lines: Строки второй схемы
-            name1: Имя первой схемы
-            name2: Имя второй схемы
-            width: Общая ширина вывода
+            schema1_lines: Lines of the first schema
+            schema2_lines: Lines of the second schema
+            name1: Name of the first schema
+            name2: Name of the second schema
+            width: Total output width
 
         Returns:
-            Отформатированный side-by-side diff
+            Formatted side-by-side diff
         """
-        col_width = (width - 3) // 2  # 3 символа для разделителя " | "
+        col_width = (width - 3) // 2  # 3 characters for separator " | "
 
         result = []
 
-        # Заголовок
+        # Header
         header1 = name1[:col_width].ljust(col_width)
         header2 = name2[:col_width].ljust(col_width)
         if self.colored_output:
@@ -304,19 +304,19 @@ class SideBySideDiffFormatter(BaseSchemaFormatter):
         result.append(f"{header1} | {header2}")
         result.append("-" * col_width + " | " + "-" * col_width)
 
-        # Сравнить построчно
+        # Compare line by line
         max_lines = max(len(schema1_lines), len(schema2_lines))
 
         for i in range(max_lines):
             line1 = schema1_lines[i] if i < len(schema1_lines) else ""
             line2 = schema2_lines[i] if i < len(schema2_lines) else ""
 
-            # Применить подсветку на уровне символов если строки различаются
+            # Apply character-level highlighting if lines differ
             if line1 != line2 and line1 and line2:
                 highlighted1, highlighted2, markers = self.highlight_line_differences(
                     line1, line2
                 )
-                # Обрезать до ширины колонки на основе видимой длины
+                # Truncate to column width based on visible length
                 if self.colored_output:
                     if self._visible_length(highlighted1) > col_width:
                         highlighted1 = line1[:col_width]
@@ -333,26 +333,26 @@ class SideBySideDiffFormatter(BaseSchemaFormatter):
                     line1_display = self._pad_to_width(highlighted1, col_width)
                     line2_display = self._pad_to_width(highlighted2, col_width)
                 else:
-                    # В не-цветном режиме показать маркеры под различиями
+                    # In non-colored mode show markers under differences
                     line1_display = highlighted1[:col_width].ljust(col_width)
                     line2_display = highlighted2[:col_width].ljust(col_width)
 
                 result.append(f"{line1_display} | {line2_display}")
 
-                # Добавить строку с маркерами в не-цветном режиме
+                # Add marker line in non-colored mode
                 if not self.colored_output and markers:
                     markers_truncated = markers[:col_width]
                     markers_display = markers_truncated.ljust(col_width)
                     result.append(f"{markers_display} | {markers_display}")
             else:
-                # Обрезать или дополнить строки
+                # Truncate or pad lines
                 line1_truncated = line1[:col_width]
                 line2_truncated = line2[:col_width]
 
                 line1_display = line1_truncated.ljust(col_width)
                 line2_display = line2_truncated.ljust(col_width)
 
-                # Применить цвета если строки различаются (но без подсветки символов)
+                # Apply colors if lines differ (but without character highlighting)
                 if self.colored_output and line1 != line2:
                     if line1 and not line2:
                         line1_display = colored(line1_display, "red")
@@ -369,9 +369,9 @@ class SideBySideDiffFormatter(BaseSchemaFormatter):
 
 class NormalDiffFormatter(BaseSchemaFormatter):
     """
-    Форматер в стиле normal diff.
+    Normal diff style formatter.
 
-    Показывает различия в простом формате с префиксами < и >.
+    Shows differences in simple format with < and > prefixes.
     """
 
     def format(
@@ -383,23 +383,23 @@ class NormalDiffFormatter(BaseSchemaFormatter):
         **kwargs: int,
     ) -> str:
         """
-        Отформатировать в стиле normal diff.
+        Format in normal diff style.
 
         Args:
-            schema1_lines: Строки первой схемы
-            schema2_lines: Строки второй схемы
-            name1: Имя первой схемы (не используется в этом форматере)
-            name2: Имя второй схемы (не используется в этом форматере)
+            schema1_lines: Lines of the first schema
+            schema2_lines: Lines of the second schema
+            name1: Name of the first schema (not used in this formatter)
+            name2: Name of the second schema (not used in this formatter)
 
         Returns:
-            Отформатированный normal diff
+            Formatted normal diff
         """
         if schema1_lines == schema2_lines:
             return "Schemas are identical"
 
         result = []
 
-        # Простое построчное сравнение
+        # Simple line-by-line comparison
         max_lines = max(len(schema1_lines), len(schema2_lines))
 
         for i in range(max_lines):
@@ -408,7 +408,7 @@ class NormalDiffFormatter(BaseSchemaFormatter):
 
             if line1 != line2:
                 if line1 is not None and line2 is not None:
-                    # Обе строки существуют - показать различия на уровне символов
+                    # Both lines exist - show character-level differences
                     highlighted1, highlighted2, markers = (
                         self.highlight_line_differences(line1, line2)
                     )
@@ -417,21 +417,21 @@ class NormalDiffFormatter(BaseSchemaFormatter):
                     prefix2 = f"> {highlighted2}"
 
                     if self.colored_output:
-                        # Уже окрашено через highlight_line_differences
+                        # Already colored via highlight_line_differences
                         result.append(prefix1)
                         result.append(prefix2)
                     else:
-                        # В не-цветном режиме показать маркеры
+                        # In non-colored mode show markers
                         result.append(prefix1)
                         result.append(prefix2)
                         if markers:
                             result.append(
                                 "  " + markers
-                            )  # 2 пробела для выравнивания с "< " и "> "
+                            )  # 2 spaces to align with "< " and "> "
 
                     result.append("---")
                 else:
-                    # Существует только одна строка
+                    # Only one line exists
                     if line1 is not None:
                         prefix = f"< {line1}"
                         if self.colored_output:
