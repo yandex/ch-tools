@@ -594,6 +594,10 @@ def get_table_uuids_from_cluster(ctx: Context, database: str, table: str) -> lis
 def get_table_schema_from_cluster(
     ctx: Context, database: str, tables: list[str]
 ) -> Dict:
+    """
+    Retrieve CREATE TABLE queries for specified tables from all cluster replicas.
+    Returns a dict mapping table names to host-schema pairs for schema comparison.
+    """
     result = {}
     for table in tables:
         query = f"""
