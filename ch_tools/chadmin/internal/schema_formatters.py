@@ -291,6 +291,9 @@ class SideBySideDiffFormatter(BaseSchemaFormatter):
         Returns:
             Formatted side-by-side diff
         """
+        if schema1_lines == schema2_lines:
+            return "Schemas are identical"
+
         col_width = (width - 3) // 2  # 3 characters for separator " | "
 
         result = []
