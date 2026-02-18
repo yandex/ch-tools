@@ -14,7 +14,6 @@ from ch_tools.chadmin.cli import table_metadata_parser
 from ch_tools.chadmin.cli.database_metadata import (
     DatabaseEngine,
     parse_database_metadata,
-    remove_uuid_from_metadata,
 )
 from ch_tools.chadmin.cli.server_group import restart_command
 from ch_tools.chadmin.internal.database import attach_database, detach_database
@@ -24,6 +23,10 @@ from ch_tools.chadmin.internal.database_replica import (
     get_replicated_db_tables_zk_metadata,
     supports_system_restore_database_replica,
     system_restore_database_replica,
+)
+from ch_tools.chadmin.internal.schema_comparison import (
+    compare_schemas_simple,
+    generate_schema_diff,
 )
 from ch_tools.chadmin.internal.table import (
     change_table_uuid,
@@ -143,21 +146,42 @@ class DatabaseMigrator:
         zk_tables = get_replicated_db_tables_zk_metadata(self.ctx, database_name)
         missing_in_zk = []
         schema_mismatches = []
+        diff_outputs = []
 
         for table in local_tables:
             if table["name"] not in zk_tables:
                 missing_in_zk.append(table["name"])
                 continue
 
-            if not self._compare_table_schemas(
-                table["name"],
-                read_local_table_metadata(self.ctx, table["metadata_path"]),
-                zk_tables[table["name"]],
+            local_metadata = read_local_table_metadata(self.ctx, table["metadata_path"])
+            zk_metadata = zk_tables[table["name"]]
+            if not compare_schemas_simple(
+                local_metadata,
+                zk_metadata,
+                ignore_uuid=True,
+                ignore_engine=False,
+                remove_replicated=True,
             ):
                 schema_mismatches.append(table["name"])
 
+                # Generate colored diff for better visibility
+                diff_output = generate_schema_diff(
+                    local_metadata,
+                    zk_metadata,
+                    f"Local: {table['name']}",
+                    f"ZooKeeper: {table['name']}",
+                    colored_output=True,
+                    ignore_uuid=True,
+                    ignore_engine=False,
+                    remove_replicated=False,
+                )
+
+                diff_outputs.append(
+                    f"Table {table['name']}: schema mismatch detected.\n{diff_output}"
+                )
+
         if missing_in_zk or schema_mismatches:
-            error_msg = f"Database '{database_name}' tables inconsistent."
+            error_msg = f"Database '{database_name}' tables are inconsistent."
             if missing_in_zk:
                 error_msg += f"\nMissing in ZK: {missing_in_zk}."
             if schema_mismatches:
@@ -169,24 +193,10 @@ class DatabaseMigrator:
             )
             logging.error(f"ZooKeeper tables: {sorted(zk_tables)}")
 
+            for diff_output in diff_outputs:
+                logging.error(diff_output)
+
             raise RuntimeError(error_msg)
-
-    def _compare_table_schemas(
-        self, table_name: str, local_metadata: str, zk_metadata: str
-    ) -> bool:
-        """Compare table schemas ignoring UUID differences."""
-        zk_metadata = zk_metadata.rstrip()
-        local_metadata = local_metadata.rstrip()
-
-        local_metadata = remove_uuid_from_metadata(local_metadata)
-        zk_metadata = remove_uuid_from_metadata(zk_metadata)
-
-        if local_metadata != zk_metadata:
-            logging.warning(f"Table {table_name}: schema mismatch")
-            return False
-
-        logging.debug(f"Table {table_name}: schemas match")
-        return True
 
     def _sync_table_uuids(self, tables_info: list[TableInfo]) -> bool:
         """Synchronize table UUIDs with ZooKeeper metadata, returns True if any UUID was changed."""

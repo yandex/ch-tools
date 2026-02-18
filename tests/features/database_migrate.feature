@@ -1848,7 +1848,7 @@ Feature: chadmin database migrate command
     Database non_repl_db has engine Replicated. Migration to Replicated from Atomic only is supported.
     """
 
-  @require_version_24.8
+  @require_version_25.8
   Scenario: Fail on database migration with inconsistent tables
     When we execute query on clickhouse01
     """
