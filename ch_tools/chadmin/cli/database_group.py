@@ -15,14 +15,14 @@ from ch_tools.chadmin.internal.database import (
     is_database_exists,
     list_databases,
 )
+from ch_tools.chadmin.internal.database_migration import (
+    migrate_database_to_atomic,
+    migrate_database_to_replicated,
+)
 from ch_tools.chadmin.internal.database_replica import (
     _restore_replica_fallback,
     supports_system_restore_database_replica,
     system_restore_database_replica,
-)
-from ch_tools.chadmin.internal.migration import (
-    migrate_database_to_atomic,
-    migrate_database_to_replicated,
 )
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging

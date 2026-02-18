@@ -15,7 +15,7 @@ from typing import Optional, Tuple
 
 from click import Context
 
-from ch_tools.chadmin.cli import metadata
+from ch_tools.chadmin.cli import table_metadata_parser
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
 from ch_tools.chadmin.internal.zookeeper import get_zk_node
 from ch_tools.common import logging
@@ -153,12 +153,15 @@ class TableMetadataParser:
         try:
             with open(table_metadata_path, "r", encoding="utf-8") as metadata_file:
                 for line in metadata_file:
-                    if line.startswith("ATTACH TABLE") and metadata.UUID_TOKEN in line:
+                    if (
+                        line.startswith("ATTACH TABLE")
+                        and table_metadata_parser.UUID_TOKEN in line
+                    ):
                         if table_uuid is not None:
                             raise MetadataParseError(
                                 f"Duplicate UUID found in metadata: '{table_metadata_path}'"
                             )
-                        table_uuid = metadata.parse_uuid(line)
+                        table_uuid = table_metadata_parser.parse_uuid(line)
                     if line.startswith("ENGINE ="):
                         if table_engine is not None:
                             raise MetadataParseError(
@@ -271,7 +274,9 @@ class TableMetadataManager:
                     f"Metadata file is empty: '{table_local_metadata_path}'"
                 )
 
-            lines[0] = re.sub(metadata.UUID_PATTERN, f"UUID '{new_uuid}'", lines[0])
+            lines[0] = re.sub(
+                table_metadata_parser.UUID_PATTERN, f"UUID '{new_uuid}'", lines[0]
+            )
 
             with open(table_local_metadata_path, "w", encoding="utf-8") as f:
                 f.writelines(lines)

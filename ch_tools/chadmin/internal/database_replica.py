@@ -58,7 +58,7 @@ def check_database_exists_in_zk(
         return zk.exists(format_path(ctx, zk_path)) is not None
 
 
-def get_default_table_in_db_path(database_name: str, table_name: str) -> str:
+def get_replicated_db_table_zk_path(database_name: str, table_name: str) -> str:
     """Get ZooKeeper path for table metadata"""
     escaped_table_name = escape_for_zookeeper(table_name)
     return (
@@ -66,7 +66,9 @@ def get_default_table_in_db_path(database_name: str, table_name: str) -> str:
     )
 
 
-def get_tables_metadata(ctx: Context, database_name: str) -> dict[str, str]:
+def get_replicated_db_tables_zk_metadata(
+    ctx: Context, database_name: str
+) -> dict[str, str]:
     """Retrieve table metadata from ZooKeeper, returns dict mapping table names to CREATE statements."""
     zk_tables_metadata: dict[str, str] = {}
 

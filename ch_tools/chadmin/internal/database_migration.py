@@ -10,7 +10,7 @@ from typing import Any, Literal, Optional
 
 from click import Context
 
-from ch_tools.chadmin.cli import metadata
+from ch_tools.chadmin.cli import table_metadata_parser
 from ch_tools.chadmin.cli.database_metadata import (
     DatabaseEngine,
     parse_database_metadata,
@@ -20,8 +20,8 @@ from ch_tools.chadmin.cli.server_group import restart_command
 from ch_tools.chadmin.internal.database import attach_database, detach_database
 from ch_tools.chadmin.internal.database_replica import (
     check_database_exists_in_zk,
-    get_default_table_in_db_path,
-    get_tables_metadata,
+    get_replicated_db_table_zk_path,
+    get_replicated_db_tables_zk_metadata,
     supports_system_restore_database_replica,
     system_restore_database_replica,
 )
@@ -89,8 +89,20 @@ class DatabaseMigrator:
 
     def migrate_to_replicated(self, database: str) -> None:
         """Migrate Atomic database to Replicated engine with automatic UUID sync and replica restoration."""
-        self._validate_version_support()
-        metadata_db = self._validate_database_engine(database)
+        # Validate ClickHouse version supports migration
+        if not supports_system_restore_database_replica(self.ctx):
+            raise RuntimeError(
+                "Migration requires ClickHouse version 25.8 or above. "
+                "Current version does not support SYSTEM RESTORE DATABASE REPLICA."
+            )
+
+        # Validate database has Atomic engine
+        metadata_db = parse_database_metadata(database)
+        if metadata_db.database_engine != DatabaseEngine.ATOMIC:
+            raise RuntimeError(
+                f"Database {database} has engine {metadata_db.database_engine}. "
+                "Migration to Replicated from Atomic only is supported."
+            )
 
         first_replica = not check_database_exists_in_zk(
             self.ctx, database, metadata_db.zookeeper_path
@@ -124,29 +136,11 @@ class DatabaseMigrator:
         system_restore_database_replica(self.ctx, database)
         logging.info(f"Successfully migrated database {database} to Replicated")
 
-    def _validate_version_support(self) -> None:
-        """Validate that ClickHouse version supports migration."""
-        if not supports_system_restore_database_replica(self.ctx):
-            raise RuntimeError(
-                "Migration requires ClickHouse version 25.8 or above. "
-                "Current version does not support SYSTEM RESTORE DATABASE REPLICA."
-            )
-
-    def _validate_database_engine(self, database: str) -> Any:
-        """Validate that database has Atomic engine."""
-        metadata_db = parse_database_metadata(database)
-        if metadata_db.database_engine != DatabaseEngine.ATOMIC:
-            raise RuntimeError(
-                f"Database {database} has engine {metadata_db.database_engine}. "
-                "Migration to Replicated from Atomic only is supported."
-            )
-        return metadata_db
-
     def _check_tables_consistent(
         self, database_name: str, local_tables: list[TableInfo]
     ) -> None:
         """Verify local tables match ZooKeeper metadata."""
-        zk_tables = get_tables_metadata(self.ctx, database_name)
+        zk_tables = get_replicated_db_tables_zk_metadata(self.ctx, database_name)
         missing_in_zk = []
         schema_mismatches = []
 
@@ -203,9 +197,11 @@ class DatabaseMigrator:
             database_name = table["database"]
             old_table_uuid = table["uuid"]
 
-            zk_metadata_path = get_default_table_in_db_path(database_name, table_name)
+            zk_metadata_path = get_replicated_db_table_zk_path(
+                database_name, table_name
+            )
             zk_table_metadata = get_zk_node(self.ctx, zk_metadata_path)
-            zk_table_uuid = metadata.parse_uuid(zk_table_metadata)
+            zk_table_uuid = table_metadata_parser.parse_uuid(zk_table_metadata)
 
             if zk_table_uuid == old_table_uuid:
                 logging.debug(f"Table {database_name}.{table_name}: UUID unchanged")

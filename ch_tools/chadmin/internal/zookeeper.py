@@ -96,15 +96,10 @@ class ZKTransactionBuilder:
     def _check_result_txn(results: List, no_throw: bool = False) -> bool:
         """Validate transaction results, returning True if all succeeded or raising exceptions unless no_throw=True."""
         for result in results:
-            if isinstance(result, NodeExistsError):
-                if no_throw:
-                    return False
-                raise NodeExistsError()
-            if isinstance(result, Exception):
-                if no_throw:
-                    return False
-                logging.error(f"Transaction error: {result}, type={type(result)}")
-                raise result
+            if no_throw:
+                return False
+            logging.error(f"Transaction error: {result}, type={type(result)}")
+            raise result
         return True
 
 
