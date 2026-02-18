@@ -82,7 +82,9 @@ def get_missing_chs3_backups(disk: str = DEFAULT_S3_DISK_NAME) -> list[str]:
     return [
         backup["name"]
         for backup in backups
-        if disk in backup["cloud_disks"] and backup["name"] not in shadow_chs3_backups
+        if disk in backup["cloud_disks"]
+        and backup["name"] not in shadow_chs3_backups
+        and backup["state"] == "created"
     ]
 
 
