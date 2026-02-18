@@ -1,9 +1,4 @@
-"""
-Table metadata parsing and management utilities.
-
-This module provides classes and functions for working with ClickHouse table metadata files,
-including parsing metadata, managing UUIDs, and handling table storage operations.
-"""
+"""Table metadata utilities."""
 
 import grp
 import os
@@ -24,25 +19,25 @@ REPLICATED_MERGE_TREE_PATTERN = r"ReplicatedMergeTree\([^\)]*\)"
 
 
 class TableMetadataError(Exception):
-    """Base exception for table metadata operations."""
+    """Base exception for metadata operations."""
 
     pass
 
 
 class MetadataParseError(TableMetadataError):
-    """Exception raised when metadata parsing fails."""
+    """Metadata parsing error."""
 
     pass
 
 
 class MetadataFileError(TableMetadataError):
-    """Exception raised when metadata file operations fail."""
+    """Metadata file operation error."""
 
     pass
 
 
 class MergeTreeFamilyEngines(Enum):
-    """Enumeration of MergeTree family table engines."""
+    """MergeTree family engines."""
 
     MERGE_TREE = "MergeTree"
     REPLACING_MERGE_TREE = "ReplacingMergeTree"
@@ -62,18 +57,7 @@ class MergeTreeFamilyEngines(Enum):
 
     @staticmethod
     def from_str(engine_str: str) -> "MergeTreeFamilyEngines":
-        """
-        Convert string representation to MergeTreeFamilyEngines enum.
-
-        Args:
-            engine_str: String representation of the engine
-
-        Returns:
-            MergeTreeFamilyEngines enum value
-
-        Raises:
-            MetadataParseError: If engine string is not recognized
-        """
+        """Convert string to engine enum."""
         for engine in MergeTreeFamilyEngines:
             if engine.value == engine_str:
                 return engine
@@ -82,12 +66,7 @@ class MergeTreeFamilyEngines(Enum):
         )
 
     def is_table_engine_replicated(self) -> bool:
-        """
-        Check if the engine is a replicated variant.
-
-        Returns:
-            True if engine is replicated, False otherwise
-        """
+        """Check if engine is replicated."""
         engines_list = list(MergeTreeFamilyEngines)
         replicated_start_idx = engines_list.index(
             MergeTreeFamilyEngines.REPLICATED_MERGE_TREE
@@ -99,15 +78,7 @@ class MergeTreeFamilyEngines(Enum):
 
 @dataclass
 class TableMetadata:
-    """
-    Dataclass representing parsed table metadata.
-
-    Attributes:
-        table_uuid: UUID of the table
-        table_engine: Table engine type
-        replica_path: ZooKeeper path for replicated tables (optional)
-        replica_name: Replica name for replicated tables (optional)
-    """
+    """Table metadata."""
 
     table_uuid: str
     table_engine: MergeTreeFamilyEngines
@@ -115,28 +86,16 @@ class TableMetadata:
     replica_name: Optional[str] = None
 
     def is_replicated(self) -> bool:
-        """Check if table uses replicated engine."""
+        """Check if table is replicated."""
         return self.table_engine.is_table_engine_replicated()
 
 
 class TableMetadataParser:
-    """Parser for ClickHouse table metadata files."""
+    """Table metadata file parser."""
 
     @staticmethod
     def parse(table_metadata_path: str) -> TableMetadata:
-        """
-        Parse table metadata from a .sql file.
-
-        Args:
-            table_metadata_path: Path to the metadata file
-
-        Returns:
-            TableMetadata object with parsed information
-
-        Raises:
-            MetadataParseError: If parsing fails or required fields are missing
-            MetadataFileError: If file cannot be read
-        """
+        """Parse metadata from .sql file."""
         if not table_metadata_path.endswith(".sql"):
             raise MetadataParseError(
                 f"Metadata file must have .sql extension: '{table_metadata_path}'"
@@ -191,18 +150,7 @@ class TableMetadataParser:
 
     @staticmethod
     def _parse_engine(line: str) -> MergeTreeFamilyEngines:
-        """
-        Parse engine type from ENGINE line.
-
-        Args:
-            line: Line containing ENGINE declaration
-
-        Returns:
-            MergeTreeFamilyEngines enum value
-
-        Raises:
-            MetadataParseError: If engine cannot be parsed
-        """
+        """Parse engine type from ENGINE line."""
         pattern = re.compile(r"ENGINE = (\w+)")
         match = pattern.search(line)
         if not match:
@@ -214,18 +162,7 @@ class TableMetadataParser:
 
     @staticmethod
     def _parse_replica_params(line: str) -> Tuple[str, str]:
-        """
-        Parse replica path and name from ReplicatedMergeTree ENGINE line.
-
-        Args:
-            line: Line containing ReplicatedMergeTree ENGINE declaration
-
-        Returns:
-            Tuple of (replica_path, replica_name)
-
-        Raises:
-            MetadataParseError: If replica parameters cannot be parsed
-        """
+        """Parse replica path and name from ENGINE line."""
         pattern = r"ENGINE = Replicated\w*MergeTree\('([^']*)', '([^']*)'(?:, [^)]*)?\)"
         match = re.match(pattern, line)
 
@@ -240,20 +177,11 @@ class TableMetadataParser:
 
 
 class TableMetadataManager:
-    """Manager for table metadata file operations."""
+    """Metadata file operations manager."""
 
     @staticmethod
     def update_uuid(table_local_metadata_path: str, new_uuid: str) -> None:
-        """
-        Update UUID in table metadata file.
-
-        Args:
-            table_local_metadata_path: Path to the metadata file
-            new_uuid: New UUID to set
-
-        Raises:
-            MetadataFileError: If file operations fail
-        """
+        """Update UUID in metadata file."""
         logging.debug(
             "Updating UUID to {} in metadata file {}",
             new_uuid,
@@ -289,29 +217,12 @@ class TableMetadataManager:
 
     @staticmethod
     def get_table_store_path(table_uuid: str) -> str:
-        """
-        Get the storage path for a table based on its UUID.
-
-        Args:
-            table_uuid: Table UUID
-
-        Returns:
-            Full path to table storage directory
-        """
+        """Get table storage path by UUID."""
         return f"{CLICKHOUSE_PATH}/store/{table_uuid[:3]}/{table_uuid}"
 
     @staticmethod
     def move_table_store(old_table_uuid: str, new_uuid: str) -> None:
-        """
-        Move table storage directory to new UUID location.
-
-        Args:
-            old_table_uuid: Current table UUID
-            new_uuid: New table UUID
-
-        Raises:
-            MetadataFileError: If move operation fails
-        """
+        """Move table storage to new UUID."""
         logging.debug("Moving table store from UUID {} to {}", old_table_uuid, new_uuid)
 
         old_table_store_path = TableMetadataManager.get_table_store_path(old_table_uuid)
@@ -357,19 +268,7 @@ class TableMetadataManager:
 
     @staticmethod
     def get_table_shared_id(ctx: Context, zookeeper_path: str) -> str:
-        """
-        Get table shared ID from ZooKeeper.
-
-        Args:
-            ctx: Click context
-            zookeeper_path: ZooKeeper path to table
-
-        Returns:
-            Table shared ID (UUID)
-
-        Raises:
-            MetadataError: If shared ID cannot be retrieved
-        """
+        """Get table shared ID from ZooKeeper."""
         table_shared_id_node_path = zookeeper_path + "/table_shared_id"
 
         try:
@@ -388,121 +287,51 @@ class TableMetadataManager:
 
 # Backward compatibility functions
 def parse_table_metadata(table_metadata_path: str) -> TableMetadata:
-    """
-    Parse table metadata from a .sql file (backward compatibility wrapper).
-
-    Args:
-        table_metadata_path: Path to the metadata file
-
-    Returns:
-        TableMetadata object with parsed information
-    """
+    """Parse table metadata (backward compatibility)."""
     return TableMetadataParser.parse(table_metadata_path)
 
 
 def update_uuid_table_metadata_file(
     table_local_metadata_path: str, new_uuid: str
 ) -> None:
-    """
-    Update UUID in table metadata file (backward compatibility wrapper).
-
-    Args:
-        table_local_metadata_path: Path to the metadata file
-        new_uuid: New UUID to set
-    """
+    """Update UUID in metadata file (backward compatibility)."""
     TableMetadataManager.update_uuid(table_local_metadata_path, new_uuid)
 
 
 def get_table_store_path(table_uuid: str) -> str:
-    """
-    Get the storage path for a table (backward compatibility wrapper).
-
-    Args:
-        table_uuid: Table UUID
-
-    Returns:
-        Full path to table storage directory
-    """
+    """Get table storage path (backward compatibility)."""
     return TableMetadataManager.get_table_store_path(table_uuid)
 
 
 def move_table_local_store(old_table_uuid: str, new_uuid: str) -> None:
-    """
-    Move table storage directory (backward compatibility wrapper).
-
-    Args:
-        old_table_uuid: Current table UUID
-        new_uuid: New table UUID
-    """
+    """Move table storage (backward compatibility)."""
     TableMetadataManager.move_table_store(old_table_uuid, new_uuid)
 
 
 def get_table_shared_id(ctx: Context, zookeeper_path: str) -> str:
-    """
-    Get table shared ID from ZooKeeper (backward compatibility wrapper).
-
-    Args:
-        ctx: Click context
-        zookeeper_path: ZooKeeper path to table
-
-    Returns:
-        Table shared ID (UUID)
-    """
+    """Get table shared ID from ZooKeeper (backward compatibility)."""
     return TableMetadataManager.get_table_shared_id(ctx, zookeeper_path)
 
 
 def check_replica_path_contains_macros(path: str, macros: str) -> bool:
-    """
-    Check if replica path contains specified macros.
-
-    Args:
-        path: Replica path to check
-        macros: Macros name to look for
-
-    Returns:
-        True if macros is present in path, False otherwise
-    """
+    """Check if replica path contains macros."""
     return f"{{{macros}}}" in path
 
 
 def remove_replicated_params(create_table_query: str) -> str:
-    """
-    Remove replicated parameters from CREATE TABLE query.
-
-    Args:
-        create_table_query: CREATE TABLE query string
-
-    Returns:
-        Query with replicated parameters removed
-    """
+    """Remove replicated parameters from CREATE TABLE query."""
     return re.sub(
         REPLICATED_MERGE_TREE_PATTERN, "ReplicatedMergeTree", create_table_query
     )
 
 
 def is_table(engine: str) -> bool:
-    """
-    Check if engine represents a table (not a view).
-
-    Args:
-        engine: Engine name
-
-    Returns:
-        True if engine is a table, False otherwise
-    """
+    """Check if engine is a table (not a view)."""
     logging.debug("Checking if engine '{}' is a table", engine)
     return engine not in ["View", "MaterializedView"]
 
 
 def is_view(engine: str) -> bool:
-    """
-    Check if engine represents a view.
-
-    Args:
-        engine: Engine name
-
-    Returns:
-        True if engine is a view, False otherwise
-    """
+    """Check if engine is a view."""
     logging.debug("Checking if engine '{}' is a view", engine)
     return engine == "View"
