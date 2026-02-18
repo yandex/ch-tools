@@ -26,7 +26,6 @@ from ch_tools.chadmin.internal.schema_comparison import (
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.table import (
     attach_table,
-    change_table_uuid,
     check_table,
     delete_detached_table,
     delete_table,
@@ -40,7 +39,10 @@ from ch_tools.chadmin.internal.table import (
     list_tables,
     materialize_ttl,
 )
-from ch_tools.chadmin.internal.table_metadata import TableMetadataParser
+from ch_tools.chadmin.internal.table_metadata import (
+    TableMetadataManager,
+    TableMetadataParser,
+)
 from ch_tools.chadmin.internal.table_schema_diff import compare_schemas
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import get_table_shared_id
@@ -952,7 +954,7 @@ def change_uuid_command(
         old_table_uuid = table_info["uuid"]
         table_local_metadata_path = table_info["metadata_path"]
 
-        change_table_uuid(
+        TableMetadataManager.change_uuid(
             ctx,
             database,
             table_name,

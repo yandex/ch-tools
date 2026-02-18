@@ -28,12 +28,12 @@ from ch_tools.chadmin.internal.schema_comparison import (
     compare_schemas_simple,
     generate_schema_diff,
 )
-from ch_tools.chadmin.internal.table import (
-    change_table_uuid,
-    list_tables,
+from ch_tools.chadmin.internal.table import list_tables
+from ch_tools.chadmin.internal.table_info import TableInfo
+from ch_tools.chadmin.internal.table_metadata import (
+    TableMetadataManager,
     read_local_table_metadata,
 )
-from ch_tools.chadmin.internal.table_info import TableInfo
 from ch_tools.chadmin.internal.zookeeper import (
     delete_zk_node,
     get_zk_node,
@@ -222,7 +222,7 @@ class DatabaseMigrator:
             )
             was_changed = True
 
-            change_table_uuid(
+            TableMetadataManager.change_uuid(
                 self.ctx,
                 database=database_name,
                 table=table_name,
