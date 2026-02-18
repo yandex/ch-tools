@@ -1,5 +1,6 @@
 # pylint: disable=too-many-lines
 import os
+import sys
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional
 
@@ -18,6 +19,10 @@ from cloup.constraints import (
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
+from ch_tools.chadmin.internal.schema_comparison import (
+    compare_schemas_simple,
+    generate_schema_diff,
+)
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.table import (
     attach_table,
@@ -39,6 +44,7 @@ from ch_tools.chadmin.internal.table_metadata import (
     get_table_shared_id,
     parse_table_metadata,
 )
+from ch_tools.chadmin.internal.table_schema_diff import compare_schemas
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import format_bytes, print_response
@@ -1008,6 +1014,11 @@ def check_uuid_equal(
 def check_schema_equal(
     ctx: Context, database: str, _all: bool, table: str, keep_going: bool
 ) -> None:
+    """
+    Check that table schemas are equal across the cluster.
+
+    Uses unified schema comparison with colored diff output for differences.
+    """
     tables = []
     if _all:
         tables = get_tables_names_from_system_tables(ctx, database)
@@ -1017,14 +1028,53 @@ def check_schema_equal(
     for table_name, create_table_queries in get_table_schema_from_cluster(
         ctx, database, tables
     ).items():
-        logging.info(f"Table {table_name} has schemas: {create_table_queries}")
+        logging.info(
+            f"Table {table_name} has {len(create_table_queries)} schema(s) in cluster"
+        )
 
         if len(create_table_queries) > 1:
-            msg = f"Table {table} has different schema in cluster"
-            if keep_going:
-                logging.error(msg)
-            else:
-                raise RuntimeError(msg)
+            # Detailed comparison of schemas with colored diff
+            schemas = list(create_table_queries.values())
+            hosts = list(create_table_queries.keys())
+            base_schema = schemas[0]
+            base_host = hosts[0]
+
+            has_differences = False
+            for host, schema in zip(hosts[1:], schemas[1:]):
+                if not compare_schemas_simple(
+                    base_schema,
+                    schema,
+                    ignore_uuid=True,
+                    ignore_engine=False,
+                    remove_replicated=True,
+                ):
+                    has_differences = True
+
+                    # Generate colored diff for better visibility
+                    diff_output = generate_schema_diff(
+                        base_schema,
+                        schema,
+                        f"{base_host}: {table_name}",
+                        f"{host}: {table_name}",
+                        colored_output=True,
+                        ignore_uuid=True,
+                        ignore_engine=False,
+                        remove_replicated=True,
+                    )
+
+                    logging.error(
+                        f"Table {table_name}: schema on {host} "
+                        f"differs from {base_host}\n{diff_output}"
+                    )
+
+            if has_differences:
+                msg = f"Table {table_name} has different schema in cluster"
+                if keep_going:
+                    logging.error(msg)
+                else:
+                    raise RuntimeError(msg)
+        else:
+            logging.info(f"Table {table_name}: all schemas are identical")
 
 
 @table_group.command("check")
@@ -1060,3 +1110,95 @@ def check_table_command(
         )
 
     print_response(ctx, result, default_format="table")
+
+
+@table_group.command("schema-diff")
+@argument("source1", metavar="SOURCE1")
+@argument("source2", metavar="SOURCE2")
+@option(
+    "--format",
+    "diff_format",
+    type=Choice(["unified", "side-by-side", "normal"]),
+    default="unified",
+    help="Diff output format: unified (default, like diff -u), "
+    "side-by-side (like diff -y), or normal.",
+)
+@option(
+    "--no-color",
+    is_flag=True,
+    help="Disable colored output.",
+)
+@option(
+    "--normalize/--no-normalize",
+    default=True,
+    help="Normalize schemas before comparison "
+    "(remove ReplicatedMergeTree params, extra whitespace).",
+)
+@option(
+    "--ignore-engine",
+    is_flag=True,
+    help="Ignore table engine differences when comparing schemas.",
+)
+@option(
+    "--ignore-uuid",
+    is_flag=True,
+    help="Ignore UUID differences when comparing schemas.",
+)
+@option(
+    "--context-lines",
+    type=int,
+    default=3,
+    help="Number of context lines for unified diff (default: 3).",
+)
+@pass_context
+def schema_diff_command(
+    ctx: Context,
+    source1: str,
+    source2: str,
+    diff_format: str,
+    no_color: bool,
+    normalize: bool,
+    ignore_engine: bool,
+    ignore_uuid: bool,
+    context_lines: int,
+) -> None:
+    """
+    Compare schemas of two tables from different sources.
+
+    SOURCE can be one of:
+
+    - database.table          - ClickHouse table
+    - /path/to/file.sql       - File with CREATE TABLE statement
+
+    Examples:
+
+    # Compare two tables in ClickHouse
+    chadmin table schema-diff db1.table1 db2.table2
+
+    # Compare table with file
+    chadmin table schema-diff db1.table1 /tmp/table_schema.sql
+
+    # Compare two files
+    chadmin table schema-diff /tmp/schema1.sql /tmp/schema2.sql
+
+    # Side-by-side format
+    chadmin table schema-diff db1.table1 db2.table2 --format side-by-side
+
+    # Without colors
+    chadmin table schema-diff db1.table1 db2.table2 --no-color
+    """
+
+    colored_output = not no_color and sys.stdout.isatty()
+
+    diff_output = compare_schemas(
+        ctx=ctx,
+        source1=source1,
+        source2=source2,
+        diff_format=diff_format,
+        colored_output=colored_output,
+        normalize=normalize,
+        context_lines=context_lines,
+        ignore_engine=ignore_engine,
+        ignore_uuid=ignore_uuid,
+    )
+    print(diff_output)

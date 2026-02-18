@@ -49,7 +49,7 @@ class DatabaseMetadata:
         with open(file_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
         if self.database_engine == DatabaseEngine.REPLICATED:
-            engine_line = f"ENGINE = Replicated('{self.zookeeper_path}', '{self.shard}', '{ self.replica_name}')"
+            engine_line = f"ENGINE = Replicated('{self.zookeeper_path}', '{self.shard}', '{self.replica_name}')"
         else:
             engine_line = "ENGINE = Atomic"
 
