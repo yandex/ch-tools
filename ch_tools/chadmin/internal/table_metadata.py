@@ -8,14 +8,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Tuple
 
-from click import Context
-
 from ch_tools.chadmin.cli import table_metadata_parser
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
-from ch_tools.chadmin.internal.zookeeper import get_zk_node
 from ch_tools.common import logging
-
-REPLICATED_MERGE_TREE_PATTERN = r"ReplicatedMergeTree\([^\)]*\)"
 
 
 class TableMetadataError(Exception):
@@ -266,72 +261,8 @@ class TableMetadataManager:
                 f"Failed to move table store from '{old_table_store_path}' to '{new_table_store_path}': {e}"
             ) from e
 
-    @staticmethod
-    def get_table_shared_id(ctx: Context, zookeeper_path: str) -> str:
-        """Get table shared ID from ZooKeeper."""
-        table_shared_id_node_path = zookeeper_path + "/table_shared_id"
-
-        try:
-            table_uuid = get_zk_node(ctx, table_shared_id_node_path)
-            logging.debug(
-                "Retrieved table_shared_id={} from zk_path={}",
-                table_uuid,
-                zookeeper_path,
-            )
-            return table_uuid
-        except Exception as e:
-            raise TableMetadataError(
-                f"Failed to get table_shared_id from ZooKeeper path '{table_shared_id_node_path}': {e}"
-            ) from e
-
 
 # Backward compatibility functions
 def parse_table_metadata(table_metadata_path: str) -> TableMetadata:
     """Parse table metadata (backward compatibility)."""
     return TableMetadataParser.parse(table_metadata_path)
-
-
-def update_uuid_table_metadata_file(
-    table_local_metadata_path: str, new_uuid: str
-) -> None:
-    """Update UUID in metadata file (backward compatibility)."""
-    TableMetadataManager.update_uuid(table_local_metadata_path, new_uuid)
-
-
-def get_table_store_path(table_uuid: str) -> str:
-    """Get table storage path (backward compatibility)."""
-    return TableMetadataManager.get_table_store_path(table_uuid)
-
-
-def move_table_local_store(old_table_uuid: str, new_uuid: str) -> None:
-    """Move table storage (backward compatibility)."""
-    TableMetadataManager.move_table_store(old_table_uuid, new_uuid)
-
-
-def get_table_shared_id(ctx: Context, zookeeper_path: str) -> str:
-    """Get table shared ID from ZooKeeper (backward compatibility)."""
-    return TableMetadataManager.get_table_shared_id(ctx, zookeeper_path)
-
-
-def check_replica_path_contains_macros(path: str, macros: str) -> bool:
-    """Check if replica path contains macros."""
-    return f"{{{macros}}}" in path
-
-
-def remove_replicated_params(create_table_query: str) -> str:
-    """Remove replicated parameters from CREATE TABLE query."""
-    return re.sub(
-        REPLICATED_MERGE_TREE_PATTERN, "ReplicatedMergeTree", create_table_query
-    )
-
-
-def is_table(engine: str) -> bool:
-    """Check if engine is a table (not a view)."""
-    logging.debug("Checking if engine '{}' is a table", engine)
-    return engine not in ["View", "MaterializedView"]
-
-
-def is_view(engine: str) -> bool:
-    """Check if engine is a view."""
-    logging.debug("Checking if engine '{}' is a view", engine)
-    return engine == "View"

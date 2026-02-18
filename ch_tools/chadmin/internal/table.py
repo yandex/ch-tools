@@ -15,19 +15,15 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
 from ch_tools.chadmin.internal.system import get_version, match_ch_version
 from ch_tools.chadmin.internal.table_info import TableInfo
 from ch_tools.chadmin.internal.table_metadata import (
-    check_replica_path_contains_macros,
-    get_table_shared_id,
-    is_table,
-    is_view,
-    move_table_local_store,
-    parse_table_metadata,
-    update_uuid_table_metadata_file,
+    TableMetadataManager,
+    TableMetadataParser,
 )
 from ch_tools.chadmin.internal.utils import (
     execute_query,
     execute_query_on_shard,
     remove_from_disk,
 )
+from ch_tools.chadmin.internal.zookeeper import get_table_shared_id
 from ch_tools.chadmin.internal.zookeeper_clean import clean_zk_metadata_for_hosts
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
@@ -471,7 +467,7 @@ def delete_detached_table(ctx: Context, database_name: str, table_name: str) -> 
             f"No metadata file for table '{escaped_database_name}'.'{escaped_table_name}' by path {local_metadata_table_path}."
         )
 
-    table_metadata = parse_table_metadata(local_metadata_table_path)
+    table_metadata = TableMetadataParser.parse(local_metadata_table_path)
 
     for disk_type, disk_name in _get_disks_data(ctx).items():
         _remove_table_data_from_disk(
@@ -621,7 +617,7 @@ def _verify_possible_change_uuid(
         table_local_metadata_path,
         dst_uuid,
     )
-    metadata = parse_table_metadata(table_local_metadata_path)
+    metadata = TableMetadataParser.parse(table_local_metadata_path)
 
     if not metadata.table_engine.is_table_engine_replicated():
         return
@@ -634,8 +630,7 @@ def _verify_possible_change_uuid(
         metadata.replica_name,
         metadata.replica_path,
     )
-    if check_replica_path_contains_macros(metadata.replica_path, "uuid"):
-
+    if "{uuid}" in metadata.replica_path:
         raise ClickException(
             f"Changing uuid for ReplicatedMergeTree that contains macros uuid in replica path was not allowed. replica_path={metadata.replica_path}"
         )
@@ -668,7 +663,11 @@ def change_table_uuid(
     if match_ch_version(ctx, "25.1"):
         table_local_metadata_path = f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
 
-    if is_table(engine=engine):
+    # Check if engine is a table (not a view)
+    is_table_engine = engine not in ["View", "MaterializedView"]
+    is_view_engine = engine == "View"
+
+    if is_table_engine:
         logging.debug("{}.{} is a table.", database, table)
         _verify_possible_change_uuid(ctx, table_local_metadata_path, new_local_uuid)
         if old_table_uuid == new_local_uuid:
@@ -691,12 +690,13 @@ def change_table_uuid(
     else:
         logging.info("{}.{} is not a table, skip checking.", database, table)
 
-    if attached and not is_view(engine=engine):
+    if attached and not is_view_engine:
         # we could not just detach view - problem with cleanupDetachedTables
         detach_table(ctx, database_name=database, table_name=table, permanently=False)
-    update_uuid_table_metadata_file(table_local_metadata_path, new_local_uuid)
 
-    if not is_table(engine):
+    TableMetadataManager.update_uuid(table_local_metadata_path, new_local_uuid)
+
+    if not is_table_engine:
         logging.info(
             "Table {}.{} has engine={}. Don't need move in local store.",
             database,
@@ -706,7 +706,7 @@ def change_table_uuid(
         return
 
     try:
-        move_table_local_store(old_table_uuid, new_local_uuid)
+        TableMetadataManager.move_table_store(old_table_uuid, new_local_uuid)
     except Exception:
         logging.error(
             "Failed move_table_local_store. old uuid={}, new_local_uuid={}. Need restore uuid in metadata for table={}.",

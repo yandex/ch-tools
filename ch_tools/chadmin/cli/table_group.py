@@ -40,12 +40,10 @@ from ch_tools.chadmin.internal.table import (
     list_tables,
     materialize_ttl,
 )
-from ch_tools.chadmin.internal.table_metadata import (
-    get_table_shared_id,
-    parse_table_metadata,
-)
+from ch_tools.chadmin.internal.table_metadata import TableMetadataParser
 from ch_tools.chadmin.internal.table_schema_diff import compare_schemas
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.chadmin.internal.zookeeper import get_table_shared_id
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import format_bytes, print_response
 from ch_tools.common.clickhouse.config import get_cluster_name
@@ -927,7 +925,7 @@ def change_uuid_command(
                     f"{CLICKHOUSE_PATH}/{table_local_metadata_path}"
                 )
 
-            metadata = parse_table_metadata(table_local_metadata_path)
+            metadata = TableMetadataParser.parse(table_local_metadata_path)
             if not metadata.table_engine.is_table_engine_replicated():
                 raise RuntimeError(
                     f"Table {table_name} is not replicated. Failed get uuid from table_shared_id node."
