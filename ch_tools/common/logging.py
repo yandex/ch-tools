@@ -53,15 +53,19 @@ def make_filter(name: str) -> Filter:
 
 
 def _format(fmt: str, record: dict) -> str:
-    message_head = MESSAGE_HEAD_LIMIT
-    message_tail = MESSAGE_TAIL_LIMIT
+    """
+    Dynamic formatter for all loguru handlers except stdout.
+    Truncates message if it is too long.
+    """
     result_fmt = fmt
     message_length = len(record["message"])
-    if message_length > message_head + message_tail:
-        tail_length = min(message_length - message_head, message_tail)
+    if message_length > MESSAGE_HEAD_LIMIT + MESSAGE_TAIL_LIMIT:
+        tail_length = min(message_length - MESSAGE_HEAD_LIMIT, MESSAGE_TAIL_LIMIT)
         record["extra"]["message_tail"] = record["message"][-tail_length:]
-        record["message"] = record["message"][:message_head]
-        skipped_characters = message_length - message_head - tail_length
+        skipped_characters = message_length - MESSAGE_HEAD_LIMIT - tail_length
+        result_fmt = result_fmt.replace(
+            "{message}", f"{{message:.{MESSAGE_HEAD_LIMIT}}}"
+        )
         result_fmt += (
             f" ...(skipped {skipped_characters} characters)... {{extra[message_tail]}}"
         )
