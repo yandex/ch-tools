@@ -17,11 +17,11 @@ from ch_tools.chadmin.cli.database_metadata import (
 from ch_tools.chadmin.cli.server_group import restart_command
 from ch_tools.chadmin.internal.database import attach_database, detach_database
 from ch_tools.chadmin.internal.database_replica import (
-    check_database_exists_in_zk,
     get_replicated_db_table_zk_path,
     get_replicated_db_tables_zk_metadata,
     supports_system_restore_database_replica,
     system_restore_database_replica,
+    try_create_database_root_node,
 )
 from ch_tools.chadmin.internal.schema_comparison import (
     compare_schemas_simple,
@@ -107,11 +107,8 @@ class DatabaseMigrator:
                 "Migration to Replicated from Atomic only is supported."
             )
 
-        first_replica = not check_database_exists_in_zk(
+        first_replica = try_create_database_root_node(
             self.ctx, database, metadata_db.zookeeper_path
-        )
-        logging.info(
-            f"Migrating database {database} as {'first' if first_replica else 'non-first'} replica"
         )
 
         tables = (

@@ -50,30 +50,50 @@ initiator:
 """  # noqa: W291
 
 
-def check_database_exists_in_zk(
+def _get_database_zk_path(
+    database_name: str, db_replica_path: Optional[str] = None
+) -> str:
+    """Get ZooKeeper path for database."""
+    return db_replica_path or f"{DEFAULT_ZK_ROOT}/{database_name}"
+
+
+def try_create_database_root_node(
     ctx: Context, database_name: str, db_replica_path: Optional[str] = None
 ) -> bool:
-    zk_path = db_replica_path or f"{DEFAULT_ZK_ROOT}/{database_name}"
+    """
+    Atomically create root ZK node to determine first replica.
+    Returns True if first replica, False otherwise.
+    """
+    zk_path = _get_database_zk_path(database_name, db_replica_path)
+
     with zk_client(ctx) as zk:
-        return zk.exists(format_path(ctx, zk_path)) is not None
+        try:
+            zk.create(format_path(ctx, zk_path), b"DatabaseReplicated", makepath=True)
+            logging.info(f"Created root ZK node at {zk_path} - first replica")
+            return True
+        except NodeExistsError:
+            logging.info(f"Root ZK node exists at {zk_path} - non-first replica")
+            return False
 
 
-def get_replicated_db_table_zk_path(database_name: str, table_name: str) -> str:
+def get_replicated_db_table_zk_path(
+    database_name: str, table_name: str, db_replica_path: Optional[str] = None
+) -> str:
     """Get ZooKeeper path for table metadata"""
+    db_path = _get_database_zk_path(database_name, db_replica_path)
     escaped_table_name = escape_for_zookeeper(table_name)
-    return (
-        f"{DEFAULT_ZK_ROOT}/{database_name}/{ZK_METADATA_SUBPATH}/{escaped_table_name}"
-    )
+    return f"{db_path}/{ZK_METADATA_SUBPATH}/{escaped_table_name}"
 
 
 def get_replicated_db_tables_zk_metadata(
-    ctx: Context, database_name: str
+    ctx: Context, database_name: str, db_replica_path: Optional[str] = None
 ) -> dict[str, str]:
     """Retrieve table metadata from ZooKeeper, returns dict mapping table names to CREATE statements."""
     zk_tables_metadata: dict[str, str] = {}
 
     with zk_client(ctx) as zk:
-        zk_metadata_path = f"{DEFAULT_ZK_ROOT}/{database_name}/{ZK_METADATA_SUBPATH}"
+        db_path = _get_database_zk_path(database_name, db_replica_path)
+        zk_metadata_path = f"{db_path}/{ZK_METADATA_SUBPATH}"
         children = zk.get_children(zk_metadata_path)
         if not children:
             return zk_tables_metadata
@@ -139,20 +159,12 @@ def _restore_replica_fallback(
 
     zk_manager = ZookeeperDatabaseManager(ctx)
 
-    # Determine if this is the first replica
-    first_replica = not check_database_exists_in_zk(ctx, database_name, db_replica_path)
+    # Atomically determine if this is the first replica
+    first_replica = try_create_database_root_node(ctx, database_name, db_replica_path)
 
     if first_replica:
-        logging.info(
-            f"Restoring {database_name} as first replica (creating database structure)"
-        )
-        try:
-            zk_manager.create_database_structure(database_name, db_replica_path)
-        except NodeExistsError:
-            logging.info(
-                "Database nodes created concurrently, continuing as non-first replica"
-            )
-            first_replica = False
+        logging.info(f"Restoring {database_name} as first replica")
+        zk_manager.create_database_structure(database_name, db_replica_path)
     else:
         logging.info(f"Restoring {database_name} as non-first replica")
 
@@ -246,9 +258,7 @@ class ZookeeperDatabaseManager:
         the sequence counter, ensuring log entry numbers start from 1 (not 0).
         """
         with zk_client(self.ctx) as zk:
-            prefix_db_zk_path = db_replica_path or self._get_default_db_path(
-                database_name
-            )
+            prefix_db_zk_path = _get_database_zk_path(database_name, db_replica_path)
 
             if not db_replica_path:
                 if not zk.exists(format_path(self.ctx, DEFAULT_ZK_ROOT)):
@@ -309,7 +319,7 @@ class ZookeeperDatabaseManager:
         - Creates first_replica_database_name node
         - Stores table metadata in {zk_path}/metadata/
         """
-        prefix_db_zk_path = db_replica_path or self._get_default_db_path(database_name)
+        prefix_db_zk_path = _get_database_zk_path(database_name, db_replica_path)
 
         with zk_client(self.ctx) as zk:
             counter = self._generate_counter(zk, prefix_db_zk_path)
@@ -542,7 +552,3 @@ class ZookeeperDatabaseManager:
         replica = replace_macros("{replica}", macros)
 
         return shard, replica
-
-    def _get_default_db_path(self, database_name: str) -> str:
-        """Get default ZooKeeper path for database."""
-        return f"{DEFAULT_ZK_ROOT}/{database_name}"
