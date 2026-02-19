@@ -39,6 +39,7 @@ def execute_query(
     stream: bool = False,
     settings: Optional[Any] = None,
     replica: Optional[str] = None,
+    log_query: bool = True,
     **kwargs: Any,
 ) -> Any:
     """
@@ -59,6 +60,7 @@ def execute_query(
         stream=stream,
         settings=settings,
         host=replica,
+        log_query=log_query,
     )
 
 
@@ -71,6 +73,7 @@ def execute_query_on_shard(
     format_: Optional[str] = "default",
     stream: bool = False,
     settings: Optional[Any] = None,
+    log_query: bool = True,
     **kwargs: Any,
 ) -> None:
     replicas = ClickhouseInfo.get_replicas(ctx)
@@ -85,6 +88,7 @@ def execute_query_on_shard(
             stream=stream,
             settings=settings,
             replica=replica,
+            log_query=log_query,
             **kwargs,
         )
 

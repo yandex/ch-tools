@@ -521,9 +521,11 @@ def _insert_missing_s3_backups_blobs(
                             data = file.read().decode("utf-8")
                             yield from S3ObjectLocalMetaData.from_string(data).objects
 
+        total_blobs = 0
         for metadata_list in chunked(
             _generate_blobs_from_tar_files(), INSERT_BATCH_SIZE
         ):
+            total_blobs += len(metadata_list)
             _insert_local_blobs_batch(
                 ctx,
                 metadata_list,
@@ -532,6 +534,8 @@ def _insert_missing_s3_backups_blobs(
                 LocalState.SHADOW,
                 disk_conf,
             )
+
+        logging.info(f"Inserted {total_blobs} blobs from missing backups")
 
     if not match_ch_backup_version("2.664.124298363"):
         logging.warning(
@@ -996,6 +1000,7 @@ def _insert_remote_blobs_batch(
         ctx,
         f"INSERT INTO {remote_blobs_table} (last_modified, obj_path, obj_size) VALUES {batch_values}",
         format_=None,
+        log_query=False,
     )
 
 
@@ -1018,6 +1023,7 @@ def _insert_local_blobs_batch(
         ctx,
         f"INSERT INTO {local_blobs_table} (replica, obj_path, state, obj_size, ref_count) VALUES {batch_values}",
         format_=None,
+        log_query=False,
     )
 
 

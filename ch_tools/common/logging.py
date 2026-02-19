@@ -6,6 +6,7 @@ import inspect
 import logging
 import sys
 import traceback
+from functools import partial
 from logging import (  # noqa # pylint:disable=unused-import
     CRITICAL,
     DEBUG,
@@ -20,6 +21,9 @@ from typing import Any, Dict, Optional
 from loguru import logger
 
 from ch_tools.common import result
+
+MESSAGE_HEAD_LIMIT = 800
+MESSAGE_TAIL_LIMIT = 300
 
 logger_config: Dict[str, Any] = {}
 
@@ -46,6 +50,27 @@ def make_filter(name: str) -> Filter:
     """
 
     return Filter(name)
+
+
+def _format(fmt: str, record: dict) -> str:
+    """
+    Dynamic formatter for all loguru handlers except stdout.
+    Truncates message if it is too long.
+    """
+    result_fmt = fmt
+    message_length = len(record["message"])
+    if message_length > MESSAGE_HEAD_LIMIT + MESSAGE_TAIL_LIMIT:
+        tail_length = min(message_length - MESSAGE_HEAD_LIMIT, MESSAGE_TAIL_LIMIT)
+        record["extra"]["message_tail"] = record["message"][-tail_length:]
+        skipped_characters = message_length - MESSAGE_HEAD_LIMIT - tail_length
+        result_fmt = result_fmt.replace(
+            "{message}", f"{{message:.{MESSAGE_HEAD_LIMIT}}}"
+        )
+        result_fmt += (
+            f" ...(skipped {skipped_characters} characters)... {{extra[message_tail]}}"
+        )
+    # Adding '\n{exception}' to dynamic formatters is required by loguru docs
+    return result_fmt + "\n{exception}"
 
 
 class InterceptHandler(logging.Handler):
@@ -91,7 +116,7 @@ def configure(
     loguru_handlers = []
 
     for name, value in config_loguru["handlers"].get(module, {}).items():
-        format_ = config_loguru["formatters"][value["format"]]
+        format_ = partial(_format, config_loguru["formatters"][value["format"]])
         handler = {
             "sink": value["sink"],
             "format": format_,
