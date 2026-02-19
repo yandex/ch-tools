@@ -49,6 +49,7 @@ from ch_tools.common.config import load_config
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
 
 CREATE_ZERO_COPY_LOCKS_BATCH_SIZE = 1000
+PRINT_ZOOKEEPER_NODES_BATCH_SIZE = 10000
 
 
 @group("zookeeper", cls=Chadmin)
@@ -168,10 +169,15 @@ def list_command(ctx: Context, path: str, verbose: bool) -> None:
     Node path can be specified with ClickHouse macros. Example: "/test_table/{shard}/replicas/{replica}".
     """
     nodes = list_zk_nodes(ctx, path, verbose=verbose)
-    if verbose:
-        print_response(ctx, nodes, format_="table")
-    else:
-        logging.info("\n".join(nodes))  # type: ignore
+    if not nodes:
+        logging.info("")
+        return
+
+    for chunk in chunked(nodes, PRINT_ZOOKEEPER_NODES_BATCH_SIZE):
+        if verbose:
+            print_response(ctx, nodes, format_="table")
+        else:
+            logging.info("\n".join(chunk))  # type: ignore
 
 
 @zookeeper_group.command("stat")
