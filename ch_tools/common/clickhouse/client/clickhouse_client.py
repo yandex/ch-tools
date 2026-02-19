@@ -182,6 +182,7 @@ class ClickhouseClient:
         settings: Optional[dict] = None,
         host: Optional[str] = None,
         port: Optional[ClickhousePort] = None,
+        log_query: bool = True,
     ) -> Any:
         """
         Execute query.
@@ -216,7 +217,8 @@ class ClickhouseClient:
                 raise UserWarning(2, "Can't find any port in clickhouse-server config")
 
         host = host or self.host
-        logging.debug(f"Executing query: {query}\n on the host: {host}")
+        if log_query:
+            logging.debug(f"Executing query: {query}\n on the host: {host}")
         if port in [ClickhousePort.HTTPS, ClickhousePort.HTTP]:
             return self._execute_http(
                 query,
