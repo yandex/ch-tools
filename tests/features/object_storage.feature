@@ -537,7 +537,13 @@ Feature: chadmin object-storage commands
     Then we get response contains
     """
     Downloading cloud storage metadata from missing backup 'test3'
+    """
+    And we get response contains
+    """
     Downloading cloud storage metadata from missing backup 'test2'
+    """
+    And we get response contains
+    """
     Downloading cloud storage metadata from missing backup 'test1'
     """
 
