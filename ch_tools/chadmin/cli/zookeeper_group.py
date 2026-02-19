@@ -175,7 +175,7 @@ def list_command(ctx: Context, path: str, verbose: bool) -> None:
 
     for chunk in chunked(nodes, PRINT_ZOOKEEPER_NODES_BATCH_SIZE):
         if verbose:
-            print_response(ctx, nodes, format_="table")
+            print_response(ctx, chunk, format_="table")
         else:
             logging.info("\n".join(chunk))  # type: ignore
 
