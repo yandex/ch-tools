@@ -3,8 +3,12 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Tuple
 
-from ch_tools.chadmin.cli import table_metadata_parser
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_METADATA_PATH
+from ch_tools.chadmin.internal.table_metadata_parser import (
+    ENGINE_TOKEN,
+    UUID_TOKEN,
+    parse_uuid,
+)
 
 PATTERN_UUID_FROM_METADATA = r"(ATTACH\s+\w+\s+(?:\w+\s+)*UUID\s+')([^']+)('.*)"
 
@@ -91,12 +95,9 @@ def parse_database_metadata(database_name: str) -> DatabaseMetadata:
 
     with open(database_metadata_path, "r", encoding="utf-8") as metadata_file:
         for line in metadata_file:
-            if (
-                line.startswith("ATTACH DATABASE")
-                and table_metadata_parser.UUID_TOKEN in line
-            ):
+            if line.startswith("ATTACH DATABASE") and UUID_TOKEN in line:
                 assert database_uuid is None
-                database_uuid = table_metadata_parser.parse_uuid(line)
+                database_uuid = parse_uuid(line)
             if line.startswith("ENGINE ="):
                 assert database_engine is None
                 database_engine = _parse_engine(line)
@@ -128,9 +129,7 @@ def _parse_engine(line: str) -> DatabaseEngine:
 
     match = pattern.search(line)
     if not match:
-        raise RuntimeError(
-            f"Failed parse {table_metadata_parser.ENGINE_TOKEN} from metadata."
-        )
+        raise RuntimeError(f"Failed parse {ENGINE_TOKEN} from metadata.")
 
     return DatabaseEngine(match.group(1))
 

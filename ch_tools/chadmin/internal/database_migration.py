@@ -10,7 +10,6 @@ from typing import Any, Literal, Optional
 
 from click import Context
 
-from ch_tools.chadmin.cli import table_metadata_parser
 from ch_tools.chadmin.cli.database_metadata import (
     DatabaseEngine,
     parse_database_metadata,
@@ -30,10 +29,11 @@ from ch_tools.chadmin.internal.schema_comparison import (
 )
 from ch_tools.chadmin.internal.table import list_tables
 from ch_tools.chadmin.internal.table_info import TableInfo
-from ch_tools.chadmin.internal.table_metadata import (
+from ch_tools.chadmin.internal.table_metadata_manager import (
     TableMetadataManager,
     read_local_table_metadata,
 )
+from ch_tools.chadmin.internal.table_metadata_parser import parse_uuid
 from ch_tools.chadmin.internal.zookeeper import (
     delete_zk_node,
     get_zk_node,
@@ -211,7 +211,7 @@ class DatabaseMigrator:
                 database_name, table_name
             )
             zk_table_metadata = get_zk_node(self.ctx, zk_metadata_path)
-            zk_table_uuid = table_metadata_parser.parse_uuid(zk_table_metadata)
+            zk_table_uuid = parse_uuid(zk_table_metadata)
 
             if zk_table_uuid == old_table_uuid:
                 logging.debug(f"Table {database_name}.{table_name}: UUID unchanged")

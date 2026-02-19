@@ -14,7 +14,7 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
 )
 from ch_tools.chadmin.internal.system import get_version
 from ch_tools.chadmin.internal.table_info import TableInfo
-from ch_tools.chadmin.internal.table_metadata import TableMetadataParser
+from ch_tools.chadmin.internal.table_metadata_parser import TableMetadataParser
 from ch_tools.chadmin.internal.utils import (
     execute_query,
     execute_query_on_shard,

@@ -104,8 +104,7 @@ class ZKTransactionBuilder:
                 # If result is an exception, raise it; otherwise create a RuntimeError
                 if isinstance(result, BaseException):
                     raise result
-                else:
-                    raise RuntimeError(f"Transaction failed with result: {result}")
+                raise RuntimeError(f"Transaction failed with result: {result}")
         return True
 
 

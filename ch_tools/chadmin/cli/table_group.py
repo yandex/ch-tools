@@ -39,10 +39,8 @@ from ch_tools.chadmin.internal.table import (
     list_tables,
     materialize_ttl,
 )
-from ch_tools.chadmin.internal.table_metadata import (
-    TableMetadataManager,
-    TableMetadataParser,
-)
+from ch_tools.chadmin.internal.table_metadata_manager import TableMetadataManager
+from ch_tools.chadmin.internal.table_metadata_parser import TableMetadataParser
 from ch_tools.chadmin.internal.table_schema_diff import compare_schemas
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import get_table_shared_id

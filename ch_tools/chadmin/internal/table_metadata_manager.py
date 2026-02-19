@@ -1,182 +1,26 @@
-"""Table metadata utilities."""
-
-# pylint: disable=import-outside-toplevel
+"""Table metadata manager utilities."""
 
 import grp
 import os
 import pwd
 import re
-from dataclasses import dataclass
-from enum import Enum
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING
 
 from click import ClickException
 
-from ch_tools.chadmin.cli import table_metadata_parser
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
 from ch_tools.chadmin.internal.system import match_ch_version
+from ch_tools.chadmin.internal.table import detach_table
+from ch_tools.chadmin.internal.table_metadata_parser import (
+    UUID_PATTERN,
+    MetadataFileError,
+    TableMetadataParser,
+)
+from ch_tools.chadmin.internal.zookeeper import get_table_shared_id
 from ch_tools.common import logging
 
 if TYPE_CHECKING:
     from click import Context
-
-
-class TableMetadataError(Exception):
-    """Base exception for metadata operations."""
-
-    pass
-
-
-class MetadataParseError(TableMetadataError):
-    """Metadata parsing error."""
-
-    pass
-
-
-class MetadataFileError(TableMetadataError):
-    """Metadata file operation error."""
-
-    pass
-
-
-class MergeTreeFamilyEngines(Enum):
-    """MergeTree family engines."""
-
-    MERGE_TREE = "MergeTree"
-    REPLACING_MERGE_TREE = "ReplacingMergeTree"
-    SUMMING_MERGE_TREE = "SummingMergeTree"
-    AGGREGATING_MERGE_TREE = "AggregatingMergeTree"
-    COLLAPSING_MERGE_TREE = "CollapsingMergeTree"
-    VERSIONED_MERGE_TREE = "VersionedCollapsingMergeTree"
-    GRAPHITE_MERGE_TREE = "GraphiteMergeTree"
-    DISTRIBUTED = "Distributed"
-    REPLICATED_MERGE_TREE = "ReplicatedMergeTree"
-    REPLICATED_SUMMING_MERGE_TREE = "ReplicatedSummingMergeTree"
-    REPLICATED_REPLACING_MERGE_TREE = "ReplicatedReplacingMergeTree"
-    REPLICATED_AGGREGATING_MERGE_TREE = "ReplicatedAggregatingMergeTree"
-    REPLICATED_COLLAPSING_MERGE_TREE = "ReplicatedCollapsingMergeTree"
-    REPLICATED_VERSIONED_MERGE_TREE = "ReplicatedVersionedCollapsingMergeTree"
-    REPLICATED_GRAPHITE_MERGE_TREE = "ReplicatedGraphiteMergeTree"
-
-    @staticmethod
-    def from_str(engine_str: str) -> "MergeTreeFamilyEngines":
-        """Convert string to engine enum."""
-        for engine in MergeTreeFamilyEngines:
-            if engine.value == engine_str:
-                return engine
-        raise MetadataParseError(
-            f"Engine '{engine_str}' is not a valid MergeTreeFamilyEngines value"
-        )
-
-    def is_table_engine_replicated(self) -> bool:
-        """Check if engine is replicated."""
-        engines_list = list(MergeTreeFamilyEngines)
-        replicated_start_idx = engines_list.index(
-            MergeTreeFamilyEngines.REPLICATED_MERGE_TREE
-        )
-        return self.value in [
-            engine.value for engine in engines_list[replicated_start_idx:]
-        ]
-
-
-@dataclass
-class TableMetadata:
-    """Table metadata."""
-
-    table_uuid: str
-    table_engine: MergeTreeFamilyEngines
-    replica_path: Optional[str] = None
-    replica_name: Optional[str] = None
-
-    def is_replicated(self) -> bool:
-        """Check if table is replicated."""
-        return self.table_engine.is_table_engine_replicated()
-
-
-class TableMetadataParser:
-    """Table metadata file parser."""
-
-    @staticmethod
-    def parse(table_metadata_path: str) -> TableMetadata:
-        """Parse metadata from .sql file."""
-        if not table_metadata_path.endswith(".sql"):
-            raise MetadataParseError(
-                f"Metadata file must have .sql extension: '{table_metadata_path}'"
-            )
-
-        if not os.path.exists(table_metadata_path):
-            raise MetadataFileError(f"Metadata file not found: '{table_metadata_path}'")
-
-        table_uuid = None
-        table_engine = None
-        replica_path = None
-        replica_name = None
-
-        try:
-            with open(table_metadata_path, "r", encoding="utf-8") as metadata_file:
-                for line in metadata_file:
-                    if (
-                        line.startswith("ATTACH TABLE")
-                        and table_metadata_parser.UUID_TOKEN in line
-                    ):
-                        if table_uuid is not None:
-                            raise MetadataParseError(
-                                f"Duplicate UUID found in metadata: '{table_metadata_path}'"
-                            )
-                        table_uuid = table_metadata_parser.parse_uuid(line)
-                    if line.startswith("ENGINE ="):
-                        if table_engine is not None:
-                            raise MetadataParseError(
-                                f"Duplicate ENGINE found in metadata: '{table_metadata_path}'"
-                            )
-                        table_engine = TableMetadataParser._parse_engine(line)
-                        if table_engine.is_table_engine_replicated():
-                            replica_path, replica_name = (
-                                TableMetadataParser._parse_replica_params(line)
-                            )
-        except OSError as e:
-            raise MetadataFileError(
-                f"Failed to read metadata file '{table_metadata_path}': {e}"
-            ) from e
-
-        if table_uuid is None:
-            raise RuntimeError(
-                f"Empty UUID from table metadata: '{table_metadata_path}'"
-            )
-
-        if table_engine is None:
-            raise RuntimeError(
-                f"Empty table engine from table metadata: '{table_metadata_path}'"
-            )
-
-        return TableMetadata(table_uuid, table_engine, replica_path, replica_name)
-
-    @staticmethod
-    def _parse_engine(line: str) -> MergeTreeFamilyEngines:
-        """Parse engine type from ENGINE line."""
-        pattern = re.compile(r"ENGINE = (\w+)")
-        match = pattern.search(line)
-        if not match:
-            raise MetadataParseError(
-                f"Failed to parse ENGINE from line: '{line.strip()}'"
-            )
-
-        return MergeTreeFamilyEngines.from_str(match.group(1))
-
-    @staticmethod
-    def _parse_replica_params(line: str) -> Tuple[str, str]:
-        """Parse replica path and name from ENGINE line."""
-        pattern = r"ENGINE = Replicated\w*MergeTree\('([^']*)', '([^']*)'(?:, [^)]*)?\)"
-        match = re.match(pattern, line)
-
-        if not match:
-            raise MetadataParseError(
-                f"Failed to parse replicated parameters from line: '{line.strip()}'"
-            )
-
-        path = match.group(1)
-        name = match.group(2)
-        return path, name
 
 
 class TableMetadataManager:
@@ -209,11 +53,6 @@ class TableMetadataManager:
             raise ClickException(
                 f"Changing uuid for ReplicatedMergeTree that contains macros uuid in replica path was not allowed. replica_path={metadata.replica_path}"
             )
-
-        # Import here to avoid circular dependency
-        from ch_tools.chadmin.internal.zookeeper import (
-            get_table_shared_id,  # pylint: disable=import-outside-toplevel
-        )
 
         table_shared_id = get_table_shared_id(ctx, metadata.replica_path)
 
@@ -251,9 +90,7 @@ class TableMetadataManager:
                     f"Metadata file is empty: '{table_local_metadata_path}'"
                 )
 
-            lines[0] = re.sub(
-                table_metadata_parser.UUID_PATTERN, f"UUID '{new_uuid}'", lines[0]
-            )
+            lines[0] = re.sub(UUID_PATTERN, f"UUID '{new_uuid}'", lines[0])
 
             with open(table_local_metadata_path, "w", encoding="utf-8") as f:
                 f.writelines(lines)
@@ -361,10 +198,6 @@ class TableMetadataManager:
             logging.info("{}.{} is not a table, skip checking.", database, table)
 
         if attached and not is_view_engine:
-            # Import here to avoid circular dependency
-            from ch_tools.chadmin.internal.table import (
-                detach_table,  # pylint: disable=import-outside-toplevel
-            )
 
             # we could not just detach view - problem with cleanupDetachedTables
             detach_table(
@@ -402,12 +235,6 @@ class TableMetadataManager:
         )
 
 
-# Backward compatibility functions
-def parse_table_metadata(table_metadata_path: str) -> TableMetadata:
-    """Parse table metadata (backward compatibility)."""
-    return TableMetadataParser.parse(table_metadata_path)
-
-
 def read_local_table_metadata(ctx: "Context", table_local_metadata_path: str) -> str:
     """Read local table metadata file content."""
     if match_ch_version(ctx, "25.1"):
@@ -415,26 +242,3 @@ def read_local_table_metadata(ctx: "Context", table_local_metadata_path: str) ->
 
     with open(table_local_metadata_path, "r", encoding="utf-8") as f:
         return f.read()
-
-
-def change_table_uuid(
-    ctx: "Context",
-    database: str,
-    table: str,
-    engine: str,
-    new_local_uuid: str,
-    old_table_uuid: str,
-    table_local_metadata_path: str,
-    attached: bool,
-) -> None:
-    """Change table UUID in metadata and move table store (backward compatibility)."""
-    TableMetadataManager.change_uuid(
-        ctx,
-        database,
-        table,
-        engine,
-        new_local_uuid,
-        old_table_uuid,
-        table_local_metadata_path,
-        attached,
-    )
