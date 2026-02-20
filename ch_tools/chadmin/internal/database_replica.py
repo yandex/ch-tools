@@ -106,6 +106,17 @@ class DatabaseLockManager:
         except NodeExistsError:
             pass
 
+    def _ensure_database_parent_path_exists(self, zk: KazooClient) -> None:
+        """Ensure parent ZooKeeper path exists for database structure."""
+        if not self.db_replica_path:
+            parent_path = format_path(self.ctx, DEFAULT_ZK_ROOT)
+            try:
+                if not zk.exists(parent_path):
+                    zk.create(parent_path, b"", makepath=True)
+                    logging.debug(f"Created database parent path: {parent_path}")
+            except NodeExistsError:
+                pass
+
     def _wait_for_lock_release(
         self, lock_path: str, timeout: int, check_interval: int
     ) -> None:
@@ -152,6 +163,7 @@ class DatabaseLockManager:
                 self._remove_lock(lock_path)
 
             self._ensure_lock_root_exists(zk)
+            self._ensure_database_parent_path_exists(zk)
 
             try:
                 with ZKTransactionBuilder(self.ctx, zk) as builder:
@@ -164,9 +176,20 @@ class DatabaseLockManager:
                 )
                 return True, True
 
-            except NodeExistsError:
+            except (NodeExistsError, NoNodeError) as e:
                 db_root_exists = zk.exists(format_path(self.ctx, zk_path)) is not None
                 lock_exists = zk.exists(lock_path) is not None
+
+                if isinstance(e, NoNodeError):
+                    # NoNodeError during transaction means parent path issue
+                    logging.error(
+                        f"NoNodeError during lock acquisition for {self.database_name}. "
+                        f"DB path exists: {db_root_exists}, Lock exists: {lock_exists}"
+                    )
+                    raise RuntimeError(
+                        f"Failed to acquire lock for database {self.database_name}: "
+                        f"parent ZooKeeper path may not exist"
+                    ) from e
 
                 if not db_root_exists and not lock_exists:
                     raise RuntimeError(
