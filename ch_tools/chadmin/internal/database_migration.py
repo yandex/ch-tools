@@ -17,11 +17,11 @@ from ch_tools.chadmin.cli.database_metadata import (
 from ch_tools.chadmin.cli.server_group import restart_command
 from ch_tools.chadmin.internal.database import attach_database, detach_database
 from ch_tools.chadmin.internal.database_replica import (
+    DatabaseLockManager,
     get_replicated_db_table_zk_path,
     get_replicated_db_tables_zk_metadata,
     supports_system_restore_database_replica,
     system_restore_database_replica,
-    try_create_database_root_node,
 )
 from ch_tools.chadmin.internal.schema_comparison import (
     compare_schemas_simple,
@@ -90,16 +90,16 @@ class DatabaseMigrator:
 
         logging.info(f"Database {database} migrated to Atomic")
 
-    def migrate_to_replicated(self, database: str) -> None:
-        """Migrate Atomic database to Replicated engine with automatic UUID sync and replica restoration."""
-        # Validate ClickHouse version supports migration
+    def migrate_to_replicated(
+        self, database: str, force_remove_lock: bool = False
+    ) -> None:
+        """Migrate Atomic database to Replicated engine."""
         if not supports_system_restore_database_replica(self.ctx):
             raise RuntimeError(
                 "Migration requires ClickHouse version 25.8 or above. "
                 "Current version does not support SYSTEM RESTORE DATABASE REPLICA."
             )
 
-        # Validate database has Atomic engine
         metadata_db = parse_database_metadata(database)
         if metadata_db.database_engine != DatabaseEngine.ATOMIC:
             raise RuntimeError(
@@ -107,34 +107,35 @@ class DatabaseMigrator:
                 "Migration to Replicated from Atomic only is supported."
             )
 
-        first_replica = try_create_database_root_node(
-            self.ctx, database, metadata_db.zookeeper_path
-        )
+        with DatabaseLockManager(
+            self.ctx, database, metadata_db.zookeeper_path, force_remove_lock
+        ) as first_replica:
+            tables = (
+                list_tables(self.ctx, database_name=database)
+                if not first_replica
+                else []
+            )
 
-        tables = (
-            list_tables(self.ctx, database_name=database) if not first_replica else []
-        )
+            detach_database(self.ctx, database)
+            logging.info(f"Detached database {database}")
 
-        detach_database(self.ctx, database)
-        logging.info(f"Detached database {database}")
+            need_restart = False
+            if not first_replica:
+                self._check_tables_consistent(database, tables)
+                need_restart = self._sync_table_uuids(tables)
 
-        need_restart = False
-        if not first_replica:
-            self._check_tables_consistent(database, tables)
-            need_restart = self._sync_table_uuids(tables)
+            metadata_db.set_replicated()
+            logging.info(f"Changed {database} engine to Replicated in metadata")
 
-        metadata_db.set_replicated()
-        logging.info(f"Changed {database} engine to Replicated in metadata")
+            if need_restart:
+                logging.info("Restarting ClickHouse server due to UUID changes")
+                self.ctx.invoke(restart_command, timeout=None)
+            else:
+                attach_database(self.ctx, database)
+                logging.info(f"Attached database {database}")
 
-        if need_restart:
-            logging.info("Restarting ClickHouse server due to UUID changes")
-            self.ctx.invoke(restart_command, timeout=None)
-        else:
-            attach_database(self.ctx, database)
-            logging.info(f"Attached database {database}")
-
-        system_restore_database_replica(self.ctx, database)
-        logging.info(f"Successfully migrated database {database} to Replicated")
+            system_restore_database_replica(self.ctx, database)
+            logging.info(f"Successfully migrated database {database} to Replicated")
 
     def _check_tables_consistent(
         self, database_name: str, local_tables: list[TableInfo]
@@ -244,7 +245,9 @@ def migrate_database_to_atomic(
     migrator.migrate_to_atomic(database, clean_zookeeper)
 
 
-def migrate_database_to_replicated(ctx: Context, database: str) -> None:
+def migrate_database_to_replicated(
+    ctx: Context, database: str, force_remove_lock: bool = False
+) -> None:
     """Migrate Atomic database to Replicated engine."""
     migrator = DatabaseMigrator(ctx)
-    migrator.migrate_to_replicated(database)
+    migrator.migrate_to_replicated(database, force_remove_lock)

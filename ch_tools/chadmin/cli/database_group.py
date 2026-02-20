@@ -10,8 +10,6 @@ from ch_tools.chadmin.cli.database_metadata import (
     parse_database_metadata,
 )
 from ch_tools.chadmin.internal.database import (
-    attach_database,
-    detach_database,
     is_database_exists,
     list_databases,
 )
@@ -20,6 +18,7 @@ from ch_tools.chadmin.internal.database_migration import (
     migrate_database_to_replicated,
 )
 from ch_tools.chadmin.internal.database_replica import (
+    DatabaseLockManager,
     _restore_replica_fallback,
     supports_system_restore_database_replica,
     system_restore_database_replica,
@@ -156,28 +155,42 @@ def delete_databases_command(
     default=False,
     help="Remove zookeeper nodes related with Replicated database.",
 )
+@option(
+    "--force-remove-lock",
+    is_flag=True,
+    default=False,
+    help="Force remove stuck database lock from previous failed runs (only for Replicated engine).",
+)
 @pass_context
 def migrate_engine_command(
-    ctx: Context, database: str, engine: str, clean_zookeeper: bool
+    ctx: Context,
+    database: str,
+    engine: str,
+    clean_zookeeper: bool,
+    force_remove_lock: bool,
 ) -> None:
     if not is_database_exists(ctx, database):
         raise RuntimeError(f"Database {database} does not exists, skip migrating")
 
     if DatabaseEngine.from_str(engine) == DatabaseEngine.REPLICATED:
-        migrate_database_to_replicated(ctx, database)
+        migrate_database_to_replicated(ctx, database, force_remove_lock)
     else:
         migrate_database_to_atomic(ctx, database, clean_zookeeper)
 
 
 @database_group.command("restore-replica")
 @option("-d", "--database", required=True)
+@option(
+    "--force-remove-lock",
+    is_flag=True,
+    default=False,
+    help="Force remove stuck database lock from previous failed runs.",
+)
 @pass_context
-def restore_replica_command(ctx: Context, database: str) -> None:
-    """
-    Restore database replica using SYSTEM RESTORE DATABASE REPLICA command.
-    """
-
-    # Validation checks
+def restore_replica_command(
+    ctx: Context, database: str, force_remove_lock: bool
+) -> None:
+    """Restore database replica using SYSTEM RESTORE DATABASE REPLICA command."""
     if not is_database_exists(ctx, database):
         raise RuntimeError(f"Database {database} does not exists, skip restore")
 
@@ -186,22 +199,13 @@ def restore_replica_command(ctx: Context, database: str) -> None:
     if not db_metadata.database_engine.is_replicated():
         raise RuntimeError(f"Database {database} is not Replicated, stop restore")
 
-    # Try using SYSTEM RESTORE DATABASE REPLICA for CH >= 25.8
-    if supports_system_restore_database_replica(ctx):
-        try:
+    # Use DatabaseLockManager for all restore scenarios
+    with DatabaseLockManager(
+        ctx, database, db_metadata.zookeeper_path, force_remove_lock
+    ) as first_replica:
+        if supports_system_restore_database_replica(ctx):
             system_restore_database_replica(ctx, database)
-            return
-        except Exception as e:
-            logging.error(f"SYSTEM RESTORE DATABASE REPLICA failed: {e}")
-            raise
-
-    # Fallback for older versions
-    logging.info("Using fallback method for ClickHouse < 25.8")
-    _restore_replica_fallback(ctx, database, db_metadata.zookeeper_path)
-
-    # Perform detach/attach operations to ensure proper synchronization
-    logging.info(f"Detaching database {database}")
-    detach_database(ctx, database)
-
-    logging.info(f"Attaching database {database}")
-    attach_database(ctx, database)
+        else:
+            _restore_replica_fallback(
+                ctx, database, first_replica, db_metadata.zookeeper_path
+            )

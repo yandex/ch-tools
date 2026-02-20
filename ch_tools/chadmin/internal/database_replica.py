@@ -6,13 +6,15 @@ for Replicated database engine. Manages database nodes, query logs, replica trac
 and table metadata storage in ZooKeeper.
 """
 
-from typing import Optional, Tuple
+import time
+from typing import Any, Optional, Tuple
 
 from click import Context
 from kazoo.client import KazooClient
 from kazoo.exceptions import NodeExistsError, NoNodeError
 
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
+from ch_tools.chadmin.internal.database import attach_database, detach_database
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.utils import execute_query, replace_macros
 from ch_tools.chadmin.internal.zookeeper import (
@@ -57,29 +59,178 @@ def _get_database_zk_path(
     return db_replica_path or f"{DEFAULT_ZK_ROOT}/{database_name}"
 
 
-def try_create_database_root_node(
-    ctx: Context, database_name: str, db_replica_path: Optional[str] = None
-) -> bool:
+class DatabaseLockManager:
     """
-    Atomically create root ZK node to determine first replica.
-    Returns True if first replica, False otherwise.
+    Context manager for database lock coordination.
+    Non-first replicas wait in __enter__() until lock is released.
     """
-    zk_path = _get_database_zk_path(database_name, db_replica_path)
 
-    with zk_client(ctx) as zk:
+    def __init__(
+        self,
+        ctx: Context,
+        database_name: str,
+        db_replica_path: Optional[str] = None,
+        force_remove_lock: bool = False,
+    ):
+        self.ctx = ctx
+        self.database_name = database_name
+        self.db_replica_path = db_replica_path
+        self.force_remove_lock = force_remove_lock
+        self.is_first_replica = False
+        self.lock_acquired = False
+        self._lock_path: Optional[str] = None
+
+    def _get_lock_path(self) -> str:
+        config = self.ctx.obj["config"]
+        lock_root = (
+            config.get("chadmin", {})
+            .get("database", {})
+            .get("lock", {})
+            .get("root_path", "/chadmin/db_lock")
+        )
+        return f"{lock_root}/{self.database_name}"
+
+    def _ensure_lock_root_exists(self, zk: KazooClient) -> None:
+        config = self.ctx.obj["config"]
+        lock_root = (
+            config.get("chadmin", {})
+            .get("database", {})
+            .get("lock", {})
+            .get("root_path", "/chadmin/db_lock")
+        )
+
         try:
-            zk.create(format_path(ctx, zk_path), b"DatabaseReplicated", makepath=True)
-            logging.info(f"Created root ZK node at {zk_path} - first replica")
-            return True
+            if not zk.exists(lock_root):
+                zk.create(lock_root, b"", makepath=True)
+                logging.debug(f"Created lock root directory: {lock_root}")
         except NodeExistsError:
-            logging.info(f"Root ZK node exists at {zk_path} - non-first replica")
-            return False
+            pass
+
+    def _wait_for_lock_release(
+        self, lock_path: str, timeout: int, check_interval: int
+    ) -> None:
+        start_time = time.time()
+        elapsed = 0.0
+
+        logging.info(f"Waiting for lock release at {lock_path} (timeout: {timeout}s)")
+
+        with zk_client(self.ctx) as zk:
+            while elapsed < timeout:
+                if not zk.exists(lock_path):
+                    logging.info(f"Lock released after {elapsed:.1f}s")
+                    return
+
+                logging.info(
+                    f"Lock still held, waiting... ({elapsed:.1f}s / {timeout}s)"
+                )
+                time.sleep(check_interval)
+                elapsed = time.time() - start_time
+
+        raise RuntimeError(
+            f"Timeout waiting for lock release at {lock_path}. "
+            f"Use --force-remove-lock flag to remove stuck lock."
+        )
+
+    def _remove_lock(self, lock_path: str) -> None:
+        try:
+            with zk_client(self.ctx) as zk:
+                if zk.exists(lock_path):
+                    zk.delete(lock_path)
+                    logging.info(f"Removed lock: {lock_path}")
+        except NoNodeError:
+            logging.debug(f"Lock already removed: {lock_path}")
+        except Exception as e:
+            logging.warning(f"Failed to remove lock {lock_path}: {e}")
+
+    def _try_acquire_first_replica_lock(self) -> Tuple[bool, bool]:
+        zk_path = _get_database_zk_path(self.database_name, self.db_replica_path)
+        lock_path = self._get_lock_path()
+
+        with zk_client(self.ctx) as zk:
+            if self.force_remove_lock:
+                logging.warning(f"Force removing lock: {lock_path}")
+                self._remove_lock(lock_path)
+
+            self._ensure_lock_root_exists(zk)
+
+            try:
+                with ZKTransactionBuilder(self.ctx, zk) as builder:
+                    builder.create_node(path=zk_path, value="DatabaseReplicated")
+                    builder.delete_node(path=zk_path)
+                    builder.create_node(path=lock_path, value="")
+
+                logging.info(
+                    f"Acquired first replica lock for database {self.database_name}"
+                )
+                return True, True
+
+            except NodeExistsError:
+                db_root_exists = zk.exists(format_path(self.ctx, zk_path)) is not None
+                lock_exists = zk.exists(lock_path) is not None
+
+                if not db_root_exists and not lock_exists:
+                    raise RuntimeError(
+                        f"Invalid ZooKeeper state for database {self.database_name}"
+                    )
+
+                if lock_exists:
+                    logging.info(
+                        f"Lock exists for database {self.database_name}, will wait in __enter__"
+                    )
+
+                return False, False
+
+    def __enter__(self) -> bool:
+        """Returns True if first replica. Non-first replicas wait here until lock is released."""
+        config = self.ctx.obj["config"]
+        lock_path = self._get_lock_path()
+        wait_timeout = (
+            config.get("chadmin", {})
+            .get("database", {})
+            .get("lock", {})
+            .get("wait_timeout", 600)
+        )
+        check_interval = (
+            config.get("chadmin", {})
+            .get("database", {})
+            .get("lock", {})
+            .get("check_interval", 10)
+        )
+
+        self.is_first_replica, self.lock_acquired = (
+            self._try_acquire_first_replica_lock()
+        )
+
+        if self.lock_acquired:
+            self._lock_path = lock_path
+            logging.info(
+                f"Proceeding as first replica for database {self.database_name}"
+            )
+        else:
+            logging.info(
+                f"Proceeding as non-first replica for database {self.database_name}"
+            )
+
+            with zk_client(self.ctx) as zk:
+                if zk.exists(lock_path):
+                    self._wait_for_lock_release(lock_path, wait_timeout, check_interval)
+
+        return self.is_first_replica
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        if self.lock_acquired and self._lock_path:
+            try:
+                self._remove_lock(self._lock_path)
+                logging.info(f"Released lock for database {self.database_name}")
+            except Exception as e:
+                logging.error(
+                    f"Failed to release lock for database {self.database_name}: {e}"
+                )
 
 
 def get_replicated_db_table_zk_path(
     database_name: str, table_name: str, db_replica_path: Optional[str] = None
 ) -> str:
-    """Get ZooKeeper path for table metadata"""
     db_path = _get_database_zk_path(database_name, db_replica_path)
     escaped_table_name = escape_for_zookeeper(table_name)
     return f"{db_path}/{ZK_METADATA_SUBPATH}/{escaped_table_name}"
@@ -88,7 +239,6 @@ def get_replicated_db_table_zk_path(
 def get_replicated_db_tables_zk_metadata(
     ctx: Context, database_name: str, db_replica_path: Optional[str] = None
 ) -> dict[str, str]:
-    """Retrieve table metadata from ZooKeeper, returns dict mapping table names to CREATE statements."""
     zk_tables_metadata: dict[str, str] = {}
 
     with zk_client(ctx) as zk:
@@ -107,12 +257,7 @@ def get_replicated_db_tables_zk_metadata(
                 if metadata_data and metadata_data[0]:
                     zk_tables_metadata[table_name] = metadata_data[0].decode().strip()
                 else:
-                    # Node exists but is empty or unreadable; log for easier diagnosis of partial failures.
-                    logging.warning(
-                        "Empty or missing ZooKeeper metadata for table %s at path %s",
-                        table_name,
-                        table_metadata_path,
-                    )
+                    logging.warning("Empty ZooKeeper metadata for table %s", table_name)
             except NoNodeError:
                 logging.warning(
                     "ZooKeeper metadata node for table %s was removed concurrently at path %s",
@@ -126,20 +271,16 @@ def get_replicated_db_tables_zk_metadata(
 def system_database_drop_replica(
     ctx: Context, database_zk_path: str, replica: str, dry_run: bool = False
 ) -> None:
-    """Perform SYSTEM DROP DATABASE REPLICA query."""
     timeout = ctx.obj["config"]["clickhouse"]["drop_replica_timeout"]
     query = f"SYSTEM DROP DATABASE REPLICA '{replica}' FROM ZKPATH '{database_zk_path}'"
     execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
 
 
 def supports_system_restore_database_replica(ctx: Context) -> bool:
-    """Check if ClickHouse version supports SYSTEM RESTORE DATABASE REPLICA command."""
     return match_ch_version(ctx, "25.8")
 
 
 def system_restore_database_replica(ctx: Context, database_name: str) -> None:
-    """Restore database replica using SYSTEM RESTORE DATABASE REPLICA command."""
-    # Wrap database name in backticks to handle special characters
     query = f"SYSTEM RESTORE DATABASE REPLICA `{database_name}`"
     execute_query(ctx, query, echo=True, format_=None)
     logging.info(
@@ -150,17 +291,12 @@ def system_restore_database_replica(ctx: Context, database_name: str) -> None:
 def _restore_replica_fallback(
     ctx: Context,
     database_name: str,
+    first_replica: bool,
     db_replica_path: Optional[str] = None,
 ) -> None:
-    """Fallback method for restoring database replica on older ClickHouse versions (< 25.8)."""
-    logging.info(
-        f"Using legacy ZookeeperDatabaseManager for restore of {database_name}"
-    )
-
+    """Fallback restoration for CH < 25.8."""
+    logging.info("Using fallback method for ClickHouse < 25.8")
     zk_manager = ZookeeperDatabaseManager(ctx)
-
-    # Atomically determine if this is the first replica
-    first_replica = try_create_database_root_node(ctx, database_name, db_replica_path)
 
     if first_replica:
         logging.info(f"Restoring {database_name} as first replica")
@@ -168,11 +304,16 @@ def _restore_replica_fallback(
     else:
         logging.info(f"Restoring {database_name} as non-first replica")
 
-    # Create replica nodes
     zk_manager.create_replica_nodes(database_name, first_replica, db_replica_path)
     logging.info(
         f"Successfully restored replica for {database_name} using fallback method"
     )
+
+    logging.info(f"Detaching database {database_name}")
+    detach_database(ctx, database_name)
+
+    logging.info(f"Attaching database {database_name}")
+    attach_database(ctx, database_name)
 
 
 class ZookeeperDatabaseManager:

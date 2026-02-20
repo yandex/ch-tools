@@ -76,6 +76,13 @@ DEFAULT_CONFIG = {
     },
     # Configuration of chadmin tool commands and options.
     "chadmin": {
+        "database": {
+            "lock": {
+                "root_path": "/chadmin/db_lock",  # ZooKeeper path for database locks
+                "wait_timeout": 600,  # Maximum time to wait for lock release (seconds)
+                "check_interval": 10,  # Interval to check lock status (seconds)
+            },
+        },
         "server": {
             "restart": {
                 "command": "sudo systemctl restart clickhouse-server",
