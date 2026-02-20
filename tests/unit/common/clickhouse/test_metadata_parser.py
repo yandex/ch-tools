@@ -3,7 +3,7 @@ from typing import Any
 import pytest
 
 from ch_tools.chadmin.cli.database_metadata import remove_uuid_from_metadata
-from ch_tools.chadmin.internal.table_metadata import (
+from ch_tools.chadmin.internal.table_metadata_parser import (
     MergeTreeFamilyEngines,
     parse_table_metadata,
 )

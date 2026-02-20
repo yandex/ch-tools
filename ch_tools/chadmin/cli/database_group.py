@@ -3,20 +3,25 @@ from typing import Any
 from click import Context
 from cloup import argument, group, option, option_group, pass_context
 from cloup.constraints import RequireAtLeast
-from kazoo.exceptions import NodeExistsError
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.cli.database_metadata import (
     DatabaseEngine,
     parse_database_metadata,
 )
-from ch_tools.chadmin.internal.database import list_databases
-from ch_tools.chadmin.internal.migration import (
-    create_database_nodes,
+from ch_tools.chadmin.internal.database import (
     is_database_exists,
+    list_databases,
+)
+from ch_tools.chadmin.internal.database_migration import (
     migrate_database_to_atomic,
     migrate_database_to_replicated,
-    restore_replica,
+)
+from ch_tools.chadmin.internal.database_replica import (
+    DatabaseLockManager,
+    _restore_replica_fallback,
+    supports_system_restore_database_replica,
+    system_restore_database_replica,
 )
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
@@ -150,23 +155,42 @@ def delete_databases_command(
     default=False,
     help="Remove zookeeper nodes related with Replicated database.",
 )
+@option(
+    "--force-remove-lock",
+    is_flag=True,
+    default=False,
+    help="Force remove stuck database lock from previous failed runs (only for Replicated engine).",
+)
 @pass_context
 def migrate_engine_command(
-    ctx: Context, database: str, engine: str, clean_zookeeper: bool
+    ctx: Context,
+    database: str,
+    engine: str,
+    clean_zookeeper: bool,
+    force_remove_lock: bool,
 ) -> None:
     if not is_database_exists(ctx, database):
         raise RuntimeError(f"Database {database} does not exists, skip migrating")
 
     if DatabaseEngine.from_str(engine) == DatabaseEngine.REPLICATED:
-        migrate_database_to_replicated(ctx, database)
+        migrate_database_to_replicated(ctx, database, force_remove_lock)
     else:
         migrate_database_to_atomic(ctx, database, clean_zookeeper)
 
 
 @database_group.command("restore-replica")
 @option("-d", "--database", required=True)
+@option(
+    "--force-remove-lock",
+    is_flag=True,
+    default=False,
+    help="Force remove stuck database lock from previous failed runs.",
+)
 @pass_context
-def restore_replica_command(ctx: Context, database: str) -> None:
+def restore_replica_command(
+    ctx: Context, database: str, force_remove_lock: bool
+) -> None:
+    """Restore database replica using SYSTEM RESTORE DATABASE REPLICA command."""
     if not is_database_exists(ctx, database):
         raise RuntimeError(f"Database {database} does not exists, skip restore")
 
@@ -175,27 +199,13 @@ def restore_replica_command(ctx: Context, database: str) -> None:
     if not db_metadata.database_engine.is_replicated():
         raise RuntimeError(f"Database {database} is not Replicated, stop restore")
 
-    first_replica = True
-    try:
-        create_database_nodes(
-            ctx,
-            database_name=database,
-            db_replica_path=db_metadata.zookeeper_path,
-        )
-    except NodeExistsError as ex:
-        logging.info(
-            "create_database_nodes failed with NodeExistsError. {}, type={}. Restore as second replica",
-            ex,
-            type(ex),
-        )
-        first_replica = False
-    except Exception as ex:
-        logging.info("create_database_nodes failed with ex={}", type(ex))
-        raise ex
-
-    restore_replica(
-        ctx,
-        database,
-        first_replica=first_replica,
-        db_replica_path=db_metadata.zookeeper_path,
-    )
+    # Use DatabaseLockManager for all restore scenarios
+    with DatabaseLockManager(
+        ctx, database, db_metadata.zookeeper_path, force_remove_lock
+    ) as first_replica:
+        if supports_system_restore_database_replica(ctx):
+            system_restore_database_replica(ctx, database)
+        else:
+            _restore_replica_fallback(
+                ctx, database, first_replica, db_metadata.zookeeper_path
+            )
