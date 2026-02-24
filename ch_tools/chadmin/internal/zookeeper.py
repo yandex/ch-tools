@@ -76,15 +76,11 @@ class ZKTransactionBuilder:
             raise RuntimeError("Transaction already committed")
 
         result = self.txn.commit()
+
+        # Check results and handle errors
+        self._check_result_txn(result)
+
         self._committed = True
-
-        # Log errors if validation fails (keep original format for external logic)
-        if not self._check_result_txn(result, no_throw=True):
-            for status in zip(self.path_to_nodes, result):
-                logging.error(f"{status}")
-
-        # Raise exception if there were errors
-        self._check_result_txn(result, no_throw=False)
 
     def reset(self) -> None:
         self.path_to_nodes = []
@@ -92,18 +88,29 @@ class ZKTransactionBuilder:
         self._committed = False
         self._reset_called = True
 
-    @staticmethod
-    def _check_result_txn(results: List, no_throw: bool = False) -> bool:
-        """Validate transaction results, returning True if all succeeded or raising exceptions unless no_throw=True."""
-        for result in results:
+    def _check_result_txn(self, results: List) -> None:
+        """
+        Validate transaction results, log all statuses if there's an error, and raise the first exception.
+        """
+        first_exception = None
+        status_messages = []
+
+        # Single pass: collect all status messages and capture first exception
+        for path, result in zip(self.path_to_nodes, results):
+            status_messages.append((path, result))
             # Check if result is an exception (indicating an error)
             # Successful operations return True (for delete) or a string path (for create)
-            if isinstance(result, BaseException):
-                if no_throw:
-                    return False
-                logging.error(f"Transaction error: {result}, type={type(result)}")
-                raise result
-        return True
+            if isinstance(result, BaseException) and first_exception is None:
+                first_exception = result
+
+        # If there were errors, log all statuses and raise the first exception
+        if first_exception is not None:
+            for status in status_messages:
+                logging.error(f"{status}")
+            logging.error(
+                f"Transaction error: {first_exception}, type={type(first_exception)}"
+            )
+            raise first_exception
 
 
 def has_zk() -> bool:
