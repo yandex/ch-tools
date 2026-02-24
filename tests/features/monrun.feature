@@ -32,6 +32,7 @@ Feature: ch-monitoring tool
     """
     0;OK
     """
+
     When we execute command on zookeeper01
     """
     supervisorctl stop zookeeper
@@ -39,6 +40,24 @@ Feature: ch-monitoring tool
     And we execute command on clickhouse01
     """
     ch-monitoring ro-replica
+    """
+    Then we get response
+    """
+    2;Readonly replica tables: test.table_01
+    """
+
+    When we execute command on clickhouse01
+    """
+    ch-monitoring ro-replica --database system
+    """
+    Then we get response
+    """
+    0;OK
+    """
+
+    When we execute command on clickhouse01
+    """
+    ch-monitoring ro-replica --database test
     """
     Then we get response
     """
