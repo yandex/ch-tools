@@ -1,3 +1,11 @@
+"""
+ZooKeeper utilities for ClickHouse administration.
+
+Provides tools for managing ZooKeeper nodes, transactions, and client connections.
+Includes transaction builder for atomic operations, path formatting with macro support,
+and optimized recursive deletion for large node hierarchies.
+"""
+
 import os
 import re
 from collections import deque
@@ -24,6 +32,85 @@ from ch_tools.chadmin.internal.utils import chunked, replace_macros
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
 from ch_tools.common.clickhouse.config.clickhouse import ClickhouseConfig
+
+
+class ZKTransactionBuilder:
+    """
+    Builder for ZooKeeper transactions with path tracking and automatic validation.
+    Supports context manager protocol for creating/deleting nodes atomically.
+    """
+
+    def __init__(self, ctx: Context, zk: KazooClient) -> None:
+        self.ctx = ctx
+        self.zk = zk
+        self.txn = zk.transaction()
+        self.path_to_nodes: List[str] = []
+        self._committed = False
+        self._reset_called = False
+
+    def __enter__(self) -> "ZKTransactionBuilder":
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        # Only auto-commit if no exception and neither commit() nor reset() was called
+        if exc_type is None and not self._committed and not self._reset_called:
+            self.commit()
+        self.reset()
+
+    def create_node(self, path: str, value: str = "") -> "ZKTransactionBuilder":
+        if self._committed:
+            raise RuntimeError("Cannot add operations to committed transaction")
+        self.path_to_nodes.append(path)
+        self.txn.create(path=format_path(self.ctx, path), value=value.encode())
+        return self
+
+    def delete_node(self, path: str) -> "ZKTransactionBuilder":
+        if self._committed:
+            raise RuntimeError("Cannot add operations to committed transaction")
+        self.path_to_nodes.append(path)
+        self.txn.delete(path=format_path(self.ctx, path))
+        return self
+
+    def commit(self) -> None:
+        if self._committed:
+            raise RuntimeError("Transaction already committed")
+
+        result = self.txn.commit()
+
+        # Check results and handle errors
+        self._check_result_txn(result)
+
+        self._committed = True
+
+    def reset(self) -> None:
+        self.path_to_nodes = []
+        self.txn = self.zk.transaction()
+        self._committed = False
+        self._reset_called = True
+
+    def _check_result_txn(self, results: List) -> None:
+        """
+        Validate transaction results, log all statuses if there's an error, and raise the first exception.
+        """
+        first_exception = None
+        status_messages = []
+
+        # Single pass: collect all status messages and capture first exception
+        for path, result in zip(self.path_to_nodes, results):
+            status_messages.append((path, result))
+            # Check if result is an exception (indicating an error)
+            # Successful operations return True (for delete) or a string path (for create)
+            if isinstance(result, BaseException) and first_exception is None:
+                first_exception = result
+
+        # If there were errors, log all statuses and raise the first exception
+        if first_exception is not None:
+            for status in status_messages:
+                logging.error(f"{status}")
+            logging.error(
+                f"Transaction error: {first_exception}, type={type(first_exception)}"
+            )
+            raise first_exception
 
 
 def has_zk() -> bool:
@@ -311,8 +398,14 @@ def delete_recursive(zk: KazooClient, paths: List[str], dry_run: bool = False) -
 
 
 def escape_for_zookeeper(s: str) -> str:
-    # clickhouse uses name formatting in zookeeper.
-    # See escapeForFileName.cpp
+    """
+    Escape string for ZooKeeper node names using ClickHouse's escapeForFileName logic.
+
+    Alphanumeric characters and underscores are kept as-is.
+    Other characters are encoded as %XX where XX is the hexadecimal character code.
+
+    Example: "table-name" -> "table%2Dname"
+    """
     result = []
     for c in s:
         if c.isalnum() or c == "_":
@@ -320,6 +413,34 @@ def escape_for_zookeeper(s: str) -> str:
         else:
             code = ord(c)
             result.append(f"%{code//16:X}{code%16:X}")
+
+    return "".join(result)
+
+
+def unescape_from_zookeeper(s: str) -> str:
+    """
+    Unescape string from ZooKeeper node names.
+
+    Decodes %XX sequences back to their original characters.
+    Matches ClickHouse's unescapeForFileName logic.
+
+    Example: "table%2Dname" -> "table-name"
+    """
+    result = []
+    i = 0
+    while i < len(s):
+        if s[i] == "%" and i + 2 < len(s):
+            try:
+                hex_code = s[i + 1 : i + 3]
+                char_code = int(hex_code, 16)
+                result.append(chr(char_code))
+                i += 3
+            except (ValueError, OverflowError):
+                result.append(s[i])
+                i += 1
+        else:
+            result.append(s[i])
+            i += 1
 
     return "".join(result)
 

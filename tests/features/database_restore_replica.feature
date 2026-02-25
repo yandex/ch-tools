@@ -40,15 +40,6 @@ Feature: chadmin database restore-replica command
     """
     Then it completes successfully
 
-    When we execute query on clickhouse01
-    """
-    DETACH DATABASE repl_db
-    """
-    When we execute query on clickhouse01
-    """
-    ATTACH DATABASE repl_db
-    """
-
     When we execute command on clickhouse02
     """
     chadmin database restore-replica -d repl_db
@@ -56,14 +47,6 @@ Feature: chadmin database restore-replica command
     When we execute query on clickhouse02
     """
     SYSTEM SYNC DATABASE REPLICA repl_db
-    """
-    When we execute query on clickhouse02
-    """
-    DETACH DATABASE repl_db
-    """
-    When we execute query on clickhouse02
-    """
-    ATTACH DATABASE repl_db
     """
 
     When we execute query on clickhouse01
@@ -154,15 +137,6 @@ Feature: chadmin database restore-replica command
     """
     Then it completes successfully
 
-    When we execute query on clickhouse01
-    """
-    DETACH DATABASE repl_db
-    """
-    When we execute query on clickhouse01
-    """
-    ATTACH DATABASE repl_db
-    """
-
     When we execute command on clickhouse02
     """
     chadmin database restore-replica -d repl_db
@@ -171,14 +145,6 @@ Feature: chadmin database restore-replica command
     When we execute query on clickhouse02
     """
     SYSTEM SYNC DATABASE REPLICA repl_db
-    """
-    When we execute query on clickhouse02
-    """
-    DETACH DATABASE repl_db
-    """
-    When we execute query on clickhouse02
-    """
-    ATTACH DATABASE repl_db
     """
 
     When we execute query on clickhouse01
@@ -234,4 +200,122 @@ Feature: chadmin database restore-replica command
     """
     Database repl_db is not Replicated, stop restore
     """
-    
+
+  @require_version_24.8
+  Scenario: Restore database with special characters in table names
+    When we execute query on clickhouse01
+    """
+    CREATE DATABASE repl_db ON CLUSTER '{cluster}'
+    ENGINE=Replicated('/clickhouse/repl_db', '{shard}', '{replica}');
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE repl_db.`table-with-dash` (a Int) ENGINE = ReplicatedMergeTree ORDER BY a
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE repl_db.`table.with.dots` (a Int) ENGINE = ReplicatedMergeTree ORDER BY a
+    """
+    When we execute query on clickhouse01
+    """
+    CREATE TABLE repl_db.`table%percent` (a Int) ENGINE = ReplicatedMergeTree ORDER BY a
+    """
+    And we execute query on clickhouse01
+    """
+    INSERT INTO repl_db.`table-with-dash` VALUES (1)
+    """
+    And we execute query on clickhouse01
+    """
+    INSERT INTO repl_db.`table.with.dots` VALUES (2)
+    """
+    And we execute query on clickhouse01
+    """
+    INSERT INTO repl_db.`table%percent` VALUES (3)
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper delete '/clickhouse/repl_db'
+    """
+    Then it completes successfully
+    When we execute command on clickhouse01
+    """
+    chadmin database restore-replica -d repl_db
+    """
+    Then it completes successfully
+    When we execute command on clickhouse02
+    """
+    chadmin database restore-replica -d repl_db
+    """
+    Then it completes successfully
+    When we execute query on clickhouse02
+    """
+    SYSTEM SYNC DATABASE REPLICA repl_db
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT table FROM system.tables WHERE database='repl_db' ORDER BY table FORMAT Values
+    """
+    Then we get response
+    """
+    ('table%percent'),('table-with-dash'),('table.with.dots')
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM repl_db.`table-with-dash` FORMAT Values
+    """
+    Then we get response
+    """
+    (1)
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM repl_db.`table.with.dots` FORMAT Values
+    """
+    Then we get response
+    """
+    (2)
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT * FROM repl_db.`table%percent` FORMAT Values
+    """
+    Then we get response
+    """
+    (3)
+    """
+    When we execute query on clickhouse02
+    """
+    SYSTEM SYNC REPLICA repl_db.`table-with-dash`
+    """
+    When we execute query on clickhouse02
+    """
+    SYSTEM SYNC REPLICA repl_db.`table.with.dots`
+    """
+    When we execute query on clickhouse02
+    """
+    SYSTEM SYNC REPLICA repl_db.`table%percent`
+    """
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM repl_db.`table-with-dash` FORMAT Values
+    """
+    Then we get response
+    """
+    (1)
+    """
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM repl_db.`table.with.dots` FORMAT Values
+    """
+    Then we get response
+    """
+    (2)
+    """
+    When we execute query on clickhouse02
+    """
+    SELECT * FROM repl_db.`table%percent` FORMAT Values
+    """
+    Then we get response
+    """
+    (3)
+    """

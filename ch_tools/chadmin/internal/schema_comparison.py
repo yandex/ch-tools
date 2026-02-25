@@ -10,7 +10,15 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 from ch_tools.chadmin.internal.schema_formatters import UnifiedDiffFormatter
-from ch_tools.chadmin.internal.table_metadata import remove_replicated_params
+
+REPLICATED_MERGE_TREE_PATTERN = r"ReplicatedMergeTree\([^\)]*\)"
+
+
+def remove_replicated_params(create_table_query: str) -> str:
+    """Remove replicated parameters from CREATE TABLE query."""
+    return re.sub(
+        REPLICATED_MERGE_TREE_PATTERN, "ReplicatedMergeTree", create_table_query
+    )
 
 
 @dataclass
