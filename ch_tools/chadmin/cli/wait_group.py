@@ -414,10 +414,13 @@ def get_timeout_by_files(
     if min_timeout is None and max_timeout is None:
         min_timeout = DEFAULT_MIN_TIMEOUT
         max_timeout = DEFAULT_MAX_TIMEOUT
-    elif min_timeout is None:
+    elif max_timeout:
         min_timeout = min(DEFAULT_MIN_TIMEOUT, max_timeout)
-    elif max_timeout is None:
+    elif min_timeout:
         max_timeout = max(DEFAULT_MAX_TIMEOUT, min_timeout)
+
+    # For mypy
+    assert min_timeout and max_timeout
 
     file_processing_timeout = get_file_count() // file_processing_speed
     return max(min_timeout, min(file_processing_timeout, max_timeout))
