@@ -578,3 +578,59 @@ Feature: chadmin zero-copy related zookeeper commands.
     clickhouse01.ch_tools_test
     """
 
+
+  Scenario: Verify zero-copy locks use shared_table_id when table UUIDs differ
+    # When tables are created separately (not via ON CLUSTER), they get different local UUIDs
+    # but share the same shared_table_id. Zero-copy locks must use shared_table_id.
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS test;
+    CREATE DATABASE test;
+    CREATE TABLE test.table_diff_uuid UUID '50000000-1111-0000-0000-000000000001' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_diff_uuid', 'clickhouse01.ch_tools_test') PARTITION BY n ORDER BY n
+    SETTINGS storage_policy='object_storage',allow_remote_fs_zero_copy_replication=1;
+    INSERT INTO test.table_diff_uuid SELECT 0;
+    """
+    And we execute queries on clickhouse02
+    """
+    DROP DATABASE IF EXISTS test;
+    CREATE DATABASE test;
+    CREATE TABLE test.table_diff_uuid UUID '50000000-2222-0000-0000-000000000002' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_diff_uuid', 'clickhouse02.ch_tools_test') PARTITION BY n ORDER BY n
+    SETTINGS storage_policy='object_storage',allow_remote_fs_zero_copy_replication=1;
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3
+    """
+    # shared_table_id should be UUID of first created table
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper get /tables/table_diff_uuid/table_shared_id
+    """
+    Then we get response
+    """
+    50000000-1111-0000-0000-000000000001
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin zookeeper cleanup-zero-copy-locks --table-uuid 50000000-1111-0000-0000-000000000001
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
+    When we execute command on clickhouse02
+    """
+    chadmin zookeeper create-zero-copy-locks --disk object_storage -t table_diff_uuid --database test --replicas clickhouse02.ch_tools_test
+    """
+    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is equal to
+    """
+    /clickhouse/zero_copy/zero_copy_s3/50000000-1111-0000-0000-000000000001
+    """
+    When we execute command on clickhouse02
+    """
+    chadmin zookeeper list $(chadmin zookeeper list /clickhouse/zero_copy/zero_copy_s3/50000000-1111-0000-0000-000000000001/0_0_0_0/)
+    """
+    Then we get response contains
+    """
+    clickhouse02.ch_tools_test
+    """
+
