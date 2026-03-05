@@ -42,14 +42,21 @@ from ch_tools.common import logging
 
 
 class AttacherContext:
-    """Context manager for database detach/attach operations."""
+    """Context manager for database detach/attach operations with optional restart support."""
 
     def __init__(self, ctx: Context, database: str):
         self.ctx = ctx
         self.database = database
+        self._restart_requested = False
 
-    def __enter__(self) -> None:
+    def __enter__(self) -> "AttacherContext":
         detach_database(self.ctx, self.database)
+        logging.info(f"Detached database {self.database}")
+        return self
+
+    def request_restart(self) -> None:
+        self._restart_requested = True
+        logging.info("Restart requested instead of attach")
 
     def __exit__(
         self,
@@ -57,12 +64,27 @@ class AttacherContext:
         exc_value: Optional[Exception],
         traceback: Optional[Any],
     ) -> Literal[False]:
-        attach_database(self.ctx, self.database)
         if exc_type is not None:
             logging.error(
                 f"Exception in AttacherContext: {exc_type.__name__}: {exc_value}"
             )
+            self._try_attach()
+            return False
+
+        if self._restart_requested:
+            logging.info("Restarting ClickHouse server due to UUID changes")
+            self.ctx.invoke(restart_command, timeout=None)
+        else:
+            self._try_attach()
+
         return False
+
+    def _try_attach(self) -> None:
+        try:
+            attach_database(self.ctx, self.database)
+            logging.info(f"Attached database {self.database}")
+        except Exception as e:
+            logging.debug(f"Attach failed (may be normal after restart): {e}")
 
 
 class DatabaseMigrator:
@@ -110,29 +132,17 @@ class DatabaseMigrator:
         with DatabaseLockManager(
             self.ctx, database, metadata_db.zookeeper_path, force_remove_lock
         ) as first_replica:
-            tables = (
-                list_tables(self.ctx, database_name=database)
-                if not first_replica
-                else []
-            )
-
-            detach_database(self.ctx, database)
-            logging.info(f"Detached database {database}")
-
-            need_restart = False
+            tables = []
             if not first_replica:
+                tables = list_tables(self.ctx, database_name=database)
                 self._check_tables_consistent(database, tables)
-                need_restart = self._sync_table_uuids(tables)
 
-            metadata_db.set_replicated()
-            logging.info(f"Changed {database} engine to Replicated in metadata")
+            with AttacherContext(self.ctx, database) as attacher:
+                metadata_db.set_replicated()
+                logging.info(f"Changed {database} engine to Replicated in metadata")
 
-            if need_restart:
-                logging.info("Restarting ClickHouse server due to UUID changes")
-                self.ctx.invoke(restart_command, timeout=None)
-            else:
-                attach_database(self.ctx, database)
-                logging.info(f"Attached database {database}")
+                if not first_replica and self._sync_table_uuids(tables):
+                    attacher.request_restart()
 
             system_restore_database_replica(self.ctx, database)
             logging.info(f"Successfully migrated database {database} to Replicated")
@@ -159,6 +169,7 @@ class DatabaseMigrator:
                 ignore_uuid=True,
                 ignore_engine=False,
                 remove_replicated=True,
+                collapse_whitespace=True,
             ):
                 schema_mismatches.append(table["name"])
 
