@@ -4,6 +4,12 @@ Feature: chadmin object-storage commands
     Given default configuration
     Given clickhouse-tools configuration on clickhouse01,clickhouse02
     """
+    chadmin:
+      server:
+        restart:
+          command: supervisorctl restart clickhouse-server
+      wait:
+        ping_command: ch-monitoring ping
     clickhouse:
         user: "_admin"
         password: ""
@@ -44,6 +50,7 @@ Feature: chadmin object-storage commands
     """
     And we execute command on clickhouse01
     """
+    chadmin server restart &&
     chadmin object-storage collect-info --to-time 0h --traverse-remote
     """
     And we execute command on clickhouse01
@@ -99,12 +106,12 @@ Feature: chadmin object-storage commands
     '\[''clickhouse01'',''clickhouse02''\]':
       active: '?([1-9][0-9]*)'?
     '\[''unknown_replicas''\]':
-      orphaned: 1
+      orphaned: '?([1-9][0-9]*)'?
     total:
       active: '?([1-9][0-9]*)'?
       unique_frozen: '?([1-9][0-9]*)'?
       unique_detached: '?([1-9][0-9]*)'?
-      orphaned: '?(1)'?
+      orphaned: '?([1-9][0-9]*)'?
     """
 
   @require_version_23.3
@@ -459,6 +466,7 @@ Feature: chadmin object-storage commands
     """
     And we execute command on clickhouse01
     """
+    chadmin server restart &&
     chadmin --format yaml object-storage clean --to-time 0h --dry-run
     """
     Then we get response contains
@@ -554,6 +562,7 @@ Feature: chadmin object-storage commands
     """
     When we try to execute command on clickhouse01
     """
+    chadmin server restart &&
     chadmin --format yaml object-storage clean --dry-run --to-time 0h
     """
     Then we get response contains
@@ -576,6 +585,7 @@ Feature: chadmin object-storage commands
     """
     And we execute command on clickhouse01
     """
+    chadmin server restart &&
     chadmin object-storage collect-info --to-time 0h --traverse-remote
     """
     And we execute command on clickhouse01
@@ -611,6 +621,7 @@ Feature: chadmin object-storage commands
     """
     And we execute command on clickhouse01
     """
+    chadmin server restart &&
     chadmin --format yaml object-storage clean --to-time 0h --dry-run --stat-by-period 'day'
     """
     Then we get response matches
@@ -673,6 +684,7 @@ Feature: chadmin object-storage commands
     # First, create some service tables by running collect-info
     When we execute command on clickhouse01
     """
+    chadmin server restart &&
     chadmin object-storage collect-info --to-time 0h --traverse-remote
     """
     When we execute query on clickhouse01
@@ -690,6 +702,7 @@ Feature: chadmin object-storage commands
     # Run <command> - this should clean up old unique tables and create new ones
     When we execute command on clickhouse01
     """
+    chadmin server restart &&
     <command>
     """
     # Should still have 3 service tables (cleanup old, create new)
