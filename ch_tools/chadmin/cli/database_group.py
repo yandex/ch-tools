@@ -16,7 +16,6 @@ from ch_tools.chadmin.internal.database import (
 from ch_tools.chadmin.internal.database_migration import (
     migrate_database_to_atomic,
     migrate_database_to_replicated,
-    MigrationCheckFailedError,
 )
 from ch_tools.chadmin.internal.database_replica import (
     DatabaseLockManager,
@@ -175,23 +174,12 @@ def migrate_engine_command(
     engine: str,
     clean_zookeeper: bool,
     force_remove_lock: bool,
-    dry_run: bool
+    dry_run: bool,
 ) -> None:
-    if not is_database_exists(ctx, database):
-        raise RuntimeError(f"Database {database} does not exists, skip migrating")
-
-    try:
-        if DatabaseEngine.from_str(engine) == DatabaseEngine.REPLICATED:
-            report = migrate_database_to_replicated(ctx, database, force_remove_lock, dry_run)
-        else:
-            report = migrate_database_to_atomic(ctx, database, clean_zookeeper, dry_run)
-        
-        # Print report if available
-        if report:
-            report.print_summary()
-    except MigrationCheckFailedError as e:
-        e.report.print_summary()
-        raise
+    if DatabaseEngine.from_str(engine) == DatabaseEngine.REPLICATED:
+        migrate_database_to_replicated(ctx, database, force_remove_lock, dry_run)
+    else:
+        migrate_database_to_atomic(ctx, database, clean_zookeeper, dry_run)
 
 
 @database_group.command("restore-replica")
