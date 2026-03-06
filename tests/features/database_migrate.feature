@@ -33,6 +33,19 @@ Feature: chadmin database migrate command
     """
     And we execute command on clickhouse01
     """
+    chadmin database migrate -d non_repl_db --engine Replicated --dry-run
+    """
+    Then it completes successfully
+    When we execute query on clickhouse01
+    """
+    SELECT engine FROM system.databases WHERE database='non_repl_db'
+    """
+    Then we get response
+    """
+    Atomic
+    """
+    When we execute command on clickhouse01
+    """
     chadmin database migrate -d non_repl_db --engine Replicated
     """
     When we execute query on clickhouse01

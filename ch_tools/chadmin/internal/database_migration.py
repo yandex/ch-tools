@@ -5,9 +5,8 @@ Handles migration between Atomic and Replicated database engines,
 including ZooKeeper structure management and replica restoration.
 """
 
-from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal, Optional
 
 from click import Context
 
@@ -116,7 +115,7 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
         self.ctx = ctx
         self.database = database
         self._clean_zookeeper = clean_zookeeper
-        self.direction = None
+        self.direction: Optional[MigrationDirection] = None
 
         # Check database exists before parsing metadata
         if not is_database_exists(self.ctx, self.database):
@@ -173,7 +172,7 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
         digest_value = get_zk_node(self.ctx, self._digest_path)
         if digest_value != "0":
             raise MigrationError(
-                f"Replica digest is {digest_value}, expected 0. Database replica already exists in zookeeper. Run: SYSTEM REMOVE DATABASE REPLICA '{self.shard}|{self.replica}' FROM '{self.database}'"
+                f"Replica digest is {digest_value}, expected 0. Database replica already exists in zookeeper. Run: SYSTEM DROP DATABASE REPLICA '{self.shard}|{self.replica}' FROM DATABASE {self.database}"
             )
 
     def _check_tables_consistency(self) -> None:
@@ -246,7 +245,7 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
 
     def migrate_to_atomic(self, dry_run: bool = False) -> bool:
         self.direction = MigrationDirection.TO_ATOMIC
-        logging.info(f"Running pre-migration checks for migration to Atomic...")
+        logging.info("Running pre-migration checks for migration to Atomic...")
         self._run_pre_migration_checks()
 
         if dry_run:
