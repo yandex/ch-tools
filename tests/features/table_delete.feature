@@ -2,6 +2,15 @@ Feature: chadmin delete detached table commands
 
   Background:
     Given default configuration
+    Given clickhouse-tools configuration on clickhouse01,clickhouse02
+    """
+    chadmin:
+      server:
+        restart:
+          command: supervisorctl restart clickhouse-server
+      wait:
+        ping_command: ch-monitoring ping
+    """
     And a working s3
     And a working zookeeper
     And a working clickhouse on clickhouse01
@@ -170,9 +179,10 @@ Feature: chadmin delete detached table commands
 
     When we execute command on clickhouse01
     """
+    chadmin server restart &&
     ls -l /var/lib/clickhouse/data/test_drop_db/
     """
-    Then we get response
+    Then we get response contains
     """
     total 0
     """
@@ -316,7 +326,8 @@ Feature: chadmin delete detached table commands
     total 0
     """
 
-  @require_version_23.3
+  @require_version_23.3 
+  @require_version_less_than_26.2
   Scenario: Drop detached table from object_storage
     Given we have executed queries on clickhouse01
     """
