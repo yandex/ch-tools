@@ -123,12 +123,6 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
         self.direction = direction
         self._clean_zookeeper = clean_zookeeper
 
-        # Check database exists before parsing metadata
-        if not is_database_exists(self.ctx, self.database):
-            raise MigrationError(
-                f"Database {self.database} does not exists, skip migrating"
-            )
-
         self.metadata_db = parse_database_metadata(self.database)
 
         self._db_zk_path = _get_database_zk_path(
@@ -160,7 +154,7 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
     def _check_database_exists(self) -> None:
         """Check if database exists before migration."""
         if not is_database_exists(self.ctx, self.database):
-            raise RuntimeError(
+            raise MigrationError(
                 f"Database {self.database} does not exists, skip migrating"
             )
 
@@ -172,7 +166,8 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
         )
         if self.metadata_db.database_engine != expected_engine:
             raise MigrationError(
-                f"Database {self.database} has engine {self.metadata_db.database_engine}. Migration to {self.metadata_db.database_engine} from {expected_engine} only is supported."
+                f"Database {self.database} has engine {self.metadata_db.database_engine}. "
+                f"Migration to {self.metadata_db.database_engine} from {expected_engine} only is supported."
             )
 
     def _check_clickhouse_version(self) -> None:
@@ -188,7 +183,9 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
         digest_value = get_zk_node(self.ctx, self._digest_path)
         if digest_value != "0":
             raise MigrationError(
-                f"Replica digest is {digest_value}, expected 0. Database replica already exists in zookeeper. Run: SYSTEM DROP DATABASE REPLICA '{self.shard}|{self.replica}' FROM DATABASE {self.database}"
+                f"Replica digest is {digest_value}, expected 0. Database replica already exists in zookeeper. "
+                f"Run: SYSTEM DROP DATABASE REPLICA '{self.shard}|{self.replica}' FROM DATABASE {self.database}. "
+                f"Or manually remove database/replica path from zookeeper."
             )
 
     def _check_tables_consistency(self) -> None:
@@ -199,9 +196,7 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
             )
             return
 
-        zk_tables = get_replicated_db_tables_zk_metadata(
-            self.ctx, self.database, self.metadata_db.zookeeper_path
-        )
+        zk_tables = get_replicated_db_tables_zk_metadata(self.ctx, self.database)
 
         missing_in_zk = []
         schema_mismatches = []
@@ -259,68 +254,6 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
 
             raise RuntimeError(error_msg)
 
-    def migrate(self, force_remove_lock: bool = False, dry_run: bool = False) -> None:
-        """Execute database migration based on the direction set in constructor."""
-        if self.direction == MigrationDirection.TO_ATOMIC:
-            self._migrate_to_atomic(dry_run)
-        else:
-            self._migrate_to_replicated(force_remove_lock, dry_run)
-
-    def _migrate_to_atomic(self, dry_run: bool = False) -> None:
-        """Internal method to migrate to Atomic engine."""
-        logging.info("Running pre-migration checks for migration to Atomic...")
-        self._run_pre_migration_checks()
-
-        if dry_run:
-            logging.info("Dry-run mode: checks completed: OK")
-            return
-
-        with AttacherContext(self.ctx, self.database):
-            zookeeper_path = self.metadata_db.zookeeper_path
-            self.metadata_db.set_atomic()
-
-            if self._clean_zookeeper and zookeeper_path:
-                try:
-                    logging.info(f"Cleaning ZooKeeper nodes: {zookeeper_path}")
-                    delete_zk_node(self.ctx, zookeeper_path)
-                except Exception as e:
-                    logging.warning(
-                        f"Failed to clean ZooKeeper nodes at {zookeeper_path}: {e}"
-                    )
-
-        logging.info(f"Database {self.database} migrated to Atomic")
-
-    def _migrate_to_replicated(
-        self, force_remove_lock: bool = False, dry_run: bool = False
-    ) -> None:
-        """Internal method to migrate to Replicated engine."""
-        logging.info("Running pre-migration checks for migration to Replicated...")
-        self._run_pre_migration_checks()
-
-        if dry_run:
-            logging.info("Dry-run mode: checks completed: OK")
-            return
-
-        # Execute the actual migration
-        with DatabaseLockManager(
-            self.ctx, self.database, self.metadata_db.zookeeper_path, force_remove_lock
-        ) as first_replica:
-            self._run_pre_migration_checks(in_action=True)
-
-            with AttacherContext(self.ctx, self.database) as attacher:
-                self.metadata_db.set_replicated()
-                logging.info(
-                    f"Changed {self.database} engine to Replicated in metadata"
-                )
-
-                if not first_replica and self._sync_table_uuids(dry_run=False):
-                    attacher.request_restart()
-
-            system_restore_database_replica(self.ctx, self.database)
-            logging.info(
-                f"Successfully migrated database {self.database} to Replicated"
-            )
-
     def _sync_table_uuids(self, dry_run: bool) -> bool:
         """Synchronize table UUIDs with ZooKeeper metadata, returns True if any UUID was changed."""
         if dry_run and not check_zk_node(self.ctx, self._db_zk_path):
@@ -368,6 +301,65 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
             )
 
         return was_changed
+
+    def migrate(self, force_remove_lock: bool = False, dry_run: bool = False) -> None:
+        """Execute database migration based on the direction set in constructor."""
+        if self.direction == MigrationDirection.TO_ATOMIC:
+            self._migrate_to_atomic(dry_run)
+        else:
+            self._migrate_to_replicated(force_remove_lock, dry_run)
+
+    def _migrate_to_atomic(self, dry_run: bool = False) -> None:
+        logging.info("Running pre-migration checks for migration to Atomic...")
+        self._run_pre_migration_checks()
+
+        if dry_run:
+            logging.info("Dry-run mode: checks completed: OK")
+            return
+
+        with AttacherContext(self.ctx, self.database):
+            zookeeper_path = self.metadata_db.zookeeper_path
+            self.metadata_db.set_atomic()
+
+            if self._clean_zookeeper and zookeeper_path:
+                try:
+                    logging.info(f"Cleaning ZooKeeper nodes: {zookeeper_path}")
+                    delete_zk_node(self.ctx, zookeeper_path)
+                except Exception as e:
+                    logging.warning(
+                        f"Failed to clean ZooKeeper nodes at {zookeeper_path}: {e}"
+                    )
+
+        logging.info(f"Database {self.database} migrated to Atomic")
+
+    def _migrate_to_replicated(
+        self, force_remove_lock: bool = False, dry_run: bool = False
+    ) -> None:
+        logging.info("Running pre-migration checks for migration to Replicated...")
+        self._run_pre_migration_checks()
+
+        if dry_run:
+            logging.info("Dry-run mode: checks completed: OK")
+            return
+
+        with DatabaseLockManager(
+            self.ctx, self.database, self.metadata_db.zookeeper_path, force_remove_lock
+        ) as first_replica:
+            self._run_pre_migration_checks(in_action=True)
+
+            with AttacherContext(self.ctx, self.database) as attacher:
+                self.metadata_db.set_replicated()
+                logging.info(
+                    f"Changed {self.database} engine to Replicated in metadata"
+                )
+
+                if not first_replica and self._sync_table_uuids(dry_run=False):
+                    attacher.request_restart()
+
+            system_restore_database_replica(self.ctx, self.database)
+            logging.info(
+                f"Successfully migrated database {self.database} to Replicated"
+            )
 
     @classmethod
     def to_atomic(
