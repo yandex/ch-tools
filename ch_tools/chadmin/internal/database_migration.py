@@ -108,14 +108,20 @@ class AttacherContext:
 class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
     """Handles database migration between Atomic and Replicated engines."""
 
-    def __init__(self, ctx: Context, database: str, clean_zookeeper: bool = False):
+    def __init__(
+        self,
+        ctx: Context,
+        database: str,
+        direction: MigrationDirection,
+        clean_zookeeper: bool = False,
+    ):
         if not database:
             raise ValueError("Database name is required")
 
         self.ctx = ctx
         self.database = database
+        self.direction = direction
         self._clean_zookeeper = clean_zookeeper
-        self.direction: Optional[MigrationDirection] = None
 
         # Check database exists before parsing metadata
         if not is_database_exists(self.ctx, self.database):
@@ -139,15 +145,24 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
 
     def _run_pre_migration_checks(self, in_action: bool = False) -> None:
         if self.direction == MigrationDirection.TO_ATOMIC:
+            self._check_database_exists()
             self._check_source_database_state()
         else:
             self._local_tables = list_tables(self.ctx, database_name=self.database)
             if not in_action:
+                self._check_database_exists()
                 self._check_source_database_state()
                 self._check_clickhouse_version()
                 self._sync_table_uuids(not in_action)
             self._check_replica_digest()
             self._check_tables_consistency()
+
+    def _check_database_exists(self) -> None:
+        """Check if database exists before migration."""
+        if not is_database_exists(self.ctx, self.database):
+            raise RuntimeError(
+                f"Database {self.database} does not exists, skip migrating"
+            )
 
     def _check_source_database_state(self) -> None:
         expected_engine = (
@@ -164,6 +179,7 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
         if not supports_system_restore_database_replica(self.ctx):
             raise MigrationError(
                 "ClickHouse version does not support SYSTEM RESTORE DATABASE REPLICA"
+                "Migration requires ClickHouse version 25.8 or above"
             )
 
     def _check_replica_digest(self) -> None:
@@ -243,8 +259,14 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
 
             raise RuntimeError(error_msg)
 
-    def migrate_to_atomic(self, dry_run: bool = False) -> bool:
-        self.direction = MigrationDirection.TO_ATOMIC
+    def migrate(self, force_remove_lock: bool = False, dry_run: bool = False) -> bool:
+        """Execute database migration based on the direction set in constructor."""
+        if self.direction == MigrationDirection.TO_ATOMIC:
+            return self._migrate_to_atomic(dry_run)
+        return self._migrate_to_replicated(force_remove_lock, dry_run)
+
+    def _migrate_to_atomic(self, dry_run: bool = False) -> bool:
+        """Internal method to migrate to Atomic engine."""
         logging.info("Running pre-migration checks for migration to Atomic...")
         self._run_pre_migration_checks()
 
@@ -268,10 +290,10 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
         logging.info(f"Database {self.database} migrated to Atomic")
         return True
 
-    def migrate_to_replicated(
+    def _migrate_to_replicated(
         self, force_remove_lock: bool = False, dry_run: bool = False
     ) -> bool:
-        self.direction = MigrationDirection.TO_REPLICATED
+        """Internal method to migrate to Replicated engine."""
         logging.info("Running pre-migration checks for migration to Replicated...")
         self._run_pre_migration_checks()
 
@@ -354,10 +376,12 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
 
 def migrate_database_to_atomic(
     ctx: Context, database: str, clean_zookeeper: bool, dry_run: bool = False
-) -> bool:
+) -> None:
     """Migrate Replicated database to Atomic engine."""
-    migrator = DatabaseMigrator(ctx, database, clean_zookeeper)
-    return migrator.migrate_to_atomic(dry_run)
+    migrator = DatabaseMigrator(
+        ctx, database, MigrationDirection.TO_ATOMIC, clean_zookeeper
+    )
+    migrator.migrate(dry_run=dry_run)
 
 
 def migrate_database_to_replicated(
@@ -365,7 +389,9 @@ def migrate_database_to_replicated(
     database: str,
     force_remove_lock: bool = False,
     dry_run: bool = False,
-) -> bool:
+) -> None:
     """Migrate Atomic database to Replicated engine."""
-    migrator = DatabaseMigrator(ctx, database, clean_zookeeper=False)
-    return migrator.migrate_to_replicated(force_remove_lock, dry_run)
+    migrator = DatabaseMigrator(
+        ctx, database, MigrationDirection.TO_REPLICATED, clean_zookeeper=False
+    )
+    migrator.migrate(force_remove_lock=force_remove_lock, dry_run=dry_run)
