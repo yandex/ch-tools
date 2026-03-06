@@ -1817,7 +1817,7 @@ Feature: chadmin database migrate command
     """
     Then it fails with response contains
     """
-    Replica node '/clickhouse/non_repl_db/replicas/shard1|clickhouse01.ch_tools_test/digest' in ZooKeeper already exists and contains unexpected value
+    Database replica already exists in zookeeper.
     """
 
   @require_version_25.8
