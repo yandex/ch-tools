@@ -259,20 +259,21 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
 
             raise RuntimeError(error_msg)
 
-    def migrate(self, force_remove_lock: bool = False, dry_run: bool = False) -> bool:
+    def migrate(self, force_remove_lock: bool = False, dry_run: bool = False) -> None:
         """Execute database migration based on the direction set in constructor."""
         if self.direction == MigrationDirection.TO_ATOMIC:
-            return self._migrate_to_atomic(dry_run)
-        return self._migrate_to_replicated(force_remove_lock, dry_run)
+            self._migrate_to_atomic(dry_run)
+        else:
+            self._migrate_to_replicated(force_remove_lock, dry_run)
 
-    def _migrate_to_atomic(self, dry_run: bool = False) -> bool:
+    def _migrate_to_atomic(self, dry_run: bool = False) -> None:
         """Internal method to migrate to Atomic engine."""
         logging.info("Running pre-migration checks for migration to Atomic...")
         self._run_pre_migration_checks()
 
         if dry_run:
             logging.info("Dry-run mode: checks completed: OK")
-            return True
+            return
 
         with AttacherContext(self.ctx, self.database):
             zookeeper_path = self.metadata_db.zookeeper_path
@@ -288,18 +289,17 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
                     )
 
         logging.info(f"Database {self.database} migrated to Atomic")
-        return True
 
     def _migrate_to_replicated(
         self, force_remove_lock: bool = False, dry_run: bool = False
-    ) -> bool:
+    ) -> None:
         """Internal method to migrate to Replicated engine."""
         logging.info("Running pre-migration checks for migration to Replicated...")
         self._run_pre_migration_checks()
 
         if dry_run:
             logging.info("Dry-run mode: checks completed: OK")
-            return True
+            return
 
         # Execute the actual migration
         with DatabaseLockManager(
@@ -320,7 +320,6 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
             logging.info(
                 f"Successfully migrated database {self.database} to Replicated"
             )
-        return True
 
     def _sync_table_uuids(self, dry_run: bool) -> bool:
         """Synchronize table UUIDs with ZooKeeper metadata, returns True if any UUID was changed."""
@@ -338,7 +337,7 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
             old_table_uuid = table["uuid"]
 
             zk_metadata_path = get_replicated_db_table_zk_path(
-                database_name, table_name, self.metadata_db.zookeeper_path
+                database_name, table_name
             )
             zk_table_metadata = get_zk_node(self.ctx, zk_metadata_path)
             zk_table_uuid = parse_uuid(zk_table_metadata)
@@ -370,28 +369,26 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
 
         return was_changed
 
+    @classmethod
+    def to_atomic(
+        cls,
+        ctx: Context,
+        database: str,
+        clean_zookeeper: bool = False,
+        dry_run: bool = False,
+    ) -> None:
+        """Migrate Replicated database to Atomic engine."""
+        migrator = cls(ctx, database, MigrationDirection.TO_ATOMIC, clean_zookeeper)
+        migrator.migrate(dry_run=dry_run)
 
-# Public API functions
-
-
-def migrate_database_to_atomic(
-    ctx: Context, database: str, clean_zookeeper: bool, dry_run: bool = False
-) -> None:
-    """Migrate Replicated database to Atomic engine."""
-    migrator = DatabaseMigrator(
-        ctx, database, MigrationDirection.TO_ATOMIC, clean_zookeeper
-    )
-    migrator.migrate(dry_run=dry_run)
-
-
-def migrate_database_to_replicated(
-    ctx: Context,
-    database: str,
-    force_remove_lock: bool = False,
-    dry_run: bool = False,
-) -> None:
-    """Migrate Atomic database to Replicated engine."""
-    migrator = DatabaseMigrator(
-        ctx, database, MigrationDirection.TO_REPLICATED, clean_zookeeper=False
-    )
-    migrator.migrate(force_remove_lock=force_remove_lock, dry_run=dry_run)
+    @classmethod
+    def to_replicated(
+        cls,
+        ctx: Context,
+        database: str,
+        force_remove_lock: bool = False,
+        dry_run: bool = False,
+    ) -> None:
+        """Migrate Atomic database to Replicated engine."""
+        migrator = cls(ctx, database, MigrationDirection.TO_REPLICATED)
+        migrator.migrate(force_remove_lock=force_remove_lock, dry_run=dry_run)

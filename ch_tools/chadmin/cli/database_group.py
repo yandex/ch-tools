@@ -13,10 +13,7 @@ from ch_tools.chadmin.internal.database import (
     is_database_exists,
     list_databases,
 )
-from ch_tools.chadmin.internal.database_migration import (
-    migrate_database_to_atomic,
-    migrate_database_to_replicated,
-)
+from ch_tools.chadmin.internal.database_migration import DatabaseMigrator
 from ch_tools.chadmin.internal.database_replica import (
     DatabaseLockManager,
     _restore_replica_fallback,
@@ -177,9 +174,9 @@ def migrate_engine_command(
     dry_run: bool,
 ) -> None:
     if DatabaseEngine.from_str(engine) == DatabaseEngine.REPLICATED:
-        migrate_database_to_replicated(ctx, database, force_remove_lock, dry_run)
+        DatabaseMigrator.to_replicated(ctx, database, force_remove_lock, dry_run)
     else:
-        migrate_database_to_atomic(ctx, database, clean_zookeeper, dry_run)
+        DatabaseMigrator.to_atomic(ctx, database, clean_zookeeper, dry_run)
 
 
 @database_group.command("restore-replica")
