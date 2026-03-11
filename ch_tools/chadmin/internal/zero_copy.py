@@ -64,10 +64,10 @@ def generate_zero_copy_lock_tasks(
     )
 
     zero_copy_path = _get_zero_copy_zookeeper_path_for_disk_type(
-        ctx, storage_config.OBJECT_STORAGE_TYPE, zero_copy_path, shared_table_id
+        ctx, storage_config.OBJECT_STORAGE_TYPE, zero_copy_path, table["uuid"]
     )
     zero_copy_path_old = _get_zero_copy_zookeeper_path_for_disk_type(
-        ctx, storage_config.OBJECT_STORAGE_TYPE, zero_copy_path_old, shared_table_id
+        ctx, storage_config.OBJECT_STORAGE_TYPE, zero_copy_path_old, table["uuid"]
     )
     should_copy_lock_values = copy_values and zero_copy_path != zero_copy_path_old
 
