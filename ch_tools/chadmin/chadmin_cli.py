@@ -46,6 +46,7 @@ from ch_tools.chadmin.cli.replica_group import replica_group
 from ch_tools.chadmin.cli.replicated_fetch_group import replicated_fetch_group
 from ch_tools.chadmin.cli.replication_queue_group import replication_queue_group
 from ch_tools.chadmin.cli.restore_replica_command import restore_replica_command
+from ch_tools.chadmin.cli.zero_copy_migration_group import zero_copy_migration_group
 from ch_tools.chadmin.cli.s3_credentials_config_group import s3_credentials_config_group
 from ch_tools.chadmin.cli.server_group import server_group
 from ch_tools.chadmin.cli.stack_trace_command import stack_trace_command
@@ -56,7 +57,6 @@ from ch_tools.chadmin.cli.zookeeper_group import zookeeper_group
 from ch_tools.common.cli.context_settings import CONTEXT_SETTINGS
 from ch_tools.common.cli.locale_resolver import LocaleResolver
 from ch_tools.common.cli.parameters import TimeSpanParamType, YamlParamType
-
 
 @cloup.group(
     "chadmin",
@@ -153,6 +153,7 @@ groups: List[Any] = [
     wait_group,
     zookeeper_group,
     flamegraph_group,
+    zero_copy_migration_group,
 ]
 
 section = cloup.Section("Commands")
