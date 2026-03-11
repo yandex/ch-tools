@@ -288,12 +288,12 @@ def wait_replication_sync_command(
     help="Time to wait, in seconds. If not set, the timeout is determined dynamically based on chosen timeout strategy.",
 )
 @constraint(
-    If(Equal("timeout_strategy", "parts"), then=AcceptAtMost(1), else_=accept_none),
-    ["wait"],
+    If(Equal("timeout_strategy", "parts"), then=accept_none),
+    ["file_processing_speed", "min_timeout", "max_timeout"],
 )
 @constraint(
-    If(Equal("timeout_strategy", "files"), then=AcceptAtMost(3), else_=accept_none),
-    ["file_processing_speed", "min_timeout", "max_timeout"],
+    If(Equal("timeout_strategy", "files"), then=AcceptAtMost(4)),
+    ["file_processing_speed", "min_timeout", "max_timeout", "wait"],
 )
 @constraint(If("track_restart", then=require_all), ["restart_start_time"])
 @pass_context
@@ -410,8 +410,17 @@ def get_timeout_by_files(
     Calculate and return timeout by files.
     """
     file_processing_speed = file_processing_speed or DEFAULT_FILE_PROCESSING_SPEED
-    min_timeout = min_timeout or DEFAULT_MIN_TIMEOUT
-    max_timeout = max_timeout or DEFAULT_MAX_TIMEOUT
+
+    if min_timeout is None and max_timeout is None:
+        min_timeout = DEFAULT_MIN_TIMEOUT
+        max_timeout = DEFAULT_MAX_TIMEOUT
+    elif max_timeout and not min_timeout:
+        min_timeout = min(DEFAULT_MIN_TIMEOUT, max_timeout)
+    elif min_timeout and not max_timeout:
+        max_timeout = max(DEFAULT_MAX_TIMEOUT, min_timeout)
+
+    # For mypy
+    assert min_timeout and max_timeout
 
     file_processing_timeout = get_file_count() // file_processing_speed
     return max(min_timeout, min(file_processing_timeout, max_timeout))
