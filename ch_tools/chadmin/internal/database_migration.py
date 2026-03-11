@@ -123,6 +123,11 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
         self.direction = direction
         self._clean_zookeeper = clean_zookeeper
 
+        if not is_database_exists(self.ctx, self.database):
+            raise MigrationError(
+                f"Database {self.database} does not exists, skip migrating"
+            )
+
         self.metadata_db = parse_database_metadata(self.database)
 
         self._db_zk_path = _get_database_zk_path(
