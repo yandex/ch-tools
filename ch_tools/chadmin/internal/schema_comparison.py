@@ -44,6 +44,7 @@ def normalize_schema(
     remove_replicated: bool = True,
     ignore_engine: bool = False,
     ignore_uuid: bool = False,
+    collapse_whitespace: bool = False,
 ) -> List[str]:
     """
     Normalize CREATE TABLE statement for comparison.
@@ -51,19 +52,21 @@ def normalize_schema(
     Normalization includes:
     - Converting ATTACH TABLE to CREATE TABLE
     - Normalizing table names to a common placeholder
-    - Removing extra whitespace
+    - Removing extra whitespace and normalizing formatting
     - Optionally: removing ReplicatedMergeTree parameters
     - Optionally: ignoring engine differences
     - Optionally: ignoring UUID differences
+    - Optionally: collapsing all whitespace to single line
 
     Args:
         schema: CREATE TABLE statement
         remove_replicated: Remove ReplicatedMergeTree parameters
         ignore_engine: Ignore engine differences
         ignore_uuid: Ignore UUID differences
+        collapse_whitespace: Collapse all content to single line
 
     Returns:
-        List of normalized lines
+        List of normalized lines (single line if collapse_whitespace=True)
     """
     # Normalize ATTACH TABLE to CREATE TABLE
     schema = re.sub(r"^ATTACH TABLE", "CREATE TABLE", schema, flags=re.MULTILINE)
@@ -91,14 +94,15 @@ def normalize_schema(
             schema,
         )
 
-    # Split into lines and remove trailing whitespace
-    lines = [line.rstrip() for line in schema.split("\n")]
+    if collapse_whitespace:
+        # Collapse all whitespace to single space and return as single line
+        schema = re.sub(r"\s+", " ", schema)
+        return [schema.strip()]
 
-    # Remove empty lines at the beginning and end
-    while lines and not lines[0]:
-        lines.pop(0)
-    while lines and not lines[-1]:
-        lines.pop()
+    # Normalize horizontal whitespace only, preserve line structure
+    schema = re.sub(r"[ \t]+", " ", schema)
+    lines = [line.rstrip() for line in schema.split("\n")]
+    lines = [line for line in lines if line]
 
     return lines
 
@@ -109,6 +113,7 @@ def compare_schemas_simple(
     ignore_uuid: bool = True,
     ignore_engine: bool = False,
     remove_replicated: bool = True,
+    collapse_whitespace: bool = False,
 ) -> bool:
     """
     Simple comparison of two table schemas.
@@ -123,6 +128,7 @@ def compare_schemas_simple(
         ignore_uuid: Ignore UUID differences
         ignore_engine: Ignore engine differences
         remove_replicated: Remove ReplicatedMergeTree parameters
+        collapse_whitespace: Collapse all content to single line
 
     Returns:
         True if schemas are identical after normalization, False otherwise
@@ -138,12 +144,14 @@ def compare_schemas_simple(
         remove_replicated=remove_replicated,
         ignore_engine=ignore_engine,
         ignore_uuid=ignore_uuid,
+        collapse_whitespace=collapse_whitespace,
     )
     normalized2 = normalize_schema(
         schema2,
         remove_replicated=remove_replicated,
         ignore_engine=ignore_engine,
         ignore_uuid=ignore_uuid,
+        collapse_whitespace=collapse_whitespace,
     )
 
     return normalized1 == normalized2
@@ -190,6 +198,7 @@ def compare_schemas_detailed(
     ignore_uuid: bool = True,
     ignore_engine: bool = False,
     remove_replicated: bool = True,
+    collapse_whitespace: bool = False,
 ) -> SchemaComparisonResult:
     """
     Detailed comparison of two table schemas.
@@ -203,6 +212,7 @@ def compare_schemas_detailed(
         ignore_uuid: Ignore UUID differences
         ignore_engine: Ignore engine differences
         remove_replicated: Remove ReplicatedMergeTree parameters
+        collapse_whitespace: Collapse all content to single line
 
     Returns:
         SchemaComparisonResult with detailed comparison information
@@ -221,12 +231,14 @@ def compare_schemas_detailed(
         remove_replicated=remove_replicated,
         ignore_engine=ignore_engine,
         ignore_uuid=ignore_uuid,
+        collapse_whitespace=collapse_whitespace,
     )
     normalized2 = normalize_schema(
         schema2,
         remove_replicated=remove_replicated,
         ignore_engine=ignore_engine,
         ignore_uuid=ignore_uuid,
+        collapse_whitespace=collapse_whitespace,
     )
 
     are_equal = normalized1 == normalized2
@@ -251,6 +263,7 @@ def generate_schema_diff(
     ignore_uuid: bool = True,
     ignore_engine: bool = False,
     remove_replicated: bool = True,
+    collapse_whitespace: bool = False,
     context_lines: int = 3,
 ) -> str:
     """
@@ -268,6 +281,7 @@ def generate_schema_diff(
         ignore_uuid: Ignore UUID differences
         ignore_engine: Ignore engine differences
         remove_replicated: Remove ReplicatedMergeTree parameters
+        collapse_whitespace: Collapse all content to single line
         context_lines: Number of context lines for unified diff
 
     Returns:
@@ -284,21 +298,21 @@ def generate_schema_diff(
         >>> logging.error(f"Schema mismatch:\\n{diff}")
     """
 
-    # Normalize schemas
     schema1_lines = normalize_schema(
         schema1,
         remove_replicated=remove_replicated,
         ignore_engine=ignore_engine,
         ignore_uuid=ignore_uuid,
+        collapse_whitespace=collapse_whitespace,
     )
     schema2_lines = normalize_schema(
         schema2,
         remove_replicated=remove_replicated,
         ignore_engine=ignore_engine,
         ignore_uuid=ignore_uuid,
+        collapse_whitespace=collapse_whitespace,
     )
 
-    # Format diff
     formatter = UnifiedDiffFormatter(colored_output=colored_output)
     return formatter.format(
         schema1_lines,

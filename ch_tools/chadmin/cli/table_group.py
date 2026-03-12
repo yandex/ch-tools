@@ -19,20 +19,16 @@ from cloup.constraints import (
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.clickhouse_disks import CLICKHOUSE_PATH
-from ch_tools.chadmin.internal.schema_comparison import (
-    compare_schemas_simple,
-    generate_schema_diff,
-)
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.table import (
     attach_table,
+    check_schema_equality_in_cluster,
     check_table,
     delete_detached_table,
     delete_table,
     detach_table,
     get_info_from_system_tables,
     get_table,
-    get_table_schema_from_cluster,
     get_table_uuids_from_cluster,
     get_tables_names_from_system_tables,
     list_table_columns,
@@ -1023,56 +1019,9 @@ def check_schema_equal(
     else:
         tables = [table]
 
-    for table_name, create_table_queries in get_table_schema_from_cluster(
-        ctx, database, tables
-    ).items():
-        logging.info(
-            f"Table {table_name} has {len(create_table_queries)} schema(s) in cluster"
-        )
-
-        if len(create_table_queries) > 1:
-            # Detailed comparison of schemas with colored diff
-            schemas = list(create_table_queries.values())
-            hosts = list(create_table_queries.keys())
-            base_schema = schemas[0]
-            base_host = hosts[0]
-
-            has_differences = False
-            for host, schema in zip(hosts[1:], schemas[1:]):
-                if not compare_schemas_simple(
-                    base_schema,
-                    schema,
-                    ignore_uuid=True,
-                    ignore_engine=False,
-                    remove_replicated=True,
-                ):
-                    has_differences = True
-
-                    # Generate colored diff for better visibility
-                    diff_output = generate_schema_diff(
-                        base_schema,
-                        schema,
-                        f"{base_host}: {table_name}",
-                        f"{host}: {table_name}",
-                        colored_output=True,
-                        ignore_uuid=True,
-                        ignore_engine=False,
-                        remove_replicated=True,
-                    )
-
-                    logging.error(
-                        f"Table {table_name}: schema on {host} "
-                        f"differs from {base_host}\n{diff_output}"
-                    )
-
-            if has_differences:
-                msg = f"Table {table_name} has different schema in cluster"
-                if keep_going:
-                    logging.error(msg)
-                else:
-                    raise RuntimeError(msg)
-        else:
-            logging.info(f"Table {table_name}: all schemas are identical")
+    check_schema_equality_in_cluster(
+        ctx, database, tables, colored_output=True, keep_going=keep_going
+    )
 
 
 @table_group.command("check")

@@ -12,6 +12,10 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
     make_ch_disks_config,
     remove_from_ch_disk,
 )
+from ch_tools.chadmin.internal.schema_comparison import (
+    compare_schemas_simple,
+    generate_schema_diff,
+)
 from ch_tools.chadmin.internal.system import get_version
 from ch_tools.chadmin.internal.table_info import TableInfo
 from ch_tools.chadmin.internal.table_metadata_parser import TableMetadataParser
@@ -603,6 +607,65 @@ def get_table_schema_from_cluster(
         # Create a dict mapping host to schema
         result[table] = {row["host"]: row["create_table_query"] for row in rows}
     return result
+
+
+def check_schema_equality_in_cluster(
+    ctx: Context,
+    database: str,
+    tables: list[str],
+    colored_output: bool = True,
+    keep_going: bool = False,
+) -> None:
+    for table_name, create_table_queries in get_table_schema_from_cluster(
+        ctx, database, tables
+    ).items():
+        logging.info(
+            f"Table {table_name} has {len(create_table_queries)} schema(s) in cluster"
+        )
+
+        if len(create_table_queries) > 1:
+            # Detailed comparison of schemas with diff
+            schemas = list(create_table_queries.values())
+            hosts = list(create_table_queries.keys())
+            base_schema = schemas[0]
+            base_host = hosts[0]
+
+            has_differences = False
+            for host, schema in zip(hosts[1:], schemas[1:]):
+                if not compare_schemas_simple(
+                    base_schema,
+                    schema,
+                    ignore_uuid=True,
+                    ignore_engine=False,
+                    remove_replicated=True,
+                ):
+                    has_differences = True
+
+                    # Generate diff for better visibility
+                    diff_output = generate_schema_diff(
+                        base_schema,
+                        schema,
+                        f"{base_host}: {table_name}",
+                        f"{host}: {table_name}",
+                        colored_output=colored_output,
+                        ignore_uuid=True,
+                        ignore_engine=False,
+                        remove_replicated=True,
+                    )
+
+                    logging.error(
+                        f"Table {table_name}: schema on {host} "
+                        f"differs from {base_host}\n{diff_output}"
+                    )
+
+            if has_differences:
+                msg = f"Table {table_name} has different schema in cluster"
+                if keep_going:
+                    logging.error(msg)
+                else:
+                    raise RuntimeError(msg)
+        else:
+            logging.info(f"Table {table_name}: all schemas are identical")
 
 
 def has_data_on_disk(ctx: Context, table: TableInfo, disk: str) -> bool:

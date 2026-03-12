@@ -33,6 +33,19 @@ Feature: chadmin database migrate command
     """
     And we execute command on clickhouse01
     """
+    chadmin database migrate -d non_repl_db --engine Replicated --dry-run
+    """
+    Then it completes successfully
+    When we execute query on clickhouse01
+    """
+    SELECT engine FROM system.databases WHERE database='non_repl_db'
+    """
+    Then we get response
+    """
+    Atomic
+    """
+    When we execute command on clickhouse01
+    """
     chadmin database migrate -d non_repl_db --engine Replicated
     """
     When we execute query on clickhouse01
@@ -1817,7 +1830,7 @@ Feature: chadmin database migrate command
     """
     Then it fails with response contains
     """
-    Replica node '/clickhouse/non_repl_db/replicas/shard1|clickhouse01.ch_tools_test/digest' in ZooKeeper already exists and contains unexpected value
+    Database replica already exists in zookeeper.
     """
 
   @require_version_25.8
@@ -1872,19 +1885,11 @@ Feature: chadmin database migrate command
     ENGINE = MergeTree
     ORDER BY b
     """
-    When we execute command on clickhouse01
-    """
-    chadmin database migrate -d non_repl_db -e Replicated
-    """
-    When we try to execute command on clickhouse02
+    When we try to execute command on clickhouse01
     """
     chadmin database migrate -d non_repl_db -e Replicated
     """
     Then it fails with response contains
     """
-    Database 'non_repl_db' tables are inconsistent
-    """
-    And we get response contains
-    """
-    Schema mismatches: ['foo']
+    Table foo has different schema in cluster
     """

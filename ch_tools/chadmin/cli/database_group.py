@@ -13,10 +13,7 @@ from ch_tools.chadmin.internal.database import (
     is_database_exists,
     list_databases,
 )
-from ch_tools.chadmin.internal.database_migration import (
-    migrate_database_to_atomic,
-    migrate_database_to_replicated,
-)
+from ch_tools.chadmin.internal.database_migration import DatabaseMigrator
 from ch_tools.chadmin.internal.database_replica import (
     DatabaseLockManager,
     _restore_replica_fallback,
@@ -161,6 +158,12 @@ def delete_databases_command(
     default=False,
     help="Force remove stuck database lock from previous failed runs (only for Replicated engine).",
 )
+@option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Only perform checks without actual migration. Shows if migration is possible and if restart is required.",
+)
 @pass_context
 def migrate_engine_command(
     ctx: Context,
@@ -168,14 +171,12 @@ def migrate_engine_command(
     engine: str,
     clean_zookeeper: bool,
     force_remove_lock: bool,
+    dry_run: bool,
 ) -> None:
-    if not is_database_exists(ctx, database):
-        raise RuntimeError(f"Database {database} does not exists, skip migrating")
-
     if DatabaseEngine.from_str(engine) == DatabaseEngine.REPLICATED:
-        migrate_database_to_replicated(ctx, database, force_remove_lock)
+        DatabaseMigrator.to_replicated(ctx, database, force_remove_lock, dry_run)
     else:
-        migrate_database_to_atomic(ctx, database, clean_zookeeper)
+        DatabaseMigrator.to_atomic(ctx, database, clean_zookeeper, dry_run)
 
 
 @database_group.command("restore-replica")
