@@ -133,7 +133,7 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
 
         if not is_database_exists(self.ctx, self.database):
             raise MigrationError(
-                f"Database {self.database} does not exist, skip migrating"
+                f"Database {self.database} does not exists, skip migrating"
             )
 
         self.metadata_db = parse_database_metadata(self.database)
