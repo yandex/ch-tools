@@ -33,7 +33,11 @@ from ch_tools.chadmin.internal.schema_comparison import (
     compare_schemas_simple,
     generate_schema_diff,
 )
-from ch_tools.chadmin.internal.table import list_tables
+from ch_tools.chadmin.internal.table import (
+    check_schema_equality_in_cluster,
+    get_tables_names_from_system_tables,
+    list_tables,
+)
 from ch_tools.chadmin.internal.table_metadata_manager import (
     TableMetadataManager,
     read_local_table_metadata,
@@ -152,6 +156,7 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
                 self._check_database_exists()
                 self._check_source_database_state()
                 self._check_clickhouse_version()
+                self._check_schemas_in_cluster_for_first_replica()
                 self._sync_table_uuids(not in_action)
             self._check_replica_digest()
             self._check_tables_consistency()
@@ -258,6 +263,38 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
                 logging.error(diff_output)
 
             raise RuntimeError(error_msg)
+
+    def _check_schemas_in_cluster_for_first_replica(self) -> None:
+        """Check that table schemas are equal across the cluster for first replica."""
+        if check_zk_node(self.ctx, self._db_zk_path):
+            logging.info(
+                f"Database {self.database} already exists in ZooKeeper at {self._db_zk_path}, "
+                "skipping cluster schema check"
+            )
+            return
+
+        logging.info(
+            "Checking table schemas consistency across cluster for first replica..."
+        )
+
+        tables = get_tables_names_from_system_tables(self.ctx, self.database)
+
+        if not tables:
+            logging.info("No tables found in database, skipping schema check")
+            return
+
+        try:
+            check_schema_equality_in_cluster(
+                self.ctx,
+                self.database,
+                tables,
+                colored_output=False,
+                keep_going=False,
+            )
+        except RuntimeError as e:
+            raise MigrationError(str(e)) from e
+
+        logging.info("All table schemas are consistent across cluster")
 
     def _sync_table_uuids(self, dry_run: bool) -> bool:
         """Synchronize table UUIDs with ZooKeeper metadata, returns True if any UUID was changed."""

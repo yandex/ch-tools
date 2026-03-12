@@ -1885,19 +1885,11 @@ Feature: chadmin database migrate command
     ENGINE = MergeTree
     ORDER BY b
     """
-    When we execute command on clickhouse01
-    """
-    chadmin database migrate -d non_repl_db -e Replicated
-    """
-    When we try to execute command on clickhouse02
+    When we try to execute command on clickhouse01
     """
     chadmin database migrate -d non_repl_db -e Replicated
     """
     Then it fails with response contains
     """
-    Database 'non_repl_db' tables are inconsistent
-    """
-    And we get response contains
-    """
-    Schema mismatches: ['foo']
+    Table foo has different schema in cluster
     """
