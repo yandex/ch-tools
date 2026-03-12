@@ -106,7 +106,11 @@ class AttacherContext:
             attach_database(self.ctx, self.database)
             logging.info(f"Attached database {self.database}")
         except Exception as e:
-            logging.debug(f"Attach failed (may be normal after restart): {e}")
+            if self._restart_requested:
+                logging.debug(f"Attach failed (expected after restart): {e}")
+            else:
+                logging.error(f"Failed to attach database {self.database}: {e}")
+                raise
 
 
 class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
@@ -129,7 +133,7 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
 
         if not is_database_exists(self.ctx, self.database):
             raise MigrationError(
-                f"Database {self.database} does not exists, skip migrating"
+                f"Database {self.database} does not exist, skip migrating"
             )
 
         self.metadata_db = parse_database_metadata(self.database)
@@ -148,12 +152,10 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
 
     def _run_pre_migration_checks(self, in_action: bool = False) -> None:
         if self.direction == MigrationDirection.TO_ATOMIC:
-            self._check_database_exists()
             self._check_source_database_state()
         else:
             self._local_tables = list_tables(self.ctx, database_name=self.database)
             if not in_action:
-                self._check_database_exists()
                 self._check_source_database_state()
                 self._check_clickhouse_version()
                 self._check_schemas_in_cluster_for_first_replica()
@@ -161,29 +163,27 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
             self._check_replica_digest()
             self._check_tables_consistency()
 
-    def _check_database_exists(self) -> None:
-        """Check if database exists before migration."""
-        if not is_database_exists(self.ctx, self.database):
-            raise MigrationError(
-                f"Database {self.database} does not exists, skip migrating"
-            )
-
     def _check_source_database_state(self) -> None:
         expected_engine = (
             DatabaseEngine.ATOMIC
             if self.direction == MigrationDirection.TO_REPLICATED
             else DatabaseEngine.REPLICATED
         )
+        target_engine = (
+            DatabaseEngine.REPLICATED
+            if self.direction == MigrationDirection.TO_REPLICATED
+            else DatabaseEngine.ATOMIC
+        )
         if self.metadata_db.database_engine != expected_engine:
             raise MigrationError(
                 f"Database {self.database} has engine {self.metadata_db.database_engine}. "
-                f"Migration to {self.metadata_db.database_engine} from {expected_engine} only is supported."
+                f"Migration to {target_engine} from {expected_engine} only is supported."
             )
 
     def _check_clickhouse_version(self) -> None:
         if not supports_system_restore_database_replica(self.ctx):
             raise MigrationError(
-                "ClickHouse version does not support SYSTEM RESTORE DATABASE REPLICA"
+                "ClickHouse version does not support SYSTEM RESTORE DATABASE REPLICA. "
                 "Migration requires ClickHouse version 25.8 or above"
             )
 
@@ -297,12 +297,12 @@ class DatabaseMigrator:  # pylint: disable=too-many-instance-attributes
         logging.info("All table schemas are consistent across cluster")
 
     def _sync_table_uuids(self, dry_run: bool) -> bool:
-        """Synchronize table UUIDs with ZooKeeper metadata, returns True if any UUID was changed."""
-        if dry_run and not check_zk_node(self.ctx, self._db_zk_path):
+        """Synchronize table UUIDs with ZooKeeper metadata, returns True if restart is needed."""
+        if not check_zk_node(self.ctx, self._db_zk_path):
             logging.info(
                 f"Database {self.database} does not exist in ZooKeeper at {self._db_zk_path}, skipping table UUID sync"
             )
-            return True
+            return False
 
         was_changed = False
 
