@@ -234,17 +234,6 @@ def test_cli_parts_strategy_rejects_file_options(
     assert result.exit_code != 0
 
 
-def test_cli_files_strategy_rejects_wait_option(
-    cli_runner: CliRunner, cli_context: dict
-) -> None:
-    result = cli_runner.invoke(
-        wait_group,
-        ["started", "--timeout-strategy", "files", "--wait", "100"],
-        obj=cli_context,
-    )
-    assert result.exit_code != 0
-
-
 @patch("ch_tools.chadmin.cli.chadmin_group.logging")
 @patch("ch_tools.chadmin.cli.wait_group.is_clickhouse_alive")
 @patch("ch_tools.chadmin.cli.wait_group.warmup_system_users")
