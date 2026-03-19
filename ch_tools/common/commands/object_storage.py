@@ -365,7 +365,10 @@ def _cleanup_old_service_tables_and_queries(ctx: Context) -> None:
             table_pattern = f"{base_name}_%"
 
             kill_process(
-                ctx, query_template=f"INSERT INTO%{table_pattern}", query_kind="Insert"
+                ctx,
+                query_template=f"INSERT INTO%{table_pattern}",
+                query_kind="Insert",
+                user=clickhouse_client(ctx).user,
             )
 
             tables = list_tables(
