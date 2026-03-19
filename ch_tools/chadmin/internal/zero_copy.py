@@ -18,6 +18,7 @@ from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
 from ch_tools.chadmin.internal.part import list_parts
 from ch_tools.chadmin.internal.table_info import TableInfo
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.chadmin.internal.zookeeper import get_table_shared_id
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.retry import retry
 from ch_tools.common.clickhouse.config import get_clickhouse_config
@@ -47,6 +48,15 @@ def generate_zero_copy_lock_tasks(
     check_part_exist: bool = True,
 ) -> Generator[WorkerTask, None, None]:
     """Generate tasks for creating zero-copy locks for given table/replicas."""
+    shared_table_id = get_table_shared_id(ctx, table_zk_path)
+
+    if not shared_table_id:
+        logging.warning(
+            f"Could not get shared_table_id for table {table['database']}.{table['name']} "
+            f"from ZooKeeper path {table_zk_path}. Skipping zero-copy lock creation."
+        )
+        return
+
     storage_config = S3DiskConfiguration.from_config(
         get_clickhouse_config(ctx).storage_configuration,
         disk,
@@ -79,15 +89,15 @@ def generate_zero_copy_lock_tasks(
                     storage_config.prefix,
                     table_zk_path,
                     zero_copy_path,
-                    table["uuid"],
+                    shared_table_id,
                     part,
                     replica,
                 )
             )
 
         # Part name segment of zero-copy lock keeps hardlinked files
-        set_value_path = os.path.join(zero_copy_path, table["uuid"], part["name"])
-        old_value_path = os.path.join(zero_copy_path_old, table["uuid"], part["name"])
+        set_value_path = os.path.join(zero_copy_path, shared_table_id, part["name"])
+        old_value_path = os.path.join(zero_copy_path_old, shared_table_id, part["name"])
 
         task_id = f"{table['database']}.{table['name']}.{part['name']}"
         yield WorkerTask(
