@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Optional
 
 from click import ClickException, Context
 
+from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 
@@ -135,7 +136,7 @@ def kill_process(
             user=user,
             exclude_user=exclude_user,
             query_template=query_template,
-            query_kind=query_kind,
+            query_kind=query_kind if match_ch_version(ctx, "23.3") else None,
         )
     )
 
