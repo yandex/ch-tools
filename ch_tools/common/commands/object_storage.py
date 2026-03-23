@@ -516,6 +516,9 @@ def _insert_missing_s3_backups_blobs(
             with open(pipe_path, "rb") as pipe:
                 with tarfile.open(fileobj=pipe, mode="r|*") as tar:
                     for member in tar:
+                        # Old backups may have revision.txt file in tar, it should not be parsed
+                        if member.name == "revision.txt":
+                            continue
                         file = tar.extractfile(member)
                         if file:
                             data = file.read().decode("utf-8")
