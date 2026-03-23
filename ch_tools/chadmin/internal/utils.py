@@ -5,6 +5,7 @@ Utility functions.
 import os
 import re
 import shutil
+import threading
 from enum import Enum
 from itertools import islice
 from typing import Any, Iterable, Iterator, Optional
@@ -17,6 +18,24 @@ from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
 DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+
+class RaisingThread(threading.Thread):
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._exc: Optional[BaseException] = None
+
+    def run(self) -> None:
+        try:
+            super().run()
+        except BaseException as e:
+            self._exc = e
+
+    def join(self, timeout: Optional[float] = None) -> None:
+        super().join(timeout)
+        if self._exc is not None:
+            raise self._exc
 
 
 class Scope(str, Enum):

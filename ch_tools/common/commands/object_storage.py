@@ -4,7 +4,6 @@ import subprocess
 import tarfile
 import uuid
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -35,6 +34,7 @@ from ch_tools.chadmin.internal.table import (
 )
 from ch_tools.chadmin.internal.utils import (
     DATETIME_FORMAT,
+    RaisingThread,
     Scope,
     assert_equal_table_schema_on_cluster,
     chunked,
@@ -548,51 +548,58 @@ def _insert_missing_s3_backups_blobs(
 
     missing_backups = get_missing_chs3_backups(disk_conf.name)
 
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        for backup in missing_backups:
-            logging.info(
-                f"Downloading cloud storage metadata from missing backup '{backup}'"
+    for backup in missing_backups:
+        logging.info(
+            f"Downloading cloud storage metadata from missing backup '{backup}'"
+        )
+
+        config = ctx.obj["config"]["object_storage"]["space_usage"][
+            "download_missing_cloud_storage_backups"
+        ]
+        pipe_path = config["named_pipe_path"]
+        timeout = config["timeout"]
+        if os.path.exists(pipe_path):
+            raise RuntimeError(f"Pipe at {pipe_path} already exists")
+
+        with _missing_backups_named_pipe(pipe_path):
+            parse_thread = RaisingThread(
+                target=_insert_blobs_from_tar, args=(pipe_path,), daemon=True
             )
+            parse_thread.start()
 
-            config = ctx.obj["config"]["object_storage"]["space_usage"][
-                "download_missing_cloud_storage_backups"
+            cmd = [
+                "ch-backup",
+                "get-cloud-storage-metadata",
+                "--disk",
+                disk_conf.name,
+                "--local-path",
+                pipe_path,
+                backup,
             ]
-            pipe_path = config["named_pipe_path"]
-            timeout = config["timeout"]
-            if os.path.exists(pipe_path):
-                raise RuntimeError(f"Pipe at {pipe_path} already exists")
-
-            with _missing_backups_named_pipe(pipe_path):
-                future = executor.submit(_insert_blobs_from_tar, pipe_path)
-
-                cmd = [
-                    "ch-backup",
-                    "get-cloud-storage-metadata",
-                    "--disk",
-                    disk_conf.name,
-                    "--local-path",
-                    pipe_path,
-                    backup,
-                ]
-                proc = subprocess.Popen(
-                    cmd,
-                    shell=False,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+            proc = subprocess.Popen(
+                cmd,
+                shell=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            _, stderr = proc.communicate(timeout=timeout)
+            if proc.returncode:
+                assert proc.stderr
+                raise RuntimeError(
+                    f"Downloading cloud storage metadata command has failed: retcode {proc.returncode}, stderr: {stderr.decode('utf-8')}"
                 )
-                _, stderr = proc.communicate(timeout=timeout)
-                if proc.returncode:
-                    assert proc.stderr
-                    raise RuntimeError(
-                        f"Downloading cloud storage metadata command has failed: retcode {proc.returncode}, stderr: {stderr.decode('utf-8')}"
-                    )
 
-                try:
-                    future.result(timeout)
-                except TimeoutError:
-                    raise RuntimeError(
-                        "Downloading cloud storage metadata command has failed: Timeout exceeded, metadata reading thread is probably locked"
-                    )
+            try:
+                parse_thread.join(timeout)
+            except Exception as e:
+                raise RuntimeError(
+                    f"Error from parsing cloud storage metadata thread: {e}"
+                ) from e
+
+            if parse_thread.is_alive():
+                raise RuntimeError(
+                    "Downloading cloud storage metadata command has failed: Timeout exceeded, metadata reading thread is probably locked"
+                )
 
 
 @contextmanager
