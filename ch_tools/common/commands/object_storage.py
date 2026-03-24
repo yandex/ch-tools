@@ -517,7 +517,10 @@ def _insert_missing_s3_backups_blobs(
                 with tarfile.open(fileobj=pipe, mode="r|*") as tar:
                     for member in tar:
                         # Old backups may have revision.txt file in tar, it should not be parsed
-                        if member.name == "revision.txt":
+                        # frozen_metadata.txt should not be uploaded to backup, ignore it just in case
+                        if member.name.endswith("revision.txt") or member.name.endswith(
+                            "frozen_metadata.txt"
+                        ):
                             continue
                         file = tar.extractfile(member)
                         if file:
