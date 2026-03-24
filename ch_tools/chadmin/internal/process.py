@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Optional
 
 from click import ClickException, Context
 
+from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 
@@ -102,6 +103,8 @@ def kill_process(
     query_id: Optional[str] = None,
     user: Optional[str] = None,
     exclude_user: Optional[str] = None,
+    query_template: Optional[str] = None,
+    query_kind: Optional[str] = None,
 ) -> None:
     """
     Perform "KILL QUERY".
@@ -118,10 +121,22 @@ def kill_process(
         {% if query_id %}
           AND query_id = '{{ query_id }}'
         {% endif %}
+        {% if query_template %}
+          AND query ILIKE '{{ query_template }}'
+        {% endif %}
+        {% if query_kind %}
+          AND query_kind = '{{ query_kind }}'
+        {% endif %}
         """
     logging.info(
         execute_query(
-            ctx, query_str, query_id=query_id, user=user, exclude_user=exclude_user
+            ctx,
+            query_str,
+            query_id=query_id,
+            user=user,
+            exclude_user=exclude_user,
+            query_template=query_template,
+            query_kind=query_kind if match_ch_version(ctx, "23.3") else None,
         )
     )
 

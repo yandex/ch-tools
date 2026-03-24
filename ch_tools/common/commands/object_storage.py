@@ -26,6 +26,7 @@ from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
     S3ObjectLocalInfo,
     S3ObjectLocalMetaData,
 )
+from ch_tools.chadmin.internal.process import kill_process
 from ch_tools.chadmin.internal.system import match_ch_backup_version, match_ch_version
 from ch_tools.chadmin.internal.table import (
     delete_table_by_full_name,
@@ -125,7 +126,7 @@ def clean(
     config = ctx.obj["config"]["object_storage"]["space_usage"]
     ch_client = clickhouse_client(ctx)
 
-    _cleanup_old_service_tables(ctx)
+    _cleanup_old_service_tables_and_queries(ctx)
 
     result_stat = ResultStat(stat_partitioning)
 
@@ -192,7 +193,7 @@ def collect_object_storage_info(
     Collects object storage usage information.
     Uses temporary unique tables for all blob tables with automatic deletion.
     """
-    _cleanup_old_service_tables(ctx)
+    _cleanup_old_service_tables_and_queries(ctx)
 
     with _get_blobs_tables(
         ctx,
@@ -337,11 +338,12 @@ def _cleanup_orphaned_objects(
     return result_stat
 
 
-def _cleanup_old_service_tables(ctx: Context) -> None:
+def _cleanup_old_service_tables_and_queries(ctx: Context) -> None:
     """
     Remove old service tables (local_blobs, orphaned_blobs, remote_blobs) that have unique names
     (contain UUID and timestamp) and are older than configured retention period.
     This helps prevent accumulation of temporary tables from previous runs.
+    Some insert queries may be stuck and they should be killed here.
     """
     config = ctx.obj["config"]["object_storage"]["space_usage"]
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
@@ -361,6 +363,13 @@ def _cleanup_old_service_tables(ctx: Context) -> None:
         try:
             base_name = f"{table_prefix}{disk_conf.name}"
             table_pattern = f"{base_name}_%"
+
+            kill_process(
+                ctx,
+                query_template=f"INSERT INTO%{table_pattern}",
+                query_kind="Insert",
+                user=clickhouse_client(ctx).user,
+            )
 
             tables = list_tables(
                 ctx, database_name=database, table_pattern=table_pattern
