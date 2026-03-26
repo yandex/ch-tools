@@ -40,7 +40,7 @@ def create() -> dict:
             },
         },
         "http_mock": {
-            "instances": ["http_mock01"],
+            "instances": ["http-mock01"],
             "expose": {
                 "tcp": 8080,
             },

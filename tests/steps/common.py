@@ -119,7 +119,7 @@ def working_http(context: ContextT) -> None:
     Ensure that http server is ready to accept incoming requests.
     """
     # pylint: disable=missing-timeout
-    container = docker.get_container(context, "http_mock01")
+    container = docker.get_container(context, "http-mock01")
     host, port = docker.get_exposed_port(container, 8080)
     response = requests.get(f"http://{host}:{port}/")
     assert response.text == "OK", f'expected "OK", got "{response.text}"'
