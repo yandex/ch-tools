@@ -11,7 +11,7 @@ Feature: ch_s3_credentials tool
     Scenario Outline: chadmin s3 check work correctly
     When we execute command on clickhouse01
     """
-    ch-monitoring --setting cloud.metadata_service_endpoint http://http_mock01:8080 s3-credentials-config --missing
+    ch-monitoring --setting cloud.metadata_service_endpoint http://http-mock01:8080 s3-credentials-config --missing
     """
     Then we get response
     """
@@ -19,11 +19,11 @@ Feature: ch_s3_credentials tool
     """
     When we execute command on clickhouse01
     """
-    chadmin --setting cloud.metadata_service_endpoint http://http_mock01:8080 s3-credentials-config update --endpoint=storage.com
+    chadmin --setting cloud.metadata_service_endpoint http://http-mock01:8080 s3-credentials-config update --endpoint=storage.com
     """
     And we execute command on clickhouse01
     """
-    ch-monitoring --setting cloud.metadata_service_endpoint http://http_mock01:8080 s3-credentials-config --present
+    ch-monitoring --setting cloud.metadata_service_endpoint http://http-mock01:8080 s3-credentials-config --present
     """
     Then we get response
     """
@@ -59,7 +59,7 @@ Feature: ch_s3_credentials tool
     Given installed clickhouse-tools config with version on clickhouse01
     When we execute command on clickhouse01
     """
-    ch-monitoring --setting cloud.metadata_service_endpoint http://http_mock01:8080 s3-credentials-config --missing
+    ch-monitoring --setting cloud.metadata_service_endpoint http://http-mock01:8080 s3-credentials-config --missing
     """
     When we execute command on clickhouse01
     """
@@ -67,11 +67,11 @@ Feature: ch_s3_credentials tool
     """
     When we execute command on clickhouse01
     """
-    chadmin --setting cloud.metadata_service_endpoint http://http_mock01:8080 s3-credentials-config update --endpoint=storage.com
+    chadmin --setting cloud.metadata_service_endpoint http://http-mock01:8080 s3-credentials-config update --endpoint=storage.com
     """
     And we execute command on clickhouse01
     """
-    ch-monitoring --setting cloud.metadata_service_endpoint http://http_mock01:8080 s3-credentials-config --present
+    ch-monitoring --setting cloud.metadata_service_endpoint http://http-mock01:8080 s3-credentials-config --present
     """
     Then we get response
     """
