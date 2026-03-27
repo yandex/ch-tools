@@ -2,7 +2,6 @@ import os
 import re
 import subprocess
 import tarfile
-import threading
 import uuid
 from collections import defaultdict
 from contextlib import contextmanager
@@ -36,6 +35,7 @@ from ch_tools.chadmin.internal.table import (
 )
 from ch_tools.chadmin.internal.utils import (
     DATETIME_FORMAT,
+    RaisingThread,
     Scope,
     assert_equal_table_schema_on_cluster,
     chunked,
@@ -525,6 +525,12 @@ def _insert_missing_s3_backups_blobs(
             with open(pipe_path, "rb") as pipe:
                 with tarfile.open(fileobj=pipe, mode="r|*") as tar:
                     for member in tar:
+                        # Old backups may have revision.txt file in tar, it should not be parsed
+                        # frozen_metadata.txt should not be uploaded to backup, ignore it just in case
+                        if member.name.endswith("revision.txt") or member.name.endswith(
+                            "frozen_metadata.txt"
+                        ):
+                            continue
                         file = tar.extractfile(member)
                         if file:
                             data = file.read().decode("utf-8")
@@ -568,7 +574,7 @@ def _insert_missing_s3_backups_blobs(
             raise RuntimeError(f"Pipe at {pipe_path} already exists")
 
         with _missing_backups_named_pipe(pipe_path):
-            parse_thread = threading.Thread(
+            parse_thread = RaisingThread(
                 target=_insert_blobs_from_tar, args=(pipe_path,), daemon=True
             )
             parse_thread.start()
@@ -588,14 +594,20 @@ def _insert_missing_s3_backups_blobs(
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
-            _, stderr = proc.communicate(timeout)
+            _, stderr = proc.communicate(timeout=timeout)
             if proc.returncode:
                 assert proc.stderr
                 raise RuntimeError(
                     f"Downloading cloud storage metadata command has failed: retcode {proc.returncode}, stderr: {stderr.decode('utf-8')}"
                 )
 
-            parse_thread.join(timeout)
+            try:
+                parse_thread.join(timeout)
+            except Exception as e:
+                raise RuntimeError(
+                    f"Error from parsing cloud storage metadata thread: {e}"
+                ) from e
+
             if parse_thread.is_alive():
                 raise RuntimeError(
                     "Downloading cloud storage metadata command has failed: Timeout exceeded, metadata reading thread is probably locked"
