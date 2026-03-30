@@ -66,6 +66,7 @@ Feature: chadmin object-storage commands
     """
 
   @require_version_24.3
+  @require_version_less_than_26.3
   Scenario: Collect info with frozen parts for all replicas
     When we execute queries on clickhouse01
     """
@@ -100,6 +101,57 @@ Feature: chadmin object-storage commands
     '\[''clickhouse01''\]':
       active: '?([1-9][0-9]*)'?
       unique_frozen: '?([1-9][0-9]*)'?
+    '\[''clickhouse02''\]':
+      active: '?([1-9][0-9]*)'?
+      unique_detached: '?([1-9][0-9]*)'?
+    '\[''clickhouse01'',''clickhouse02''\]':
+      active: '?([1-9][0-9]*)'?
+    '\[''unknown_replicas''\]':
+      orphaned: '?([1-9][0-9]*)'?
+    total:
+      active: '?([1-9][0-9]*)'?
+      unique_frozen: '?([1-9][0-9]*)'?
+      unique_detached: '?([1-9][0-9]*)'?
+      orphaned: '?([1-9][0-9]*)'?
+    """
+
+  # Since 26.3 metadata_version.txt is kept in detached parts, clickhouse01 should show unique_detached: 1
+  @require_version_26.3
+  Scenario: Collect info with frozen parts for all replicas
+    When we execute queries on clickhouse01
+    """
+    CREATE TABLE IF NOT EXISTS test.table_s3_02 ON CLUSTER '{cluster}' (n Int32)
+    ENGINE = ReplicatedMergeTree('/tables/table_s3_02', '{replica}') ORDER BY n PARTITION BY (n%10)
+    SETTINGS storage_policy = 'object_storage', allow_remote_fs_zero_copy_replication = 1;
+
+    INSERT INTO test.table_s3_02 (n) SELECT number FROM system.numbers LIMIT 10;
+
+    ALTER TABLE test.table_s3_01 FREEZE;
+    """
+    And we execute query on clickhouse01
+    """
+    ALTER TABLE test.table_s3_01 DETACH PARTITION '0';
+    """
+    And we put object in S3
+    """
+      bucket: cloud-storage-test
+      path: /data/cluster_id/shard_1/orpaned_object.tsv
+      data: '1'
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin object-storage collect-info --to-time 0h --traverse-remote
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage space-usage -v
+    """
+    Then we get response matches
+    """
+    '\[''clickhouse01''\]':
+      active: '?([1-9][0-9]*)'?
+      unique_frozen: '?([1-9][0-9]*)'?
+      unique_detached: '?(1)'?
     '\[''clickhouse02''\]':
       active: '?([1-9][0-9]*)'?
       unique_detached: '?([1-9][0-9]*)'?
