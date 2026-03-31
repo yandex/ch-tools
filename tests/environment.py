@@ -79,33 +79,36 @@ def after_all(context: ContextT) -> None:
 def _check_tags(context: ContextT, scenario: model.Scenario) -> bool:
     ch_version = context.conf["ch_version"]
 
-    require_version = _parse_version_tag(scenario.tags, "require_version")
-    if require_version:
-        if not version_ge(ch_version, require_version):
-            logging.info("Skipping scenario due to require_version mismatch")
+    for tag in scenario.tags:
+        if tag == "skip":
+            logging.info("Skipping scenario due to skip tag")
             scenario.mark_skipped()
             return False
 
-    require_lt_version = _parse_version_tag(scenario.tags, "require_version_less_than")
-    if require_lt_version:
-        if not version_lt(ch_version, require_lt_version):
-            logging.info("Skipping scenario due to require_version_less_than mismatch")
-            scenario.mark_skipped()
-            return False
+        require_version = _parse_version_tag(tag, "require_version")
+        if require_version:
+            if not version_ge(ch_version, require_version):
+                logging.info("Skipping scenario due to require_version mismatch")
+                scenario.mark_skipped()
+                return False
 
-    if "skip" in scenario.tags:
-        logging.info("Skipping scenario due to skip tag")
-        scenario.mark_skipped()
-        return False
+        require_lt_version = _parse_version_tag(tag, "require_version_less_than")
+        if require_lt_version:
+            if not version_lt(ch_version, require_lt_version):
+                logging.info(
+                    "Skipping scenario due to require_version_less_than mismatch"
+                )
+                scenario.mark_skipped()
+                return False
 
     return True
 
 
-def _parse_version_tag(tags: list, prefix: str) -> Optional[str]:
+def _parse_version_tag(tag: str, prefix: str) -> Optional[str]:
     tag_pattern = prefix + r"_(?P<version>[\d\.]+)"
-    for tag in tags:
-        match = re.fullmatch(tag_pattern, tag)
-        if match:
-            return match.group("version")
+
+    match = re.fullmatch(tag_pattern, tag)
+    if match:
+        return match.group("version")
 
     return None

@@ -66,7 +66,7 @@ Feature: chadmin object-storage commands
     """
 
   @require_version_24.3
-  Scenario: Collect info with frozen parts for all replicas
+  Scenario Outline: Collect info with frozen parts for all replicas
     When we execute queries on clickhouse01
     """
     CREATE TABLE IF NOT EXISTS test.table_s3_02 ON CLUSTER '{cluster}' (n Int32)
@@ -99,7 +99,7 @@ Feature: chadmin object-storage commands
     """
     '\[''clickhouse01''\]':
       active: '?([1-9][0-9]*)'?
-      unique_frozen: '?([1-9][0-9]*)'?
+      unique_frozen: '?([1-9][0-9]*)'?<clickhouse01_detached>
     '\[''clickhouse02''\]':
       active: '?([1-9][0-9]*)'?
       unique_detached: '?([1-9][0-9]*)'?
@@ -113,6 +113,17 @@ Feature: chadmin object-storage commands
       unique_detached: '?([1-9][0-9]*)'?
       orphaned: '?([1-9][0-9]*)'?
     """
+
+  @require_version_less_than_26.3
+  Examples:
+  | clickhouse01_detached              |
+  |                                    |
+
+  # Since 26.3 metadata_version.txt is kept in detached parts, clickhouse01 should show unique_detached: 1
+  @require_version_26.3
+  Examples:
+  | clickhouse01_detached              |
+  | \n  unique_detached: '?(1)'?       |
 
   @require_version_23.3
   Scenario: Detect different space usage table schema
