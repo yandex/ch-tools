@@ -214,6 +214,7 @@ def attach_partitions_command(
         table,
         partition_id=partition_id,
         detached=True,
+        reason="",
         format_="JSON",
         **kwargs,
     )["data"]
@@ -1011,6 +1012,7 @@ def get_partitions(
     min_replication_task_postpone_count: Optional[int] = None,
     max_replication_task_postpone_count: Optional[int] = None,
     replication_task_exception: Optional[str] = None,
+    reason: Optional[str] = None,
     detached: Optional[bool] = None,
     order_by: Optional[str] = None,
     limit: Optional[int] = None,
@@ -1047,6 +1049,9 @@ def get_partitions(
             {% endif -%}
             {% if table -%}
               AND table {{ format_str_match(table) }}
+            {% endif -%}
+            {% if reason is not none -%}
+              AND reason {{ format_str_match(reason) }}
             {% endif -%}
             GROUP BY database, table, partition_id
             HAVING partition_id IS NOT NULL
@@ -1181,6 +1186,7 @@ def get_partitions(
         min_replication_task_postpone_count=min_replication_task_postpone_count,
         max_replication_task_postpone_count=max_replication_task_postpone_count,
         replication_task_exception=replication_task_exception,
+        reason=reason,
         order_by=order_by,
         limit=limit,
         format_=format_,
