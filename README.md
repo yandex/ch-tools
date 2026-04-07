@@ -19,7 +19,7 @@ All of these tools must be run on the same host as ClickHouse server is running.
 ## Installation
 
 In order to get an up-to-date version of ch-tools, run `make build`. It will produce
-Python whl package that can be installed using `pip install` or `uv tool install`.
+a Python wheel (.whl) package that can be installed using `pip install` or `uv tool install`.
 
 <details>
 <summary>Example</summary>
