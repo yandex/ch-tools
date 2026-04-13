@@ -11,6 +11,7 @@ IGNORED_OBJECT_NAME_PREFIXES = ["operations", ".SCHEMA_VERSION"]
 
 def s3_object_storage_iterator(
     disk: S3DiskConfiguration,
+    retries_config: dict,
     *,
     object_name_prefix: str = "",
     skip_ignoring: bool = False,
@@ -20,7 +21,7 @@ def s3_object_storage_iterator(
         endpoint_url=disk.endpoint_url,
         aws_access_key_id=disk.access_key_id,
         aws_secret_access_key=disk.secret_access_key,
-        config=Config(s3={"addressing_style": "auto"}),
+        config=Config(s3={"addressing_style": "auto"}, retries=retries_config),
     )
     bucket = s3.Bucket(disk.bucket_name)
 

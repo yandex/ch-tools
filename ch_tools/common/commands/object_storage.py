@@ -987,7 +987,9 @@ def _collect_remote_blobs(
     counter = 0
     now = datetime.now(timezone.utc)
     for obj in s3_object_storage_iterator(
-        ctx.obj["disk_configuration"], object_name_prefix=prefix
+        ctx.obj["disk_configuration"],
+        ctx.obj["config"]["object_storage"]["retries"],
+        object_name_prefix=prefix,
     ):
         if obj.last_modified > now - to_time:
             continue
