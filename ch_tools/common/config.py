@@ -68,6 +68,8 @@ DEFAULT_CONFIG = {
                 "named_pipe_path": "/tmp/cloud-storage-metadata-pipe",
             },
         },
+        # see https://docs.aws.amazon.com/botocore/latest/reference/config.html for details
+        "retries": None,
     },
     "zookeeper": {
         "randomize_hosts": True,
