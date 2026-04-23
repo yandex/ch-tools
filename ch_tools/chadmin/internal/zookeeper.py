@@ -497,12 +497,18 @@ def _get_zk_client(ctx: Context) -> KazooClient:
     zk_config_section = ctx.obj["config"].get("zookeeper", {})
     zk_randomize_hosts = zk_config_section.get("randomize_hosts", True)
 
-    connection_retry: KazooRetry | None = None
-    if "connection_retry" in zk_config_section:
-        connection_retry = KazooRetry(**zk_config_section["connection_retry"])
-    command_retry: KazooRetry | None = None
-    if "command_retry" in zk_config_section:
-        command_retry = KazooRetry(**zk_config_section["command_retry"])
+    # Only create KazooRetry when config is explicitly provided
+    # This preserves KazooClient's default behavior when not specified
+    connection_retry = (
+        KazooRetry(**zk_config_section["connection_retry"])
+        if "connection_retry" in zk_config_section
+        else None
+    )
+    command_retry = (
+        KazooRetry(**zk_config_section["command_retry"])
+        if "command_retry" in zk_config_section
+        else None
+    )
 
     if no_ch_config:
         if not host:
