@@ -515,6 +515,14 @@ Feature: ch-monitoring tool
     """
     2;Total size: 10
     """
+    When we execute command on clickhouse01
+    """
+    ch-monitoring orphaned-objects --state-local --min-uptime 1s --human-readable
+    """
+    Then we get response contains
+    """
+    0;Total size: 10 bytes
+    """
 
   Scenario: Check clickhouse orphaned objects --state-local and --state-zk-path are mutually exclusive
     When we execute command on clickhouse01

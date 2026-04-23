@@ -7,6 +7,7 @@ from ch_tools.chadmin.internal.object_storage.orphaned_objects_state import (
     OrphanedObjectsState,
 )
 from ch_tools.chadmin.internal.zookeeper import get_zk_node
+from ch_tools.common.cli.formatting import format_bytes
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.config.clickhouse import ClickhouseConfig
 from ch_tools.common.result import CRIT, OK, WARNING, Result
@@ -48,6 +49,13 @@ from ch_tools.monrun_checks.utils import get_uptime
     default=100 * 1024**2,
     help="Warning threshold.",
 )
+@click.option(
+    "-h",
+    "--human-readable",
+    "human_readable",
+    is_flag=True,
+    help="Print size in human readable format.",
+)
 @click.pass_context
 def orphaned_objects_command(
     ctx: click.Context,
@@ -56,6 +64,7 @@ def orphaned_objects_command(
     min_uptime: timedelta,
     crit: int,
     warn: int,
+    human_readable: bool,
 ) -> Result:
     if not ClickhouseConfig.load().storage_configuration.has_disk("object_storage"):
         return Result(OK, "Disabled")
@@ -76,7 +85,8 @@ def orphaned_objects_command(
     if error_msg != "":
         return Result(CRIT, error_msg)
 
-    result_msg = f"Total size: {total_size}"
+    formatted_size = format_bytes(total_size) if human_readable else total_size
+    result_msg = f"Total size: {formatted_size}"
     if total_size >= crit:
         return Result(CRIT, result_msg)
     if total_size >= warn:
