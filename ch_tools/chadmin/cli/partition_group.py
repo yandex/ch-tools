@@ -77,11 +77,6 @@ def partition_group() -> None:
     help="Output only those partitions that have merging data parts.",
 )
 @option(
-    "--mutating",
-    is_flag=True,
-    help="Output only those partitions that have mutating data parts.",
-)
-@option(
     "--has-replication-tasks",
     "has_replication_tasks",
     is_flag=True,
@@ -100,8 +95,13 @@ def partition_group() -> None:
 @option(
     "--replication-task-error",
     "--replication-task-exception",
-    "replication_task_exception",
+    "replication_task_exception_pattern",
     help="Filter out replication tasks by the specified exception.",
+)
+@option(
+    "--replication-task-type",
+    "replication_task_type_pattern",
+    help="Filter out replication tasks by the specified type.",
 )
 @option(
     "--detached", is_flag=True, help="Show detached partitions instead of attached."
@@ -128,7 +128,8 @@ def partition_group() -> None:
         AnySet(
             "min_replication_task_postpone_count",
             "max_replication_task_postpone_count",
-            "replication_task_exception",
+            "replication_task_exception_pattern",
+            "replication_task_type_pattern",
         ),
         then=RequireExactly(1),
     ),
@@ -274,11 +275,6 @@ def attach_partitions_command(
         help="Filter in only those partitions that have merging data parts.",
     ),
     option(
-        "--mutating",
-        is_flag=True,
-        help="Filter in only those partitions that have mutating data parts.",
-    ),
-    option(
         "--has-replication-tasks",
         "has_replication_tasks",
         is_flag=True,
@@ -297,8 +293,13 @@ def attach_partitions_command(
     option(
         "--replication-task-error",
         "--replication-task-exception",
-        "replication_task_exception",
+        "replication_task_exception_pattern",
         help="Filter out replication tasks by the specified exception.",
+    ),
+    option(
+        "--replication-task-type",
+        "replication_task_type_pattern",
+        help="Filter out replication tasks by the specified type.",
     ),
     option(
         "--use-partition-list-from-json",
@@ -311,7 +312,8 @@ def attach_partitions_command(
             AnySet(
                 "min_replication_task_postpone_count",
                 "max_replication_task_postpone_count",
-                "replication_task_exception",
+                "replication_task_exception_pattern",
+                "replication_task_type_pattern",
             ),
             then=RequireExactly(1),
         ),
@@ -340,11 +342,11 @@ def detach_partitions_command(
     partition_id: Optional[str],
     disk_name: Optional[str],
     merging: bool,
-    mutating: bool,
     has_replication_tasks: bool,
     min_replication_task_postpone_count: Optional[int],
     max_replication_task_postpone_count: Optional[int],
-    replication_task_exception: Optional[str],
+    replication_task_exception_pattern: Optional[str],
+    replication_task_type_pattern: Optional[str],
     keep_going: bool,
     dry_run: bool,
     use_partition_list_from_json: Optional[str],
@@ -357,11 +359,11 @@ def detach_partitions_command(
         partition_id=partition_id,
         disk_name=disk_name,
         merging=merging,
-        mutating=mutating,
         has_replication_tasks=has_replication_tasks,
         min_replication_task_postpone_count=min_replication_task_postpone_count,
         max_replication_task_postpone_count=max_replication_task_postpone_count,
-        replication_task_exception=replication_task_exception,
+        replication_task_exception_pattern=replication_task_exception_pattern,
+        replication_task_type_pattern=replication_task_type_pattern,
         format_="JSON",
         use_partition_list_from_json=use_partition_list_from_json,
     )["data"]
@@ -423,11 +425,6 @@ def detach_partitions_command(
         help="Filter in only those partitions that have merging data parts.",
     ),
     option(
-        "--mutating",
-        is_flag=True,
-        help="Filter in only those partitions that have mutating data parts.",
-    ),
-    option(
         "--has-replication-tasks",
         "has_replication_tasks",
         is_flag=True,
@@ -446,8 +443,13 @@ def detach_partitions_command(
     option(
         "--replication-task-error",
         "--replication-task-exception",
-        "replication_task_exception",
+        "replication_task_exception_pattern",
         help="Filter out replication tasks by the specified exception.",
+    ),
+    option(
+        "--replication-task-type",
+        "replication_task_type_pattern",
+        help="Filter out replication tasks by the specified type.",
     ),
     option(
         "-l",
@@ -466,7 +468,8 @@ def detach_partitions_command(
             AnySet(
                 "min_replication_task_postpone_count",
                 "max_replication_task_postpone_count",
-                "replication_task_exception",
+                "replication_task_exception_pattern",
+                "replication_task_type_pattern",
             ),
             then=RequireExactly(1),
         ),
@@ -503,11 +506,11 @@ def reattach_partitions_command(
     max_partition_id: Optional[str],
     disk_name: Optional[str],
     merging: bool,
-    mutating: bool,
     has_replication_tasks: bool,
     min_replication_task_postpone_count: Optional[int],
     max_replication_task_postpone_count: Optional[int],
-    replication_task_exception: Optional[str],
+    replication_task_exception_pattern: Optional[str],
+    replication_task_type_pattern: Optional[str],
     limit: Optional[int],
     keep_going: bool,
     limit_errors: int,
@@ -534,11 +537,11 @@ def reattach_partitions_command(
         max_partition_id=max_partition_id,
         disk_name=disk_name,
         merging=merging,
-        mutating=mutating,
         has_replication_tasks=has_replication_tasks,
         min_replication_task_postpone_count=min_replication_task_postpone_count,
         max_replication_task_postpone_count=max_replication_task_postpone_count,
-        replication_task_exception=replication_task_exception,
+        replication_task_exception_pattern=replication_task_exception_pattern,
+        replication_task_type_pattern=replication_task_type_pattern,
         limit=limit,
         format_="JSON",
         use_partition_list_from_json=use_partition_list_from_json,
@@ -1007,11 +1010,11 @@ def get_partitions(
     active_parts: Optional[bool] = None,
     disk_name: Optional[str] = None,
     merging: Optional[bool] = None,
-    mutating: Optional[bool] = None,
     has_replication_tasks: Optional[bool] = None,
     min_replication_task_postpone_count: Optional[int] = None,
     max_replication_task_postpone_count: Optional[int] = None,
-    replication_task_exception: Optional[str] = None,
+    replication_task_exception_pattern: Optional[str] = None,
+    replication_task_type_pattern: Optional[str] = None,
     reason: Optional[str] = None,
     detached: Optional[bool] = None,
     order_by: Optional[str] = None,
@@ -1135,13 +1138,6 @@ def get_partitions(
                    FROM system.merges
                )
             {% endif -%}
-            {% if mutating -%}
-               AND (database, table, partition_id) IN (
-                   SELECT (database, table, partition_id)
-                   FROM system.merges
-                   WHERE is_mutation
-               )
-            {% endif -%}
             {% if has_replication_tasks -%}
                AND (database, table, partition_id) IN (
                    SELECT (database, table, splitByChar('_', new_part_name, 1)[1])
@@ -1153,8 +1149,11 @@ def get_partitions(
             {%     if max_replication_task_postpone_count -%}
                      AND num_postponed <= {{ max_replication_task_postpone_count }}
             {%     endif -%}
-            {%     if replication_task_exception -%}
-                     AND last_exception {{ format_str_match(replication_task_exception) }}
+            {%     if replication_task_exception_pattern -%}
+                     AND last_exception {{ format_str_match(replication_task_exception_pattern) }}
+            {%     endif -%}
+            {%     if replication_task_type_pattern -%}
+                      AND type {{ format_str_match(replication_task_type_pattern) }}
             {%     endif -%}
                )
             {% endif -%}
@@ -1181,11 +1180,11 @@ def get_partitions(
         active_parts=active_parts,
         disk_name=disk_name,
         merging=merging,
-        mutating=mutating,
         has_replication_tasks=has_replication_tasks,
         min_replication_task_postpone_count=min_replication_task_postpone_count,
         max_replication_task_postpone_count=max_replication_task_postpone_count,
-        replication_task_exception=replication_task_exception,
+        replication_task_exception_pattern=replication_task_exception_pattern,
+        replication_task_type_pattern=replication_task_type_pattern,
         reason=reason,
         order_by=order_by,
         limit=limit,
