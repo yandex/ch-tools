@@ -27,6 +27,7 @@ from click import Context
 from kazoo.client import KazooClient
 from kazoo.exceptions import NodeExistsError, NoNodeError, NotEmptyError
 from kazoo.protocol.states import ZnodeStat
+from kazoo.retry import KazooRetry
 
 from ch_tools.chadmin.internal.utils import chunked, replace_macros
 from ch_tools.common import logging
@@ -493,8 +494,20 @@ def _get_zk_client(ctx: Context) -> KazooClient:
     no_chroot = args.get("no_chroot", False)
     no_ch_config = args.get("no_ch_config", False)
     zk_root_path = args.get("zk_root_path", None)
-    zk_randomize_hosts = (
-        ctx.obj["config"].get("zookeeper", {}).get("randomize_hosts", True)
+    zk_config_section = ctx.obj["config"].get("zookeeper", {})
+    zk_randomize_hosts = zk_config_section.get("randomize_hosts", True)
+
+    # Only create KazooRetry when config is explicitly provided
+    # This preserves KazooClient's default behavior when not specified
+    connection_retry = (
+        KazooRetry(**zk_config_section["connection_retry"])
+        if "connection_retry" in zk_config_section
+        else None
+    )
+    command_retry = (
+        KazooRetry(**zk_config_section["command_retry"])
+        if "command_retry" in zk_config_section
+        else None
     )
 
     if no_ch_config:
@@ -525,6 +538,8 @@ def _get_zk_client(ctx: Context) -> KazooClient:
         connect_str,
         auth_data=auth_data,
         timeout=timeout,
+        connection_retry=connection_retry,
+        command_retry=command_retry,
         logger=logging.getNativeLogger("kazoo"),
         use_ssl=use_ssl,
         verify_certs=verify_ssl_certs,

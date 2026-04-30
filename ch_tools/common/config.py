@@ -75,6 +75,18 @@ DEFAULT_CONFIG = {
         "randomize_hosts": True,
         "username": None,
         "password": None,
+        "connection_retry": {
+            "max_tries": 3,
+            "delay": 0.1,
+            "backoff": 2,
+            "max_delay": 60.0,
+        },
+        "command_retry": {
+            "max_tries": 3,
+            "delay": 0.1,
+            "backoff": 2,
+            "max_delay": 60.0,
+        },
     },
     # Configuration of chadmin tool commands and options.
     "chadmin": {
