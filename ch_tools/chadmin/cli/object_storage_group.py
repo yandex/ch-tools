@@ -1,3 +1,5 @@
+import random
+import time
 from datetime import timedelta
 from typing import Any, Optional
 
@@ -183,6 +185,13 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     default=StatisticsPeriod.ALL,
     help=("Partition output stats by months or days, or return only total stats."),
 )
+@option(
+    "--max-random-sleep",
+    "max_random_sleep",
+    type=TimeSpanParamType(),
+    default=None,
+    help="Perform random sleep up to specified value before executing command.",
+)
 @pass_context
 def clean_command(
     ctx: Context,
@@ -200,10 +209,15 @@ def clean_command(
     max_size_to_delete_fraction: float,
     ignore_missing_cloud_storage_backups: bool,
     stat_by_period: StatisticsPeriod,
+    max_random_sleep: timedelta,
 ) -> None:
     """
     Clean orphaned S3 objects.
     """
+    if max_random_sleep:
+        random_sleep = random.randint(0, int(max_random_sleep.total_seconds()))
+        time.sleep(random_sleep)
+
     result_stat = ResultStat(stat_by_period)
     error_msg = ""
 

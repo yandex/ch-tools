@@ -155,6 +155,17 @@ Feature: chadmin object-storage commands
       TotalSize: 0
     """
 
+  Scenario: Dry-run clean with max random sleep
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --dry-run --max-random-sleep 3s
+    """
+    Then we get response contains
+    """
+      WouldDelete: 0
+      TotalSize: 0
+    """
+
   Scenario: Clean orphaned objects
     When we put object in S3
     """
