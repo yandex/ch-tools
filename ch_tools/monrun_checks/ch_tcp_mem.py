@@ -5,11 +5,11 @@ import click
 
 from ch_tools.common.result import CRIT, OK, WARNING, Result
 
-
 SOCKSTAT_PATH = Path("/proc/net/sockstat")
 
-GIB = 1024 ** 3
+GIB = 1024**3
 DEFAULT_CRIT_BYTES = 10 * GIB
+
 
 @click.command("tcp-mem")
 @click.option(
@@ -52,6 +52,7 @@ def tcp_mem_command(
 
     return Result(OK)
 
+
 def _get_tcp_mem_bytes() -> int:
     """
     Return current TCP memory usage from /proc/net/sockstat in bytes.
@@ -61,6 +62,7 @@ def _get_tcp_mem_bytes() -> int:
 
     return mem_pages * page_size
 
+
 def _get_tcp_mem_pages() -> int:
     """
     Return current TCP memory usage from /proc/net/sockstat in memory pages.
@@ -68,7 +70,7 @@ def _get_tcp_mem_pages() -> int:
         TCP: inuse 37 orphan 0 tw 12 alloc 42 mem 8
     The "mem" value is reported in pages.
     """
-    for line in SOCKSTAT_PATH.read_text().splitlines():
+    for line in SOCKSTAT_PATH.read_text(encoding="utf-8").splitlines():
         if not line.startswith("TCP:"):
             continue
 
