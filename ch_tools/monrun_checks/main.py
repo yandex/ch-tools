@@ -39,6 +39,7 @@ from ch_tools.monrun_checks.ch_s3_credentials_config import (
 )
 from ch_tools.monrun_checks.ch_system_metrics import system_metrics_command
 from ch_tools.monrun_checks.ch_system_queues import system_queues_command
+from ch_tools.monrun_checks.ch_tcp_mem import tcp_mem_command
 from ch_tools.monrun_checks.ch_tls import tls_command
 from ch_tools.monrun_checks.dns import dns_command
 from ch_tools.monrun_checks.exceptions import translate_to_status
@@ -173,6 +174,7 @@ CLI_COMMANDS = [
     dns_command,
     orphaned_objects_command,
     system_metrics_command,
+    tcp_mem_command,
 ]
 
 cli.add_command(status_command(CLI_COMMANDS))

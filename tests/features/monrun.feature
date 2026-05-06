@@ -583,3 +583,23 @@ Feature: ch-monitoring tool
     """
     2;Metric not available
     """
+
+  Scenario: Check TCP memory sockstat with default thresholds
+    When we execute command on clickhouse01
+    """
+    ch-monitoring tcp-mem
+    """
+    Then we get response
+    """
+    0;OK
+    """
+
+  Scenario: Check TCP memory sockstat with critical threshold
+    When we execute command on clickhouse01
+    """
+    ch-monitoring tcp-mem -w 0 -c -1
+    """
+    Then we get response contains
+    """
+    2;tcp_mem_bytes, crit = -1, count =
+    """
