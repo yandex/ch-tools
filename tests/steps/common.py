@@ -3,6 +3,8 @@ Common steps.
 """
 
 import time
+from threading import Thread
+from typing import Any
 
 import requests
 import yaml
@@ -23,6 +25,17 @@ def step_configuration(context: ContextT) -> None:
         setattr(context, key, value)
 
 
+def _wait_background_command(context: ContextT, timeout: int = 120) -> Any:
+    thread = context.background_command_thread
+    thread.join(timeout=timeout)
+    assert not thread.is_alive(), f'"{context.command}" is still running'
+
+    result = context.background_command_result
+    context.response = result.output.decode().strip()
+    context.exit_code = result.exit_code
+    return result
+
+
 @when("we try to execute command on {node:w}")
 def step_try_command(context: ContextT, node: str) -> None:
     container = docker.get_container(context, node)
@@ -30,6 +43,20 @@ def step_try_command(context: ContextT, node: str) -> None:
     result = container.exec_run(["bash", "-c", context.command], user="root")
     context.response = result.output.decode().strip()
     context.exit_code = result.exit_code
+
+
+@when("we start executing command on {node:w} in background")
+def step_start_command_in_background(context: ContextT, node: str) -> None:
+    container = docker.get_container(context, node)
+    context.command = context.text.strip()
+
+    def run_command() -> None:
+        context.background_command_result = container.exec_run(
+            ["bash", "-c", context.command], user="root"
+        )
+
+    context.background_command_thread = Thread(target=run_command, daemon=True)
+    context.background_command_thread.start()
 
 
 @given("we have executed command on {node:w}")
@@ -60,6 +87,24 @@ def step_command_fail_response_contains(context: ContextT) -> None:
         context.exit_code != 0
     ), f'"{context.command}" succeeded, but failure was expected'
     assert_that(context.response, contains_string(context.text))
+
+
+@then("background command fails")
+def step_background_command_fail(context: ContextT) -> None:
+    _wait_background_command(context)
+    step_command_fail(context)
+
+
+@then("background command fails with response contains")
+def step_background_command_fail_response_contains(context: ContextT) -> None:
+    _wait_background_command(context)
+    step_command_fail_response_contains(context)
+
+
+@then("background command completes successfully")
+def step_background_command_completes_successfully(context: ContextT) -> None:
+    _wait_background_command(context)
+    step_complete_successfully(context)
 
 
 @then("we get response")

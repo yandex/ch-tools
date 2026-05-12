@@ -630,6 +630,72 @@ Feature: chadmin object-storage commands
     """
 
   @require_version_23.3
+  Scenario: MDB-43371 - clean with permanently unavailable replica removes saved remote listing table locally
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths
+    """
+    Then we get response contains
+    """
+      WouldDelete: 0
+      TotalSize: 0
+    """
+    When we stop clickhouse on clickhouse02
+    And we try to execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths
+    """
+    Then it fails
+    When we execute query on clickhouse01
+    """
+    SELECT count() FROM system.tables
+    WHERE database = 'test'
+    AND name = 'listing_objects_from_object_storage'
+    """
+    Then we get response
+    """
+    0
+    """
+    When we try to execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --from-time 0h --to-time 0h --dry-run --use-saved-list --keep-paths
+    """
+    Then it fails with response contains
+    """
+    Can't use saved test.listing_objects_from_object_storage because it does not exist
+    """
+
+  @require_version_23.3
+  Scenario: MDB-43371 - clean with temporarily unavailable replica fails before replica returns
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths
+    """
+    Then we get response contains
+    """
+      WouldDelete: 0
+      TotalSize: 0
+    """
+    When we stop clickhouse on clickhouse02
+    And we start executing command on clickhouse01 in background
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths
+    """
+    And we sleep for 1 seconds
+    And we start clickhouse on clickhouse02
+    Then background command fails
+    When we execute query on clickhouse01
+    """
+    SELECT count() FROM system.tables
+    WHERE database = 'test'
+    AND name = 'listing_objects_from_object_storage'
+    """
+    Then we get response
+    """
+    0
+    """
+
+  @require_version_23.3
   Scenario: Clean with stat partitioning
     When we execute query on clickhouse01
     """
