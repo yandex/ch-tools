@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from click import Context
@@ -19,11 +20,18 @@ from ch_tools.chadmin.internal.part import (
     part_has_suffix,
     remove_detached_part_prefix_on_disk,
 )
+from ch_tools.chadmin.internal.part_recovery import recover_broken_part
+from ch_tools.chadmin.internal.part_recovery.exceptions import (
+    CriticalLossError,
+)
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.table import check_table
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import format_bytes, print_response
 from ch_tools.common.cli.parameters import BytesParamType
+from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
+from ch_tools.common.clickhouse.config import get_clickhouse_config
+from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
 
 FIELD_FORMATTERS = {
@@ -752,3 +760,135 @@ def check_parts_command(
             }
         )
     print_response(ctx, result, default_format="table")
+
+
+@part_group.command("recover-broken")
+@option(
+    "--part-path",
+    "part_path",
+    required=True,
+    type=str,
+    help=(
+        "Path to the detached broken part directory, e.g. "
+        "/var/lib/clickhouse/disks/<disk>/store/<uuid>/detached/broken_<name>."
+    ),
+)
+@option(
+    "--disk",
+    "disk_name",
+    default="object_storage",
+    show_default=True,
+    help="Name of the S3 disk as configured in ClickHouse (used to read S3 credentials).",
+)
+@option(
+    "--output",
+    "output_tsv",
+    required=True,
+    type=str,
+    help="Destination path for the recovered TSV file.",
+)
+@option(
+    "--tmp-dir",
+    "tmp_dir",
+    default=None,
+    type=str,
+    help="Working directory for temporary files. Defaults to a system temp directory.",
+)
+@option(
+    "--threads",
+    default=16,
+    show_default=True,
+    type=int,
+    help="Number of parallel threads for S3 operations.",
+)
+@option(
+    "-n",
+    "--dry-run",
+    "dry_run",
+    is_flag=True,
+    default=False,
+    help="Print the recovery plan without performing any actions.",
+)
+@option(
+    "--report",
+    "report_path",
+    default=None,
+    type=str,
+    help="Write a JSON recovery report to this path.",
+)
+@option(
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Deprecated. This option is kept for backward compatibility but has no effect.",
+)
+@pass_context
+def recover_broken_part_command(
+    ctx: Context,
+    part_path: str,
+    disk_name: str,
+    output_tsv: str,
+    tmp_dir: Optional[str],
+    threads: int,
+    dry_run: bool,
+    report_path: Optional[str],
+    force: bool,
+) -> None:
+    """
+    Recover a broken MergeTree part (Wide or Compact format) with missing S3 blobs and export data to TSV.
+
+    The command reads S3 credentials from the ClickHouse configuration and uses
+    the running ClickHouse server for the final data extraction.  The server
+    schema (system.columns) is used as the authoritative column list; columns.txt
+    from the part is used as a fallback when the source table has been dropped.
+
+    **Wide parts:** Missing data columns are replaced with NULL (\\N in TSV output).
+    **Compact parts:** All column data is stored in a single ``data.bin`` file.
+    If ``data.bin`` has missing S3 blobs, recovery fails with exit code 2.
+
+    Missing index/meta files are zero-filled or reconstructed automatically.
+
+    Exit codes:
+      0 — success (or dry-run completed)
+      1 — unrecoverable error (e.g. columns.txt missing, S3 auth failure)
+      2 — critical data loss detected (e.g. Compact part with missing data.bin blobs)
+    """
+    ch_config = get_clickhouse_config(ctx)
+    disk_conf = S3DiskConfiguration.from_config(
+        ch_config.storage_configuration,
+        disk_name,
+        ctx.obj["config"]["object_storage"]["bucket_name_prefix"],
+    )
+
+    part_path_obj = Path(part_path)
+    if not part_path_obj.is_dir():
+        ctx.fail(f"Part path does not exist or is not a directory: {part_path}")
+
+    output_tsv_path = Path(output_tsv)
+    tmp_dir_path = Path(tmp_dir) if tmp_dir else None
+    report_path_obj = Path(report_path) if report_path else None
+
+    client = clickhouse_client(ctx)
+
+    try:
+        report = recover_broken_part(
+            client=client,
+            disk_conf=disk_conf,
+            part_path=part_path_obj,
+            output_tsv=output_tsv_path,
+            tmp_dir=tmp_dir_path,
+            threads=threads,
+            dry_run=dry_run,
+            report_path=report_path_obj,
+            force=force,
+        )
+        logging.info(
+            "Recovery summary: {} files total, {} healthy, {} missing, {} broken columns.",
+            report.files_total,
+            report.files_healthy,
+            report.files_missing,
+            len(report.broken_columns),
+        )
+    except CriticalLossError as exc:
+        logging.error("Critical loss: {}", exc)
+        raise SystemExit(2) from exc
