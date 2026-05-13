@@ -19,6 +19,9 @@ Feature: chadmin object-storage commands
         local_blobs_table_prefix: "local_objects_"
         remote_blobs_table_prefix: "listing_objects_from_"
         orphaned_blobs_table_prefix: "orphaned_objects_"
+      shard_query_retries:
+        max_attempts: 2
+        max_interval: 1
     """
     And a working s3
     And a working zookeeper
@@ -630,7 +633,7 @@ Feature: chadmin object-storage commands
     """
 
   @require_version_23.3
-  Scenario: MDB-43371 - clean with permanently unavailable replica removes saved remote listing table locally
+  Scenario: Clean with permanently unavailable replica preserves saved remote listing table locally
     When we execute command on clickhouse01
     """
     chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths
@@ -654,19 +657,11 @@ Feature: chadmin object-storage commands
     """
     Then we get response
     """
-    0
-    """
-    When we try to execute command on clickhouse01
-    """
-    chadmin --format yaml object-storage clean --from-time 0h --to-time 0h --dry-run --use-saved-list --keep-paths
-    """
-    Then it fails with response contains
-    """
-    Can't use saved test.listing_objects_from_object_storage because it does not exist
+    1
     """
 
   @require_version_23.3
-  Scenario: MDB-43371 - clean with temporarily unavailable replica fails before replica returns
+  Scenario: Clean with temporarily unavailable replica succeeds after replica returns
     When we execute command on clickhouse01
     """
     chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths
@@ -683,7 +678,7 @@ Feature: chadmin object-storage commands
     """
     And we sleep for 1 seconds
     And we start clickhouse on clickhouse02
-    Then background command fails
+    Then background command completes successfully
     When we execute query on clickhouse01
     """
     SELECT count() FROM system.tables
@@ -692,7 +687,7 @@ Feature: chadmin object-storage commands
     """
     Then we get response
     """
-    0
+    1
     """
 
   @require_version_23.3
