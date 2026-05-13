@@ -3,10 +3,7 @@ from typing import Any, Optional
 from click import Context, group, option, pass_context
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
-from ch_tools.chadmin.internal.dictionary import (
-    list_dictionaries,
-    reload_dictionary,
-)
+from ch_tools.chadmin.internal.dictionary import list_dictionaries, reload_dictionary
 from ch_tools.chadmin.internal.dictionary_migration import migrate_dictionaries
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import print_response

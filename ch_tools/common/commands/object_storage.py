@@ -38,6 +38,7 @@ from ch_tools.chadmin.internal.utils import (
     RaisingThread,
     Scope,
     assert_equal_table_schema_on_cluster,
+    check_replicas_availability,
     chunked,
     execute_query,
     execute_query_on_shard,
@@ -1059,7 +1060,23 @@ def _create_remote_blobs_table(
     drop_existing_table: bool = False,
 ) -> None:
     if drop_existing_table:
-        delete_table_by_full_name(ctx, table_name, shard=True)
+        # Check all replicas are available before destructive DROP operation
+        # This prevents partial deletion when local replica succeeds but remote fails
+        if not check_replicas_availability(
+            ctx, timeout=5, retry_on_transient_errors=True
+        ):
+            raise RuntimeError(
+                "Not all replicas are available. Skipping DROP TABLE to prevent partial deletion. "
+                "Please ensure all replicas are up and retry the operation."
+            )
+
+        # Use retry for DROP to handle temporarily unavailable replicas
+        delete_table_by_full_name(
+            ctx,
+            table_name,
+            shard=True,
+            retry_on_transient_errors=True,
+        )
 
     engine = (
         "ReplicatedMergeTree"
@@ -1070,6 +1087,7 @@ def _create_remote_blobs_table(
         else "MergeTree"
     )
 
+    # Use retry for CREATE to handle temporarily unavailable replicas
     execute_query_on_shard(
         ctx,
         f"""
@@ -1080,6 +1098,7 @@ def _create_remote_blobs_table(
             SETTINGS storage_policy = '{storage_policy}'
         """,
         format_=None,
+        retry_on_transient_errors=True,
     )
 
 

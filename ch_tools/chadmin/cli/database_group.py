@@ -9,10 +9,7 @@ from ch_tools.chadmin.cli.database_metadata import (
     DatabaseEngine,
     parse_database_metadata,
 )
-from ch_tools.chadmin.internal.database import (
-    is_database_exists,
-    list_databases,
-)
+from ch_tools.chadmin.internal.database import is_database_exists, list_databases
 from ch_tools.chadmin.internal.database_migration import DatabaseMigrator
 from ch_tools.chadmin.internal.database_replica import (
     DatabaseLockManager,

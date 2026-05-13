@@ -295,9 +295,17 @@ def delete_table(
     echo: bool = False,
     sync_mode: bool = True,
     dry_run: bool = False,
+    retry_on_transient_errors: bool = False,
+    retry_max_attempts: Optional[int] = None,
+    retry_max_interval: Optional[int] = None,
 ) -> None:
     """
     Perform "DROP TABLE" for the specified table.
+
+    Args:
+        retry_on_transient_errors: Enable retry logic for transient errors (only for shard=True)
+        retry_max_attempts: Maximum number of retry attempts (default: from config)
+        retry_max_interval: Maximum interval between retries in seconds (default: from config)
     """
     if cluster and shard:
         raise ValueError("`cluster` and `shard` cannot be set both")
@@ -313,18 +321,37 @@ def delete_table(
         NO DELAY
         {%- endif %}
         """
-    (execute_query if not shard else execute_query_on_shard)(
-        ctx,
-        query,
-        timeout=timeout,
-        database_name=database_name,
-        table_name=table_name,
-        cluster=cluster,
-        sync_mode=sync_mode,
-        echo=echo,
-        dry_run=dry_run,
-        format_=None,
-    )
+
+    if not shard:
+        execute_query(
+            ctx,
+            query,
+            timeout=timeout,
+            database_name=database_name,
+            table_name=table_name,
+            cluster=cluster,
+            sync_mode=sync_mode,
+            echo=echo,
+            dry_run=dry_run,
+            format_=None,
+        )
+    else:
+        # Use execute_query_on_shard with retry support
+        execute_query_on_shard(
+            ctx,
+            query,
+            timeout=timeout,
+            database_name=database_name,
+            table_name=table_name,
+            cluster=cluster,
+            sync_mode=sync_mode,
+            echo=echo,
+            dry_run=dry_run,
+            format_=None,
+            retry_on_transient_errors=retry_on_transient_errors,
+            retry_max_attempts=retry_max_attempts,
+            retry_max_interval=retry_max_interval,
+        )
 
 
 def delete_table_by_full_name(
