@@ -103,12 +103,14 @@ def check_replicas_availability(
     replicas = ClickhouseInfo.get_replicas(ctx)
 
     # Get retry settings from config if retry is enabled
-    config = ctx.obj.get("config", {})
-    object_storage_config = config.get("object_storage", {})
-    shard_query_retries = object_storage_config.get("shard_query_retries", {})
-
-    max_attempts = retry_max_attempts or shard_query_retries.get("max_attempts", 3)
-    max_interval = retry_max_interval or shard_query_retries.get("max_interval", 5)
+    max_attempts = (
+        retry_max_attempts
+        or ctx.obj["config"]["object_storage"]["shard_query_retries"]["max_attempts"]
+    )
+    max_interval = (
+        retry_max_interval
+        or ctx.obj["config"]["object_storage"]["shard_query_retries"]["max_interval"]
+    )
 
     for replica in replicas:
         try:
@@ -135,7 +137,7 @@ def check_replicas_availability(
                     replica=replica,
                     log_query=False,
                 )
-        except BaseException:
+        except Exception:
             # Replica is unavailable
             logging.error(f"Replica {replica} is unavailable")
             return False
@@ -212,7 +214,7 @@ def _execute_query_with_retry(
     """
     Execute query on a specific replica with retry logic for transient errors.
     """
-    last_exception: Optional[BaseException] = None
+    last_exception: Optional[Exception] = None
 
     for attempt in range(1, max_attempts + 1):
         try:
@@ -229,7 +231,7 @@ def _execute_query_with_retry(
                 log_query=log_query,
                 **kwargs,
             )
-        except BaseException as e:
+        except Exception as e:
             last_exception = e
 
             if not _is_retryable_error(e):
@@ -289,13 +291,16 @@ def execute_query_on_shard(
     replicas = ClickhouseInfo.get_replicas(ctx)
 
     # Get retry settings from config if retry is enabled
-    config = ctx.obj.get("config", {})
-    object_storage_config = config.get("object_storage", {})
-    shard_query_retries = object_storage_config.get("shard_query_retries", {})
+    max_attempts = (
+        retry_max_attempts
+        or ctx.obj["config"]["object_storage"]["shard_query_retries"]["max_attempts"]
+    )
+    max_interval = (
+        retry_max_interval
+        or ctx.obj["config"]["object_storage"]["shard_query_retries"]["max_interval"]
+    )
 
     if retry_on_transient_errors:
-        max_attempts = retry_max_attempts or shard_query_retries.get("max_attempts", 5)
-        max_interval = retry_max_interval or shard_query_retries.get("max_interval", 30)
 
         for replica in replicas:
             _execute_query_with_retry(
