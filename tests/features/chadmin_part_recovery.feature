@@ -6,6 +6,7 @@ Feature: chadmin part recover-broken
     And a working zookeeper
     And a working clickhouse on clickhouse01
 
+  @require_version_23.3
   Scenario: Recover Wide part with one missing data column blob
     Given we have executed queries on clickhouse01
     """
@@ -58,6 +59,7 @@ Feature: chadmin part recover-broken
     DROP TABLE IF EXISTS default.test_recovery;
     """
 
+  @require_version_23.3
   Scenario: Dry-run mode does not create output file
     Given we have executed queries on clickhouse01
     """
@@ -92,6 +94,7 @@ Feature: chadmin part recover-broken
     DROP TABLE IF EXISTS default.test_recovery_dry;
     """
 
+  @require_version_23.3
   Scenario: Missing columns.txt causes exit code 2
     Given we have executed queries on clickhouse01
     """
@@ -125,6 +128,7 @@ Feature: chadmin part recover-broken
     DROP TABLE IF EXISTS default.test_recovery_critical;
     """
 
+  @require_version_23.3
   Scenario: All blobs healthy — full recovery without NULL columns
     Given we have executed queries on clickhouse01
     """
@@ -167,6 +171,7 @@ Feature: chadmin part recover-broken
     DROP TABLE IF EXISTS default.test_recovery_full;
     """
 
+  @require_version_23.3
   Scenario: Compact part with healthy data.bin — full recovery
     Given we have executed queries on clickhouse01
     """
@@ -209,6 +214,7 @@ Feature: chadmin part recover-broken
     DROP TABLE IF EXISTS default.test_compact_recovery;
     """
 
+  @require_version_23.3
   Scenario: Compact part with missing data.bin blobs — exit code 2
     Given we have executed queries on clickhouse01
     """
