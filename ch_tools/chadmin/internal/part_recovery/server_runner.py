@@ -392,7 +392,7 @@ def place_part_in_detached(
                 os.lchown(os.path.join(root, d), target_uid, target_gid)
             for f in files:
                 os.lchown(os.path.join(root, f), target_uid, target_gid)
-    except (PermissionError, OSError) as exc:
+    except (AttributeError, PermissionError, OSError) as exc:
         logging.warning(
             "Could not lchown placed part {} to ClickHouse user: {}",
             dest,
@@ -490,7 +490,10 @@ def select_to_tsv(
     """
     Execute SELECT and stream TSV output to *output_path*.
 
-    Returns the number of rows written.
+    Returns the approximate number of rows written (based on newline-delimited output).
+
+    The count may undercount the final line if the file does not end with a newline
+    and will include trailing empty lines.
     """
     sql = build_select_sql(columns, broken_columns, table_name)
     logging.debug("SELECT SQL:\n{}", sql)
@@ -500,15 +503,17 @@ def select_to_tsv(
     # Use streaming HTTP response to avoid loading all data into memory
     response = client.query(sql, stream=True)
 
-    rows = 0
+    # Approximate row count based on newline-delimited output; may undercount the final line
+    # if the file does not end with a newline and will include trailing empty lines.
+    approx_rows = 0
     with output_path.open("wb") as fh:
         for chunk in response.iter_content(chunk_size=65536):
             if chunk:
                 fh.write(chunk)
-                rows += chunk.count(b"\n")
+                approx_rows += chunk.count(b"\n")
 
-    logging.info("Wrote {} rows to {}", rows, output_path)
-    return rows
+    logging.info("Wrote {} rows to {}", approx_rows, output_path)
+    return approx_rows
 
 
 # ---------------------------------------------------------------------------

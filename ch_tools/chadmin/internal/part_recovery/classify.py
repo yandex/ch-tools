@@ -13,6 +13,7 @@ For **Wide** parts (no ``data.bin`` file), each column has its own ``.bin`` file
 and individual broken columns can be excluded from recovery.
 """
 
+import logging
 import os
 import re
 from dataclasses import dataclass, field
@@ -180,6 +181,35 @@ def _decide(
     return Decision.DROP
 
 
+def _collect_healthy_mrk2_columns(
+    all_paths: List[Path],
+    blob_status: Dict[str, bool],
+    disk_conf: Optional[S3DiskConfiguration],
+) -> set:
+    """
+    Collect column names that have at least one healthy .mrk2 file.
+
+    This is used to determine whether count.txt can be reconstructed.
+    """
+    healthy_mrk2_cols: set = set()
+    for path in all_paths:
+        match = _RE_MARK2.match(path.name)
+        if match:
+            try:
+                meta = S3ObjectLocalMetaData.from_file(path)
+                all_healthy = all(
+                    blob_status.get(
+                        _full_key(disk_conf, obj) if disk_conf else obj.key, False
+                    )
+                    for obj in meta.objects
+                )
+                if all_healthy:
+                    healthy_mrk2_cols.add(match.group("col"))
+            except (ValueError, IndexError, OSError) as exc:
+                logging.debug("Failed to parse metadata for %s: %s", path.name, exc)
+    return healthy_mrk2_cols
+
+
 def scan_blob_keys(
     part_dir: Path,
     disk_conf: Optional[S3DiskConfiguration] = None,
@@ -209,8 +239,8 @@ def scan_blob_keys(
             for obj in meta.objects:
                 full = _full_key(disk_conf, obj) if disk_conf else obj.key
                 keys[full] = path.name
-        except (ValueError, IndexError, OSError):
-            pass  # plain-text file or unrecognized format
+        except (ValueError, IndexError, OSError) as exc:
+            logging.debug("Failed to parse metadata for %s: %s", path.name, exc)
     return keys
 
 
@@ -269,24 +299,9 @@ def classify(
 
     # Determine which columns have at least one healthy .mrk2 file
     # (needed to decide whether count.txt can be reconstructed)
-    healthy_mrk2_cols: set = set()
-    for p in all_paths:
-        m = _RE_MARK2.match(p.name)
-        if m:
-            try:
-                meta = S3ObjectLocalMetaData.from_file(p)
-                all_healthy = all(
-                    blob_status.get(
-                        _full_key(disk_conf, obj) if disk_conf else obj.key, False
-                    )
-                    for obj in meta.objects
-                )
-                if all_healthy:
-                    healthy_mrk2_cols.add(m.group("col"))
-            except (ValueError, IndexError, OSError):
-                pass
-
-    has_healthy_mrk2 = len(healthy_mrk2_cols) > 0
+    has_healthy_mrk2 = (
+        len(_collect_healthy_mrk2_columns(all_paths, blob_status, disk_conf)) > 0
+    )
 
     for path in sorted(all_paths, key=lambda p: p.name):
         name = path.name

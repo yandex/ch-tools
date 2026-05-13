@@ -202,7 +202,9 @@ def step_corrupt_data_bin_blobs(
     # 4. Parse S3 metadata and delete the referenced blobs
     s3_client = s3_module.S3Client(context)
     keys = ch_module.read_s3_metadata_keys(context, node, data_bin_path, s3_prefix)
-    assert keys, f"No S3 metadata found in {data_bin_path} — check that it is a Compact part"
+    assert (
+        keys
+    ), f"No S3 metadata found in {data_bin_path} — check that it is a Compact part"
 
     deleted = 0
     for key in keys:
@@ -210,8 +212,8 @@ def step_corrupt_data_bin_blobs(
         deleted += 1
 
     assert deleted > 0, (
-        f"No S3 blobs were deleted for data.bin — "
-        f"check that the file is an S3 metadata file"
+        "No S3 blobs were deleted for data.bin — "
+        "check that the file is an S3 metadata file"
     )
 
     # 5. Store the broken part path for use in subsequent steps

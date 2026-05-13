@@ -219,7 +219,9 @@ def recover_broken_part(
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 
-def _log_plan(part_files: List[PartFile], broken_columns: Set[str], is_compact: bool = False) -> None:
+def _log_plan(
+    part_files: List[PartFile], broken_columns: Set[str], is_compact: bool = False
+) -> None:
     """Log a human-readable summary of the recovery plan."""
     total = len(part_files)
     healthy = sum(1 for pf in part_files if pf.healthy)
@@ -233,7 +235,9 @@ def _log_plan(part_files: List[PartFile], broken_columns: Set[str], is_compact: 
         missing,
     )
     if is_compact:
-        logging.info("Compact part: all column data is in data.bin (no per-column recovery).")
+        logging.info(
+            "Compact part: all column data is in data.bin (no per-column recovery)."
+        )
     elif broken_columns:
         logging.warning(
             "Broken columns (will be NULL in output): {}", sorted(broken_columns)
