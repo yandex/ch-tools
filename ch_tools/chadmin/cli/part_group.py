@@ -24,7 +24,7 @@ from ch_tools.chadmin.internal.part_recovery import recover_broken_part
 from ch_tools.chadmin.internal.part_recovery.exceptions import (
     CriticalLossError,
 )
-from ch_tools.chadmin.internal.system import match_ch_version
+from ch_tools.chadmin.internal.system import get_version, match_ch_version
 from ch_tools.chadmin.internal.table import check_table
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import format_bytes, print_response
@@ -869,6 +869,13 @@ def recover_broken_part_command(
     report_path_obj = Path(report_path) if report_path else None
 
     client = clickhouse_client(ctx)
+
+    # Check ClickHouse version - SETTINGS disk = '...' requires 23.3+
+    if not match_ch_version(ctx, "23.3"):
+        ctx.fail(
+            "recover-broken requires ClickHouse version 23.3 or above. "
+            f"Current version: {get_version(ctx)}"
+        )
 
     try:
         report = recover_broken_part(
