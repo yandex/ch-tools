@@ -65,10 +65,7 @@ Feature: chadmin replica commands.
   Scenario Outline: Check replica restore (<replicas_count> replicas, <workers> workers) 
     Given populated clickhouse with <replicas_count> replicated tables on clickhouse01 with db database and table_ prefix
     When we delete zookeepers nodes /db on clickhouse01
-    And we execute command on clickhouse01
-    """
-    supervisorctl restart clickhouse-server
-    """
+    When we restart clickhouse on clickhouse01
     Then a clickhouse will be worked on clickhouse01
     And <replicas_count> readonly replicas on clickhouse01
 

@@ -70,6 +70,11 @@ DEFAULT_CONFIG = {
         },
         # see https://docs.aws.amazon.com/botocore/latest/reference/config.html for details
         "retries": None,
+        # Retry settings for shard-level queries (used in object-storage clean and similar operations)
+        "shard_query_retries": {
+            "max_attempts": 5,
+            "max_interval": 30,
+        },
     },
     "zookeeper": {
         "randomize_hosts": True,

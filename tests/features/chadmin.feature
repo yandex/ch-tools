@@ -95,10 +95,7 @@ Feature: chadmin commands.
     """
     chadmin table set-flag <options> -v --engine %MergeTree --exclude-engine Replicated% convert_to_replicated
     """
-    And we execute command on clickhouse01
-    """
-    supervisorctl restart clickhouse-server
-    """
+    When we restart clickhouse on clickhouse01
     Given a working clickhouse on clickhouse01
     When we execute query on clickhouse01
     """
@@ -151,10 +148,7 @@ Feature: chadmin commands.
     """
     SYSTEM START FETCHES
     """
-    When we execute command on clickhouse01
-    """
-    supervisorctl stop clickhouse-server
-    """
+    When we stop clickhouse on clickhouse01
     When we try to execute command on clickhouse01
     """
     chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4 <options>
@@ -163,10 +157,7 @@ Feature: chadmin commands.
     """
     Connection error
     """
-    When we execute command on clickhouse01
-    """
-    supervisorctl start clickhouse-server
-    """
+    When we start clickhouse on clickhouse01
     When we execute command on clickhouse01
     """
     chadmin wait replication-sync --total-timeout 10 --replica-timeout 3 -p 1 -w 4 <options>

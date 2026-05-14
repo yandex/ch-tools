@@ -5,14 +5,7 @@ from typing import Any, Optional
 
 import psutil
 import requests
-from cloup import (
-    Choice,
-    Context,
-    FloatRange,
-    group,
-    option,
-    pass_context,
-)
+from cloup import Choice, Context, FloatRange, group, option, pass_context
 from cloup.constraints import (
     AcceptAtMost,
     Equal,

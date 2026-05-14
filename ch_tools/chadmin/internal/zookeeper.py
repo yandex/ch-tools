@@ -11,17 +11,7 @@ import re
 from collections import deque
 from contextlib import contextmanager
 from math import sqrt
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Generator,
-    Iterable,
-    List,
-    Optional,
-    Set,
-    Union,
-)
+from typing import Any, Callable, Dict, Generator, Iterable, List, Optional, Set, Union
 
 from click import Context
 from kazoo.client import KazooClient

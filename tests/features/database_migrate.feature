@@ -415,10 +415,7 @@ Feature: chadmin database migrate command
     """
     Then it completes successfully
 
-    When we execute command on clickhouse01
-    """
-    supervisorctl stop clickhouse-server
-    """
+    When we stop clickhouse on clickhouse01
 
     When we execute command on clickhouse02
     """
@@ -1464,14 +1461,8 @@ Feature: chadmin database migrate command
     chadmin table change -d non_repl_db --all --zk
     """
     Then it completes successfully
-    When we execute command on clickhouse01
-    """
-    supervisorctl restart clickhouse-server
-    """
-    When we execute command on clickhouse02
-    """
-    supervisorctl restart clickhouse-server
-    """
+    When we restart clickhouse on clickhouse01
+    When we restart clickhouse on clickhouse02
     When we sleep for 10 seconds
 
     When we execute command on clickhouse01

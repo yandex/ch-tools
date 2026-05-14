@@ -19,6 +19,9 @@ Feature: chadmin object-storage commands
         local_blobs_table_prefix: "local_objects_"
         remote_blobs_table_prefix: "listing_objects_from_"
         orphaned_blobs_table_prefix: "orphaned_objects_"
+      shard_query_retries:
+        max_attempts: 2
+        max_interval: 1
     """
     And a working s3
     And a working zookeeper
@@ -627,6 +630,64 @@ Feature: chadmin object-storage commands
     """
       WouldDelete: 1
       TotalSize: 1
+    """
+
+  @require_version_23.3
+  Scenario: Clean with permanently unavailable replica preserves saved remote listing table locally
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths
+    """
+    Then we get response contains
+    """
+      WouldDelete: 0
+      TotalSize: 0
+    """
+    When we stop clickhouse on clickhouse02
+    And we try to execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths
+    """
+    Then it fails
+    When we execute query on clickhouse01
+    """
+    SELECT count() FROM system.tables
+    WHERE database = 'test'
+    AND name = 'listing_objects_from_object_storage'
+    """
+    Then we get response
+    """
+    1
+    """
+
+  @require_version_23.3
+  Scenario: Clean with temporarily unavailable replica succeeds after replica returns
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths
+    """
+    Then we get response contains
+    """
+      WouldDelete: 0
+      TotalSize: 0
+    """
+    When we stop clickhouse on clickhouse02
+    And we start executing command on clickhouse01 in background
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths
+    """
+    And we sleep for 1 seconds
+    And we start clickhouse on clickhouse02
+    Then background command completes successfully
+    When we execute query on clickhouse01
+    """
+    SELECT count() FROM system.tables
+    WHERE database = 'test'
+    AND name = 'listing_objects_from_object_storage'
+    """
+    Then we get response
+    """
+    1
     """
 
   @require_version_23.3

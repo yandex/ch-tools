@@ -5,16 +5,7 @@ import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from functools import partial
-from typing import (
-    Any,
-    Callable,
-    Deque,
-    Dict,
-    Generator,
-    List,
-    Optional,
-    Tuple,
-)
+from typing import Any, Callable, Deque, Dict, Generator, List, Optional, Tuple
 
 from click import BadParameter, Context
 from kazoo.client import KazooClient

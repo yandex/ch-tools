@@ -80,9 +80,9 @@ Feature: chadmin dictionary migration command.
               </structure>
             </dictionary>
           </clickhouse>
-          " > /etc/clickhouse-server/test_dictionary.xml && \
-      supervisorctl restart clickhouse-server
+          " > /etc/clickhouse-server/test_dictionary.xml
     """
+    When we restart clickhouse on clickhouse01
     And we execute command on clickhouse01:
     """
       chadmin dictionary migrate --database _dictionaries
@@ -183,9 +183,9 @@ Feature: chadmin dictionary migration command.
               </structure>
             </dictionary>
           </clickhouse>
-          " > /etc/clickhouse-server/test_dictionary.xml && \
-      supervisorctl restart clickhouse-server
+          " > /etc/clickhouse-server/test_dictionary.xml
     """
+    When we restart clickhouse on clickhouse01
     And we execute command on clickhouse01:
     """
       chadmin dictionary migrate --remove --database _dictionaries
@@ -266,9 +266,9 @@ Feature: chadmin dictionary migration command.
               </structure>
             </dictionary>
           </clickhouse>
-          " > /etc/clickhouse-server/test_dictionary.xml && \
-      supervisorctl restart clickhouse-server
+          " > /etc/clickhouse-server/test_dictionary.xml
     """
+    When we restart clickhouse on clickhouse01
     And we execute command on clickhouse01:
     """
       chadmin dictionary migrate --include "prod_*" --remove --database _dictionaries
@@ -343,9 +343,9 @@ Feature: chadmin dictionary migration command.
               </structure>
             </dictionary>
           </clickhouse>
-          " > /etc/clickhouse-server/test_dictionary.xml && \
-      supervisorctl restart clickhouse-server
+          " > /etc/clickhouse-server/test_dictionary.xml
     """
+    When we restart clickhouse on clickhouse01
     And we execute command on clickhouse01:
     """
       chadmin dictionary migrate --exclude "prod_*" --remove --database _dictionaries
@@ -440,9 +440,9 @@ Feature: chadmin dictionary migration command.
               </structure>
             </dictionary>
           </clickhouse>
-          " > /etc/clickhouse-server/test_dictionary.xml && \
-      supervisorctl restart clickhouse-server
+          " > /etc/clickhouse-server/test_dictionary.xml
     """
+    When we restart clickhouse on clickhouse01
     And we execute command on clickhouse01:
     """
       chadmin dictionary migrate --database prod_db

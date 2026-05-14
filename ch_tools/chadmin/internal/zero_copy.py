@@ -2,11 +2,7 @@ import os
 import re
 import traceback
 from pathlib import Path
-from typing import (
-    Generator,
-    Optional,
-    TypedDict,
-)
+from typing import Generator, Optional, TypedDict
 
 from click import Context
 from kazoo.client import KazooClient

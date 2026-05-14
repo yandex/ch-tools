@@ -61,10 +61,7 @@ Feature: ch_s3_credentials tool
     """
     ch-monitoring --setting cloud.metadata_service_endpoint http://http-mock01:8080 s3-credentials-config --missing
     """
-    When we execute command on clickhouse01
-    """
-    supervisorctl stop clickhouse-server
-    """
+    When we stop clickhouse on clickhouse01
     When we execute command on clickhouse01
     """
     chadmin --setting cloud.metadata_service_endpoint http://http-mock01:8080 s3-credentials-config update --endpoint=storage.com
