@@ -3,7 +3,7 @@ ClickHouse client.
 """
 
 from http import HTTPStatus
-from typing import Any, Optional, Sequence, Tuple
+from typing import Any, List, Optional, Sequence, Tuple
 
 from hamcrest import assert_that
 from requests import HTTPError
@@ -13,6 +13,9 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
     CLICKHOUSE_PATH,
     OBJECT_STORAGE_DISK_TYPES,
     S3_PATH,
+)
+from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
+    S3ObjectLocalMetaData,
 )
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import (
@@ -180,3 +183,101 @@ def check_table_exists_in_uuid_dir(
     table_path = path + "/store/" + table_uuid[:3] + "/" + table_uuid
     result = container.exec_run(["bash", "-c", f"ls {table_path}"], user="root")
     return True if 0 == result.exit_code else False
+
+
+# ---------------------------------------------------------------------------
+# Part recovery helpers
+# ---------------------------------------------------------------------------
+
+
+def get_part_path(context: ContextT, node: str, db: str, table: str) -> str:
+    """Return the filesystem path of the first active part of *table* in *db*.
+
+    Uses ``system.parts`` to find the path, then strips the trailing slash.
+    """
+    query = (
+        f"SELECT path FROM system.parts "
+        f"WHERE database='{db}' AND table='{table}' AND active=1 "
+        f"ORDER BY name LIMIT 1 FORMAT TabSeparated"
+    )
+    result = execute_query(context, node, query)
+    path = str(result).strip().rstrip("/")
+    assert path, f"No active parts found for {db}.{table} on {node}"
+    return path
+
+
+def detach_part_copy_as_broken(context: ContextT, node: str, part_path: str) -> str:
+    """Copy an active part directory into the table's *detached/* folder with a
+    ``broken_`` prefix and return the path to the broken copy.
+
+    *part_path* is the absolute path returned by :func:`get_part_path`.
+    """
+    import posixpath
+
+    part_name = posixpath.basename(part_path)
+    table_dir = posixpath.dirname(part_path)
+    detached_dir = posixpath.join(table_dir, "detached")
+    broken_name = f"broken_{part_name}"
+    broken_path = posixpath.join(detached_dir, broken_name)
+
+    container = docker.get_container(context, node)
+
+    # Ensure detached/ exists
+    result = container.exec_run(["bash", "-c", f"mkdir -p {detached_dir}"], user="root")
+    assert result.exit_code == 0, f"mkdir detached failed: {result.output.decode()}"
+
+    # Copy the active part
+    result = container.exec_run(
+        ["bash", "-c", f"cp -r {part_path} {broken_path}"], user="root"
+    )
+    assert result.exit_code == 0, f"cp part failed: {result.output.decode()}"
+
+    return broken_path
+
+
+def list_column_files(
+    context: ContextT, node: str, part_path: str, column: str
+) -> List[str]:
+    """Return a list of absolute file paths inside *part_path* that belong to
+    *column* (i.e. whose basename starts with ``<column>.`` or ``<column>_``).
+    """
+    container = docker.get_container(context, node)
+    result = container.exec_run(["bash", "-c", f"ls {part_path}/"], user="root")
+    assert result.exit_code == 0, f"ls part dir failed: {result.output.decode()}"
+
+    files = []
+    for name in result.output.decode().split():
+        name = name.strip()
+        if name.startswith(f"{column}.") or name.startswith(f"{column}_"):
+            files.append(f"{part_path}/{name}")
+    return files
+
+
+def read_s3_metadata_keys(
+    context: ContextT, node: str, file_path: str, s3_prefix: str
+) -> List[str]:
+    """Read an S3 metadata file from the container and return the list of full
+    S3 object keys referenced by it.
+
+    *s3_prefix* is the path prefix to prepend for metadata versions < 5
+    (e.g. ``"data/cid1/shard_1/"``).
+    """
+    container = docker.get_container(context, node)
+    result = container.exec_run(["bash", "-c", f"cat {file_path}"], user="root")
+    if result.exit_code != 0:
+        return []
+
+    content = result.output.decode("latin-1")
+    try:
+        meta = S3ObjectLocalMetaData.from_string(content)
+    except (ValueError, IndexError):
+        # Not a metadata file (plain text like columns.txt)
+        return []
+
+    keys: List[str] = []
+    for obj in meta.objects:
+        if obj.key_is_full:
+            keys.append(obj.key)
+        else:
+            keys.append(s3_prefix.rstrip("/") + "/" + obj.key)
+    return keys
