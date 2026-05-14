@@ -66,10 +66,7 @@ Feature: keeper-monitoring tool
     """
     0;OK
     """
-    When we execute command on clickhouse01
-    """
-    supervisorctl stop clickhouse-server
-    """
+    When we stop clickhouse on clickhouse01
     When we execute command on clickhouse01
     """
     keeper-monitoring -n alive

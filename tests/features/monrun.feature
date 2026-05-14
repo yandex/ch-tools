@@ -126,9 +126,9 @@ Feature: ch-monitoring tool
             <path_to_regions_hierarchy_file>/opt/geo/regions_hierarchy.txt</path_to_regions_hierarchy_file>
             <path_to_regions_names_files>/opt/geo/</path_to_regions_names_files>
         </clickhouse>
-        " > /etc/clickhouse-server/config.d/geo.xml && \
-    supervisorctl restart clickhouse-server
+        " > /etc/clickhouse-server/config.d/geo.xml
     """
+    When we restart clickhouse on clickhouse01
     And we sleep for 5 seconds
     And we execute command on clickhouse01
     """
@@ -278,9 +278,9 @@ Feature: ch-monitoring tool
     """
     0;OK
     """
+    When we stop clickhouse on clickhouse01
     When we execute command on clickhouse01
     """
-    supervisorctl stop clickhouse-server
     ch-monitoring ping
     """
     Then we get response contains
@@ -395,10 +395,7 @@ Feature: ch-monitoring tool
      """
      0;OK
      """
-    When we execute command on clickhouse01
-    """
-    supervisorctl stop clickhouse-server
-    """
+    When we stop clickhouse on clickhouse01
     When we execute command on clickhouse01
     """"
     ch-monitoring keeper -n

@@ -102,6 +102,16 @@ def step_start_clickhouse(context: ContextT, node: str) -> None:
     step_wait_for_clickhouse_alive(context, node)
 
 
+@when("we restart clickhouse on {node:w}")
+def step_restart_clickhouse(context: ContextT, node: str) -> None:
+    container = get_container(context, node)
+    result = container.exec_run(
+        ["bash", "-c", "supervisorctl restart clickhouse-server"], user="root"
+    )
+    assert_that(result.exit_code, equal_to(0))
+    step_wait_for_clickhouse_alive(context, node)
+
+
 @when("we put the  clickhouse config to path {path} with restarting on {node:w}")
 def step_put_config(context: ContextT, path: str, node: str) -> None:
     config = context.text

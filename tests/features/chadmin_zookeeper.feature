@@ -454,10 +454,7 @@ Feature: chadmin zookeeper commands.
     Then there are no unfinished dll queries on clickhouse02
     # It is not necessary, just to do not increase sleep time in nexts steps.
     # We are doing it to reload DDL queue in clickhouse-server
-    When we execute command on clickhouse01
-    """
-    supervisorctl restart clickhouse-server
-    """
+    When we restart clickhouse on clickhouse01
     When we sleep for 15 seconds
     And we execute command on clickhouse01
     """

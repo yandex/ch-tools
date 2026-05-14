@@ -161,10 +161,7 @@ Feature: chadmin table change and check-uuid-equal
     chadmin table change -d non_repl_db -t foo --uuid '123e4567-e89b-12d3-a456-426614174000'
     """
     Then it completes successfully
-    When we execute command on clickhouse01
-    """
-    supervisorctl restart clickhouse-server
-    """
+    When we restart clickhouse on clickhouse01
     When we sleep for 10 seconds
 
     When we execute query on clickhouse01
@@ -342,10 +339,7 @@ Feature: chadmin table change and check-uuid-equal
     chadmin table change -d non_repl_db -t foo --uuid "$(chadmin zookeeper get /clickhouse/foo/table_shared_id)"
     """
     Then it completes successfully
-    When we execute command on clickhouse02
-    """
-    supervisorctl restart clickhouse-server
-    """
+    When we restart clickhouse on clickhouse02
     When we sleep for 10 seconds
     Then check uuid table foo equal to table_shared_id by path /clickhouse/foo/table_shared_id on clickhouse02
 
@@ -469,10 +463,7 @@ Feature: chadmin table change and check-uuid-equal
     """
     SYSTEM START PULLING REPLICATION LOG non_repl_db.foo
     """
-    When we execute command on clickhouse02
-    """
-    supervisorctl restart clickhouse-server
-    """
+    When we restart clickhouse on clickhouse02
     When we sleep for 10 seconds
     Then check uuid table foo equal to table_shared_id by path /clickhouse/foo/table_shared_id on clickhouse02
 
@@ -565,19 +556,13 @@ Feature: chadmin table change and check-uuid-equal
     chadmin table change -d non_repl_db -t test_table1 --zk
     """
     Then it completes successfully
-    When we execute command on clickhouse01
-    """
-    supervisorctl restart clickhouse-server
-    """
+    When we restart clickhouse on clickhouse01
     When we execute command on clickhouse02
     """
     chadmin table change -d non_repl_db -t test_table1 --zk
     """
     Then it completes successfully
-    When we execute command on clickhouse02
-    """
-    supervisorctl restart clickhouse-server
-    """
+    When we restart clickhouse on clickhouse02
     When we sleep for 10 seconds
 
     When we execute query on clickhouse01
