@@ -282,11 +282,6 @@ def execute_query_on_shard(
 ) -> None:
     """
     Execute query on all replicas in the shard.
-
-    Args:
-        retry_on_transient_errors: Enable retry logic for transient errors (default: False)
-        retry_max_attempts: Maximum number of retry attempts (default: from config)
-        retry_max_interval: Maximum interval between retries in seconds (default: from config)
     """
     replicas = ClickhouseInfo.get_replicas(ctx)
 

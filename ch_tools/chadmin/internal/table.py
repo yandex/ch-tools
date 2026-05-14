@@ -301,11 +301,6 @@ def delete_table(
 ) -> None:
     """
     Perform "DROP TABLE" for the specified table.
-
-    Args:
-        retry_on_transient_errors: Enable retry logic for transient errors (only for shard=True)
-        retry_max_attempts: Maximum number of retry attempts (default: from config)
-        retry_max_interval: Maximum interval between retries in seconds (default: from config)
     """
     if cluster and shard:
         raise ValueError("`cluster` and `shard` cannot be set both")
