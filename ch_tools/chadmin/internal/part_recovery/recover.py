@@ -44,7 +44,10 @@ from ch_tools.chadmin.internal.part_recovery.s3_blobs import (
     check_blobs_parallel,
     download_part_files,
 )
-from ch_tools.chadmin.internal.part_recovery.server_runner import run_server_recovery
+from ch_tools.chadmin.internal.part_recovery.server_runner import (
+    reconstruct_columns_txt,
+    run_server_recovery,
+)
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import ClickhouseClient
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
@@ -59,7 +62,6 @@ def recover_broken_part(
     threads: int = 16,
     dry_run: bool = False,
     report_path: Optional[Path] = None,
-    force: bool = False,  # pylint: disable=unused-argument
 ) -> RecoveryReport:
     """
     Recover a broken MergeTree part (Wide or Compact format) and export readable rows to TSV.
@@ -68,59 +70,33 @@ def recover_broken_part(
       If ``data.bin`` has missing S3 blobs, :class:`CriticalLossError` is raised.
     - **Wide** parts: each column has its own ``.bin`` file. Individual broken
       columns can be excluded from recovery (replaced with NULL in output).
-
-    Parameters
-    ----------
-    client:
-        ClickHouse HTTP client connected to the running server.
-    disk_conf:
-        S3 disk configuration (endpoint, bucket, credentials).
-    part_path:
-        Path to the detached part directory (e.g. ``detached/broken_<name>``).
-    output_tsv:
-        Destination path for the recovered TSV file.
-    tmp_dir:
-        Working directory for temporary files.  A subdirectory is created
-        inside it.  If *None*, a system temp directory is used.
-    threads:
-        Number of parallel threads for S3 operations.
-    dry_run:
-        If True, only print the recovery plan without performing any actions.
-    report_path:
-        If set, write the JSON report to this path.
-    force:
-        Deprecated. This parameter is kept for backward compatibility but has no effect.
-
-    Returns
-    -------
-    :class:`RecoveryReport`
+    - ``columns.txt`` may be missing — it will be reconstructed from another part
+      or from ``system.columns``.
 
     Raises
     ------
     CriticalLossError:
         If the part is in Compact format and ``data.bin`` has missing S3 blobs,
-        or if any critical metadata file (e.g. ``columns.txt``) has missing blobs.
+        or if any required metadata file (e.g. ``partition.dat``) has missing blobs,
+        or if ``columns.txt`` cannot be reconstructed.
     """
+
     part_name = part_path.name
     logging.info("Starting recovery of part '{}' at {}", part_name, part_path)
 
     # ── Step 1: Scan part directory to collect all blob keys ──────────────────
-    # Use scan_blob_keys() (no validation) so that we can check S3 health
-    # before classify() raises CriticalLossError for missing blobs.
     logging.info("Scanning part directory for S3 blob keys …")
     all_blob_keys = set(scan_blob_keys(part_path, disk_conf=disk_conf).keys())
-    logging.info("Checking {} unique S3 blob keys …", len(all_blob_keys))
 
     # ── Step 2: Check S3 blobs in parallel ────────────────────────────────────
+    logging.info("Checking {} unique S3 blob keys …", len(all_blob_keys))
     blob_status = check_blobs_parallel(disk_conf, all_blob_keys, threads=threads)
 
     # ── Step 3: Classify files with actual blob health status ─────────────────
     logging.info("Classifying part files …")
-    part_files = classify(
-        part_path, blob_status=blob_status, disk_conf=disk_conf, force=force
-    )
+    part_files = classify(part_path, blob_status=blob_status, disk_conf=disk_conf)
 
-    # ── Step 5: Determine broken columns ─────────────────────────────────────
+    # ── Step 4: Determine broken columns ─────────────────────────────────────
     # For Compact parts, all data is in data.bin which is either fully healthy
     # or causes CriticalLossError. So broken_columns is always empty for Compact.
     is_compact = (part_path / "data.bin").exists()
@@ -160,24 +136,34 @@ def recover_broken_part(
         # ── Step 9: Copy plain-text local files ───────────────────────────────
         _copy_local_files(assembled_dir, part_files)
 
-        # ── Step 10: Reconstruct missing meta files ───────────────────────────
+        # ── Step 9a: Reconstruct missing meta files ───────────────────────────
         reconstructed: List[str] = []
         _reconstruct_files(assembled_dir, part_files, reconstructed)
 
-        # ── Step 10b: Strip broken columns from columns.txt /
-        #             columns_substreams.txt so ATTACH PART does not look for
-        #             their (deleted) .bin/.mrk2 files.
+        # ── Step 9b: Reconstruct missing columns.txt from another part or
+        #              system.columns (both Wide and Compact formats)
+        if not (assembled_dir / "columns.txt").exists():
+            columns_txt_source = reconstruct_columns_txt(
+                client=client,
+                part_path=part_path,
+                assembled_dir=assembled_dir,
+            )
+            reconstructed.append(f"columns.txt (from {columns_txt_source})")
+
+        # ── Step 9c: Strip broken columns from columns.txt /
+        #              columns_substreams.txt so ATTACH PART does not look for
+        #              their (deleted) .bin/.mrk2 files.
         # This is only needed for Wide parts; Compact parts never have broken_columns.
         if broken_columns and not is_compact:
             _strip_broken_from_columns_files(
                 assembled_dir, broken_columns, reconstructed
             )
 
-        # ── Step 11: Determine columns.txt path ───────────────────────────────
+        # ── Step 10: Determine columns.txt path ───────────────────────────────
         columns_txt = assembled_dir / "columns.txt"
-        if not columns_txt.exists():
-            # Fall back to original part directory
-            columns_txt = part_path / "columns.txt"
+        assert (
+            columns_txt.exists()
+        ), f"columns.txt must exist after reconstruction for part {part_path.name}"
 
         # ── Step 12: Run server-side recovery ─────────────────────────────────
         logging.info("Running server-side recovery …")

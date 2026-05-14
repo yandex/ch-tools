@@ -20,9 +20,9 @@ from ch_tools.chadmin.internal.part import (
     part_has_suffix,
     remove_detached_part_prefix_on_disk,
 )
-from ch_tools.chadmin.internal.part_recovery import recover_broken_part
-from ch_tools.chadmin.internal.part_recovery.exceptions import (
+from ch_tools.chadmin.internal.part_recovery import (
     CriticalLossError,
+    recover_broken_part,
 )
 from ch_tools.chadmin.internal.system import get_version, match_ch_version
 from ch_tools.chadmin.internal.table import check_table
@@ -816,12 +816,6 @@ def check_parts_command(
     type=str,
     help="Write a JSON recovery report to this path.",
 )
-@option(
-    "--force",
-    is_flag=True,
-    default=False,
-    help="Deprecated. This option is kept for backward compatibility but has no effect.",
-)
 @pass_context
 def recover_broken_part_command(
     ctx: Context,
@@ -832,7 +826,6 @@ def recover_broken_part_command(
     threads: int,
     dry_run: bool,
     report_path: Optional[str],
-    force: bool,
 ) -> None:
     """
     Recover a broken MergeTree part (Wide or Compact format) with missing S3 blobs and export data to TSV.
@@ -887,7 +880,6 @@ def recover_broken_part_command(
             threads=threads,
             dry_run=dry_run,
             report_path=report_path_obj,
-            force=force,
         )
         logging.info(
             "Recovery summary: {} files total, {} healthy, {} missing, {} broken columns.",

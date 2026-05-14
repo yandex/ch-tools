@@ -5,12 +5,7 @@ Each file in the part directory is a local metadata file pointing to one or more
 S3 blobs.  This module inspects the file names, determines the semantic role of
 each file, and decides what to do when its S3 blobs are missing.
 
-For **Compact** parts (identified by the presence of a single ``data.bin`` file),
-all column data is stored together in that file.  If ``data.bin`` has missing blobs,
-recovery is impossible and :class:`CriticalLossError` is raised.
-
-For **Wide** parts (no ``data.bin`` file), each column has its own ``.bin`` file,
-and individual broken columns can be excluded from recovery.
+For details on Compact vs Wide part handling, see :func:`classify`.
 """
 
 import logging
@@ -32,7 +27,7 @@ from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfig
 
 
 class FileCategory(str, Enum):
-    CRITICAL_META = "critical_meta"
+    REQUIRED_META = "required_meta"  # columns.txt, count.txt, partition.dat
     META = "meta"
     DATA = "data"
     MARK = "mark"
@@ -76,10 +71,12 @@ _META_PLAIN_NAMES = {
     "checksums.txt",
 }
 
-# Critical meta files.  If any of these files are backed by missing S3 blobs,
-# recovery must stop instead of creating zero-filled placeholders: ClickHouse
-# expects their contents to be semantically valid.
-_CRITICAL_META_NAMES = {"columns.txt", "count.txt", "partition.dat"}
+# Required meta files that cannot be zero-filled if their S3 blobs are missing.
+# These are handled specially by the orchestrator (e.g. columns.txt reconstruction).
+# - columns.txt: can be reconstructed from another part or system.columns
+# - partition.dat: plain-text file (no S3 blobs), must exist locally
+# - count.txt: can be reconstructed from healthy .mrk2 files
+_REQUIRED_META_NAMES = {"columns.txt", "count.txt", "partition.dat"}
 
 
 @dataclass
@@ -108,9 +105,9 @@ def _categorize(name: str) -> tuple:  # pylint: disable=too-many-return-statemen
     """
     Return (FileCategory, column_name_or_None) for a given file name.
     """
-    # Critical meta files — check first to avoid false matches by data regexes
-    if name in _CRITICAL_META_NAMES:
-        return FileCategory.CRITICAL_META, None
+    # Required meta files — check first to avoid false matches by data regexes
+    if name in _REQUIRED_META_NAMES:
+        return FileCategory.REQUIRED_META, None
 
     # Compact part sentinel — handled separately in classify()
     if _RE_COMPACT_DATA.match(name):
@@ -166,7 +163,7 @@ def _decide(
         return Decision.DOWNLOAD if has_metadata else Decision.KEEP
 
     # Blob(s) missing — decide by category:
-    if category == FileCategory.CRITICAL_META:
+    if category == FileCategory.REQUIRED_META:
         if name == "count.txt" and has_healthy_mrk2:
             return Decision.RECONSTRUCT
         # columns.txt missing → unrecoverable (CriticalLossError raised by caller)
@@ -221,14 +218,6 @@ def scan_blob_keys(
     This is a lightweight scan that does **not** validate blob health or raise
     any exceptions — it is used to collect the set of keys to check before
     calling :func:`classify`.
-
-    Parameters
-    ----------
-    part_dir:
-        Path to the detached part directory.
-    disk_conf:
-        S3 disk configuration used to resolve relative blob keys to full keys.
-        May be ``None`` in unit tests that supply full keys directly.
     """
     keys: Dict[str, str] = {}
     for path in part_dir.iterdir():
@@ -248,7 +237,6 @@ def classify(
     part_dir: Path,
     blob_status: Dict[str, bool],
     disk_conf: Optional[S3DiskConfiguration] = None,
-    force: bool = False,  # pylint: disable=unused-argument
 ) -> List[PartFile]:
     """
     Scan *part_dir* and classify every file.
@@ -260,34 +248,16 @@ def classify(
       S3 blobs, recovery is impossible and :class:`CriticalLossError` is raised.
     - **Wide** parts have per-column ``.bin`` files. Individual broken columns
       can be excluded from recovery.
-
-    Parameters
-    ----------
-    part_dir:
-        Path to the detached part directory (e.g. ``detached/broken_<name>``).
-    blob_status:
-        Mapping from **full** S3 blob key → True (healthy) / False (missing).
-        Keys that are absent from the dict are treated as missing.
-        Full keys are built by prepending ``disk_conf.prefix`` for metadata
-        versions 1–4 (where ``obj.key_is_full`` is False).
-    disk_conf:
-        S3 disk configuration used to resolve relative blob keys to full keys.
-        Required when *blob_status* contains full keys (i.e. always in
-        production).  May be ``None`` only in unit tests that already supply
-        full keys directly.
-    force:
-        Deprecated. This parameter is kept for backward compatibility but has no effect.
-
-    Returns
-    -------
-    List of :class:`PartFile` objects, one per file in the directory.
+    - ``columns.txt`` may be missing — it will be reconstructed later by the orchestrator
+      from another part or from ``system.columns``.
 
     Raises
     ------
     CriticalLossError:
         If the part is in Compact format and ``data.bin`` has missing S3 blobs,
-        or if any critical metadata file (e.g. ``columns.txt``) has missing blobs.
+        or if any required metadata file (e.g. ``partition.dat``) has missing blobs.
     """
+
     files: List[PartFile] = []
 
     # Detect Compact vs Wide format
@@ -349,18 +319,13 @@ def classify(
             )
         )
 
-    # Validate: columns.txt must be present locally (it's a plain-text file)
-    col_file = part_dir / "columns.txt"
-    if not col_file.exists():
-        raise CriticalLossError(
-            f"columns.txt is missing from {part_dir}. "
-            "Cannot determine table schema — recovery is impossible."
-        )
+    # Note: columns.txt may be missing — it will be reconstructed later
+    # from another part or from system.columns by the orchestrator.
 
-    # Validate: any MARK_BROKEN on a CRITICAL_META file → fail
+    # Validate: any MARK_BROKEN on a REQUIRED_META file → fail
     for pf in files:
         if (
-            pf.category == FileCategory.CRITICAL_META
+            pf.category == FileCategory.REQUIRED_META
             and pf.decision == Decision.MARK_BROKEN
         ):
             raise CriticalLossError(

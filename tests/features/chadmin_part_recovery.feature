@@ -95,7 +95,7 @@ Feature: chadmin part recover-broken
     """
 
   @require_version_23.3
-  Scenario: Missing columns.txt causes exit code 2
+  Scenario: Missing columns.txt is reconstructed from system.columns
     Given we have executed queries on clickhouse01
     """
     DROP TABLE IF EXISTS default.test_recovery_critical;
@@ -121,7 +121,15 @@ Feature: chadmin part recover-broken
     """
     Then we get response contains
     """
-    EXIT:2
+    EXIT:0
+    """
+    And we get response contains
+    """
+    Reconstructed columns.txt for part
+    """
+    And we get response contains
+    """
+    system.columns
     """
     Given we have executed queries on clickhouse01
     """

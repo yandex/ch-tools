@@ -23,6 +23,7 @@ import shutil
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
+from ch_tools.chadmin.internal.part_recovery.exceptions import CriticalLossError
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import ClickhouseClient
 
@@ -124,6 +125,168 @@ def merge_schemas(
         )
 
     return from_columns_txt
+
+
+def format_columns_txt(columns: List[Tuple[str, str]]) -> str:
+    """
+    Format a list of ``(name, type)`` pairs into ``columns.txt`` content.
+
+    The format matches what ClickHouse writes::
+
+        columns format version: 1
+        N columns:
+        `col_name` TypeName
+        ...
+
+    Backticks in column names are escaped by doubling them.
+    """
+    lines = ["columns format version: 1", f"{len(columns)} columns:"]
+    for name, typ in columns:
+        # Escape backticks in column names by doubling them (ClickHouse convention)
+        escaped_name = name.replace("`", "``")
+        lines.append(f"`{escaped_name}` {typ}")
+    return "\n".join(lines) + "\n"
+
+
+def _try_read_columns_from_part(
+    part_path: str,
+    source_label: str,
+) -> Optional[List[Tuple[str, str]]]:
+    """
+    Try to read ``columns.txt`` from a single part path.
+
+    Returns parsed columns or ``None`` if reading fails.
+    """
+    columns_path = Path(part_path) / "columns.txt"
+    if not columns_path.exists():
+        return None
+    try:
+        columns = parse_columns_txt(columns_path)
+        if columns:
+            logging.info(
+                "Found columns.txt from {} part: {}",
+                source_label,
+                columns_path,
+            )
+            return columns
+    except (OSError, IOError, ValueError) as exc:
+        logging.debug("Cannot read columns.txt from {}: {}", columns_path, exc)
+    return None
+
+
+def find_columns_txt_from_other_part(
+    client: ClickhouseClient,
+    database: str,
+    table: str,
+    exclude_part_name: str,
+) -> Optional[List[Tuple[str, str]]]:
+    """
+    Try to read ``columns.txt`` from another active or detached part of the same table.
+
+    Returns parsed columns as ``[(name, type), ...]`` or ``None`` if no other part
+    with a readable ``columns.txt`` is found.
+    """
+    # Try active parts first (ORDER BY modification_time DESC for determinism)
+    db_esc = database.replace("'", "\\'")
+    tbl_esc = table.replace("'", "\\'")
+    part_esc = exclude_part_name.replace("'", "\\'")
+    rows = client.query_json_data(
+        f"SELECT path FROM system.parts "
+        f"WHERE database = '{db_esc}' AND table = '{tbl_esc}' "
+        f"AND active = 1 AND name != '{part_esc}' "
+        f"ORDER BY modification_time DESC "
+        f"LIMIT 1",
+    )
+    if rows:
+        # query_json_data returns list of lists (JSONCompact format)
+        result = _try_read_columns_from_part(rows[0][0], "active")
+        if result is not None:
+            return result
+
+    # Fallback to detached parts (ORDER BY name for determinism)
+    rows = client.query_json_data(
+        f"SELECT path FROM system.detached_parts "
+        f"WHERE database = '{db_esc}' AND table = '{tbl_esc}' "
+        f"AND name != '{part_esc}' "
+        f"ORDER BY name "
+        f"LIMIT 1",
+    )
+    if rows:
+        result = _try_read_columns_from_part(rows[0][0], "detached")
+        if result is not None:
+            return result
+
+    return None
+
+
+def reconstruct_columns_txt(
+    client: ClickhouseClient,
+    part_path: Path,
+    assembled_dir: Path,
+) -> str:
+    """
+    Reconstruct missing ``columns.txt`` in *assembled_dir*.
+
+    Strategy:
+    1. Resolve the source table (database, table) from the part path UUID.
+    2. Try to read ``columns.txt`` from another active/detached part of the same table.
+    3. Fallback to live schema from ``system.columns``.
+    4. If neither source is available, raise ``CriticalLossError``.
+
+    Returns ``source_description`` indicating where the schema was taken from
+    (e.g. "another active part", "system.columns").
+
+    Raises
+    ------
+    CriticalLossError:
+        If the source table cannot be resolved or no schema source is found.
+    """
+
+    part_name = part_path.name
+
+    # Step 1: Resolve table
+    try:
+        database, table = resolve_table_from_path(client, part_path)
+        logging.info("Resolved source table for columns.txt: {}.{}", database, table)
+    except RuntimeError as exc:
+        raise CriticalLossError(
+            f"Cannot resolve source table for part {part_name}: {exc}. "
+            "columns.txt is missing and no schema source is available."
+        ) from exc
+
+    # Step 2: Try columns.txt from another part
+    columns = find_columns_txt_from_other_part(client, database, table, part_name)
+    source = "another part"
+
+    # Step 3: Fallback to system.columns
+    if columns is None:
+        logging.warning(
+            "No columns.txt found from other parts of {}.{} — falling back to system.columns",
+            database,
+            table,
+        )
+        columns = get_live_schema(client, database, table)
+        source = "system.columns"
+
+    # Step 4: Fail if no schema
+    if not columns:
+        raise CriticalLossError(
+            f"Cannot reconstruct columns.txt for part {part_name}: "
+            f"table {database}.{table} has no schema in system.columns "
+            "and no other part with columns.txt found."
+        )
+
+    # Write columns.txt
+    columns_file = assembled_dir / "columns.txt"
+    content = format_columns_txt(columns)
+    columns_file.write_text(content, encoding="utf-8")
+    logging.info(
+        "Reconstructed columns.txt for part {} from {} ({} columns)",
+        part_name,
+        source,
+        len(columns),
+    )
+    return source
 
 
 # ---------------------------------------------------------------------------
