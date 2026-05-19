@@ -496,6 +496,8 @@ def _get_zk_client(ctx: Context) -> KazooClient:
     zk_root_path = args.get("zk_root_path", None)
     zk_config_section = ctx.obj["config"].get("zookeeper", {})
     zk_randomize_hosts = zk_config_section.get("randomize_hosts", True)
+    zk_username = zk_config_section.get("username")
+    zk_password = zk_config_section.get("password")
 
     # Only create KazooRetry when config is explicitly provided
     # This preserves KazooClient's default behavior when not specified
@@ -533,6 +535,8 @@ def _get_zk_client(ctx: Context) -> KazooClient:
     auth_data = None
     if zkcli_identity is not None:
         auth_data = [("digest", zkcli_identity)]
+    elif zk_username and zk_password:
+        auth_data = [("digest", f"{zk_username}:{zk_password}")]
 
     return KazooClient(
         connect_str,
