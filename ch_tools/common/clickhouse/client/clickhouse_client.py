@@ -194,9 +194,7 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
         ``query`` may be ``None`` to perform a connectivity check (used by
         :meth:`ping`); in that case an HTTP GET to the server root is issued.
 
-        Retries transient errors (ConnectionError, Timeout, ReadTimeout,
-        ChunkedEncodingError, and ClickhouseError with status codes
-        408, 429, 500, 502, 503, 504) using exponential back-off.
+        Retries transient errors using exponential back-off.
         """
         retrying = tenacity.Retrying(
             retry=tenacity.retry_if_exception(is_transient_error),

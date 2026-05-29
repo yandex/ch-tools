@@ -1,4 +1,5 @@
-from typing import Any, Tuple, Type, Union
+from http import HTTPStatus
+from typing import Any, Optional, Tuple, Type, Union
 
 import requests
 import tenacity
@@ -7,25 +8,37 @@ from ch_tools.common import logging
 
 from .error import ClickhouseError
 
+RETRYABLE_CLICKHOUSE_ERROR_CODES = {
+    999,  # KEEPER_EXCEPTION
+}
+
+RETRYABLE_HTTP_STATUS_CODES = {
+    HTTPStatus.TOO_MANY_REQUESTS,
+    HTTPStatus.BAD_GATEWAY,
+    HTTPStatus.SERVICE_UNAVAILABLE,
+    HTTPStatus.GATEWAY_TIMEOUT,
+}
+
+
+def _get_clickhouse_error_code(exc: ClickhouseError) -> Optional[int]:
+    """
+    Extract ClickHouse exception code from the response.
+
+    ClickHouse sets the X-ClickHouse-Exception-Code header in HTTP 500
+    responses when the error occurs before streaming starts.
+    """
+    if exc.response is None:
+        return None
+    header_value = exc.response.headers.get("X-ClickHouse-Exception-Code", "")
+    try:
+        return int(header_value)
+    except (TypeError, ValueError):
+        return None
+
 
 def is_transient_error(exc: BaseException) -> bool:
     """
     Determine if an error is transient and can be retried.
-
-    Retryable errors:
-    - requests.exceptions.ConnectionError (network issues, DNS, connection reset)
-    - requests.exceptions.Timeout, ReadTimeout (transient network issues)
-    - requests.exceptions.ChunkedEncodingError (transient network)
-    - ClickhouseError with HTTP status codes from proxy/load balancer:
-      - 429: Too Many Requests
-      - 502: Bad Gateway
-      - 503: Service Unavailable
-      - 504: Gateway Timeout
-
-    Non-retryable errors:
-    - HTTP 500: real ClickHouse DB errors (not idempotent to retry)
-    - HTTP 4xx: client errors (syntax, permissions, unknown tables)
-    - All other exceptions
     """
     # Network-related errors are retryable
     if isinstance(
@@ -42,9 +55,11 @@ def is_transient_error(exc: BaseException) -> bool:
     # ClickHouse HTTP errors - check status code. Do not rely on
     # requests.Response truthiness: 4xx/5xx responses are falsy.
     if isinstance(exc, ClickhouseError):
-        retryable_status_codes = {429, 502, 503, 504}
-        status_code = exc.response.status_code if exc.response is not None else None
-        return status_code in retryable_status_codes
+        if exc.response is None:
+            return False
+        if exc.response.status_code in RETRYABLE_HTTP_STATUS_CODES:
+            return True
+        return _get_clickhouse_error_code(exc) in RETRYABLE_CLICKHOUSE_ERROR_CODES
 
     return False
 
