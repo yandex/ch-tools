@@ -10,7 +10,7 @@ from ch_tools.monrun_checks.exceptions import die
 
 
 @click.command("resetup-state")
-def resetup_state_command(_ssl: bool, _ca_bundle: Any) -> Any:
+def resetup_state_command() -> Any:
     """
     Check state of resetup process.
     """
