@@ -62,6 +62,9 @@ export DEB_TARGET_PLATFORM ?=
 # E.g. ubuntu:22.04, ubuntu:jammy, ubuntu:bionic, etc.
 # If it is not provided, default value in Dockerfile is used
 export DEB_BUILD_DISTRIBUTION ?=
+# Ubuntu package mirror used while building the Docker image.
+# E.g. http://mirror.yandex.ru/ubuntu or http://mirror.yandex.ru/ubuntu-ports
+export DEB_BUILD_MIRROR ?=
 
 
 # Should be default target, because "make" is just run
