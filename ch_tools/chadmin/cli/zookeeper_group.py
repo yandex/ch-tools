@@ -192,7 +192,7 @@ def stat_command(ctx: Context, path: str) -> None:
 
 
 @zookeeper_group.command("create")
-@argument("paths", type=ListParamType())
+@argument("path", type=StringParamType())
 @argument("value", type=StringParamType(), required=False)
 @option(
     "--make-parents",
@@ -201,38 +201,37 @@ def stat_command(ctx: Context, path: str) -> None:
     default=False,
 )
 @pass_context
-def create_command(ctx: Context, paths: list, value: str, make_parents: bool) -> None:
-    """Create one or several ZooKeeper nodes.
+def create_command(
+    ctx: Context, path: str, value: Optional[str], make_parents: bool
+) -> None:
+    """Create a ZooKeeper node.
 
     Node path can be specified with ClickHouse macros (e.g. "/test_table/{shard}/replicas/{replica}").
-    Multiple values can be specified through a comma.
     """
-    create_zk_nodes(ctx, paths, value, make_parents=make_parents)
+    create_zk_nodes(ctx, [path], value, make_parents=make_parents)
 
 
 @zookeeper_group.command("update")
-@argument("paths", type=ListParamType())
+@argument("path", type=StringParamType())
 @argument("value", type=StringParamType())
 @pass_context
-def update_command(ctx: Context, paths: list, value: str) -> None:
-    """Update one or several ZooKeeper nodes.
+def update_command(ctx: Context, path: str, value: str) -> None:
+    """Update a ZooKeeper node.
 
     Node path can be specified with ClickHouse macros (e.g. "/test_table/{shard}/replicas/{replica}").
-    Multiple values can be specified through a comma.
     """
-    update_zk_nodes(ctx, paths, value)
+    update_zk_nodes(ctx, [path], value)
 
 
 @zookeeper_group.command("delete")
-@argument("paths", type=ListParamType())
+@argument("path", type=StringParamType())
 @pass_context
-def delete_command(ctx: Context, paths: list) -> None:
-    """Delete one or several ZooKeeper nodes.
+def delete_command(ctx: Context, path: str) -> None:
+    """Delete a ZooKeeper node.
 
     Node path can be specified with ClickHouse macros (e.g. "/test_table/{shard}/replicas/{replica}").
-    Multiple values can be specified through a comma.
     """
-    delete_zk_nodes(ctx, paths)
+    delete_zk_nodes(ctx, [path])
 
 
 @zookeeper_group.command("get-table-metadata")
