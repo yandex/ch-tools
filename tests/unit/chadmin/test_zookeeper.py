@@ -1,23 +1,50 @@
+from typing import Optional
 from unittest.mock import ANY, patch
 
+import pytest
 from click.testing import CliRunner
 
 from ch_tools.chadmin.cli.zookeeper_group import zookeeper_group
 
+PATH = "/clickhouse/task_queue/ddl/query/shards/replica1:9440,replica2:9440/executed"
 
-def test_create_command_preserves_commas_in_path() -> None:
-    path = (
-        "/clickhouse/task_queue/ddl/query/shards/replica1:9440,replica2:9440/executed"
-    )
 
+@pytest.mark.parametrize(
+    "args,value,make_parents",
+    [
+        pytest.param(["create", PATH], None, False, id="no-value"),
+        pytest.param(
+            ["create", "--make-parents", PATH, "value"],
+            "value",
+            True,
+            id="value-and-make-parents",
+        ),
+    ],
+)
+def test_create_command_forwards_path_value_and_make_parents(
+    args: list[str], value: Optional[str], make_parents: bool
+) -> None:
     with patch(
         "ch_tools.chadmin.cli.zookeeper_group.create_zk_nodes"
     ) as mock_create_zk_nodes:
         result = CliRunner().invoke(
             zookeeper_group,
-            ["create", path],
+            args,
             obj={"config": {"loguru": {"handlers": {}}}},
         )
 
     assert result.exit_code == 0, result.output
-    mock_create_zk_nodes.assert_called_once_with(ANY, [path], None, make_parents=False)
+    mock_create_zk_nodes.assert_called_once_with(
+        ANY, [PATH], value, make_parents=make_parents
+    )
+
+
+def test_delete_command_rejects_multiple_paths() -> None:
+    result = CliRunner().invoke(
+        zookeeper_group,
+        ["delete", PATH, "/clickhouse/task_queue/ddl/query/shards/replica3/executed"],
+        obj={"config": {"loguru": {"handlers": {}}}},
+    )
+
+    assert result.exit_code != 0
+    assert "Got unexpected extra argument" in result.output
