@@ -411,8 +411,8 @@ Feature: chadmin zookeeper commands.
       /test/c/d
     """
     # Make sure that it is okey to delete the node and its child.
-    And we delete zookeepers nodes /test/a,/test/a/b on clickhouse01
-    And we delete zookeepers nodes /test/c/d,/test/c on clickhouse01
+    And we delete zookeepers nodes --path /test/a --path /test/a/b on clickhouse01
+    And we delete zookeepers nodes --path /test/c/d --path /test/c on clickhouse01
     Then the list of children on clickhouse01 for zk node /test is empty
 
 

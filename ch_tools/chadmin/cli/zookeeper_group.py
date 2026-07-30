@@ -192,8 +192,19 @@ def stat_command(ctx: Context, path: str) -> None:
 
 
 @zookeeper_group.command("create")
-@argument("path", type=StringParamType())
+@constraint(RequireAtLeast(1), ["path", "paths"])
+@constraint(mutually_exclusive, ["path", "paths"])
+@constraint(mutually_exclusive, ["value", "option_value"])
+@argument("path", type=StringParamType(), required=False)
 @argument("value", type=StringParamType(), required=False)
+@option(
+    "--path",
+    "paths",
+    multiple=True,
+    type=StringParamType(),
+    help="ZooKeeper node path. Can be specified multiple times.",
+)
+@option("--value", "option_value", type=StringParamType(), help="Node value.")
 @option(
     "--make-parents",
     is_flag=True,
@@ -202,36 +213,78 @@ def stat_command(ctx: Context, path: str) -> None:
 )
 @pass_context
 def create_command(
-    ctx: Context, path: str, value: Optional[str], make_parents: bool
+    ctx: Context,
+    path: Optional[str],
+    value: Optional[str],
+    paths: tuple[str, ...],
+    option_value: Optional[str],
+    make_parents: bool,
 ) -> None:
-    """Create a ZooKeeper node.
+    """Create one or more ZooKeeper nodes.
 
-    Node path can be specified with ClickHouse macros (e.g. "/test_table/{shard}/replicas/{replica}").
+    Node paths can be specified with ClickHouse macros (e.g. "/test_table/{shard}/replicas/{replica}").
+    Use repeated --path options to create multiple nodes.
     """
-    create_zk_nodes(ctx, [path], value, make_parents=make_parents)
+    paths_ = [path] if path is not None else list(paths)
+    value_ = option_value if option_value is not None else value
+    create_zk_nodes(ctx, paths_, value_, make_parents=make_parents)
 
 
 @zookeeper_group.command("update")
-@argument("path", type=StringParamType())
-@argument("value", type=StringParamType())
+@constraint(RequireAtLeast(1), ["path", "paths"])
+@constraint(RequireAtLeast(1), ["value", "option_value"])
+@constraint(mutually_exclusive, ["path", "paths"])
+@constraint(mutually_exclusive, ["value", "option_value"])
+@argument("path", type=StringParamType(), required=False)
+@argument("value", type=StringParamType(), required=False)
+@option(
+    "--path",
+    "paths",
+    multiple=True,
+    type=StringParamType(),
+    help="ZooKeeper node path. Can be specified multiple times.",
+)
+@option("--value", "option_value", type=StringParamType(), help="Node value.")
 @pass_context
-def update_command(ctx: Context, path: str, value: str) -> None:
-    """Update a ZooKeeper node.
+def update_command(
+    ctx: Context,
+    path: Optional[str],
+    value: Optional[str],
+    paths: tuple[str, ...],
+    option_value: Optional[str],
+) -> None:
+    """Update one or more ZooKeeper nodes.
 
-    Node path can be specified with ClickHouse macros (e.g. "/test_table/{shard}/replicas/{replica}").
+    Node paths can be specified with ClickHouse macros (e.g. "/test_table/{shard}/replicas/{replica}").
+    Use repeated --path options to update multiple nodes.
     """
-    update_zk_nodes(ctx, [path], value)
+    paths_ = [path] if path is not None else list(paths)
+    value_ = option_value if option_value is not None else value
+    if value_ is None:
+        raise ValueError("ZooKeeper node value is required")
+    update_zk_nodes(ctx, paths_, value_)
 
 
 @zookeeper_group.command("delete")
-@argument("path", type=StringParamType())
+@constraint(RequireAtLeast(1), ["path", "paths"])
+@constraint(mutually_exclusive, ["path", "paths"])
+@argument("path", type=StringParamType(), required=False)
+@option(
+    "--path",
+    "paths",
+    multiple=True,
+    type=StringParamType(),
+    help="ZooKeeper node path. Can be specified multiple times.",
+)
 @pass_context
-def delete_command(ctx: Context, path: str) -> None:
-    """Delete a ZooKeeper node.
+def delete_command(ctx: Context, path: Optional[str], paths: tuple[str, ...]) -> None:
+    """Delete one or more ZooKeeper nodes.
 
-    Node path can be specified with ClickHouse macros (e.g. "/test_table/{shard}/replicas/{replica}").
+    Node paths can be specified with ClickHouse macros (e.g. "/test_table/{shard}/replicas/{replica}").
+    Use repeated --path options to delete multiple nodes.
     """
-    delete_zk_nodes(ctx, [path])
+    paths_ = [path] if path is not None else list(paths)
+    delete_zk_nodes(ctx, paths_)
 
 
 @zookeeper_group.command("get-table-metadata")
