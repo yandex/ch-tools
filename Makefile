@@ -250,7 +250,7 @@ prepare-changelog: setup
 
 
 $(VERSION_FILE):
-	echo "2.$$(git rev-list HEAD --count).$$(git rev-parse --short HEAD | xargs -I {} printf '%d' 0x{})" > $@
+	echo "3.$$(git rev-list HEAD --count).$$(git rev-parse --short HEAD | xargs -I {} printf '%d' 0x{})" > $@
 
 
 .PHONY: prepare-build-deb
