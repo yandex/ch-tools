@@ -1,0 +1,34 @@
+<clickhouse>
+    <logger>
+        <level>information</level>
+        <log>/var/log/clickhouse-keeper/clickhouse-keeper.log</log>
+        <errorlog>/var/log/clickhouse-keeper/clickhouse-keeper.err.log</errorlog>
+        <size>256M</size>
+        <count>2</count>
+        <console>1</console>
+    </logger>
+
+    <listen_host>0.0.0.0</listen_host>
+
+    <keeper_server>
+        <tcp_port>2181</tcp_port>
+        <server_id>1</server_id>
+        <log_storage_path>/var/lib/clickhouse-keeper/coordination/log</log_storage_path>
+        <snapshot_storage_path>/var/lib/clickhouse-keeper/coordination/snapshots</snapshot_storage_path>
+
+        <coordination_settings>
+            <operation_timeout_ms>10000</operation_timeout_ms>
+            <min_session_timeout_ms>1000</min_session_timeout_ms>
+            <session_timeout_ms>60000</session_timeout_ms>
+            <force_sync>false</force_sync>
+        </coordination_settings>
+
+        <raft_configuration>
+            <server>
+                <id>1</id>
+                <hostname>zookeeper01</hostname>
+                <port>9234</port>
+            </server>
+        </raft_configuration>
+    </keeper_server>
+</clickhouse>

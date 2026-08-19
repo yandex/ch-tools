@@ -32,6 +32,9 @@ def create() -> dict:
             "expose": {
                 "tcp": 2181,
             },
+            "args": {
+                "CLICKHOUSE_VERSION": "${CLICKHOUSE_VERSION:-latest}",
+            },
         },
         "minio": {
             "instances": ["minio01"],
