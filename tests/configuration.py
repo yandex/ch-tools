@@ -18,7 +18,9 @@ def create() -> dict:
                 "clickhouse": 9000,
                 "keeper": 2281,
             },
-            "depends_on": ["zookeeper"],
+            "depends_on": {
+                "zookeeper": "service_healthy",
+            },
             "args": {
                 "CLICKHOUSE_VERSION": "${CLICKHOUSE_VERSION:-latest}",
             },
@@ -34,6 +36,15 @@ def create() -> dict:
             },
             "args": {
                 "CLICKHOUSE_VERSION": "${CLICKHOUSE_VERSION:-latest}",
+            },
+            "healthcheck": {
+                "test": [
+                    "CMD-SHELL",
+                    "echo ruok | nc 127.0.0.1 2181 | grep -q imok",
+                ],
+                "interval": "500ms",
+                "timeout": "1s",
+                "retries": 60,
             },
         },
         "minio": {

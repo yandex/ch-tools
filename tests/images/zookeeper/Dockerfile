@@ -8,7 +8,7 @@ ENV LANGUAGE=en_US:en
 ENV LC_ALL=en_US.UTF-8
 
 RUN apt-get update -qq && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y locales supervisor && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y locales netcat-openbsd supervisor && \
     echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
     locale-gen && \
     groupadd --system clickhouse && \
