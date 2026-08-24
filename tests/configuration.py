@@ -40,7 +40,8 @@ def create() -> dict:
             "healthcheck": {
                 "test": [
                     "CMD-SHELL",
-                    "echo ruok | nc 127.0.0.1 2181 | grep -q imok",
+                    "printf mntr | nc 127.0.0.1 2181 "
+                    "| grep -q '^zk_server_state[[:space:]]*leader$'",
                 ],
                 "interval": "500ms",
                 "timeout": "1s",

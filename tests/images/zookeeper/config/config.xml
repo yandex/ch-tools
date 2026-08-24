@@ -13,6 +13,7 @@
     <keeper_server>
         <tcp_port>2181</tcp_port>
         <server_id>1</server_id>
+        <four_letter_word_allow_list>mntr</four_letter_word_allow_list>
         <log_storage_path>/var/lib/clickhouse-keeper/coordination/log</log_storage_path>
         <snapshot_storage_path>/var/lib/clickhouse-keeper/coordination/snapshots</snapshot_storage_path>
 
