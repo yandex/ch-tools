@@ -23,6 +23,7 @@ def step_wait_for_zookeeper_alive(context: Context) -> None:
     client = _zk_client(context)
     try:
         client.start()
+        client.get("/") # wait for the zk to actually be accessible
     finally:
         client.stop()
 
