@@ -58,7 +58,7 @@ def after_step(context: ContextT, step: model.Step) -> None:
     """
     Save logs after failed step.
     """
-    if step.status == "failed":
+    if step.status in ("failed", "error"):
         save_logs(context)
         if context.config.userdata.getbool("debug"):
             pdb.post_mortem(step.exc_traceback)
