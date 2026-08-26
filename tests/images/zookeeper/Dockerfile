@@ -11,7 +11,9 @@ RUN apt-get update -qq && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y locales netcat-openbsd supervisor && \
     echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
     locale-gen && \
-    groupadd --system clickhouse && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --system clickhouse && \
     useradd --system --gid clickhouse clickhouse && \
     mkdir -p /etc/clickhouse-keeper \
              /var/lib/clickhouse-keeper/coordination/log \
@@ -20,11 +22,10 @@ RUN apt-get update -qq && \
     chown -R clickhouse:clickhouse \
         /etc/clickhouse-keeper \
         /var/lib/clickhouse-keeper \
-        /var/log/clickhouse-keeper && \
-    rm -rf /var/lib/apt/lists/*
+        /var/log/clickhouse-keeper
 
 COPY --from=keeper /usr/bin/clickhouse-keeper /usr/bin/clickhouse-keeper
-COPY tests/images/zookeeper/config/zookeeper.conf /etc/supervisord.conf
+COPY tests/images/zookeeper/config/supervisord.conf /etc/supervisord.conf
 COPY --chown=clickhouse:clickhouse tests/images/zookeeper/config/config.xml /etc/clickhouse-keeper/config.xml
 
 COPY dist/*.whl /
