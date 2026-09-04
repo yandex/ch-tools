@@ -170,8 +170,18 @@ def list_partitions_command(ctx: Context, **kwargs: Any) -> None:
         help="Filter in partitions to attach by the specified partition."
         " Multiple values can be specified through a comma.",
     ),
-    option("--min-partition", "min_partition_id"),
-    option("--max-partition", "max_partition_id"),
+    option(
+        "--min-partition",
+        "min_partition_id",
+        type=str,
+        help="Min partition id",
+    ),
+    option(
+        "--max-partition",
+        "max_partition_id",
+        type=str,
+        help="Max partition id",
+    ),
     option(
         "--disk",
         "disk_name",
@@ -204,6 +214,10 @@ def attach_partitions_command(
     database: Optional[str],
     table: Optional[str],
     partition_id: Optional[str],
+    min_partition_id: Optional[str],
+    max_partition_id: Optional[str],
+    disk_name: Optional[str],
+    use_partition_list_from_json: Optional[str],
     keep_going: bool,
     dry_run: bool,
     **kwargs: Any,
@@ -214,6 +228,10 @@ def attach_partitions_command(
         database,
         table,
         partition_id=partition_id,
+        min_partition_id=min_partition_id,
+        max_partition_id=max_partition_id,
+        disk_name=disk_name,
+        use_partition_list_from_json=use_partition_list_from_json,
         detached=True,
         reason="",
         format_="JSON",
@@ -1058,6 +1076,9 @@ def get_partitions(
             {% endif -%}
             GROUP BY database, table, partition_id
             HAVING partition_id IS NOT NULL
+            {% if disk_name -%}
+              AND has(groupUniqArray(disk), '{{ disk_name }}')
+            {% endif -%}
             {% if partition_id -%}
               AND partition_id {{ format_str_match(partition_id) }}
             {% endif -%}
@@ -1066,6 +1087,12 @@ def get_partitions(
             {% endif -%}
             {% if max_partition_id -%}
               AND partition_id <= '{{ max_partition_id }}'
+            {% endif -%}
+            {% if min_size and version_ge('23.1') -%}
+              AND sum(bytes_on_disk) >= {{ min_size }}
+            {% endif -%}
+            {% if max_size and version_ge('23.1') -%}
+              AND sum(bytes_on_disk) <= {{ max_size }}
             {% endif -%}
             {% if min_part_count -%}
               AND parts >= {{ min_part_count }}
@@ -1127,10 +1154,16 @@ def get_partitions(
                AND min_date <= '{{ max_date }}'
             {% endif -%}
             {% if min_size -%}
-               AND sum(bytes_on_disk) >= '{{ min_size }}'
+               AND sum(bytes_on_disk) >= {{ min_size }}
             {% endif -%}
             {% if max_size -%}
-               AND sum(bytes_on_disk) <= '{{ max_size }}'
+               AND sum(bytes_on_disk) <= {{ max_size }}
+            {% endif -%}
+            {% if min_part_count -%}
+               AND parts >= {{ min_part_count }}
+            {% endif -%}
+            {% if max_part_count -%}
+               AND parts <= {{ max_part_count }}
             {% endif -%}
             {% if merging -%}
                AND (database, table, partition_id) IN (
