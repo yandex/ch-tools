@@ -616,7 +616,7 @@ def _dry_run_delete_recursive(zk: KazooClient, paths: List[str]) -> None:
     logging.info("Got {} nodes to remove.", node_count)
     if dry_run_nodes is None:
         logging.info(
-            "Would delete {} nodes; path list omitted because it exceeds " "{} entries",
+            "Would delete {} nodes; path list omitted because it exceeds {} entries",
             node_count,
             RECURSIVE_DELETE_DRY_RUN_MAX_LISTED_PATHS,
         )
