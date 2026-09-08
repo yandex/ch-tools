@@ -1,5 +1,5 @@
 ARG PYTHON_VERSION=3.10
-FROM python:${PYTHON_VERSION}-bullseye
+FROM python:${PYTHON_VERSION}-bookworm
 
 ARG CLICKHOUSE_VERSION=latest
 ENV TZ=Europe/Moscow
