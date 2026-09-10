@@ -1,5 +1,5 @@
 ARG PYTHON_VERSION=3.10
-FROM python:${PYTHON_VERSION}-bullseye
+FROM python:${PYTHON_VERSION}-bookworm
 
 ARG CLICKHOUSE_VERSION=latest
 ENV TZ=Europe/Moscow
@@ -24,6 +24,7 @@ ENV LC_ALL=en_US.UTF-8
 
 # Install ClickHouse
 COPY tests/images/clickhouse/config/clickhouse-keyring.gpg /usr/share/keyrings/clickhouse-keyring.gpg
+# Test image uses a self-signed certificate; allow its client to probe secure TCP.
 RUN mkdir -p /etc/apt/sources.list.d && \
     echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg] https://packages.clickhouse.com/deb stable main" | tee /etc/apt/sources.list.d/clickhouse.list && \
     apt-get update -qq && \
@@ -38,6 +39,10 @@ RUN mkdir -p /etc/apt/sources.list.d && \
             clickhouse-client=${CLICKHOUSE_VERSION} \
             clickhouse-common-static=${CLICKHOUSE_VERSION}; \
     fi && \
+    sed -i \
+        -e 's#<client>#<client><verificationMode>none</verificationMode>#' \
+        -e 's#<name>RejectCertificateHandler</name>#<name>AcceptCertificateHandler</name>#' \
+        /etc/clickhouse-client/config.xml && \
     rm -rf /var/lib/apt/lists/* /var/cache/debconf && \
     apt-get clean
 
