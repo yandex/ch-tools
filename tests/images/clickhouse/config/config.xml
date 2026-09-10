@@ -19,9 +19,10 @@
             <preferServerCiphers>true</preferServerCiphers>
         </server>
         <client>
-            <verificationMode>none</verificationMode>
+            <caConfig>/etc/clickhouse-server/ssl/allCAs.pem</caConfig>
+            <verificationMode>strict</verificationMode>
             <invalidCertificateHandler>
-                <name>AcceptCertificateHandler</name>
+                <name>RejectCertificateHandler</name>
             </invalidCertificateHandler>
         </client>
     </openSSL>

@@ -1,0 +1,8 @@
+<config>
+    <openSSL>
+        <client>
+            <caConfig>/etc/clickhouse-server/ssl/allCAs.pem</caConfig>
+            <verificationMode>strict</verificationMode>
+        </client>
+    </openSSL>
+</config>
