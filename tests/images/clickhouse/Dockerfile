@@ -24,7 +24,6 @@ ENV LC_ALL=en_US.UTF-8
 
 # Install ClickHouse
 COPY tests/images/clickhouse/config/clickhouse-keyring.gpg /usr/share/keyrings/clickhouse-keyring.gpg
-# Test image uses a self-signed certificate; allow its client to probe secure TCP.
 RUN mkdir -p /etc/apt/sources.list.d && \
     echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg] https://packages.clickhouse.com/deb stable main" | tee /etc/apt/sources.list.d/clickhouse.list && \
     apt-get update -qq && \
@@ -39,16 +38,13 @@ RUN mkdir -p /etc/apt/sources.list.d && \
             clickhouse-client=${CLICKHOUSE_VERSION} \
             clickhouse-common-static=${CLICKHOUSE_VERSION}; \
     fi && \
-    sed -i \
-        -e 's#<client>#<client><verificationMode>none</verificationMode>#' \
-        -e 's#<name>RejectCertificateHandler</name>#<name>AcceptCertificateHandler</name>#' \
-        /etc/clickhouse-client/config.xml && \
     rm -rf /var/lib/apt/lists/* /var/cache/debconf && \
     apt-get clean
 
 COPY tests/images/clickhouse/config/monitor-ch-backup /etc/sudoers.d/monitor-ch-backup
 COPY tests/images/clickhouse/config/regions_names_ru.txt /opt/geo/regions_names_ru.txt
 COPY tests/images/clickhouse/config/regions_hierarchy.txt /opt/geo/regions_hierarchy.txt
+COPY tests/images/clickhouse/config/client.xml /etc/clickhouse-client/config.d/tls.xml
 
 RUN rm -rf /etc/supervisor && \
     ln -s /config/supervisor /etc/supervisor && \
