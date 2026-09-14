@@ -5,6 +5,8 @@ from typing import Any, Generator, Optional
 from cloup import (
     Choice,
     Context,
+    FloatRange,
+    IntRange,
     argument,
     constraint,
     group,
@@ -276,15 +278,38 @@ def update_command(
     type=StringParamType(),
     help="ZooKeeper node path. Can be specified multiple times.",
 )
+@option(
+    "--max-sweeps",
+    type=IntRange(min=0),
+    default=3,
+    show_default=True,
+    help="Maximum deletion sweeps; 0 retries until completion.",
+)
+@option(
+    "--delete-timeout",
+    type=FloatRange(min=0.0, min_open=True),
+    help="Soft wall-clock deadline for deletion, in seconds.",
+)
 @pass_context
-def delete_command(ctx: Context, path: Optional[str], paths: tuple[str, ...]) -> None:
+def delete_command(
+    ctx: Context,
+    path: Optional[str],
+    paths: tuple[str, ...],
+    max_sweeps: int,
+    delete_timeout: Optional[float],
+) -> None:
     """Delete one or more ZooKeeper nodes.
 
     Node paths can be specified with ClickHouse macros (e.g. "/test_table/{shard}/replicas/{replica}").
     Use repeated --path options to delete multiple nodes.
     """
     paths_ = [path] if path is not None else list(paths)
-    delete_zk_nodes(ctx, paths_)
+    delete_zk_nodes(
+        ctx,
+        paths_,
+        max_sweeps=max_sweeps,
+        delete_timeout=delete_timeout,
+    )
 
 
 @zookeeper_group.command("get-table-metadata")

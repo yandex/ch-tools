@@ -14,6 +14,40 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 from ch_tools.common import logging
 
 
+@given(
+    "a ZooKeeper tree at {root} with {branches:d} branches and {leaves:d} leaves per branch"
+)
+def step_create_tree(context: Context, root: str, branches: int, leaves: int) -> None:
+    client = _zk_client(context)
+    try:
+        client.start()
+        client.create(root, makepath=True)
+        for branch in range(branches):
+            parent = f"{root}/branch-{branch}"
+            client.create(parent)
+            for start in range(0, leaves, 500):
+                transaction = client.transaction()
+                for leaf in range(start, min(start + 500, leaves)):
+                    transaction.create(f"{parent}/leaf-{leaf}")
+                results = transaction.commit()
+                assert len(results) == min(500, leaves - start)
+                assert all(isinstance(result, str) for result in results), results
+    finally:
+        client.stop()
+        client.close()
+
+
+@then("ZooKeeper node {path} is absent")
+def step_node_absent(context: Context, path: str) -> None:
+    client = _zk_client(context)
+    try:
+        client.start()
+        assert client.exists(path) is None
+    finally:
+        client.stop()
+        client.close()
+
+
 @given("a working zookeeper")
 @retry(wait=wait_fixed(0.5), stop=stop_after_attempt(40))
 def step_wait_for_zookeeper_alive(context: Context) -> None:

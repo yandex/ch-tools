@@ -1,5 +1,5 @@
 ARG PYTHON_VERSION=3.10
-FROM python:${PYTHON_VERSION}-bullseye
+FROM python:${PYTHON_VERSION}-bookworm
 
 ARG CLICKHOUSE_VERSION=latest
 ENV TZ=Europe/Moscow
@@ -44,6 +44,7 @@ RUN mkdir -p /etc/apt/sources.list.d && \
 COPY tests/images/clickhouse/config/monitor-ch-backup /etc/sudoers.d/monitor-ch-backup
 COPY tests/images/clickhouse/config/regions_names_ru.txt /opt/geo/regions_names_ru.txt
 COPY tests/images/clickhouse/config/regions_hierarchy.txt /opt/geo/regions_hierarchy.txt
+COPY tests/images/clickhouse/config/client.xml /etc/clickhouse-client/config.d/tls.xml
 
 RUN rm -rf /etc/supervisor && \
     ln -s /config/supervisor /etc/supervisor && \

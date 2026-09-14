@@ -404,6 +404,16 @@ Feature: chadmin zookeeper commands.
     And we delete zookeepers nodes /test/a on clickhouse01
     Then the list of children on clickhouse01 for zk node /test is empty
 
+  Scenario: Zookeeper recursive delete spans multiple sibling batches
+    Given a ZooKeeper tree at /test/wide with 1 branches and 2001 leaves per branch
+    When we delete zookeepers nodes /test/wide on clickhouse01
+    Then ZooKeeper node /test/wide is absent
+
+  Scenario: Zookeeper recursive delete discovers nonempty branches across batches
+    Given a ZooKeeper tree at /test/branched with 1001 branches and 2 leaves per branch
+    When we delete zookeepers nodes /test/branched on clickhouse01
+    Then ZooKeeper node /test/branched is absent
+
   Scenario: Zookeeper delete parent and child nodes
     When we execute chadmin create zk nodes on clickhouse01
     """
