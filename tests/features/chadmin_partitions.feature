@@ -50,6 +50,52 @@ Feature: chadmin partitions commands.
         | SELECT database, table, partition_id FROM system.parts WHERE table='test' FORMAT JSON   | partition   | --use-partition-list-from-json /tmp/json  |
         | SELECT database, table, name FROM system.parts WHERE table='test' FORMAT JSON           | part        | --use-part-list-from-json /tmp/json       |
 
+  Scenario: Attach partitions detached on the specified disk.
+    When we execute queries on clickhouse01
+    """
+    CREATE TABLE hybrid(a int) ENGINE=MergeTree() ORDER BY a PARTITION BY a SETTINGS storage_policy='hybrid_storage';
+    INSERT INTO hybrid SELECT 1;
+    INSERT INTO hybrid SELECT 2;
+    ALTER TABLE hybrid MOVE PARTITION 2 TO DISK 'object_storage';
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin partition detach -t hybrid
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin partition attach -t hybrid --disk object_storage
+    """
+    And we execute query on clickhouse01
+    """
+    SELECT partition_id FROM system.parts WHERE table='hybrid' AND active=1
+    """
+    Then we get response
+    """
+    2
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT partition_id FROM system.detached_parts WHERE table='hybrid'
+    """
+    Then we get response
+    """
+    1
+    """
+
+    When we execute command on clickhouse01
+    """
+    chadmin partition attach -t hybrid --disk default
+    """
+    And we execute query on clickhouse01
+    """
+    SELECT count() FROM system.detached_parts WHERE table='hybrid'
+    """
+    Then we get response
+    """
+    0
+    """
+
   Scenario: Reattach with precalculated json.
     When we execute command on clickhouse01
     """
