@@ -12,6 +12,7 @@ It provides monitoring for:
 - Version of Keeper
 - Presence of snapshots
 - Presence of `NullPointerException` in logs for 24 hours
+- Count of leader elections
 
 Each monitoring check outputs in following format:
 ```

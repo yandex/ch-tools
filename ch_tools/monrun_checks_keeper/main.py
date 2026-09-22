@@ -25,6 +25,7 @@ from ch_tools.monrun_checks_keeper.keeper_commands import (
     check_snapshots,
     descriptors_command,
     get_version_command,
+    leader_elections_command,
     max_latency_command,
     min_latency_command,
     queue_command,
@@ -168,6 +169,7 @@ COMMANDS = [
     get_version_command,
     check_snapshots,
     tls_command,
+    leader_elections_command,
 ]
 
 cli.add_command(status_command(COMMANDS))
