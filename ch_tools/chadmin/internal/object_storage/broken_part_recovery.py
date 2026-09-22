@@ -56,7 +56,9 @@ from ch_tools.common.utils import escape_for_file_name, version_ge
 COLUMNS_FILE = "columns.txt"
 COLUMNS_SUBSTREAMS_FILE = "columns_substreams.txt"
 COUNT_FILE = "count.txt"
+DEFAULT_COMPRESSION_CODEC_FILE = "default_compression_codec.txt"
 SERIALIZATION_FILE = "serialization.json"
+BUILTIN_COMPRESSION_CODEC = b"CODEC(LZ4)"
 
 # Synthetic names used while materializing recovered data.
 RECOVERY_ROW_EXISTS_COLUMN = "_recovery_row_exists"
@@ -676,7 +678,13 @@ def _prepare_staging_part(
     analysis: RecoveryAnalysis,
     file_recoverability: Dict[str, bool],
 ) -> str:
-    """Copy intact streams and regenerate metadata for the staging part."""
+    """Copy intact streams and regenerate metadata for the staging part.
+
+    Since 26.9 ClickHouse refuses to attach a part without
+    ``default_compression_codec.txt`` instead of deducing the codec, so the file
+    is carried over from the source part, or written with the built-in default
+    when the source copy is lost.
+    """
     stage_root = _get_table_path_on_disk(ctx, stage, source.disk)
     relative_stage_root = str(stage_root.relative_to(source.disk.root))
     detached_root = os.path.join(relative_stage_root, "detached")
@@ -689,6 +697,15 @@ def _prepare_staging_part(
             os.path.join(source.relative_path, filename),
             os.path.join(stage_part, filename),
         )
+
+    codec_path = os.path.join(stage_part, DEFAULT_COMPRESSION_CODEC_FILE)
+    if file_recoverability.get(DEFAULT_COMPRESSION_CODEC_FILE):
+        disk_client.copy(
+            os.path.join(source.relative_path, DEFAULT_COMPRESSION_CODEC_FILE),
+            codec_path,
+        )
+    else:
+        disk_client.write(codec_path, BUILTIN_COMPRESSION_CODEC)
 
     disk_client.write(
         os.path.join(stage_part, COLUMNS_FILE),
