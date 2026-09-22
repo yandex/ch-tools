@@ -12,6 +12,7 @@
 
     <keeper_server>
         <tcp_port>2181</tcp_port>
+        <tcp_port_secure>2281</tcp_port_secure>
         <server_id>1</server_id>
         <four_letter_word_allow_list>mntr</four_letter_word_allow_list>
         <log_storage_path>/var/lib/clickhouse-keeper/coordination/log</log_storage_path>
@@ -32,4 +33,16 @@
             </server>
         </raft_configuration>
     </keeper_server>
+
+    <openSSL>
+        <server>
+            <certificateFile>/etc/clickhouse-keeper/server.crt</certificateFile>
+            <privateKeyFile>/etc/clickhouse-keeper/server.key</privateKeyFile>
+            <verificationMode>none</verificationMode>
+            <loadDefaultCAFile>false</loadDefaultCAFile>
+            <cacheSessions>true</cacheSessions>
+            <disableProtocols>sslv2,sslv3</disableProtocols>
+            <preferServerCiphers>true</preferServerCiphers>
+        </server>
+    </openSSL>
 </clickhouse>
