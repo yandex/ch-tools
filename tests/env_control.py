@@ -75,15 +75,18 @@ def _run_stage(stage: str, context: ContextT) -> None:
     """
     assert stage in STAGES, stage + " not implemented"
 
-    _init_context(context)
+    _init_context(context, reuse_state=stage != "create")
 
     for step in STAGES[stage]:
         step(context)
 
 
-def _init_context(context: ContextT) -> None:
+def _init_context(context: ContextT, reuse_state: bool = True) -> None:
     """
     Initialize context.
+
+    The state file outlives a session, so reusing it on create would keep the
+    config of whichever run wrote it, ch_version included.
     """
     if getattr(context, "initialized", False):
         return
@@ -91,12 +94,16 @@ def _init_context(context: ContextT) -> None:
     if not hasattr(context, "state_file"):
         context.state_file = SESSION_STATE_CONF
 
-    try:
-        with open(context.state_file, "rb") as session_conf:
-            context.conf = pickle.load(session_conf)
-    except FileNotFoundError:
-        logging.info("creating new test config")
-        context.conf = configuration.create()
+    if reuse_state:
+        try:
+            with open(context.state_file, "rb") as session_conf:
+                context.conf = pickle.load(session_conf)
+            return
+        except FileNotFoundError:
+            pass
+
+    logging.info("creating new test config")
+    context.conf = configuration.create()
 
 
 def cli_main() -> None:
