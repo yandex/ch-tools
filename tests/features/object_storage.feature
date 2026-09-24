@@ -578,7 +578,11 @@ Feature: chadmin object-storage commands
     """
 
   Scenario: Sanity check when no objects in CH
-    Given we have executed queries on clickhouse01
+    Given we have executed queries on clickhouse02
+    """
+    SYSTEM SYNC REPLICA test.table_s3_01;
+    """
+    And we have executed queries on clickhouse01
     """
     DROP TABLE test.table_s3_01 ON CLUSTER '{cluster}' SYNC;
     """
