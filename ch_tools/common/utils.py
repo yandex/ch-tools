@@ -1,10 +1,14 @@
 import os
 import re
 import subprocess
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Union
 
 from click import Context
+from file_read_backwards import FileReadBackwards
+
+LOGS_REGEX_PREFIX = r"^([0-9]{4}\.[0-9]{2}\.[0-9]{2}\ [0-9]{2}\:[0-9]{2}\:[0-9]{2}).*?"
 
 
 def escape_for_file_name(value: str) -> str:
@@ -221,3 +225,32 @@ def update_by_key_path(object_: dict[str, Any], key_path: str, value: Any) -> No
                 _update(obj[key], path, value, current_path_str)
 
     _update(object_, key_path.split("."), value, "")
+
+
+def count_log_messages(
+    logfile: str, watch_seconds: int, match: str, exclude: str | None
+) -> int:
+    """
+    Read logfile and count message occurrences.
+    """
+    datetime_start = datetime.now() - timedelta(seconds=watch_seconds)
+    occurrences = 0
+    match_regex = re.compile(LOGS_REGEX_PREFIX + match)
+
+    exclude_regex = None
+    if exclude is not None:
+        exclude_regex = re.compile(LOGS_REGEX_PREFIX + exclude)
+
+    with FileReadBackwards(logfile, encoding="utf-8") as f:
+        for line in f:
+            if exclude_regex is not None and exclude_regex.match(line):
+                continue
+            matched_line = match_regex.match(line)
+            if matched_line is None:
+                continue
+            date = matched_line.group(1)
+            if datetime.strptime(date, "%Y.%m.%d %H:%M:%S") < datetime_start:
+                break
+            occurrences += 1
+
+    return occurrences
