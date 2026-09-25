@@ -74,7 +74,7 @@ def _configure_s3_credentials(context: ContextT) -> None:
     secret_key = context.conf["s3"]["access_secret_key"]
     _mc_execute(
         context,
-        f"alias set local http://localhost:9000 {access_key} {secret_key}",
+        f"config host add local http://localhost:9000 {access_key} {secret_key}",
     )
 
 
