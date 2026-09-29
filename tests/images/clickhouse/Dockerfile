@@ -45,6 +45,7 @@ COPY tests/images/clickhouse/config/monitor-ch-backup /etc/sudoers.d/monitor-ch-
 COPY tests/images/clickhouse/config/regions_names_ru.txt /opt/geo/regions_names_ru.txt
 COPY tests/images/clickhouse/config/regions_hierarchy.txt /opt/geo/regions_hierarchy.txt
 COPY tests/images/clickhouse/config/client.xml /etc/clickhouse-client/config.d/tls.xml
+COPY tests/images/ssl/rootCACert.pem /etc/clickhouse-server/ssl/rootCACert.pem
 
 RUN rm -rf /etc/supervisor && \
     ln -s /config/supervisor /etc/supervisor && \
@@ -62,7 +63,8 @@ RUN rm -rf /etc/supervisor && \
         -keyout /etc/clickhouse-server/ssl/server.key \
         -addext "subjectAltName=DNS:clickhouse01,DNS:clickhouse02,DNS:clickhouse01.ch_tools_test,DNS:clickhouse02.ch_tools_test" \
         -out /etc/clickhouse-server/ssl/server.crt && \
-    ln -s /etc/clickhouse-server/ssl/server.crt /etc/clickhouse-server/ssl/allCAs.pem && \
+    cat /etc/clickhouse-server/ssl/server.crt /etc/clickhouse-server/ssl/rootCACert.pem \
+        > /etc/clickhouse-server/ssl/allCAs.pem && \
     \
     groupadd monitor && useradd -g monitor -G monitor,clickhouse monitor && \
     echo 'monitor ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && \
