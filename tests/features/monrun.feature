@@ -418,7 +418,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects --state-zk-path /tmp/shard_1 --min-uptime 1s
+    ch-monitoring orphaned-objects --state-zk-path /tmp/shard_1 --min-uptime 0s
     """
     Then we get response
     """
@@ -436,7 +436,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects --state-zk-path /tmp/shard_1 --min-uptime 1s
+    ch-monitoring orphaned-objects --state-zk-path /tmp/shard_1 --min-uptime 0s
     """
     Then we get response contains
     """
@@ -444,7 +444,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects -w 9 -c 19 --state-zk-path /tmp/shard_1 --min-uptime 1s
+    ch-monitoring orphaned-objects -w 9 -c 19 --state-zk-path /tmp/shard_1 --min-uptime 0s
     """
     Then we get response contains
     """
@@ -452,7 +452,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects -w 4 -c 9 --state-zk-path /tmp/shard_1 --min-uptime 1s
+    ch-monitoring orphaned-objects -w 4 -c 9 --state-zk-path /tmp/shard_1 --min-uptime 0s
     """
     Then we get response contains
     """
@@ -472,7 +472,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects --state-local --min-uptime 1s
+    ch-monitoring orphaned-objects --state-local --min-uptime 0s
     """
     Then we get response
     """
@@ -490,7 +490,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects --state-local --min-uptime 1s
+    ch-monitoring orphaned-objects --state-local --min-uptime 0s
     """
     Then we get response contains
     """
@@ -498,7 +498,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects -w 9 -c 19 --state-local --min-uptime 1s
+    ch-monitoring orphaned-objects -w 9 -c 19 --state-local --min-uptime 0s
     """
     Then we get response contains
     """
@@ -506,7 +506,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects -w 4 -c 9 --state-local --min-uptime 1s
+    ch-monitoring orphaned-objects -w 4 -c 9 --state-local --min-uptime 0s
     """
     Then we get response contains
     """
@@ -514,7 +514,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects --state-local --min-uptime 1s --human-readable
+    ch-monitoring orphaned-objects --state-local --min-uptime 0s --human-readable
     """
     Then we get response contains
     """
@@ -524,7 +524,7 @@ Feature: ch-monitoring tool
   Scenario: Check clickhouse orphaned objects --state-local and --state-zk-path are mutually exclusive
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects -w 9 -c 19 --state-local --state-zk-path /tmp/shard_1 --min-uptime 1s
+    ch-monitoring orphaned-objects -w 9 -c 19 --state-local --state-zk-path /tmp/shard_1 --min-uptime 0s
     """
     Then we get response contains
     """
@@ -532,7 +532,7 @@ Feature: ch-monitoring tool
     """
     When we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects -w 9 -c 19 --min-uptime 1s
+    ch-monitoring orphaned-objects -w 9 -c 19 --min-uptime 0s
     """
     Then we get response contains
     """
@@ -543,7 +543,7 @@ Feature: ch-monitoring tool
     When we create file /tmp/object_storage_cleanup_state.json with data "{ \"orphaned_objects_size\": 0,  \"error_msg\": \"ERROR\" }"
     And we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects --state-local --min-uptime 1s
+    ch-monitoring orphaned-objects --state-local --min-uptime 0s
     """
     Then we get response
     """
@@ -554,7 +554,7 @@ Feature: ch-monitoring tool
     When we create file /tmp/object_storage_cleanup_state.json with data "{ \"orphaned_objects_size\": 0,  \"error_msg\": \"Code: 27. DB::Exception: Cannot parse: input:: expected '\\\\t' before: 'klg%2D1acvr8hmq0n16qm5%2Edb%2Eyandex%2Enet\\\\ndefault\\\\n6736d483-516a-4892-87d4-084d5c1f6d3c\\\\n': While executing SystemRemoteDataPaths. (CANNOT_PARSE_INPUT_ASSERTION_FAILED) (version 24.8.5.115 (official build))  Query: SELECT obj_path, obj_size FROM _system.listing_objects_from_object_storage AS object_storage LEFT ANTI JOIN remoteSecure('klg-1acvr8hmq0n16qm5.db.yandex.net', system.remote_data_paths) AS object_table ON object_table.remote_path = object_storage.obj_path AND object_table.disk_name = 'object_storage' SETTINGS traverse_shadow_remote_data_paths=1 FORMAT TabSeparated (klg-1acvr8hmq0n16qm5.mdb.yandex.net)\" }"
     And we execute command on clickhouse01
     """
-    ch-monitoring orphaned-objects --state-local --min-uptime 1s
+    ch-monitoring orphaned-objects --state-local --min-uptime 0s
     """
     Then we get response
     """
