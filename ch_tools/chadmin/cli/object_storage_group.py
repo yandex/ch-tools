@@ -245,6 +245,9 @@ def clean_command(
         state = OrphanedObjectsState(total_size, error_msg)
 
         if store_state_zk_path:
+            ctx.obj["zk_client_args"] = {
+                "no_chroot": True,
+            }
             _store_state_zk_save(
                 ctx,
                 store_state_zk_path,
