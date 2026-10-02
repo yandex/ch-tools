@@ -127,5 +127,8 @@ def _local_get_orphaned_objects_state() -> "OrphanedObjectsState":
 def _zk_get_orphaned_objects_state(
     ctx: click.Context, state_zk_path: str
 ) -> "OrphanedObjectsState":
+    ctx.obj["zk_client_args"] = {
+        "no_chroot": True,
+    }
     zk_data = get_zk_node(ctx, state_zk_path)
     return OrphanedObjectsState.from_json(zk_data)
