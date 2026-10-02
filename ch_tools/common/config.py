@@ -242,6 +242,13 @@ DEFAULT_CONFIG = {
             "crit": 10,
             "warn": 30,
         },
+        "leader-elections": {
+            "@disabled": False,
+            "crit": 8,
+            "warn": 5,
+            "watch_seconds": 600,
+            "logfile": "/var/log/clickhouse-keeper/clickhouse-keeper.log",
+        },
     },
     # Logging configuration.
     "loguru": {
