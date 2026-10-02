@@ -53,6 +53,7 @@ from ch_tools.common.clickhouse.client.clickhouse_client import (
     clickhouse_client,
 )
 from ch_tools.common.clickhouse.client.query import Query
+from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 
 # Batch size for inserts in a listing table
@@ -147,10 +148,27 @@ def clean(
         use_saved=use_saved_list,
         ignore_missing_cloud_storage_backups=ignore_missing_cloud_storage_backups,
     ) as (remote_blobs_table, local_blobs_table, orphaned_blobs_table):
+        from_time_cond, to_time_cond = _prepare_orphaned_objects_query_cond(
+            from_time, to_time
+        )
+
         timeout = config["antijoin_timeout"]
         query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
         orphaned_objects_iterator = _object_list_generator(
-            ctx, orphaned_blobs_table, from_time, to_time, query_settings, timeout
+            ctx,
+            orphaned_blobs_table,
+            from_time_cond,
+            to_time_cond,
+            query_settings,
+            timeout,
+        )
+        orphaned_objects_count, orphaned_objects_size = _orphaned_objects_stat(
+            ctx,
+            orphaned_blobs_table,
+            from_time_cond,
+            to_time_cond,
+            query_settings,
+            timeout,
         )
         listing_size_in_bucket = int(
             ch_client.query_json_data_first_row(
@@ -178,6 +196,8 @@ def clean(
             max_size_to_delete_bytes,
             max_size_to_delete_fraction,
             stat_partitioning,
+            orphaned_objects_count,
+            orphaned_objects_size,
             dry_run,
         )
 
@@ -291,12 +311,12 @@ def _process_objects_batch(
     batch_size = sum(obj.size for obj in objects)
     is_last_batch = False
 
-    if result_stat.total["total_size"] + batch_size > max_size_to_delete:
+    if result_stat.total["deleted_size"] + batch_size > max_size_to_delete:
         # To fit into the size restriction: sort all objects by size
         # And remove elements from the end
         is_last_batch = True
         objects = sorted(objects, key=lambda obj: obj.size)
-        while result_stat.total["total_size"] + batch_size > max_size_to_delete:
+        while result_stat.total["deleted_size"] + batch_size > max_size_to_delete:
             batch_size -= objects[-1].size
             objects.pop()
 
@@ -310,12 +330,15 @@ def _cleanup_orphaned_objects(
     max_size_to_delete_bytes: int,
     max_size_to_delete_fraction: float,
     stat_partitioning: StatisticsPeriod,
+    orphaned_objects_count: int,
+    orphaned_objects_size: int,
     dry_run: bool,
 ) -> ResultStat:
     """
     Performs the main logic for cleaning up orphaned objects.
     """
     result_stat = ResultStat(stat_partitioning)
+    result_stat.update_total(orphaned_objects_count, orphaned_objects_size)
 
     max_size_to_delete = _calculate_size_limits(
         listing_size_in_bucket, max_size_to_delete_bytes, max_size_to_delete_fraction
@@ -331,10 +354,12 @@ def _cleanup_orphaned_objects(
         if is_last_batch:
             break
 
-    deleted = result_stat.total["deleted"]
+    deleted_count = result_stat.total["deleted_count"]
+    deleted_size = format_size(result_stat.total["deleted_size"], binary=True)
+    total_count = result_stat.total["total_count"]
     total_size = format_size(result_stat.total["total_size"], binary=True)
     logging.info(
-        f"{'Would delete' if dry_run else 'Deleted'} {deleted} objects with total size {total_size} from bucket [{disk_conf.bucket_name}]",
+        f"{'Would delete' if dry_run else 'Deleted'} {deleted_count} / {total_count} objects with size {deleted_size} / {total_size} from bucket [{disk_conf.bucket_name}]",
     )
 
     return result_stat
@@ -819,19 +844,11 @@ def _collect_space_usage(
 def _object_list_generator(
     ctx: Context,
     table_name: str,
-    from_time: Optional[timedelta],
-    to_time: Optional[timedelta],
+    from_time_cond: Optional[str],
+    to_time_cond: Optional[str],
     query_settings: Dict[str, Any],
     timeout: Optional[int] = None,
 ) -> Callable:
-    now = datetime.now(timezone.utc)
-    from_time_cond = (
-        (now - from_time).strftime(DATETIME_FORMAT) if from_time is not None else None
-    )
-    to_time_cond = (
-        (now - to_time).strftime(DATETIME_FORMAT) if to_time is not None else None
-    )
-
     query = """
         SELECT * FROM {{ table_name }}
         WHERE 1
@@ -860,6 +877,55 @@ def _object_list_generator(
                 yield ObjListItem.from_json(line)
 
     return obj_list_iterator
+
+
+def _orphaned_objects_stat(
+    ctx: Context,
+    table_name: str,
+    from_time_cond: Optional[str],
+    to_time_cond: Optional[str],
+    query_settings: Dict[str, Any],
+    timeout: Optional[int] = None,
+) -> Tuple[int, int]:
+    query = """
+        SELECT count(*) AS count, sum(obj_size) AS size FROM {{ table_name }}
+        WHERE 1
+        {%- if from_time_cond %}
+            AND last_modified >= toDateTime('{{ from_time_cond }}')
+        {%- endif %}
+        {%- if to_time_cond %}
+            AND last_modified <= toDateTime('{{ to_time_cond }}')
+        {%- endif %}
+        """
+
+    values = execute_query(
+        ctx,
+        query,
+        format_=OutputFormat.JSON,
+        timeout=timeout,
+        settings=query_settings,
+        table_name=table_name,
+        from_time_cond=from_time_cond,
+        to_time_cond=to_time_cond,
+    )["data"][0]
+
+    return int(values["count"]), int(values["size"])
+
+
+def _prepare_orphaned_objects_query_cond(
+    from_time: Optional[timedelta],
+    to_time: Optional[timedelta],
+) -> Tuple[Optional[str], Optional[str]]:
+    now = datetime.now(timezone.utc)
+
+    from_time_cond = (
+        (now - from_time).strftime(DATETIME_FORMAT) if from_time is not None else None
+    )
+    to_time_cond = (
+        (now - to_time).strftime(DATETIME_FORMAT) if to_time is not None else None
+    )
+
+    return from_time_cond, to_time_cond
 
 
 def _sanity_check_before_cleanup(
