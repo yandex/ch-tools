@@ -12,12 +12,14 @@ from kazoo.security import ACL, make_digest_acl
 from ch_tools.common.clickhouse.config import ClickhouseKeeperConfig
 from ch_tools.common.result import CRIT, OK, WARNING, Result
 from ch_tools.common.tls import check_cert_on_ports
+from ch_tools.common.utils import count_log_messages
 
 ZOOKEEPER_CFG_FILE = "/etc/zookeeper/conf/zoo.cfg"
 DEFAULT_ZOOKEEPER_DATA_DIR = "/var/lib/zookeeper"
 DEFAULT_ZOOKEEPER_DATA_LOG_DIR = "/var/log/zookeeper"
 KEEPER_DEFAULT_PATH = "/var/lib/clickhouse-keeper/snapshots"
 CH_DBMS_DEFAULT_PATH = "/var/lib/clickhouse/snapshots"
+LEADER_ELECTION_PATTERN = "(i|I)nitiate leader election"
 
 context = ssl.create_default_context()
 
@@ -180,6 +182,40 @@ def tls_command(
         return Result(WARNING, "Keeper has security port without configured TLS cert.")
 
     return check_cert_on_ports(port_list, crit, warn, chain, path)
+
+
+@command("leader-elections")
+@option("-c", "--critical", "crit", type=int, help="Critical threshold.")
+@option("-w", "--warning", "warn", type=int, help="Warning threshold.")
+@option(
+    "-n",
+    "--watch-seconds",
+    "watch_seconds",
+    type=int,
+    help="Watch seconds.",
+)
+@option(
+    "-f",
+    "--logfile",
+    "logfile",
+    help="Log file path.",
+)
+def leader_elections_command(
+    crit: int, warn: int, watch_seconds: int, logfile: str
+) -> Result:
+    """
+    Check count of leader elections in Keeper logs.
+    """
+    error_occurrences = count_log_messages(
+        logfile, watch_seconds, LEADER_ELECTION_PATTERN, None
+    )
+
+    msg = f"{error_occurrences} leader elections for last {watch_seconds} seconds"
+    if error_occurrences >= crit:
+        return Result(CRIT, msg)
+    if error_occurrences >= warn:
+        return Result(WARNING, msg)
+    return Result(OK, f"OK, {msg}")
 
 
 def get_zookeeper_log_files_for_last_day() -> List[str]:
