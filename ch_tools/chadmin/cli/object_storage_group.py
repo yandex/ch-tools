@@ -242,7 +242,8 @@ def clean_command(
         )
     finally:
         total_size = result_stat.total["total_size"]
-        state = OrphanedObjectsState(total_size, error_msg)
+        deleted_size = result_stat.total["deleted_size"]
+        state = OrphanedObjectsState(total_size, deleted_size, not dry_run, error_msg)
 
         if store_state_zk_path:
             ctx.obj["zk_client_args"] = {
@@ -487,7 +488,9 @@ def _print_response(ctx: Context, dry_run: bool, result_stat: ResultStat) -> Non
     # List of dicts for print_response()
     clean_stats = {
         partition: {
-            "WouldDelete" if dry_run else "Deleted": values["deleted"],
+            "WouldDeleted" if dry_run else "Deleted": values["deleted_count"],
+            "WouldDeletedSize" if dry_run else "DeletedSize": values["deleted_size"],
+            "Total": values["total_count"],
             "TotalSize": values["total_size"],
         }
         for partition, values in result_stat.items()
@@ -498,8 +501,13 @@ def _print_response(ctx: Context, dry_run: bool, result_stat: ResultStat) -> Non
 
         if "Deleted" in stats:
             result["Deleted"] = stats["Deleted"]
-        if "WouldDelete" in stats:
-            result["WouldDelete"] = stats["WouldDelete"]
+        if "WouldDeleted" in stats:
+            result["WouldDeleted"] = stats["WouldDeleted"]
+        if "DeletedSize" in stats:
+            result["DeletedSize"] = stats["DeletedSize"]
+        if "WouldDeletedSize" in stats:
+            result["WouldDeletedSize"] = stats["WouldDeletedSize"]
+        result["Total"] = stats["Total"]
         result["TotalSize"] = format_size(stats["TotalSize"], binary=True)
 
         return result
