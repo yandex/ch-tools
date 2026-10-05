@@ -374,6 +374,10 @@ Feature: chadmin database migrate command
     """
     When we execute query on clickhouse02
     """
+    SYSTEM SYNC DATABASE REPLICA non_repl_db
+    """
+    When we execute query on clickhouse02
+    """
     SELECT * FROM non_repl_db.foo FORMAT Values
     """
     Then we get response
@@ -557,6 +561,10 @@ Feature: chadmin database migrate command
     """
     When we execute query on clickhouse02
     """
+    SYSTEM SYNC REPLICA non_repl_db.foo
+    """
+    When we execute query on clickhouse02
+    """
     SELECT * FROM non_repl_db.foo FORMAT Values
     """
     Then we get response
@@ -702,6 +710,10 @@ Feature: chadmin database migrate command
     Then we get response
     """
     (42,'value')
+    """
+    When we execute query on clickhouse02
+    """
+    SYSTEM SYNC REPLICA non_repl_db.foo
     """
     When we execute query on clickhouse02
     """
@@ -1491,6 +1503,10 @@ Feature: chadmin database migrate command
 
     When we execute query on clickhouse02
     """
+    SYSTEM SYNC REPLICA non_repl_db.test_table1
+    """
+    When we execute query on clickhouse02
+    """
     SELECT * FROM non_repl_db.test_table1 FORMAT Values
     """
     Then we get response
@@ -1511,6 +1527,10 @@ Feature: chadmin database migrate command
     (117,'value')
     """
 
+    When we execute query on clickhouse02
+    """
+    SYSTEM SYNC REPLICA non_repl_db.test_table2
+    """
     When we execute query on clickhouse02
     """
     SELECT * FROM non_repl_db.test_table2 FORMAT Values
