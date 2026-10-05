@@ -79,7 +79,11 @@ def orphaned_objects_command(
     except Exception as e:
         return Result(CRIT, str(e))
 
-    total_size = state.orphaned_objects_size
+    total_size = (
+        state.orphaned_objects_size - state.deleted_orphaned_objects_size
+        if state.deleted
+        else state.orphaned_objects_size
+    )
     error_msg = state.error_msg
 
     if error_msg != "":

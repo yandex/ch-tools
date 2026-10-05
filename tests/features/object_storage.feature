@@ -151,7 +151,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 0
+      WouldDeleted: 0
+      WouldDeletedSize: 0
+      Total: 0
       TotalSize: 0
     """
 
@@ -162,7 +164,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 0
+      WouldDeleted: 0
+      WouldDeletedSize: 0
+      Total: 0
       TotalSize: 0
     """
 
@@ -179,7 +183,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 1
+      WouldDeleted: 1
+      WouldDeletedSize: 1
+      Total: 1
       TotalSize: 1
     """
     When we execute command on clickhouse01
@@ -189,6 +195,8 @@ Feature: chadmin object-storage commands
     Then we get response contains
     """
       Deleted: 1
+      DeletedSize: 1
+      Total: 1
       TotalSize: 1
     """
     And path does not exist in S3
@@ -210,7 +218,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 100
+      WouldDeleted: 100
+      WouldDeletedSize: 200
+      Total: 100
       TotalSize: 200
     """
     When we execute command on clickhouse01
@@ -220,6 +230,8 @@ Feature: chadmin object-storage commands
     Then we get response contains
     """
       Deleted: 100
+      DeletedSize: 200
+      Total: 100
       TotalSize: 200
     """
     When we execute command on clickhouse01
@@ -228,7 +240,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 0
+      WouldDeleted: 0
+      WouldDeletedSize: 0
+      Total: 0
       TotalSize: 0
     """
  
@@ -257,7 +271,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 1
+      WouldDeleted: 1
+      WouldDeletedSize: 2
+      Total: 1
       TotalSize: 2
     """
     When we execute command on clickhouse01
@@ -267,6 +283,8 @@ Feature: chadmin object-storage commands
     Then we get response contains
     """
       Deleted: 1
+      DeletedSize: 2
+      Total: 1
       TotalSize: 2
     """
     And path does not exist in S3
@@ -280,7 +298,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 1
+      WouldDeleted: 1
+      WouldDeletedSize: 3
+      Total: 1
       TotalSize: 3
     """
   
@@ -293,6 +313,8 @@ Feature: chadmin object-storage commands
     """
     {
         "orphaned_objects_size": 0,
+        "deleted_orphaned_objects_size": 0,
+        "deleted": false,
         "error_msg": ""
     }
     """
@@ -310,6 +332,8 @@ Feature: chadmin object-storage commands
     """
     {
         "orphaned_objects_size": 10,
+        "deleted_orphaned_objects_size": 10,
+        "deleted": false,
         "error_msg": ""
     }
     """
@@ -323,6 +347,8 @@ Feature: chadmin object-storage commands
     """
     {
         "orphaned_objects_size": 0,
+        "deleted_orphaned_objects_size": 0,
+        "deleted": false,
         "error_msg": ""
     }
     """
@@ -340,6 +366,8 @@ Feature: chadmin object-storage commands
     """
     {
         "orphaned_objects_size": 10,
+        "deleted_orphaned_objects_size": 10,
+        "deleted": false,
         "error_msg": ""
     }
     """
@@ -373,7 +401,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 20
+      WouldDeleted: 20
+      WouldDeletedSize: 40
+      Total: 20
       TotalSize: 40
     """
     When we execute command on clickhouse01
@@ -383,7 +413,9 @@ Feature: chadmin object-storage commands
     Then we get response contains
     """
       Deleted: 15
-      TotalSize: 30
+      DeletedSize: 30
+      Total: 20
+      TotalSize: 40
     """
     When we execute command on clickhouse01
     """
@@ -391,7 +423,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 5
+      WouldDeleted: 5
+      WouldDeletedSize: 10
+      Total: 5
       TotalSize: 10
     """
 
@@ -414,7 +448,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 20
+      WouldDeleted: 20
+      WouldDeletedSize: 40
+      Total: 20
       TotalSize: 40
     """
     When we execute command on clickhouse01
@@ -424,7 +460,9 @@ Feature: chadmin object-storage commands
     Then we get response contains
     """
       Deleted: 15
-      TotalSize: 30
+      DeletedSize: 30
+      Total: 20
+      TotalSize: 40
     """
     When we execute command on clickhouse01
     """
@@ -432,7 +470,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 5
+      WouldDeleted: 5
+      WouldDeletedSize: 10
+      Total: 5
       TotalSize: 10
     """
 
@@ -456,7 +496,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 100
+      WouldDeleted: 100
+      WouldDeletedSize: 1100
+      Total: 100
       TotalSize: 1100
     """
     When we try to execute command on clickhouse01
@@ -493,7 +535,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 0
+      WouldDeleted: 0
+      WouldDeletedSize: 0
+      Total: 0
       TotalSize: 0
     """
     When we execute command on clickhouse01
@@ -506,7 +550,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response matches
     """
-      WouldDelete: [1-9][0-9]*
+      WouldDeleted: [1-9][0-9]*
+      WouldDeletedSize: [1-9][0-9]*
+      Total: [1-9][0-9]*
       TotalSize: [1-9][0-9]*
     """
     When we execute command on clickhouse01
@@ -515,7 +561,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 0
+      WouldDeleted: 0
+      WouldDeletedSize: 0
+      Total: 0
       TotalSize: 0
     """
     When we execute command on clickhouse01
@@ -593,7 +641,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 0
+      WouldDeleted: 0
+      WouldDeletedSize: 0
+      Total: 0
       TotalSize: 0
     """
 
@@ -620,7 +670,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 0
+      WouldDeleted: 0
+      WouldDeletedSize: 0
+      Total: 0
       TotalSize: 0
     """
     When we execute command on clickhouse01
@@ -629,7 +681,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 1
+      WouldDeleted: 1
+      WouldDeletedSize: 1
+      Total: 1
       TotalSize: 1
     """
 
@@ -641,7 +695,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 0
+      WouldDeleted: 0
+      WouldDeletedSize: 0
+      Total: 0
       TotalSize: 0
     """
     When we stop clickhouse on clickhouse02
@@ -669,7 +725,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 0
+      WouldDeleted: 0
+      WouldDeletedSize: 0
+      Total: 0
       TotalSize: 0
     """
     When we stop clickhouse on clickhouse02
@@ -711,8 +769,10 @@ Feature: chadmin object-storage commands
     Then we get response matches
     """
     '\d{4}-\d{2}-\d{2}':
-      WouldDelete: 1
-      TotalSize: 1
+      WouldDeleted: 1
+      WouldDeletedSize: 1
+      Total: 0
+      TotalSize: 0
     """
     When we execute command on clickhouse01
     """
@@ -721,8 +781,10 @@ Feature: chadmin object-storage commands
     Then we get response matches
     """
     \d{4}-\d{2}:
-      WouldDelete: 1
-      TotalSize: 1
+      WouldDeleted: 1
+      WouldDeletedSize: 1
+      Total: 0
+      TotalSize: 0
     """
 
   @require_version_23.3
@@ -737,7 +799,9 @@ Feature: chadmin object-storage commands
     """
     Then we get response contains
     """
-      WouldDelete: 0
+      WouldDeleted: 0
+      WouldDeletedSize: 0
+      Total: 0
       TotalSize: 0
     """
     When we execute query on clickhouse01

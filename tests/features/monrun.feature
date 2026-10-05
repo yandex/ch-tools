@@ -458,6 +458,39 @@ Feature: ch-monitoring tool
     """
     2;Total size: 10
     """
+  
+  Scenario: Check clickhouse deleted orphaned objects with state-zk-path option
+    Given clickhouse-tools configuration on clickhouse01,clickhouse02
+    """
+    clickhouse:
+        user: "_admin"
+        password: ""
+    """
+    When we put object in S3
+    """
+      bucket: cloud-storage-test
+      path: /data/cluster_id/shard_1/orpaned_object.tsv
+      data: '1234567890'
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --keep-paths --store-state-zk-path /tmp/shard_1
+    """
+    Then we get response contains
+    """
+      Deleted: 1
+      DeletedSize: 10
+      Total: 1
+      TotalSize: 10
+    """
+    When we execute command on clickhouse01
+    """
+    ch-monitoring orphaned-objects --state-zk-path /tmp/shard_1 --min-uptime 1s
+    """
+    Then we get response contains
+    """
+    0;Total size: 0
+    """
 
   Scenario: Check clickhouse orphaned objects with state-local option
     Given clickhouse-tools configuration on clickhouse01,clickhouse02
@@ -540,7 +573,7 @@ Feature: ch-monitoring tool
     """
   
   Scenario: Check clickhouse orphaned objects with not empty error_msg
-    When we create file /tmp/object_storage_cleanup_state.json with data "{ \"orphaned_objects_size\": 0,  \"error_msg\": \"ERROR\" }"
+    When we create file /tmp/object_storage_cleanup_state.json with data "{ \"orphaned_objects_size\": 0, \"deleted_orphaned_objects_size\": 0, \"deleted\": false,  \"error_msg\": \"ERROR\" }"
     And we execute command on clickhouse01
     """
     ch-monitoring orphaned-objects --state-local --min-uptime 0s
@@ -551,7 +584,7 @@ Feature: ch-monitoring tool
     """
   
   Scenario: Check clickhouse orphaned objects with long error_msg
-    When we create file /tmp/object_storage_cleanup_state.json with data "{ \"orphaned_objects_size\": 0,  \"error_msg\": \"Code: 27. DB::Exception: Cannot parse: input:: expected '\\\\t' before: 'klg%2D1acvr8hmq0n16qm5%2Edb%2Eyandex%2Enet\\\\ndefault\\\\n6736d483-516a-4892-87d4-084d5c1f6d3c\\\\n': While executing SystemRemoteDataPaths. (CANNOT_PARSE_INPUT_ASSERTION_FAILED) (version 24.8.5.115 (official build))  Query: SELECT obj_path, obj_size FROM _system.listing_objects_from_object_storage AS object_storage LEFT ANTI JOIN remoteSecure('klg-1acvr8hmq0n16qm5.db.yandex.net', system.remote_data_paths) AS object_table ON object_table.remote_path = object_storage.obj_path AND object_table.disk_name = 'object_storage' SETTINGS traverse_shadow_remote_data_paths=1 FORMAT TabSeparated (klg-1acvr8hmq0n16qm5.mdb.yandex.net)\" }"
+    When we create file /tmp/object_storage_cleanup_state.json with data "{ \"orphaned_objects_size\": 0, \"deleted_orphaned_objects_size\": 0, \"deleted\": false,  \"error_msg\": \"Code: 27. DB::Exception: Cannot parse: input:: expected '\\\\t' before: 'klg%2D1acvr8hmq0n16qm5%2Edb%2Eyandex%2Enet\\\\ndefault\\\\n6736d483-516a-4892-87d4-084d5c1f6d3c\\\\n': While executing SystemRemoteDataPaths. (CANNOT_PARSE_INPUT_ASSERTION_FAILED) (version 24.8.5.115 (official build))  Query: SELECT obj_path, obj_size FROM _system.listing_objects_from_object_storage AS object_storage LEFT ANTI JOIN remoteSecure('klg-1acvr8hmq0n16qm5.db.yandex.net', system.remote_data_paths) AS object_table ON object_table.remote_path = object_storage.obj_path AND object_table.disk_name = 'object_storage' SETTINGS traverse_shadow_remote_data_paths=1 FORMAT TabSeparated (klg-1acvr8hmq0n16qm5.mdb.yandex.net)\" }"
     And we execute command on clickhouse01
     """
     ch-monitoring orphaned-objects --state-local --min-uptime 0s

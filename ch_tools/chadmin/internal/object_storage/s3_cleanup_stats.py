@@ -18,13 +18,20 @@ class StatisticsPeriod(str, Enum):
 
 
 class StatDict(TypedDict):
-    deleted: int
+    total_count: int
     total_size: int
+    deleted_count: int
+    deleted_size: int
 
 
 class ResultStat(defaultdict):
     def _default_factory(self) -> StatDict:
-        return {"deleted": 0, "total_size": 0}
+        return {
+            "total_count": 0,
+            "total_size": 0,
+            "deleted_count": 0,
+            "deleted_size": 0,
+        }
 
     def __init__(
         self, stat_partitioning: StatisticsPeriod = StatisticsPeriod.ALL
@@ -36,16 +43,20 @@ class ResultStat(defaultdict):
     def total(self) -> StatDict:
         return self["Total"]
 
+    def update_total(self, count: int, total_size: int) -> None:
+        self.total["total_count"] = count
+        self.total["total_size"] = total_size
+
     def update_by_item(self, item: ObjListItem) -> None:
-        self.total["deleted"] += 1
-        self.total["total_size"] += item.size
+        self.total["deleted_count"] += 1
+        self.total["deleted_size"] += item.size
 
         if self._stat_partitioning == StatisticsPeriod.ALL:
             return
 
         key = self._get_stat_key(item.last_modified)
-        self[key]["deleted"] += 1
-        self[key]["total_size"] += item.size
+        self[key]["deleted_count"] += 1
+        self[key]["deleted_size"] += item.size
 
     def _get_stat_key(self, timestamp: datetime) -> str:
         if self._stat_partitioning == StatisticsPeriod.ALL:
