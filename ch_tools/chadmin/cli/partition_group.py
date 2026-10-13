@@ -1115,7 +1115,7 @@ def get_partitions(
                 SELECT
                     database,
                     table,
-                    splitByChar('_', new_part_name, 1)[1] AS partition_id
+                    splitByChar('_', new_part_name)[1] AS partition_id
                 FROM system.replication_queue
                 WHERE 1
                 {% if database -%}

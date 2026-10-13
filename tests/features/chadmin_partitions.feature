@@ -151,7 +151,7 @@ Feature: chadmin partitions commands.
         (SELECT count() > 0 FROM system.detached_parts WHERE table = 'replication_queue_reattach'),
         (SELECT count() > 0 FROM system.replication_queue
          WHERE table = 'replication_queue_reattach'
-           AND splitByChar('_', new_part_name, 1)[1] = '42')
+           AND splitByChar('_', new_part_name)[1] = '42')
     """
     Then we get query response
     """
@@ -178,7 +178,7 @@ Feature: chadmin partitions commands.
          WHERE table = 'replication_queue_reattach'),
         (SELECT count() FROM system.replication_queue
          WHERE table = 'replication_queue_reattach'
-           AND splitByChar('_', new_part_name, 1)[1] = '42')
+           AND splitByChar('_', new_part_name)[1] = '42')
     """
     Then we get query response
     """
