@@ -885,6 +885,11 @@ def quarantine_object_storage_parts(
         logging.warning("Replicas to mark lost: {}", lost_plan.replicas_to_mark_lost)
 
         if dry_run:
+            for part in parts:
+                if not part.already_detached:
+                    logging.info(
+                        "Will move {} -> {}", part.source_path, part.detached_path
+                    )
             report = QuarantineReport(
                 parts,
                 moved=0,

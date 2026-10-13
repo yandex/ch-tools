@@ -360,6 +360,11 @@ def test_dry_run_saves_manifest_without_changes(
     assert source.is_dir()
     assert not zk.deleted
     assert not zk.updated
+    parts_quarantine.logging.info.assert_called_once_with(
+        "Will move {} -> {}",
+        source,
+        table_path / "detached" / f"{DETACHED_PREFIX}all_1_1_0",
+    )
     assert report.summary() == {
         "parts": 1,
         "moved": 0,
