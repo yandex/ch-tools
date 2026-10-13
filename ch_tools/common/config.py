@@ -76,6 +76,7 @@ DEFAULT_CONFIG = {
         "retries": None,
     },
     "zookeeper": {
+        "connect_timeout": 20,
         "randomize_hosts": True,
         "username": None,
         "password": None,
