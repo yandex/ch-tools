@@ -106,6 +106,26 @@ class TableMetadata:
         """Check if table is replicated."""
         return self.table_engine.is_table_engine_replicated()
 
+    def effective_replica_path(self, default_replica_path: Optional[str]) -> str:
+        """Return the explicit or server-default Keeper path."""
+        replica_path = self.replica_path or default_replica_path
+        if replica_path is None:
+            raise MetadataParseError(
+                "Replicated table has neither an explicit Keeper path nor "
+                "default_replica_path"
+            )
+        return replica_path
+
+    def effective_replica_name(self, default_replica_name: Optional[str]) -> str:
+        """Return the explicit or server-default replica name."""
+        replica_name = self.replica_name or default_replica_name
+        if replica_name is None:
+            raise MetadataParseError(
+                "Replicated table has neither an explicit replica name nor "
+                "default_replica_name"
+            )
+        return replica_name
+
 
 class TableMetadataParser:
     """Table metadata file parser."""

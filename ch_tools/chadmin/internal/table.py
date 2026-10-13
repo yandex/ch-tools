@@ -27,6 +27,7 @@ from ch_tools.chadmin.internal.utils import (
 from ch_tools.chadmin.internal.zookeeper_clean import clean_zk_metadata_for_hosts
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
+from ch_tools.common.clickhouse.config import get_clickhouse_config
 
 DISK_LOCAL_KEY = "local"
 DISK_OBJECT_STORAGE_KEY = "object_storage"
@@ -474,6 +475,19 @@ def delete_detached_table(ctx: Context, database_name: str, table_name: str) -> 
 
     table_metadata = TableMetadataParser.parse(local_metadata_table_path)
 
+    replica_path = None
+    replica_name = None
+    if table_metadata.table_engine.is_table_engine_replicated():
+        clickhouse_config = get_clickhouse_config(ctx)
+        # Resolve both defaults before deleting any local data. Otherwise a
+        # no-argument ReplicatedMergeTree could fail only after disk removal.
+        replica_path = table_metadata.effective_replica_path(
+            clickhouse_config.default_replica_path
+        )
+        replica_name = table_metadata.effective_replica_name(
+            clickhouse_config.default_replica_name
+        )
+
     for disk_type, disk_name in _get_disks_data(ctx).items():
         _remove_table_data_from_disk(
             table_uuid=table_metadata.table_uuid,
@@ -485,14 +499,14 @@ def delete_detached_table(ctx: Context, database_name: str, table_name: str) -> 
     if table_metadata.table_engine.is_table_engine_replicated():
         logging.info(
             "Remove node: replica_name={}, replica_path={}",
-            table_metadata.replica_name,
-            table_metadata.replica_path,
+            replica_name,
+            replica_path,
         )
 
         clean_zk_metadata_for_hosts(
             ctx,
-            nodes=[table_metadata.replica_name],
-            zk_cleanup_root_path=table_metadata.replica_path,
+            nodes=[replica_name],
+            zk_cleanup_root_path=replica_path,
             cleanup_database=False,
             cleanup_ddl_queue=False,
         )

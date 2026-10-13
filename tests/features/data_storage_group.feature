@@ -116,10 +116,7 @@ Feature: chadmin data-store commands
     And we sleep for 5 seconds
     And we execute command on clickhouse01
     """
-    mkdir -p /tmp/chadmin-test-bin
-    printf '#!/bin/sh\nprintf "inactive\\n"\n' > /tmp/chadmin-test-bin/systemctl
-    chmod +x /tmp/chadmin-test-bin/systemctl
-    PATH=/tmp/chadmin-test-bin:$PATH chadmin --format yaml data-store detach-object-storage-parts --parts-file /tmp/quarantined-parts.json
+    chadmin --format yaml data-store detach-object-storage-parts --parts-file /tmp/quarantined-parts.json
     """
     Then we get response contains
     """
@@ -185,10 +182,7 @@ Feature: chadmin data-store commands
     And we sleep for 5 seconds
     And we try to execute command on clickhouse01
     """
-    mkdir -p /tmp/chadmin-test-bin
-    printf '#!/bin/sh\nprintf "inactive\\n"\n' > /tmp/chadmin-test-bin/systemctl
-    chmod +x /tmp/chadmin-test-bin/systemctl
-    PATH=/tmp/chadmin-test-bin:$PATH chadmin --format yaml data-store detach-object-storage-parts
+    chadmin --format yaml data-store detach-object-storage-parts
     """
     Then it fails with response contains
     """
@@ -222,10 +216,7 @@ Feature: chadmin data-store commands
     And we sleep for 5 seconds
     And we execute command on clickhouse01
     """
-    mkdir -p /tmp/chadmin-test-bin
-    printf '#!/bin/sh\nprintf "inactive\\n"\n' > /tmp/chadmin-test-bin/systemctl
-    chmod +x /tmp/chadmin-test-bin/systemctl
-    PATH=/tmp/chadmin-test-bin:$PATH chadmin --format yaml data-store detach-object-storage-parts --dry-run --parts-file /tmp/quarantined-dry-run-parts.json
+    chadmin --format yaml data-store detach-object-storage-parts --dry-run --parts-file /tmp/quarantined-dry-run-parts.json
     """
     Then we get response contains
     """
@@ -259,7 +250,7 @@ Feature: chadmin data-store commands
     """
     When we execute command on clickhouse01
     """
-    PATH=/tmp/chadmin-test-bin:$PATH chadmin --format yaml data-store detach-object-storage-parts --dry-run --no-mark-replicas-lost
+    chadmin --format yaml data-store detach-object-storage-parts --dry-run --no-mark-replicas-lost
     """
     Then we get response contains
     """

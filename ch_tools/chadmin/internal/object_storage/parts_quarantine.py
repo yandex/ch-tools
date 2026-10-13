@@ -7,7 +7,6 @@ import os
 import posixpath
 import re
 import socket
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set
@@ -16,6 +15,7 @@ from uuid import UUID
 from click import Context
 from kazoo.client import KazooClient
 
+from ch_tools.chadmin.internal.system import ensure_clickhouse_server_stopped
 from ch_tools.chadmin.internal.table_metadata_parser import (
     UUID_PATTERN,
     TableMetadataParser,
@@ -128,25 +128,6 @@ class ReplicaLostPlan:
     local_replicas: List[str]
     replicas_to_mark_lost: List[str]
     nodes_to_mark_lost: List[str]
-
-
-def ensure_clickhouse_server_stopped() -> None:
-    """Fail unless the systemd-managed ClickHouse server is fully stopped."""
-    state = subprocess.check_output(
-        [
-            "systemctl",
-            "show",
-            "--property=ActiveState",
-            "--value",
-            "clickhouse-server.service",
-        ],
-        text=True,
-    ).strip()
-    if state not in {"inactive", "failed"}:
-        raise RuntimeError(
-            "ClickHouse systemd service is not stopped: "
-            f"clickhouse-server.service is {state!r}"
-        )
 
 
 def _setting_is_enabled(value: Any) -> bool:
@@ -360,6 +341,78 @@ def _database_replica_macros(
     return {**macros, "shard": shard, "replica": replica}
 
 
+def _load_offline_table(
+    metadata_path: Path,
+    metadata_file: Path,
+    macros: Dict[str, str],
+    default_replica_path: Optional[str],
+    default_replica_name: Optional[str],
+    require_replica_name: bool,
+) -> OfflineTable:
+    """Parse one table and resolve its effective offline replica identity."""
+    metadata = TableMetadataParser.parse(str(metadata_file))
+    database = unescape_for_file_name(metadata_file.parent.name)
+    table = unescape_for_file_name(metadata_file.stem)
+    if not metadata.is_replicated():
+        return OfflineTable(database, table, metadata.table_uuid, None, None)
+
+    # Replicated databases override {shard}/{replica} for their tables. Apply
+    # those macros to both engine arguments, not only to the replica name.
+    replica_macros = _database_replica_macros(
+        metadata_path,
+        metadata_file.parent.name,
+        macros,
+    )
+    replica_path = metadata.effective_replica_path(default_replica_path)
+    zookeeper_path = _expand_zookeeper_path(
+        replica_path,
+        metadata.table_uuid,
+        database,
+        table,
+        replica_macros,
+    )
+
+    replica_template = metadata.replica_name or default_replica_name
+    if replica_template is None:
+        if require_replica_name:
+            raise _replica_identity_error(
+                f"{database}.{table}",
+                "neither table metadata nor server configuration contains a "
+                "replica name",
+            )
+        replica_name = None
+    else:
+        try:
+            replica_name = _expand_replica_name(
+                replica_template,
+                metadata.table_uuid,
+                database,
+                table,
+                replica_macros,
+            )
+        except Exception as error:
+            if require_replica_name:
+                raise _replica_identity_error(
+                    f"{database}.{table}", str(error)
+                ) from error
+            logging.warning(
+                "Cannot determine the local replica for {}.{}: {!r}; "
+                "replicas will not be marked lost for this table",
+                database,
+                table,
+                error,
+            )
+            replica_name = None
+
+    return OfflineTable(
+        database=database,
+        table=table,
+        uuid=metadata.table_uuid,
+        zookeeper_path=zookeeper_path,
+        replica_name=replica_name,
+    )
+
+
 def load_offline_tables(
     metadata_path: Path,
     table_uuids: Set[str],
@@ -403,71 +456,18 @@ def load_offline_tables(
                 "quarantined parts"
             )
         try:
-            metadata = TableMetadataParser.parse(str(metadata_file))
-            database = unescape_for_file_name(metadata_file.parent.name)
-            table = unescape_for_file_name(metadata_file.stem)
-            zookeeper_path = None
-            replica_name = None
-            if metadata.is_replicated():
-                replica_path = metadata.replica_path or default_replica_path
-                if replica_path is None:
-                    raise ValueError(
-                        f"Replicated table {database}.{table} has neither an "
-                        "explicit Keeper path nor default_replica_path"
-                    )
-                zookeeper_path = _expand_zookeeper_path(
-                    replica_path,
-                    metadata.table_uuid,
-                    database,
-                    table,
-                    macros,
-                )
-                replica_template = metadata.replica_name or default_replica_name
-                if replica_template is None:
-                    if require_replica_name:
-                        raise _replica_identity_error(
-                            f"{database}.{table}",
-                            "neither table metadata nor server configuration "
-                            "contains a replica name",
-                        )
-                else:
-                    try:
-                        replica_macros = _database_replica_macros(
-                            metadata_path,
-                            metadata_file.parent.name,
-                            macros,
-                        )
-                        replica_name = _expand_replica_name(
-                            replica_template,
-                            metadata.table_uuid,
-                            database,
-                            table,
-                            replica_macros,
-                        )
-                    except Exception as error:
-                        if require_replica_name:
-                            raise _replica_identity_error(
-                                f"{database}.{table}", str(error)
-                            ) from error
-                        logging.warning(
-                            "Cannot determine the local replica for {}.{}: {!r}; "
-                            "replicas will not be marked lost for this table",
-                            database,
-                            table,
-                            error,
-                        )
-
-            offline_table = OfflineTable(
-                database=database,
-                table=table,
-                uuid=metadata.table_uuid,
-                zookeeper_path=zookeeper_path,
-                replica_name=replica_name,
+            offline_table = _load_offline_table(
+                metadata_path,
+                metadata_file,
+                macros,
+                default_replica_path,
+                default_replica_name,
+                require_replica_name,
             )
-            previous = tables.setdefault(metadata.table_uuid, offline_table)
+            previous = tables.setdefault(offline_table.uuid, offline_table)
             if previous != offline_table:
                 raise ValueError(
-                    f"Table UUID {metadata.table_uuid} belongs to multiple metadata files"
+                    f"Table UUID {offline_table.uuid} belongs to multiple metadata files"
                 )
         except Exception as error:
             if isinstance(error, ReplicaIdentityError):
@@ -573,19 +573,28 @@ def preflight_local_moves(
     return result
 
 
+def _tables_by_zookeeper_path(
+    tables: Dict[str, OfflineTable],
+) -> Dict[str, List[OfflineTable]]:
+    result: Dict[str, List[OfflineTable]] = {}
+    for table in tables.values():
+        if table.zookeeper_path is not None:
+            result.setdefault(table.zookeeper_path, []).append(table)
+    return result
+
+
 def ensure_zookeeper_replicas_inactive(
     zk: KazooClient,
     tables: Dict[str, OfflineTable],
     keep_going: bool = False,
 ) -> None:
     """Fail if any replica of a selected table is active in Keeper."""
-    for table in tables.values():
-        if table.zookeeper_path is None:
-            continue
-        replicas_path = posixpath.join(table.zookeeper_path, "replicas")
+    for zookeeper_path, root_tables in _tables_by_zookeeper_path(tables).items():
+        table_names = ", ".join(sorted(table.display_name for table in root_tables))
+        replicas_path = posixpath.join(zookeeper_path, "replicas")
         if zk.exists(replicas_path) is None:
             message = (
-                f"Keeper replicas path does not exist for {table.display_name}: "
+                f"Keeper replicas path does not exist for {table_names}: "
                 f"{replicas_path}"
             )
             if not keep_going:
@@ -597,7 +606,7 @@ def ensure_zookeeper_replicas_inactive(
             active_path = posixpath.join(replicas_path, replica, "is_active")
             if zk.exists(active_path) is not None:
                 raise RuntimeError(
-                    f"Keeper replica is active for {table.display_name}: "
+                    f"Keeper replica is active for {table_names}: "
                     f"{replica} ({active_path})"
                 )
 
@@ -617,68 +626,70 @@ def plan_replicas_to_mark_lost(
     replicas_to_mark_lost: Set[str] = set()
     nodes_to_mark_lost: Set[str] = set()
 
-    for table in tables.values():
-        assert table.zookeeper_path is not None
-        if table.replica_name is None:
-            if mark_replicas_lost:
-                raise _replica_identity_error(
-                    table.display_name, "the replica name could not be resolved"
-                )
-            continue
-
-        replicas_path = posixpath.join(table.zookeeper_path, "replicas")
+    for zookeeper_path, root_tables in _tables_by_zookeeper_path(tables).items():
+        table_names = ", ".join(sorted(table.display_name for table in root_tables))
+        replicas_path = posixpath.join(zookeeper_path, "replicas")
         if zk.exists(replicas_path) is None:
             message = f"Keeper replicas path does not exist: {replicas_path}"
             if mark_replicas_lost:
-                raise _replica_identity_error(table.display_name, message)
+                raise _replica_identity_error(table_names, message)
             logging.warning(
                 "Cannot verify the local replica for {}: {}; "
                 "--no-mark-replicas-lost is active",
-                table.display_name,
+                table_names,
                 message,
             )
             continue
 
         replicas = set(get_children(zk, replicas_path))
-        if table.replica_name not in replicas:
-            message = (
-                f"resolved name {table.replica_name!r} is absent under "
-                f"{replicas_path}; registered replicas: {sorted(replicas)}"
-            )
-            if mark_replicas_lost:
-                raise _replica_identity_error(table.display_name, message)
-            logging.warning(
-                "Cannot verify the local replica for {}: {}; "
-                "--no-mark-replicas-lost is active",
-                table.display_name,
-                message,
-            )
-            continue
+        root_local_replicas: Set[str] = set()
+        for table in root_tables:
+            if table.replica_name is None:
+                if mark_replicas_lost:
+                    raise _replica_identity_error(
+                        table.display_name, "the replica name could not be resolved"
+                    )
+                continue
+            if table.replica_name not in replicas:
+                message = (
+                    f"resolved name {table.replica_name!r} is absent under "
+                    f"{replicas_path}; registered replicas: {sorted(replicas)}"
+                )
+                if mark_replicas_lost:
+                    raise _replica_identity_error(table.display_name, message)
+                logging.warning(
+                    "Cannot verify the local replica for {}: {}; "
+                    "--no-mark-replicas-lost is active",
+                    table.display_name,
+                    message,
+                )
+                continue
+            root_local_replicas.add(table.replica_name)
 
-        local_replicas.add(table.replica_name)
+        local_replicas.update(root_local_replicas)
         if not mark_replicas_lost:
             continue
 
-        local_is_lost_path = posixpath.join(
-            replicas_path, table.replica_name, "is_lost"
-        )
-        if zk.exists(local_is_lost_path) is None:
-            raise _replica_identity_error(
-                table.display_name,
-                f"local node does not exist: {local_is_lost_path}",
-            )
-        local_is_lost = _get_zookeeper_node_text(zk, local_is_lost_path)
-        if local_is_lost != "0":
-            raise _replica_identity_error(
-                table.display_name,
-                f"local node {local_is_lost_path} contains {local_is_lost!r}, not '0'",
-            )
+        for local_replica in root_local_replicas:
+            local_is_lost_path = posixpath.join(replicas_path, local_replica, "is_lost")
+            if zk.exists(local_is_lost_path) is None:
+                raise _replica_identity_error(
+                    table_names,
+                    f"local node does not exist: {local_is_lost_path}",
+                )
+            local_is_lost = _get_zookeeper_node_text(zk, local_is_lost_path)
+            if local_is_lost != "0":
+                raise _replica_identity_error(
+                    table_names,
+                    f"local node {local_is_lost_path} contains "
+                    f"{local_is_lost!r}, not '0'",
+                )
 
-        for replica in replicas - {table.replica_name}:
+        for replica in replicas - root_local_replicas:
             is_lost_path = posixpath.join(replicas_path, replica, "is_lost")
             if zk.exists(is_lost_path) is None:
                 raise ValueError(
-                    f"Cannot mark replica {replica!r} lost for {table.display_name}: "
+                    f"Cannot mark replica {replica!r} lost for {table_names}: "
                     f"node does not exist: {is_lost_path}. Rerun with "
                     "--no-mark-replicas-lost to skip lost-replica marking"
                 )
@@ -706,26 +717,33 @@ def collect_zookeeper_part_nodes(
     keep_going: bool = False,
 ) -> List[str]:
     """Resolve exact part znodes under every registered table replica."""
-    result = []
-    parts_by_table: Dict[str, List[QuarantinedPart]] = {}
+    result: List[str] = []
+    seen_nodes: Set[str] = set()
+    parts_by_root: Dict[str, List[QuarantinedPart]] = {}
     for part in parts:
         part.zookeeper_nodes.clear()
         if part.table is None or part.temporary or part.table.zookeeper_path is None:
             continue
-        parts_by_table.setdefault(part.table.uuid, []).append(part)
+        parts_by_root.setdefault(part.table.zookeeper_path, []).append(part)
 
-    for table_parts in parts_by_table.values():
-        table = table_parts[0].table
-        assert table is not None and table.zookeeper_path is not None
-        replicas_path = posixpath.join(table.zookeeper_path, "replicas")
+    for zookeeper_path, root_parts in parts_by_root.items():
+        table_names = sorted(
+            {part.table.display_name for part in root_parts if part.table is not None}
+        )
+        replicas_path = posixpath.join(zookeeper_path, "replicas")
         if zk.exists(replicas_path) is None:
-            message = f"Keeper replicas path does not exist for {table.display_name}: {replicas_path}"
+            message = (
+                f"Keeper replicas path does not exist for {', '.join(table_names)}: "
+                f"{replicas_path}"
+            )
             if not keep_going:
                 raise ValueError(message)
             logging.warning("{}; the local parts will still be detached", message)
             continue
 
-        by_name = {part.part_name: part for part in table_parts}
+        by_name: Dict[str, List[QuarantinedPart]] = {}
+        for part in root_parts:
+            by_name.setdefault(part.part_name, []).append(part)
         selected_names = set(by_name)
         found_names: Set[str] = set()
         for replica in sorted(get_children(zk, replicas_path)):
@@ -739,8 +757,11 @@ def collect_zookeeper_part_nodes(
             replica_part_names = set(get_children(zk, replica_parts_path))
             for part_name in sorted(replica_part_names & selected_names):
                 node = posixpath.join(replica_parts_path, part_name)
-                by_name[part_name].zookeeper_nodes.append(node)
-                result.append(node)
+                for part in by_name[part_name]:
+                    part.zookeeper_nodes.append(node)
+                if node not in seen_nodes:
+                    seen_nodes.add(node)
+                    result.append(node)
                 found_names.add(part_name)
 
         missing_names = sorted(selected_names - found_names)
@@ -750,9 +771,9 @@ def collect_zookeeper_part_nodes(
                 example += f", ... ({len(missing_names) - 10} more)"
             logging.warning(
                 "Keeper has no exact /parts node on any replica for {} local "
-                "part(s) of {}: {}. The local parts will still be detached",
+                "part name(s) of {}: {}. The local parts will still be detached",
                 len(missing_names),
-                table.display_name,
+                ", ".join(table_names),
                 example,
             )
     return result

@@ -10,10 +10,12 @@ from click.testing import CliRunner
 from kazoo.exceptions import NoNodeError
 
 import ch_tools.chadmin.cli.data_store_group as data_store_group_module
+import ch_tools.chadmin.internal.system as system_module
 from ch_tools.chadmin.cli.data_store_group import data_store_group
 from ch_tools.chadmin.internal.object_storage import parts_quarantine
 from ch_tools.chadmin.internal.object_storage.parts_quarantine import (
     DETACHED_PREFIX,
+    OfflineTable,
     QuarantineReport,
     bind_parts_to_tables,
     collect_zookeeper_part_nodes,
@@ -21,9 +23,11 @@ from ch_tools.chadmin.internal.object_storage.parts_quarantine import (
     ensure_broken_detached_parts_are_not_cleaned,
     ensure_clickhouse_server_stopped,
     load_offline_tables,
+    plan_replicas_to_mark_lost,
     preflight_local_moves,
     quarantine_object_storage_parts,
 )
+from ch_tools.chadmin.internal.system import SYSTEMCTL_PATH
 
 TABLE_UUID = "a99cbcd7-af44-43fe-bb67-591133b8e6c7"
 TABLE_ZK_PATH = f"/clickhouse/tables/01/{TABLE_UUID}"
@@ -123,12 +127,11 @@ def make_zookeeper(part_names: set[str]) -> FakeZooKeeper:
 
 
 @pytest.fixture(autouse=True)
-def silence_logging(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(parts_quarantine, "logging", MagicMock())
+def silence_logging(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    logging_mock = MagicMock()
+    monkeypatch.setattr(parts_quarantine, "logging", logging_mock)
     monkeypatch.setattr(
-        parts_quarantine.subprocess,
-        "check_output",
-        lambda *_args, **_kwargs: "inactive\n",
+        parts_quarantine, "ensure_clickhouse_server_stopped", MagicMock()
     )
     monkeypatch.setattr(
         parts_quarantine,
@@ -153,6 +156,7 @@ def silence_logging(monkeypatch: pytest.MonkeyPatch) -> None:
                 pass
 
     monkeypatch.setattr(parts_quarantine, "delete_nodes_batched", delete_part_nodes)
+    return logging_mock
 
 
 def test_discovers_parts_tmp_directories_and_previous_run(tmp_path: Path) -> None:
@@ -204,6 +208,52 @@ def test_uses_replicated_database_replica_for_table_macro(tmp_path: Path) -> Non
     )
 
     assert tables[TABLE_UUID].replica_name == "db-r1"
+    assert tables[TABLE_UUID].zookeeper_path == (
+        f"/clickhouse/tables/db-shard/{TABLE_UUID}"
+    )
+
+
+def test_same_keeper_root_preserves_locals_and_collects_all_part_nodes() -> None:
+    part_name = "all_1_1_0"
+    zk = make_zookeeper({part_name})
+    replicas_path = f"{TABLE_ZK_PATH}/replicas"
+    zk.children[replicas_path].add("local-r3")
+    zk.children[f"{replicas_path}/local-r3"] = {"parts", "is_lost"}
+    zk.children[f"{replicas_path}/local-r3/parts"] = {part_name}
+    zk.children[f"{replicas_path}/local-r3/parts/{part_name}"] = set()
+    zk.children[f"{replicas_path}/local-r3/is_lost"] = set()
+    zk.values[f"{replicas_path}/local-r3/is_lost"] = b"0"
+    tables = {
+        "uuid-r1": OfflineTable("db", "first", "uuid-r1", TABLE_ZK_PATH, "r1"),
+        "uuid-r3": OfflineTable("db", "second", "uuid-r3", TABLE_ZK_PATH, "local-r3"),
+    }
+
+    plan = plan_replicas_to_mark_lost(zk, tables, mark_replicas_lost=True)
+
+    assert plan.local_replicas == ["local-r3", "r1"]
+    assert plan.replicas_to_mark_lost == ["r2"]
+    assert plan.nodes_to_mark_lost == [f"{replicas_path}/r2/is_lost"]
+
+    parts = [
+        parts_quarantine.QuarantinedPart(
+            table_uuid=table.uuid,
+            part_name=part_name,
+            source_path=Path(f"/store/{table.uuid}/{part_name}"),
+            detached_path=Path(f"/store/{table.uuid}/detached/{part_name}"),
+            temporary=False,
+            already_detached=False,
+            table=table,
+        )
+        for table in tables.values()
+    ]
+    expected_nodes = [
+        f"{replicas_path}/local-r3/parts/{part_name}",
+        f"{replicas_path}/r1/parts/{part_name}",
+        f"{replicas_path}/r2/parts/{part_name}",
+    ]
+
+    assert collect_zookeeper_part_nodes(zk, parts) == expected_nodes
+    assert all(part.zookeeper_nodes == expected_nodes for part in parts)
 
 
 def test_fails_if_table_uuid_cannot_be_mapped(tmp_path: Path) -> None:
@@ -333,7 +383,9 @@ def test_keep_going_moves_conflicting_part_and_deletes_its_keeper_node(
 
 
 def test_dry_run_saves_manifest_without_changes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    silence_logging: MagicMock,
 ) -> None:
     store, table_path = make_store(tmp_path)
     source = make_part(table_path, "all_1_1_0")
@@ -360,7 +412,7 @@ def test_dry_run_saves_manifest_without_changes(
     assert source.is_dir()
     assert not zk.deleted
     assert not zk.updated
-    parts_quarantine.logging.info.assert_called_once_with(
+    silence_logging.info.assert_called_once_with(
         "Will move {} -> {}",
         source,
         table_path / "detached" / f"{DETACHED_PREFIX}all_1_1_0",
@@ -574,6 +626,9 @@ def test_default_replica_path_is_used_when_engine_omits_replica_arguments(
     metadata = tmp_path / "metadata"
     database_path = metadata / "test"
     database_path.mkdir(parents=True)
+    (metadata / "test.sql").write_text(
+        "ATTACH DATABASE test\nENGINE = Atomic\n", encoding="utf-8"
+    )
     (database_path / "table.sql").write_text(
         "\n".join(
             [
@@ -702,13 +757,26 @@ def test_active_replica_blocks_operation_before_local_move(
 
 
 def test_detects_running_clickhouse_service(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        parts_quarantine.subprocess,
-        "check_output",
-        lambda *_args, **_kwargs: "deactivating\n",
-    )
+    check_output = MagicMock(return_value="deactivating\n")
+    monkeypatch.setattr(system_module, "_systemd_is_running", lambda: True)
+    monkeypatch.setattr(system_module, "_running_clickhouse_server_pids", lambda: [])
+    monkeypatch.setattr(system_module.subprocess, "check_output", check_output)
 
     with pytest.raises(RuntimeError, match="systemd service is not stopped"):
+        ensure_clickhouse_server_stopped()
+
+    assert check_output.call_args.args[0][0] == SYSTEMCTL_PATH
+
+
+def test_detects_running_clickhouse_process_without_systemd(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(system_module, "_systemd_is_running", lambda: False)
+    monkeypatch.setattr(
+        system_module, "_running_clickhouse_server_pids", lambda: [123, 456]
+    )
+
+    with pytest.raises(RuntimeError, match=r"\[123, 456\]"):
         ensure_clickhouse_server_stopped()
 
 
@@ -762,7 +830,10 @@ def test_rename_preserves_part_ownership_and_mode(tmp_path: Path) -> None:
     assert target_stat.st_mode == source_stat.st_mode
 
 
-def test_cli_builds_store_path_from_disk_name(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cli_builds_store_path_from_disk_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "disks" / "cold_s3").mkdir(parents=True)
     quarantine = MagicMock(return_value=QuarantineReport([], 0, 0, 0, dry_run=True))
     monkeypatch.setattr(
         data_store_group_module, "quarantine_object_storage_parts", quarantine
@@ -771,7 +842,7 @@ def test_cli_builds_store_path_from_disk_name(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(
         data_store_group_module,
         "get_clickhouse_config",
-        lambda _ctx: SimpleNamespace(data_path="/srv/clickhouse"),
+        lambda _ctx: SimpleNamespace(data_path=str(tmp_path)),
     )
 
     result = CliRunner().invoke(
@@ -792,11 +863,37 @@ def test_cli_builds_store_path_from_disk_name(monkeypatch: pytest.MonkeyPatch) -
     assert result.exit_code == 0, result.output
     quarantine.assert_called_once_with(
         ctx=ANY,
-        root_path="/srv/clickhouse/disks/cold_s3/store",
-        metadata_path="/srv/clickhouse/metadata",
+        root_path=str(tmp_path / "disks" / "cold_s3" / "store"),
+        metadata_path=str(tmp_path / "metadata"),
         parts_file=None,
         dry_run=True,
         detached_prefix="quarantine_",
         keep_going=True,
         mark_replicas_lost=False,
     )
+
+
+@pytest.mark.parametrize("disk_name", ["../object_storage", "/tmp/disk", "a/b", "."])
+def test_cli_rejects_disk_name_that_is_not_one_component(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, disk_name: str
+) -> None:
+    (tmp_path / "disks" / "object_storage").mkdir(parents=True)
+    quarantine = MagicMock()
+    monkeypatch.setattr(
+        data_store_group_module, "quarantine_object_storage_parts", quarantine
+    )
+    monkeypatch.setattr(
+        data_store_group_module,
+        "get_clickhouse_config",
+        lambda _ctx: SimpleNamespace(data_path=str(tmp_path)),
+    )
+
+    result = CliRunner().invoke(
+        data_store_group,
+        ["detach-object-storage-parts", "--disk", disk_name, "--dry-run"],
+        obj={"config": {"loguru": {"handlers": {}, "formatters": {}}}},
+    )
+
+    assert result.exit_code == 1
+    assert "is not a directory under" in result.output
+    quarantine.assert_not_called()

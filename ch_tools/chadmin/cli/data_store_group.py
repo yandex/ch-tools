@@ -44,6 +44,31 @@ def data_store_group() -> None:
     pass
 
 
+def _object_storage_store_path(data_path: str, disk_name: str) -> str:
+    """Build a store path for an existing ClickHouse disk directory."""
+    disks_path = os.path.join(data_path, "disks")
+    try:
+        with os.scandir(disks_path) as entries:
+            disk_directories = {
+                entry.name: entry.path
+                for entry in entries
+                if entry.is_dir(follow_symlinks=False)
+            }
+    except OSError as error:
+        raise ValueError(
+            f"Cannot list ClickHouse disks directory {disks_path}: {error}"
+        ) from error
+
+    disk_path = disk_directories.get(disk_name)
+    if disk_path is None:
+        available = ", ".join(sorted(disk_directories)) or "none"
+        raise ValueError(
+            f"ClickHouse disk {disk_name!r} is not a directory under "
+            f"{disks_path}; available disks: {available}"
+        )
+    return os.path.join(disk_path, "store")
+
+
 @data_store_group.command("detach-object-storage-parts")
 @option(
     "--disk",
@@ -103,7 +128,7 @@ def detach_object_storage_parts_command(
 ) -> None:
     """Offline-detach object-storage parts and remove them from replica /parts."""
     data_path = get_clickhouse_config(ctx).data_path
-    root_path = os.path.join(data_path, "disks", disk_name, "store")
+    root_path = _object_storage_store_path(data_path, disk_name)
     report = quarantine_object_storage_parts(
         ctx=ctx,
         root_path=root_path,
