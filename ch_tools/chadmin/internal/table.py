@@ -94,7 +94,10 @@ def list_tables(
                 t.name,
                 t.uuid,
                 t.metadata_modification_time,
-                t.engine,
+                -- Runtime engine may still be TableProxy on the first paths query.
+                if(t.engine = 'TableProxy',
+                   extract(t.engine_full, '^[A-Za-z_][A-Za-z0-9_]*'),
+                   t.engine) AS effective_engine,
                 t.storage_policy,
                 t.data_paths,
                 t.metadata_path,
@@ -126,10 +129,10 @@ def list_tables(
             AND t.name NOT {{ format_str_match(exclude_table_pattern) }}
         {% endif -%}
         {% if engine_pattern -%}
-            AND t.engine {{ format_str_match(engine_pattern) }}
+            AND effective_engine {{ format_str_match(engine_pattern) }}
         {% endif -%}
         {% if exclude_engine_pattern -%}
-           AND t.engine NOT {{ format_str_match(exclude_engine_pattern) }}
+           AND effective_engine NOT {{ format_str_match(exclude_engine_pattern) }}
         {% endif -%}
         {% if is_readonly -%}
            AND r.is_readonly
@@ -154,7 +157,7 @@ def list_tables(
             t.database,
             t.name,
             t.uuid,
-            t.engine,
+            t.effective_engine AS engine,
             t.storage_policy,
             t.create_table_query,
             t.metadata_path,
