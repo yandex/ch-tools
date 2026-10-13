@@ -625,6 +625,32 @@ Feature: chadmin object-storage commands
     Downloading cloud storage metadata from missing backup 'test1'
     """
 
+  @require_version_24.3
+  Scenario: Backup deleted before metadata download is skipped
+    When we execute command on clickhouse01
+    """
+    ch-backup backup --name race_backup --databases test -f &&
+    rm -r /var/lib/clickhouse/disks/object_storage/shadow/race_backup
+    """
+    And we execute command on clickhouse01
+    """
+    real_ch_backup="$(command -v ch-backup)"
+    cat > /tmp/ch-backup <<EOF
+    #!/bin/bash
+    set -e
+    if [ "\$1" = "get-cloud-storage-metadata" ]; then
+        "${real_ch_backup}" delete "\${@: -1}"
+    fi
+    exec "${real_ch_backup}" "\$@"
+    EOF
+    chmod +x /tmp/ch-backup
+    PATH="/tmp:${PATH}" chadmin object-storage clean --to-time 0h --dry-run
+    """
+    Then we get response contains
+    """
+    Skipping cloud storage metadata from backup 'race_backup': backup is no longer in CREATED state
+    """
+
   Scenario: Sanity check when no objects in CH
     Given we have executed queries on clickhouse02
     """

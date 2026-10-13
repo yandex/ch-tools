@@ -24,10 +24,11 @@ def s3_credentials_config_group() -> None:
 @option(
     "-e",
     "--endpoint",
-    "s3_endpoint",
+    "s3_endpoints",
     type=str,
     required=True,
-    help="S3 endpoint.",
+    multiple=True,
+    help="S3 endpoint. Repeat for multiple endpoints.",
 )
 @option(
     "-s",
@@ -38,24 +39,28 @@ def s3_credentials_config_group() -> None:
     help="Perform random sleep before updating S3 credentials config.",
 )
 @pass_context
-def update_s3_credentials(ctx: Context, s3_endpoint: str, random_sleep: bool) -> None:
+def update_s3_credentials(
+    ctx: Context, s3_endpoints: tuple[str, ...], random_sleep: bool
+) -> None:
     """Update S3 credentials config."""
     if random_sleep:
         time.sleep(random.randint(0, 30))
 
     doc = minidom.Document()
-    storage = _add_xml_node(
-        doc,
-        _add_xml_node(doc, _add_xml_node(doc, doc, "clickhouse"), "s3"),
-        "cloud_storage",
-    )
+    s3 = _add_xml_node(doc, _add_xml_node(doc, doc, "clickhouse"), "s3")
     endpoint_header = (
         "access_header" if match_ch_version(ctx, min_version="24.11") else "header"
     )
-    _add_xml_node(doc, storage, "endpoint").appendChild(doc.createTextNode(s3_endpoint))
-    _add_xml_node(doc, storage, endpoint_header).appendChild(
-        doc.createTextNode(f"X-YaCloud-SubjectToken: {_get_token(ctx)}")
-    )
+    token = _get_token(ctx)
+    for index, endpoint in enumerate(dict.fromkeys(s3_endpoints)):
+        storage_name = "cloud_storage" if index == 0 else f"cloud_storage_{index}"
+        storage = _add_xml_node(doc, s3, storage_name)
+        _add_xml_node(doc, storage, "endpoint").appendChild(
+            doc.createTextNode(endpoint)
+        )
+        _add_xml_node(doc, storage, endpoint_header).appendChild(
+            doc.createTextNode(f"X-YaCloud-SubjectToken: {token}")
+        )
 
     with open(CLICKHOUSE_S3_CREDENTIALS_CONFIG_PATH, "wb") as file:
         file.write(doc.toprettyxml(indent=4 * " ", encoding="utf-8"))

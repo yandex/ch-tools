@@ -47,7 +47,7 @@ from ch_tools.chadmin.internal.utils import (
 )
 from ch_tools.chadmin.internal.zookeeper import has_zk
 from ch_tools.common import logging
-from ch_tools.common.backup import get_missing_chs3_backups
+from ch_tools.common.backup import get_backups, get_missing_chs3_backups
 from ch_tools.common.clickhouse.client.clickhouse_client import (
     ClickhouseClient,
     clickhouse_client,
@@ -606,39 +606,58 @@ def _insert_missing_s3_backups_blobs(
             )
             parse_thread.start()
 
-            cmd = [
-                "ch-backup",
-                "get-cloud-storage-metadata",
-                "--disk",
-                disk_conf.name,
-                "--local-path",
-                pipe_path,
-                backup,
-            ]
-            proc = subprocess.Popen(
-                cmd,
-                shell=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            _, stderr = proc.communicate(timeout=timeout)
-            if proc.returncode:
-                assert proc.stderr
-                raise RuntimeError(
-                    f"Downloading cloud storage metadata command has failed: retcode {proc.returncode}, stderr: {stderr.decode('utf-8')}"
+            # ch-backup may fail before opening the pipe and leave the parser
+            # blocked in open(..., "rb"). Keep a writer open so that closing it
+            # after ch-backup exits always delivers EOF to the parser.
+            with open(pipe_path, "wb"):
+                cmd = [
+                    "ch-backup",
+                    "get-cloud-storage-metadata",
+                    "--disk",
+                    disk_conf.name,
+                    "--local-path",
+                    pipe_path,
+                    backup,
+                ]
+                proc = subprocess.Popen(
+                    cmd,
+                    shell=False,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
                 )
+                _, stderr = proc.communicate(timeout=timeout)
 
+            parse_error = None
             try:
                 parse_thread.join(timeout)
-            except Exception as e:
-                raise RuntimeError(
-                    f"Error from parsing cloud storage metadata thread: {e}"
-                ) from e
+            except Exception as error:
+                parse_error = error
 
             if parse_thread.is_alive():
                 raise RuntimeError(
                     "Downloading cloud storage metadata command has failed: Timeout exceeded, metadata reading thread is probably locked"
                 )
+
+            if proc.returncode:
+                backup_in_created_state = any(
+                    item["name"] == backup and item["state"] == "created"
+                    for item in get_backups()
+                )
+                if not backup_in_created_state:
+                    logging.warning(
+                        f"Skipping cloud storage metadata from backup '{backup}': "
+                        "backup is no longer in CREATED state"
+                    )
+                    continue
+
+                raise RuntimeError(
+                    f"Downloading cloud storage metadata command has failed: retcode {proc.returncode}, stderr: {stderr.decode('utf-8', errors='replace')}"
+                )
+
+            if parse_error:
+                raise RuntimeError(
+                    f"Error from parsing cloud storage metadata thread: {parse_error}"
+                ) from parse_error
 
 
 @contextmanager
