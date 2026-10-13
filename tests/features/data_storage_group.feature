@@ -89,6 +89,185 @@ Feature: chadmin data-store commands
       deleted: 'Yes'
     """
 
+  Scenario: Offline-detach object-storage parts while the second replica is unavailable.
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS quarantine_parts ON CLUSTER 'cluster' SYNC;
+    CREATE DATABASE quarantine_parts ON CLUSTER 'cluster';
+    CREATE TABLE quarantine_parts.parts UUID '20000000-0000-0000-0000-000000000001' ON CLUSTER 'cluster' (n UInt32)
+    ENGINE = ReplicatedMergeTree('/tables/quarantine_parts', '{replica}')
+    PARTITION BY n ORDER BY n SETTINGS storage_policy = 'object_storage';
+    INSERT INTO quarantine_parts.parts VALUES (0);
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3
+    """
+    And we execute query on clickhouse02
+    """
+    SELECT count() FROM quarantine_parts.parts
+    """
+    Then we get response
+    """
+    1
+    """
+    When we stop clickhouse on clickhouse02
+    And we stop clickhouse on clickhouse01
+    And we sleep for 5 seconds
+    And we execute command on clickhouse01
+    """
+    mkdir -p /tmp/chadmin-test-bin
+    printf '#!/bin/sh\nprintf "inactive\\n"\n' > /tmp/chadmin-test-bin/systemctl
+    chmod +x /tmp/chadmin-test-bin/systemctl
+    PATH=/tmp/chadmin-test-bin:$PATH chadmin --format yaml data-store detach-object-storage-parts --parts-file /tmp/quarantined-parts.json
+    """
+    Then we get response contains
+    """
+      moved: 1
+    """
+    And we get response contains
+    """
+      zookeeper_nodes: 2
+    """
+    And we get response contains
+    """
+      local_replicas:
+      - clickhouse01.ch_tools_test
+      replicas_to_mark_lost:
+      - clickhouse02.ch_tools_test
+    """
+    When we execute command on clickhouse01
+    """
+    test -d /var/lib/clickhouse/disks/object_storage/store/200/20000000-0000-0000-0000-000000000001/detached/broken-on-start_0_0_0_0
+    python3 -c "import json; manifest = json.load(open('/tmp/quarantined-parts.json')); assert manifest['dry_run'] is False; assert manifest['parts'][0]['part_name'] == '0_0_0_0'"
+    ! chadmin zookeeper exists /tables/quarantine_parts/replicas/clickhouse01.ch_tools_test/parts/0_0_0_0
+    ! chadmin zookeeper exists /tables/quarantine_parts/replicas/clickhouse02.ch_tools_test/parts/0_0_0_0
+    test "$(chadmin zookeeper get /tables/quarantine_parts/replicas/clickhouse01.ch_tools_test/is_lost)" = 0
+    test "$(chadmin zookeeper get /tables/quarantine_parts/replicas/clickhouse02.ch_tools_test/is_lost)" = 1
+    """
+    And we execute command on clickhouse02
+    """
+    supervisorctl status clickhouse-server | grep -q STOPPED
+    """
+    And we start clickhouse on clickhouse01
+    And we execute query on clickhouse01
+    """
+    SELECT count() FROM system.parts WHERE database = 'quarantine_parts' AND table = 'parts' AND active
+    """
+    Then we get response
+    """
+    0
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT count() FROM system.detached_parts WHERE database = 'quarantine_parts' AND table = 'parts'
+    """
+    Then we get response
+    """
+    1
+    """
+
+  Scenario: Refuse to detach object-storage parts while another replica is active.
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS quarantine_active ON CLUSTER 'cluster' SYNC;
+    CREATE DATABASE quarantine_active ON CLUSTER 'cluster';
+    CREATE TABLE quarantine_active.parts UUID '20000000-0000-0000-0000-000000000002' ON CLUSTER 'cluster' (n UInt32)
+    ENGINE = ReplicatedMergeTree('/tables/quarantine_active', '{replica}')
+    PARTITION BY n ORDER BY n SETTINGS storage_policy = 'object_storage';
+    INSERT INTO quarantine_active.parts VALUES (0);
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3
+    """
+    When we stop clickhouse on clickhouse01
+    And we sleep for 5 seconds
+    And we try to execute command on clickhouse01
+    """
+    mkdir -p /tmp/chadmin-test-bin
+    printf '#!/bin/sh\nprintf "inactive\\n"\n' > /tmp/chadmin-test-bin/systemctl
+    chmod +x /tmp/chadmin-test-bin/systemctl
+    PATH=/tmp/chadmin-test-bin:$PATH chadmin --format yaml data-store detach-object-storage-parts
+    """
+    Then it fails with response contains
+    """
+    Keeper replica is active for quarantine_active.parts
+    """
+    When we execute command on clickhouse01
+    """
+    table_dir=/var/lib/clickhouse/disks/object_storage/store/200/20000000-0000-0000-0000-000000000002
+    test -d "$table_dir/0_0_0_0"
+    test ! -e "$table_dir/detached/broken-on-start_0_0_0_0"
+    chadmin zookeeper exists /tables/quarantine_active/replicas/clickhouse01.ch_tools_test/parts/0_0_0_0
+    chadmin zookeeper exists /tables/quarantine_active/replicas/clickhouse02.ch_tools_test/parts/0_0_0_0
+    """
+
+  Scenario: Dry-run preserves an object-storage part and its replica metadata.
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS quarantine_dry_run ON CLUSTER 'cluster' SYNC;
+    CREATE DATABASE quarantine_dry_run ON CLUSTER 'cluster';
+    CREATE TABLE quarantine_dry_run.parts UUID '20000000-0000-0000-0000-000000000003' ON CLUSTER 'cluster' (n UInt32)
+    ENGINE = ReplicatedMergeTree('/tables/quarantine_dry_run', '{replica}')
+    PARTITION BY n ORDER BY n SETTINGS storage_policy = 'object_storage';
+    INSERT INTO quarantine_dry_run.parts VALUES (0);
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3
+    """
+    When we stop clickhouse on clickhouse02
+    And we stop clickhouse on clickhouse01
+    And we sleep for 5 seconds
+    And we execute command on clickhouse01
+    """
+    mkdir -p /tmp/chadmin-test-bin
+    printf '#!/bin/sh\nprintf "inactive\\n"\n' > /tmp/chadmin-test-bin/systemctl
+    chmod +x /tmp/chadmin-test-bin/systemctl
+    PATH=/tmp/chadmin-test-bin:$PATH chadmin --format yaml data-store detach-object-storage-parts --dry-run --parts-file /tmp/quarantined-dry-run-parts.json
+    """
+    Then we get response contains
+    """
+      dry_run: true
+    """
+    And we get response contains
+    """
+      moved: 0
+    """
+    And we get response contains
+    """
+      zookeeper_nodes: 2
+    """
+    And we get response contains
+    """
+      local_replicas:
+      - clickhouse01.ch_tools_test
+      replicas_to_mark_lost:
+      - clickhouse02.ch_tools_test
+    """
+    When we execute command on clickhouse01
+    """
+    table_dir=/var/lib/clickhouse/disks/object_storage/store/200/20000000-0000-0000-0000-000000000003
+    test -d "$table_dir/0_0_0_0"
+    test ! -e "$table_dir/detached/broken-on-start_0_0_0_0"
+    python3 -c "import json; manifest = json.load(open('/tmp/quarantined-dry-run-parts.json')); assert manifest['dry_run'] is True; assert manifest['parts'][0]['part_name'] == '0_0_0_0'"
+    chadmin zookeeper exists /tables/quarantine_dry_run/replicas/clickhouse01.ch_tools_test/parts/0_0_0_0
+    chadmin zookeeper exists /tables/quarantine_dry_run/replicas/clickhouse02.ch_tools_test/parts/0_0_0_0
+    test "$(chadmin zookeeper get /tables/quarantine_dry_run/replicas/clickhouse01.ch_tools_test/is_lost)" = 0
+    test "$(chadmin zookeeper get /tables/quarantine_dry_run/replicas/clickhouse02.ch_tools_test/is_lost)" = 0
+    """
+    When we execute command on clickhouse01
+    """
+    PATH=/tmp/chadmin-test-bin:$PATH chadmin --format yaml data-store detach-object-storage-parts --dry-run --no-mark-replicas-lost
+    """
+    Then we get response contains
+    """
+      local_replicas:
+      - clickhouse01.ch_tools_test
+      replicas_to_mark_lost: []
+    """
+
   Scenario Outline: Restore recoverable <filename> file for broken object storage part.
     When we execute queries on clickhouse01
     """

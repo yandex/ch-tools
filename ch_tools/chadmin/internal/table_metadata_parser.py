@@ -175,8 +175,16 @@ class TableMetadataParser:
         return MergeTreeFamilyEngines.from_str(match.group(1))
 
     @staticmethod
-    def _parse_replica_params(line: str) -> Tuple[str, str]:
+    def _parse_replica_params(
+        line: str,
+    ) -> Tuple[Optional[str], Optional[str]]:
         """Parse replica path and name from ENGINE line."""
+        engine_match = re.match(
+            r"ENGINE = Replicated\w*MergeTree(?:\((.*)\))?\s*$", line.strip()
+        )
+        if engine_match and not (engine_match.group(1) or "").lstrip().startswith("'"):
+            return None, None
+
         pattern = r"ENGINE = Replicated\w*MergeTree\('([^']*)', '([^']*)'(?:, [^)]*)?\)"
         match = re.match(pattern, line)
 
