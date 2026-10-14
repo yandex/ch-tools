@@ -106,6 +106,26 @@ class TableMetadata:
         """Check if table is replicated."""
         return self.table_engine.is_table_engine_replicated()
 
+    def effective_replica_path(self, default_replica_path: Optional[str]) -> str:
+        """Return the explicit or server-default Keeper path."""
+        replica_path = self.replica_path or default_replica_path
+        if replica_path is None:
+            raise MetadataParseError(
+                "Replicated table has neither an explicit Keeper path nor "
+                "default_replica_path"
+            )
+        return replica_path
+
+    def effective_replica_name(self, default_replica_name: Optional[str]) -> str:
+        """Return the explicit or server-default replica name."""
+        replica_name = self.replica_name or default_replica_name
+        if replica_name is None:
+            raise MetadataParseError(
+                "Replicated table has neither an explicit replica name nor "
+                "default_replica_name"
+            )
+        return replica_name
+
 
 class TableMetadataParser:
     """Table metadata file parser."""
@@ -175,8 +195,16 @@ class TableMetadataParser:
         return MergeTreeFamilyEngines.from_str(match.group(1))
 
     @staticmethod
-    def _parse_replica_params(line: str) -> Tuple[str, str]:
+    def _parse_replica_params(
+        line: str,
+    ) -> Tuple[Optional[str], Optional[str]]:
         """Parse replica path and name from ENGINE line."""
+        engine_match = re.match(
+            r"ENGINE = Replicated\w*MergeTree(?:\((.*)\))?\s*$", line.strip()
+        )
+        if engine_match and not (engine_match.group(1) or "").lstrip().startswith("'"):
+            return None, None
+
         pattern = r"ENGINE = Replicated\w*MergeTree\('([^']*)', '([^']*)'(?:, [^)]*)?\)"
         match = re.match(pattern, line)
 

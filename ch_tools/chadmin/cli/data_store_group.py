@@ -23,6 +23,10 @@ from ch_tools.chadmin.internal.object_storage.broken_partitions_recovery import 
     make_partition_report,
     restore_recoverable_broken_partitions,
 )
+from ch_tools.chadmin.internal.object_storage.parts_quarantine import (
+    DETACHED_PREFIX,
+    quarantine_object_storage_parts,
+)
 from ch_tools.chadmin.internal.system import get_version
 from ch_tools.chadmin.internal.utils import remove_from_disk
 from ch_tools.common import logging
@@ -38,6 +42,110 @@ def data_store_group() -> None:
     Commands for manipulating data stored by ClickHouse.
     """
     pass
+
+
+def _object_storage_store_path(data_path: str, disk_name: str) -> str:
+    """Build a store path for an existing ClickHouse disk directory."""
+    disks_path = os.path.join(data_path, "disks")
+    try:
+        with os.scandir(disks_path) as entries:
+            disk_directories = {
+                entry.name: entry.path
+                for entry in entries
+                if entry.is_dir(follow_symlinks=False)
+            }
+    except OSError as error:
+        raise ValueError(
+            f"Cannot list ClickHouse disks directory {disks_path}: {error}"
+        ) from error
+
+    disk_path = disk_directories.get(disk_name)
+    if disk_path is None:
+        available = ", ".join(sorted(disk_directories)) or "none"
+        raise ValueError(
+            f"ClickHouse disk {disk_name!r} is not a directory under "
+            f"{disks_path}; available disks: {available}"
+        )
+    return os.path.join(disk_path, "store")
+
+
+@data_store_group.command("detach-object-storage-parts")
+@option(
+    "--disk",
+    "disk_name",
+    default="object_storage",
+    show_default=True,
+    help="Name of the object-storage disk.",
+)
+@option(
+    "--detached-prefix",
+    default=DETACHED_PREFIX,
+    show_default=True,
+    help="Prefix added to part directory names under detached/.",
+)
+@option(
+    "--parts-file",
+    default=None,
+    help="Save the part list and Keeper paths to a new JSON file.",
+)
+@option(
+    "-n",
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Show the planned local moves and Keeper deletions without changing them.",
+)
+@option(
+    "-k",
+    "--keep-going",
+    is_flag=True,
+    default=False,
+    help=(
+        "Detach local parts even when metadata or Keeper paths are missing, "
+        "or detached destination names conflict."
+    ),
+)
+@option(
+    "--mark-replicas-lost/--no-mark-replicas-lost",
+    default=True,
+    help=(
+        "Mark every non-local replica as lost so it mimics this replica on its "
+        "next start. Use --no-mark-replicas-lost when the local replica name "
+        "cannot be determined safely."
+    ),
+)
+@option("-v", "--verbose", is_flag=True, help="Print every selected part.")
+@pass_context
+def detach_object_storage_parts_command(
+    ctx: Context,
+    disk_name: str,
+    detached_prefix: str,
+    parts_file: Optional[str],
+    dry_run: bool,
+    keep_going: bool,
+    mark_replicas_lost: bool,
+    verbose: bool,
+) -> None:
+    """Offline-detach object-storage parts and remove them from replica /parts."""
+    data_path = get_clickhouse_config(ctx).data_path
+    root_path = _object_storage_store_path(data_path, disk_name)
+    report = quarantine_object_storage_parts(
+        ctx=ctx,
+        root_path=root_path,
+        metadata_path=os.path.join(data_path, "metadata"),
+        parts_file=parts_file,
+        dry_run=dry_run,
+        detached_prefix=detached_prefix,
+        keep_going=keep_going,
+        mark_replicas_lost=mark_replicas_lost,
+    )
+    if verbose:
+        print_response(ctx, [report.summary()], default_format="table")
+    print_response(
+        ctx,
+        report.details() if verbose else [report.summary()],
+        default_format="table",
+    )
 
 
 @data_store_group.command("clean-orphaned-tables")
@@ -284,7 +392,6 @@ def remove_orphaned_sql_object_full(
     ch_version: str,
     disks_config_path: str,
 ) -> None:
-
     path = data["path"]
 
     if not path.startswith(path_to_disk):

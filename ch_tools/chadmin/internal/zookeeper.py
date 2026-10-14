@@ -774,6 +774,51 @@ def delete_recursive(
         )
 
 
+def delete_nodes_batched(zk: KazooClient, paths: Iterable[str]) -> None:
+    """Delete independent node roots in bounded ZooKeeper transactions.
+
+    The common case (leaf nodes) needs one multi request per batch. Nodes from
+    legacy layouts that still have children fall back to recursive deletion.
+    Missing nodes are accepted to make concurrent, repeated cleanup idempotent.
+    """
+    paths = remove_subpaths(list(dict.fromkeys(paths)))
+    counts = _DeleteCounts()
+    nonempty_paths: List[str] = []
+    start = 0
+
+    while start < len(paths):
+        batch: List[str] = []
+        estimated_bytes = 0
+        while start < len(paths) and len(batch) < RECURSIVE_DELETE_TRANSACTION_MAX_OPS:
+            path = paths[start]
+            path_size = _path_delete_size(path)
+            if (
+                batch
+                and estimated_bytes + path_size > RECURSIVE_DELETE_TRANSACTION_MAX_BYTES
+            ):
+                break
+            batch.append(path)
+            estimated_bytes += path_size
+            start += 1
+            if estimated_bytes > RECURSIVE_DELETE_TRANSACTION_MAX_BYTES:
+                break
+
+        nonempty_indices = _delete_candidates(zk, batch, counts)
+        nonempty_paths.extend(batch[index] for index in nonempty_indices)
+
+    if nonempty_paths:
+        delete_recursive(zk, nonempty_paths)
+
+    logging.info(
+        "Batched ZooKeeper deletion completed: roots={}, deleted={}, "
+        "already_absent={}, recursive={}",
+        len(paths),
+        counts.deleted,
+        counts.already_absent,
+        len(nonempty_paths),
+    )
+
+
 def escape_for_zookeeper(s: str) -> str:
     """
     Escape string for ZooKeeper node names using ClickHouse's escapeForFileName logic.

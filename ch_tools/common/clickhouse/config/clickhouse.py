@@ -62,6 +62,23 @@ class ClickhouseConfig:
         )
 
     @property
+    def merge_tree_settings(self) -> dict:
+        """Default MergeTree settings from the server configuration."""
+        return self._config_root.get("merge_tree") or {}
+
+    @property
+    def default_replica_path(self) -> Any:
+        return self._config_root.get("default_replica_path")
+
+    @property
+    def default_replica_name(self) -> Any:
+        return self._config_root.get("default_replica_name")
+
+    @property
+    def data_path(self) -> str:
+        return self._config_root.get("path", "/var/lib/clickhouse")
+
+    @property
     def ports(self) -> Dict[ClickhousePort, int]:
         settings = {
             "tcp_port": ClickhousePort.TCP,
