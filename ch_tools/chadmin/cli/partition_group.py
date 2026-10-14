@@ -1105,6 +1105,68 @@ def get_partitions(
             LIMIT {{ limit }}
             {% endif -%}
             """
+    elif has_replication_tasks:
+        query = """
+            SELECT
+                database,
+                table,
+                partition_id
+            FROM (
+                SELECT
+                    database,
+                    table,
+                    splitByChar('_', new_part_name)[1] AS partition_id
+                FROM system.replication_queue
+                WHERE 1
+                {% if database -%}
+                  AND database {{ format_str_match(database) }}
+                {% endif -%}
+                {% if table -%}
+                  AND table {{ format_str_match(table) }}
+                {% endif -%}
+                {% if min_replication_task_postpone_count is not none -%}
+                  AND num_postponed >= {{ min_replication_task_postpone_count }}
+                {% endif -%}
+                {% if max_replication_task_postpone_count is not none -%}
+                  AND num_postponed <= {{ max_replication_task_postpone_count }}
+                {% endif -%}
+                {% if replication_task_exception_pattern -%}
+                  AND last_exception {{ format_str_match(replication_task_exception_pattern) }}
+                {% endif -%}
+                {% if replication_task_type_pattern -%}
+                  AND type {{ format_str_match(replication_task_type_pattern) }}
+                {% endif -%}
+            )
+            WHERE partition_id != ''
+            {% if partition_id -%}
+              AND partition_id {{ format_str_match(partition_id) }}
+            {% endif -%}
+            {% if min_partition_id -%}
+              AND partition_id >= '{{ min_partition_id }}'
+            {% endif -%}
+            {% if max_partition_id -%}
+              AND partition_id <= '{{ max_partition_id }}'
+            {% endif -%}
+            {% if disk_name -%}
+              AND (database, table, partition_id) IN (
+                  SELECT database, table, partition_id
+                  FROM system.parts
+                  GROUP BY database, table, partition_id
+                  HAVING has(groupUniqArray(disk_name), '{{ disk_name }}')
+              )
+            {% endif -%}
+            {% if merging -%}
+              AND (database, table, partition_id) IN (
+                  SELECT database, table, partition_id
+                  FROM system.merges
+              )
+            {% endif -%}
+            GROUP BY database, table, partition_id
+            ORDER BY database, table, partition_id
+            {% if limit -%}
+            LIMIT {{ limit }}
+            {% endif -%}
+            """
     else:
         query = """
             SELECT
@@ -1169,25 +1231,6 @@ def get_partitions(
                AND (database, table, partition_id) IN (
                    SELECT (database, table, partition_id)
                    FROM system.merges
-               )
-            {% endif -%}
-            {% if has_replication_tasks -%}
-               AND (database, table, partition_id) IN (
-                   SELECT (database, table, splitByChar('_', new_part_name, 1)[1])
-                   FROM system.replication_queue
-                   WHERE 1
-            {%     if min_replication_task_postpone_count -%}
-                     AND num_postponed >= {{ min_replication_task_postpone_count }}
-            {%     endif -%}
-            {%     if max_replication_task_postpone_count -%}
-                     AND num_postponed <= {{ max_replication_task_postpone_count }}
-            {%     endif -%}
-            {%     if replication_task_exception_pattern -%}
-                     AND last_exception {{ format_str_match(replication_task_exception_pattern) }}
-            {%     endif -%}
-            {%     if replication_task_type_pattern -%}
-                      AND type {{ format_str_match(replication_task_type_pattern) }}
-            {%     endif -%}
                )
             {% endif -%}
             ORDER BY {{ order_by }}

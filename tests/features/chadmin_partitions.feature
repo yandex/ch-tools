@@ -114,6 +114,77 @@ Feature: chadmin partitions commands.
     3
     """
 
+  Scenario: Reattach a partition that exists only in the replication queue.
+    Given we have executed queries on clickhouse01
+    """
+    CREATE TABLE replication_queue_reattach ON CLUSTER 'cluster' (a Int32)
+    ENGINE = ReplicatedMergeTree('/tables/replication_queue_reattach', '{replica}')
+    ORDER BY a PARTITION BY a;
+    SYSTEM STOP FETCHES replication_queue_reattach;
+    """
+    And we have executed query on clickhouse02
+    """
+    INSERT INTO replication_queue_reattach VALUES (42)
+    """
+    And we have executed query on clickhouse01
+    """
+    SYSTEM SYNC REPLICA replication_queue_reattach PULL
+    """
+    And we have executed queries on clickhouse01
+    """
+    SYSTEM STOP REPLICATION QUEUES replication_queue_reattach;
+    SYSTEM START FETCHES replication_queue_reattach;
+    """
+    And we have executed command on clickhouse01
+    """
+    clickhouse client --query "ALTER TABLE replication_queue_reattach FETCH PARTITION 42 FROM '/tables/replication_queue_reattach'"
+    """
+    When we stop clickhouse on clickhouse02
+    And we execute query on clickhouse01
+    """
+    SYSTEM START REPLICATION QUEUES replication_queue_reattach;
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT
+        (SELECT count() FROM system.parts WHERE table = 'replication_queue_reattach'),
+        (SELECT count() > 0 FROM system.detached_parts WHERE table = 'replication_queue_reattach'),
+        (SELECT count() > 0 FROM system.replication_queue
+         WHERE table = 'replication_queue_reattach'
+           AND splitByChar('_', new_part_name)[1] = '42')
+    """
+    Then we get query response
+    """
+    0\t1\t1
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin partition reattach -t replication_queue_reattach --has-replication-tasks
+    """
+    Then we get response contains
+    """
+    ALTER TABLE `default`.`replication_queue_reattach` DETACH PARTITION ID '42'
+    """
+    And we get response contains
+    """
+    ALTER TABLE `default`.`replication_queue_reattach` ATTACH PARTITION ID '42'
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT
+        (SELECT count() FROM system.parts
+         WHERE table = 'replication_queue_reattach' AND active),
+        (SELECT count() FROM system.detached_parts
+         WHERE table = 'replication_queue_reattach'),
+        (SELECT count() FROM system.replication_queue
+         WHERE table = 'replication_queue_reattach'
+           AND splitByChar('_', new_part_name)[1] = '42')
+    """
+    Then we get query response
+    """
+    1\t0\t0
+    """
+
   Scenario: Delete with precalculated json.
     When we execute command on clickhouse01
     """
