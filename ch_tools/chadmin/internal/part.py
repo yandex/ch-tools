@@ -394,6 +394,8 @@ def remove_detached_part_prefix_on_disk(
     part_path: str,
     part_prefix: str,
     dry_run: bool = False,
+    *,
+    log_move: bool = True,
 ) -> None:
     path_splitted = part_path.split("/")
     if path_splitted[-1].startswith(part_prefix):
@@ -403,7 +405,13 @@ def remove_detached_part_prefix_on_disk(
     from_path = part_path
     to_path = os.path.join("/", *path_splitted)
 
-    logging.info(f"Move from {from_path} to {to_path}")
+    if log_move:
+        logging.info(
+            "{} {} -> {}",
+            "Would move" if dry_run else "Move",
+            from_path,
+            to_path,
+        )
 
     if not os.path.exists(from_path):
         ## fine , assuming that we already moved this dir

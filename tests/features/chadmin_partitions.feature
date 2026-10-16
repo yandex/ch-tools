@@ -284,3 +284,162 @@ Feature: chadmin partitions commands.
     """
     5
     """
+
+  @require_version_23.3
+  Scenario: Attach a quarantined S3 partition after reading every object.
+    When we execute queries on clickhouse01
+    """
+    CREATE TABLE checked_s3_attach(id UInt64, payload String)
+    ENGINE=MergeTree()
+    PARTITION BY tuple()
+    ORDER BY id
+    SETTINGS storage_policy='object_storage', min_bytes_for_wide_part=0;
+    INSERT INTO checked_s3_attach SELECT number, toString(number) FROM numbers(10);
+    """
+    And we move parts as broken_on_start for table default.checked_s3_attach on clickhouse01
+    And we execute queries on clickhouse01
+    """
+    INSERT INTO checked_s3_attach SELECT number + 10, toString(number) FROM numbers(10);
+    ALTER TABLE checked_s3_attach DETACH PARTITION tuple();
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT
+        countIf(reason = 'broken-on-start'),
+        countIf(reason = '')
+    FROM system.detached_parts
+    WHERE database = 'default' AND table = 'checked_s3_attach'
+    """
+    Then we get response
+    """
+    1	1
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin partition attach -t checked_s3_attach --reason broken-on-start --check-s3-objects get
+    """
+    Then we get response contains
+    """
+    Attach partition default.checked_s3_attach: all
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT count() FROM checked_s3_attach
+    """
+    Then we get response
+    """
+    20
+    """
+
+  @require_version_23.3
+  Scenario: Leave a quarantined S3 part prefixed when an object is missing.
+    When we execute queries on clickhouse01
+    """
+    CREATE TABLE broken_s3_attach(id UInt64, payload String)
+    ENGINE=MergeTree()
+    PARTITION BY tuple()
+    ORDER BY id
+    SETTINGS storage_policy='object_storage', min_bytes_for_wide_part=0;
+    INSERT INTO broken_s3_attach VALUES (1, 'payload');
+    """
+    And we move parts as broken_on_start for table default.broken_s3_attach on clickhouse01
+    And we remove S3 blobs for file payload.bin from detached part default.broken_s3_attach on clickhouse01
+    And we execute command on clickhouse01
+    """
+    chadmin partition attach -t broken_s3_attach --reason broken-on-start --check-s3-objects head
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT
+        (SELECT count() FROM system.parts WHERE table='broken_s3_attach' AND active),
+        (SELECT count() FROM system.detached_parts WHERE table='broken_s3_attach' AND reason='broken-on-start')
+    """
+    Then we get query response
+    """
+    0\t1
+    """
+
+  @require_version_23.3
+  Scenario: Quarantine a failed unprefixed S3 part and attach its partition.
+    When we execute queries on clickhouse01
+    """
+    CREATE TABLE quarantine_failed_unprefixed(id UInt64)
+    ENGINE=MergeTree()
+    PARTITION BY tuple()
+    ORDER BY id
+    SETTINGS storage_policy='object_storage', min_bytes_for_wide_part=0;
+    INSERT INTO quarantine_failed_unprefixed VALUES (1);
+    """
+    And we move parts as broken_on_start for table default.quarantine_failed_unprefixed on clickhouse01
+    And we execute command on clickhouse01
+    """
+    part_path=$(clickhouse client --query "SELECT path FROM system.detached_parts WHERE table='quarantine_failed_unprefixed' AND reason='broken-on-start'")
+    detached_dir=$(dirname "$part_path")
+    mkdir "$detached_dir/all_1000000_1000000_0"
+    touch "$detached_dir/all_1000000_1000000_0/invalid"
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin partition attach -t quarantine_failed_unprefixed --reason broken-on-start --check-s3-objects head --quarantine-failed-unprefixed broken
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT
+        (SELECT count() FROM system.parts WHERE table='quarantine_failed_unprefixed' AND active),
+        (SELECT count() FROM system.detached_parts WHERE table='quarantine_failed_unprefixed' AND reason='broken'),
+        (SELECT count() FROM system.detached_parts WHERE table='quarantine_failed_unprefixed' AND reason='broken-on-start')
+    """
+    Then we get query response
+    """
+    1\t1\t0
+    """
+
+  @require_version_23.3
+  Scenario: Remove old zero-copy locks after attaching a quarantined partition.
+    When we execute queries on clickhouse01
+    """
+    DROP TABLE IF EXISTS zero_copy_cleanup ON CLUSTER 'cluster' SYNC;
+    CREATE TABLE zero_copy_cleanup UUID '31000000-0000-0000-0000-000000000001' ON CLUSTER 'cluster' (id UInt64)
+    ENGINE=ReplicatedMergeTree('/tables/zero_copy_cleanup', '{replica}')
+    PARTITION BY tuple()
+    ORDER BY id
+    SETTINGS storage_policy='object_storage', allow_remote_fs_zero_copy_replication=1;
+    INSERT INTO zero_copy_cleanup VALUES (1), (2), (3);
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3
+    clickhouse client --query "SELECT name FROM system.parts WHERE table='zero_copy_cleanup' AND active" > /tmp/old-zero-copy-part
+    old_part=$(cat /tmp/old-zero-copy-part)
+    chadmin zookeeper list "/clickhouse/zero_copy/zero_copy_s3/31000000-0000-0000-0000-000000000001/$old_part" > /tmp/old-zero-copy-unique-id
+    """
+    When we stop clickhouse on clickhouse02
+    And we stop clickhouse on clickhouse01
+    And we sleep for 5 seconds
+    And we execute command on clickhouse01
+    """
+    chadmin data-store detach-object-storage-parts
+    """
+    And we start clickhouse on clickhouse01
+    And we execute command on clickhouse01
+    """
+    chadmin zookeeper exists "/clickhouse/zero_copy/zero_copy_s3/31000000-0000-0000-0000-000000000001/$(cat /tmp/old-zero-copy-part)"
+    chadmin partition attach -t zero_copy_cleanup --reason broken-on-start --check-s3-objects head --cleanup-old-zero-copy-locks
+    """
+    When we execute command on clickhouse01
+    """
+    old_part=$(cat /tmp/old-zero-copy-part)
+    old_unique_id_path=$(cat /tmp/old-zero-copy-unique-id)
+    ! chadmin zookeeper exists "$old_unique_id_path"
+    chadmin zookeeper exists "/clickhouse/zero_copy/zero_copy_s3/31000000-0000-0000-0000-000000000001/$old_part"
+    new_part=$(clickhouse client --query "SELECT name FROM system.parts WHERE table='zero_copy_cleanup' AND active")
+    chadmin zookeeper exists "/clickhouse/zero_copy/zero_copy_s3/31000000-0000-0000-0000-000000000001/$new_part"
+    """
+    And we execute query on clickhouse01
+    """
+    SELECT count() FROM zero_copy_cleanup
+    """
+    Then we get response
+    """
+    3
+    """
