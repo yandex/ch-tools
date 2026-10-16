@@ -1,5 +1,5 @@
 from typing import Any
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import ANY, MagicMock, call, patch
 
 from click.testing import CliRunner
 
@@ -66,6 +66,7 @@ def test_attach_help_groups_s3_checked_options() -> None:
     assert result.exit_code == 0, result.output
     assert "S3 checked attach options:" in result.output
     assert "--quarantine-failed-unprefixed" in result.output
+    assert "--verbose" not in result.output
 
 
 def test_attach_operation_report_only_includes_renames_and_partition_attaches() -> None:
@@ -137,7 +138,7 @@ def test_attach_operation_report_only_includes_renames_and_partition_attaches() 
     ]
 
 
-def test_checked_attach_prints_details_only_with_verbose() -> None:
+def test_checked_attach_prints_operations() -> None:
     report = [
         {
             "database": "db",
@@ -160,7 +161,7 @@ def test_checked_attach_prints_details_only_with_verbose() -> None:
             "ch_tools.chadmin.cli.partition_group.attach_checked_partitions",
             return_value=report,
         ) as attach_checked,
-        patch("ch_tools.chadmin.cli.partition_group.print_response") as print_response,
+        patch("ch_tools.chadmin.cli.partition_group.echo") as echo,
     ):
         result = CliRunner().invoke(
             partition_group,
@@ -179,36 +180,13 @@ def test_checked_attach_prints_details_only_with_verbose() -> None:
         cleanup_old_zero_copy_locks=False,
         quarantine_failed_unprefixed=None,
     )
-    print_response.assert_called_once_with(
-        ANY,
-        _attach_operation_report(report),
-        default_format="table",
+    echo.assert_has_calls(
+        [
+            call("Move db.table: broken-on-start_1_1_1_0 -> 1_1_1_0"),
+            call("Attach partition db.table: first"),
+        ]
     )
-
-
-def test_checked_attach_prints_full_report_with_verbose() -> None:
-    report = [{"action": "attached"}]
-    config: dict[str, Any] = {"loguru": {"handlers": {}, "formatters": {}}}
-
-    with (
-        patch(
-            "ch_tools.chadmin.cli.partition_group.get_partitions",
-            return_value={"data": []},
-        ),
-        patch(
-            "ch_tools.chadmin.cli.partition_group.attach_checked_partitions",
-            return_value=report,
-        ),
-        patch("ch_tools.chadmin.cli.partition_group.print_response") as print_response,
-    ):
-        result = CliRunner().invoke(
-            partition_group,
-            ["attach", "--all", "--reason", "broken-on-start", "--verbose"],
-            obj={"config": config},
-        )
-
-    assert result.exit_code == 0, result.output
-    print_response.assert_called_once_with(ANY, report, default_format="table")
+    assert echo.call_count == 2
 
 
 def test_partitions_are_filtered_by_part_count() -> None:

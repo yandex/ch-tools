@@ -4,7 +4,7 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from click import Context
+from click import Context, echo
 from cloup import Choice, constraint, group, option, option_group, pass_context
 from cloup.constraints import (
     AnySet,
@@ -215,12 +215,6 @@ def list_partitions_command(ctx: Context, **kwargs: Any) -> None:
 @option_group(
     "S3 checked attach options",
     option(
-        "-v",
-        "--verbose",
-        is_flag=True,
-        help="Print the S3 check report for every part.",
-    ),
-    option(
         "--reason",
         default=None,
         help=(
@@ -279,7 +273,6 @@ def attach_partitions_command(
     disk_name: Optional[str],
     use_partition_list_from_json: Optional[str],
     keep_going: bool,
-    verbose: bool,
     reason: Optional[str],
     check_s3_objects: Optional[str],
     quarantine_failed_unprefixed: Optional[str],
@@ -320,11 +313,7 @@ def attach_partitions_command(
             cleanup_old_zero_copy_locks=cleanup_old_zero_copy_locks,
             quarantine_failed_unprefixed=quarantine_failed_unprefixed,
         )
-        print_response(
-            ctx,
-            report if verbose else _attach_operation_report(report),
-            default_format="table",
-        )
+        _print_attach_operations(report)
         return
 
     for p in partitions:
@@ -418,6 +407,39 @@ def _attach_operation_report(report: List[Dict[str, Any]]) -> List[Dict[str, str
             )
 
     return operations
+
+
+def _print_attach_operations(report: List[Dict[str, Any]]) -> None:
+    """Print the filesystem changes before the partition attach statements."""
+    operations = _attach_operation_report(report)
+    renames = [
+        operation
+        for operation in operations
+        if operation["action"]
+        in {"quarantine", "would-quarantine", "rename", "would-rename"}
+    ]
+    attaches = [
+        operation
+        for operation in operations
+        if operation["action"] in {"attach-partition", "would-attach-partition"}
+    ]
+
+    for operation in renames:
+        verb = "Would move" if operation["action"].startswith("would-") else "Move"
+        echo(
+            f"{verb} {operation['database']}.{operation['table']}: "
+            f"{operation['part']} -> {operation['destination_part']}"
+        )
+    for operation in attaches:
+        verb = (
+            "Would attach partition"
+            if operation["action"] == "would-attach-partition"
+            else "Attach partition"
+        )
+        echo(
+            f"{verb} {operation['database']}.{operation['table']}: "
+            f"{operation['partition_id']}"
+        )
 
 
 @partition_group.command("detach")
