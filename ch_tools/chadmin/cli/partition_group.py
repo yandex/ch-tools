@@ -1,13 +1,25 @@
 # pylint: disable=too-many-lines
 import json
 from collections import OrderedDict
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from click import Context
 from cloup import Choice, constraint, group, option, option_group, pass_context
-from cloup.constraints import AnySet, If, IsSet, RequireAtLeast, RequireExactly
+from cloup.constraints import (
+    AnySet,
+    If,
+    IsSet,
+    RequireAtLeast,
+    RequireExactly,
+    require_all,
+)
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
+from ch_tools.chadmin.internal.object_storage.checked_partition_attach import (
+    DETACHED_PART_REASONS,
+    attach_checked_partitions,
+)
 from ch_tools.chadmin.internal.partition import (
     attach_partition,
     detach_partition,
@@ -200,6 +212,54 @@ def list_partitions_command(ctx: Context, **kwargs: Any) -> None:
     ),
 )
 @option("-k", "--keep-going", is_flag=True, help="Do not stop on the first error.")
+@option_group(
+    "S3 checked attach options",
+    option(
+        "-v",
+        "--verbose",
+        is_flag=True,
+        help="Print the S3 check report for every part.",
+    ),
+    option(
+        "--reason",
+        default=None,
+        help=(
+            "Select detached parts with this reason prefix and remove the prefix "
+            "only from parts that pass the requested S3 check."
+        ),
+    ),
+    option(
+        "--check-s3-objects",
+        type=Choice(["head", "get"]),
+        help=(
+            "Validate every referenced S3 object before attach. 'head' checks "
+            "existence and size; 'get' also reads every object completely."
+        ),
+    ),
+    option(
+        "--quarantine-failed-unprefixed",
+        type=Choice(DETACHED_PART_REASONS),
+        metavar="REASON",
+        help=(
+            "Move unprefixed parts that fail --check-s3-objects to "
+            "REASON_<part> before attaching the rest of their partition. "
+            "REASON must be a ClickHouse detached-part reason."
+        ),
+    ),
+    option(
+        "--cleanup-old-zero-copy-locks",
+        is_flag=True,
+        help=(
+            "After a successful attach, delete the old zero-copy lock subtrees "
+            "for all attached parts, including locks of all replicas."
+        ),
+    ),
+    constraint(If("cleanup_old_zero_copy_locks", then=require_all), ["reason"]),
+    constraint(
+        If(IsSet("quarantine_failed_unprefixed"), then=require_all),
+        ["check_s3_objects"],
+    ),
+)
 @option(
     "-n",
     "--dry-run",
@@ -219,10 +279,22 @@ def attach_partitions_command(
     disk_name: Optional[str],
     use_partition_list_from_json: Optional[str],
     keep_going: bool,
+    verbose: bool,
+    reason: Optional[str],
+    check_s3_objects: Optional[str],
+    quarantine_failed_unprefixed: Optional[str],
+    cleanup_old_zero_copy_locks: bool,
     dry_run: bool,
     **kwargs: Any,
 ) -> None:
     """Attach one or several partitions."""
+    checked_attach = (
+        reason is not None
+        or check_s3_objects is not None
+        or quarantine_failed_unprefixed is not None
+        or cleanup_old_zero_copy_locks
+    )
+    reason = reason or ""
     partitions = get_partitions(
         ctx,
         database,
@@ -233,10 +305,28 @@ def attach_partitions_command(
         disk_name=disk_name,
         use_partition_list_from_json=use_partition_list_from_json,
         detached=True,
-        reason="",
+        reason=reason,
         format_="JSON",
         **kwargs,
     )["data"]
+    if checked_attach:
+        report = attach_checked_partitions(
+            ctx,
+            partitions,
+            reason=reason,
+            check_method=check_s3_objects,
+            dry_run=dry_run,
+            keep_going=keep_going,
+            cleanup_old_zero_copy_locks=cleanup_old_zero_copy_locks,
+            quarantine_failed_unprefixed=quarantine_failed_unprefixed,
+        )
+        print_response(
+            ctx,
+            report if verbose else _attach_operation_report(report),
+            default_format="table",
+        )
+        return
+
     for p in partitions:
         try:
             attach_partition(
@@ -251,6 +341,83 @@ def attach_partitions_command(
                 logging.warning("{!r}\n", e)
             else:
                 raise
+
+
+def _attach_operation_report(report: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    """Return only the local renames and partition attaches from a full report."""
+    checks_by_partition: OrderedDict[tuple[str, str, str], List[Dict[str, Any]]] = (
+        OrderedDict()
+    )
+    for check in report:
+        key = (check["database"], check["table"], check["partition_id"])
+        checks_by_partition.setdefault(key, []).append(check)
+
+    operations: List[Dict[str, str]] = []
+    for (database, table, partition_id), checks in checks_by_partition.items():
+        for check in checks:
+            if check["action"] not in {"quarantined", "would-quarantine"}:
+                continue
+            operations.append(
+                {
+                    "action": (
+                        "would-quarantine"
+                        if check["action"] == "would-quarantine"
+                        else "quarantine"
+                    ),
+                    "database": database,
+                    "table": table,
+                    "partition_id": partition_id,
+                    "part": Path(check["path"]).name,
+                    "destination_part": check["destination_part"],
+                }
+            )
+
+        attached = [
+            check for check in checks if check["action"] in {"attached", "would-attach"}
+        ]
+        for check in attached:
+            reason = check["reason"]
+            if not reason:
+                continue
+            source_part = Path(check["path"]).name
+            prefix = f"{reason}_"
+            destination_part = (
+                source_part[len(prefix) :]
+                if source_part.startswith(prefix)
+                else check["part"]
+            )
+            operations.append(
+                {
+                    "action": (
+                        "would-rename"
+                        if check["action"] == "would-attach"
+                        else "rename"
+                    ),
+                    "database": database,
+                    "table": table,
+                    "partition_id": partition_id,
+                    "part": source_part,
+                    "destination_part": destination_part,
+                }
+            )
+
+        if attached:
+            operations.append(
+                {
+                    "action": (
+                        "would-attach-partition"
+                        if attached[0]["action"] == "would-attach"
+                        else "attach-partition"
+                    ),
+                    "database": database,
+                    "table": table,
+                    "partition_id": partition_id,
+                    "part": "",
+                    "destination_part": "",
+                }
+            )
+
+    return operations
 
 
 @partition_group.command("detach")
