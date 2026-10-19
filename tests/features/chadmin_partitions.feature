@@ -344,9 +344,13 @@ Feature: chadmin partitions commands.
     """
     And we move parts as broken_on_start for table default.broken_s3_attach on clickhouse01
     And we remove S3 blobs for file payload.bin from detached part default.broken_s3_attach on clickhouse01
-    And we execute command on clickhouse01
+    And we try to execute command on clickhouse01
     """
-    ! chadmin partition attach -t broken_s3_attach --reason broken-on-start --check-s3-objects head
+    chadmin partition attach -t broken_s3_attach --reason broken-on-start --check-s3-objects head
+    """
+    Then it fails with response contains
+    """
+    S3 check failed for 1 detached part(s); the failed parts were not attached
     """
     When we execute query on clickhouse01
     """
@@ -378,9 +382,13 @@ Feature: chadmin partitions commands.
     mkdir "$detached_dir/all_1000000_1000000_0"
     touch "$detached_dir/all_1000000_1000000_0/invalid"
     """
-    And we execute command on clickhouse01
+    And we try to execute command on clickhouse01
     """
     chadmin partition attach -t quarantine_failed_unprefixed --reason broken-on-start --check-s3-objects head --quarantine-failed-unprefixed broken
+    """
+    Then it fails with response contains
+    """
+    S3 check failed for 1 detached part(s); the failed parts were not attached
     """
     When we execute query on clickhouse01
     """
