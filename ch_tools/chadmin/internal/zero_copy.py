@@ -125,6 +125,11 @@ def _get_first_checksums_blob_path(object_storage_prefix: str, part: dict) -> st
     return os.path.join(object_storage_prefix, metadata.objects[0].key.lstrip("/"))
 
 
+def get_zero_copy_lock_unique_id(object_storage_prefix: str, part: dict) -> str:
+    """Return the remote part identifier used in a zero-copy lock path."""
+    return _get_first_checksums_blob_path(object_storage_prefix, part).replace("/", "_")
+
+
 def _get_zero_copy_lock_info(
     object_storage_prefix: str,
     table_zk_path: str,
@@ -133,12 +138,11 @@ def _get_zero_copy_lock_info(
     part: dict,
     replica: str,
 ) -> ZeroCopyLockInfo:
-    blob_path = _get_first_checksums_blob_path(object_storage_prefix, part)
-    object_storage_path = blob_path.replace("/", "_")
+    unique_id = get_zero_copy_lock_unique_id(object_storage_prefix, part)
 
     return ZeroCopyLockInfo(
         lock_path=os.path.join(
-            zero_copy_path, table_uuid, part["name"], object_storage_path, replica
+            zero_copy_path, table_uuid, part["name"], unique_id, replica
         ),
         part_path=_get_part_path_in_zk(part["name"], table_zk_path, replica),
         replica=replica,
