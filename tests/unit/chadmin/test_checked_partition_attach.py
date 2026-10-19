@@ -479,7 +479,7 @@ def test_attach_failure_restores_reason_prefix(tmp_path: Path) -> None:
     detached = tmp_path / "detached"
     source = detached / "broken-on-start_all_1_1_0"
     write_metadata(source, "prefix/good")
-    parts = [part_row(source, "all_1_1_0")]
+    parts = [part_row(source, "broken-on-start_all_1_1_0")]
 
     with (
         patch(
@@ -516,7 +516,9 @@ def test_old_zero_copy_locks_are_deleted_after_successful_attach(
     write_metadata(unprefixed, "prefix/unprefixed")
     write_metadata(unprefixed, "prefix/unprefixed", filename="checksums.txt")
     parts = [
-        part_row(source, "all_1_1_0"),
+        # system.detached_parts.name is the directory name, not the parsed
+        # logical part name.
+        part_row(source, "broken-on-start_all_1_1_0"),
         part_row(unprefixed, "all_2_2_0", reason=""),
     ]
     zk = MagicMock()
@@ -609,7 +611,7 @@ def test_old_zero_copy_locks_are_not_deleted_when_attach_fails(
     source = detached / "broken-on-start_all_1_1_0"
     write_metadata(source, "prefix/good")
     write_metadata(source, "prefix/good", filename="checksums.txt")
-    parts = [part_row(source, "all_1_1_0")]
+    parts = [part_row(source, "broken-on-start_all_1_1_0")]
 
     storage_configuration = MagicMock()
     storage_configuration.get_disk_config.return_value = {"type": "s3"}
@@ -676,7 +678,7 @@ def test_zero_copy_cleanup_is_preflighted_before_part_is_moved(
     detached = tmp_path / "detached"
     source = detached / "broken-on-start_all_1_1_0"
     write_metadata(source, "prefix/good")
-    parts = [part_row(source, "all_1_1_0")]
+    parts = [part_row(source, "broken-on-start_all_1_1_0")]
 
     storage_configuration = MagicMock()
     storage_configuration.get_disk_config.return_value = {"type": "s3"}

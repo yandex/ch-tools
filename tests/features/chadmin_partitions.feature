@@ -346,7 +346,7 @@ Feature: chadmin partitions commands.
     And we remove S3 blobs for file payload.bin from detached part default.broken_s3_attach on clickhouse01
     And we execute command on clickhouse01
     """
-    chadmin partition attach -t broken_s3_attach --reason broken-on-start --check-s3-objects head
+    ! chadmin partition attach -t broken_s3_attach --reason broken-on-start --check-s3-objects head
     """
     When we execute query on clickhouse01
     """
@@ -423,11 +423,15 @@ Feature: chadmin partitions commands.
     And we start clickhouse on clickhouse01
     And we execute command on clickhouse01
     """
+    set -e
     chadmin zookeeper exists "/clickhouse/zero_copy/zero_copy_s3/31000000-0000-0000-0000-000000000001/$(cat /tmp/old-zero-copy-part)"
+    chadmin zookeeper exists "$(cat /tmp/old-zero-copy-unique-id)"
+    test "$(chadmin zookeeper list "$(cat /tmp/old-zero-copy-unique-id)" | wc -l)" -eq 2
     chadmin partition attach -t zero_copy_cleanup --reason broken-on-start --check-s3-objects head --cleanup-old-zero-copy-locks
     """
     When we execute command on clickhouse01
     """
+    set -e
     old_part=$(cat /tmp/old-zero-copy-part)
     old_unique_id_path=$(cat /tmp/old-zero-copy-unique-id)
     ! chadmin zookeeper exists "$old_unique_id_path"

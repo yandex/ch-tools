@@ -60,6 +60,16 @@ def test_cleanup_old_zero_copy_locks_requires_reason() -> None:
     )
 
 
+def test_checked_attach_rejects_unknown_reason() -> None:
+    result = CliRunner().invoke(
+        partition_group,
+        ["attach", "--all", "--reason", "broken_on_start"],
+    )
+
+    assert result.exit_code == 2
+    assert "Invalid value for '--reason'" in result.output
+
+
 def test_attach_help_groups_s3_checked_options() -> None:
     result = CliRunner().invoke(partition_group, ["attach", "--help"])
 
@@ -187,6 +197,44 @@ def test_checked_attach_prints_operations() -> None:
         ]
     )
     assert echo.call_count == 2
+
+
+def test_checked_attach_fails_on_failed_s3_check() -> None:
+    report = [
+        {
+            "database": "db",
+            "table": "table",
+            "partition_id": "first",
+            "part": "1_1_1_0",
+            "reason": "broken-on-start",
+            "path": "/var/lib/clickhouse/detached/broken-on-start_1_1_1_0",
+            "check": "failed",
+            "action": "left-prefixed",
+        }
+    ]
+    config: dict[str, Any] = {"loguru": {"handlers": {}, "formatters": {}}}
+
+    with (
+        patch(
+            "ch_tools.chadmin.cli.partition_group.get_partitions",
+            return_value={"data": []},
+        ),
+        patch(
+            "ch_tools.chadmin.cli.partition_group.attach_checked_partitions",
+            return_value=report,
+        ),
+    ):
+        result = CliRunner().invoke(
+            partition_group,
+            ["attach", "--all", "--reason", "broken-on-start"],
+            obj={"config": config},
+        )
+
+    assert result.exit_code == 1
+    assert (
+        "S3 check failed for 1 detached part(s); "
+        "the failed parts were not attached" in result.output
+    )
 
 
 def test_partitions_are_filtered_by_part_count() -> None:

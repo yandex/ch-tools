@@ -279,6 +279,22 @@ def partition_key(item: Dict[str, Any]) -> PartitionKey:
     return PartitionKey(item["database"], item["table"], item["partition_id"])
 
 
+def _zero_copy_part_name(part: Dict[str, Any]) -> str:
+    """Return the logical part name used in ClickHouse zero-copy lock paths."""
+    name = part["name"]
+    reason = part["reason"]
+    if not reason:
+        return name
+
+    prefix = f"{reason}_"
+    if not name.startswith(prefix):
+        raise RuntimeError(
+            "Detached part name does not match its reason: "
+            f"name={name!r}, reason={reason!r}"
+        )
+    return name[len(prefix) :]
+
+
 def _parts_in_partitions(
     ctx: Context, selected_keys: set[PartitionKey], reason: str
 ) -> List[Dict[str, Any]]:
@@ -386,7 +402,7 @@ def _prepare_zero_copy_cleanup_plans(
                     posixpath.join(
                         zero_copy_paths[path_key],
                         shared_table_id,
-                        check.part["name"],
+                        _zero_copy_part_name(check.part),
                         unique_id,
                     )
                 )

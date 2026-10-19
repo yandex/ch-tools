@@ -1,5 +1,6 @@
 # pylint: disable=too-many-lines
 import json
+import sys
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -217,6 +218,7 @@ def list_partitions_command(ctx: Context, **kwargs: Any) -> None:
     option(
         "--reason",
         default=None,
+        type=Choice(DETACHED_PART_REASONS),
         help=(
             "Select detached parts with this reason prefix and remove the prefix "
             "only from parts that pass the requested S3 check."
@@ -314,6 +316,7 @@ def attach_partitions_command(
             quarantine_failed_unprefixed=quarantine_failed_unprefixed,
         )
         _print_attach_operations(report)
+        _exit_if_s3_checks_failed(report)
         return
 
     for p in partitions:
@@ -440,6 +443,18 @@ def _print_attach_operations(report: List[Dict[str, Any]]) -> None:
             f"{verb} {operation['database']}.{operation['table']}: "
             f"{operation['partition_id']}"
         )
+
+
+def _exit_if_s3_checks_failed(report: List[Dict[str, Any]]) -> None:
+    """Make a partial checked attach visible to callers via a non-zero exit."""
+    failed_checks = [check for check in report if check.get("check") == "failed"]
+    if failed_checks:
+        echo(
+            f"S3 check failed for {len(failed_checks)} detached part(s); "
+            "the failed parts were not attached",
+            err=True,
+        )
+        sys.exit(1)
 
 
 @partition_group.command("detach")
