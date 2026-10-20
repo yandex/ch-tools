@@ -30,6 +30,8 @@ from ch_tools.common import logging
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 
 ATTACH_DETACH_QUERY_RETRY = 10
+READ_CHUNK_SIZE = 8 * 1024 * 1024
+OBJECT_CHECK_MODES = ("head", "range", "full")
 
 
 @dataclass(frozen=True, order=True)
@@ -78,6 +80,48 @@ class PartRecoveryResult:
     has_unresolved: bool
 
 
+def check_object_in_storage(
+    s3_client: Boto3Client,
+    bucket: str,
+    key: str,
+    expected_size: int,
+    mode: str,
+) -> bool:
+    """Check an S3 object with the requested amount of data access."""
+    if mode not in OBJECT_CHECK_MODES:
+        raise ValueError(f"Unsupported S3 object check mode: {mode}")
+
+    if mode == "head":
+        return object_exists(s3_client, bucket, key)
+
+    get_kwargs = {"Bucket": bucket, "Key": key}
+    if mode == "range" and expected_size > 0:
+        get_kwargs["Range"] = "bytes=0-0"
+
+    try:
+        response = s3_client.get_object(**get_kwargs)
+        body = response["Body"]
+        try:
+            if mode == "range":
+                read_size = len(body.read(1))
+                return read_size == min(expected_size, 1)
+
+            read_size = 0
+            while True:
+                chunk = body.read(READ_CHUNK_SIZE)
+                if not chunk:
+                    break
+                read_size += len(chunk)
+            return read_size == expected_size
+        finally:
+            body.close()
+    except Exception as error:
+        logging.warning(
+            "Failed to read S3 object {} in {} mode: {!r}", key, mode, error
+        )
+        return False
+
+
 def restore_recoverable_broken_partitions(
     ctx: Context,
     root_path: str,
@@ -85,8 +129,9 @@ def restore_recoverable_broken_partitions(
     disk_conf: S3DiskConfiguration,
     detach_unrecoverable: bool,
     reattach_unrecoverable: bool,
+    mode: str = "head",
 ) -> List[Dict[str, Any]]:
-    broken_parts = find_broken_parts(ctx, root_path, s3_client, disk_conf)
+    broken_parts = find_broken_parts(ctx, root_path, s3_client, disk_conf, mode=mode)
     result: List[Dict[str, Any]] = []
 
     broken_parts_by_partition = group_broken_parts_by_partition(broken_parts)
@@ -167,6 +212,7 @@ def find_broken_parts(
     root_path: str,
     s3_client: Boto3Client,
     disk_conf: S3DiskConfiguration,
+    mode: str = "head",
 ) -> List[BrokenPart]:
     active_parts_by_path = get_active_parts_by_path(ctx)
     broken_parts_by_path: Dict[str, BrokenPart] = {}
@@ -188,7 +234,13 @@ def find_broken_parts(
 
             for object_info in metadata.objects:
                 object_key = get_object_storage_key(disk_conf.prefix, object_info)
-                if object_exists(s3_client, disk_conf.bucket_name, object_key):
+                if check_object_in_storage(
+                    s3_client,
+                    disk_conf.bucket_name,
+                    object_key,
+                    object_info.size,
+                    mode,
+                ):
                     continue
 
                 broken_part = broken_parts_by_path.setdefault(

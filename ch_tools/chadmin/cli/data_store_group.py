@@ -4,7 +4,7 @@ import subprocess
 from typing import Any, Dict, List, Optional
 
 import boto3
-from click import Context, group, option, pass_context
+from click import Choice, Context, group, option, pass_context
 from cloup.constraints import AcceptAtMost, constraint
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -452,6 +452,16 @@ def collect_orphaned_sql_objects_recursive(
 
 @data_store_group.command("detect-broken-partitions")
 @option(
+    "--mode",
+    type=Choice(["head", "range", "full"]),
+    default="head",
+    show_default=True,
+    help=(
+        "S3 object check depth: 'head' checks object metadata; 'range' reads "
+        "the first byte; 'full' streams the complete object and checks its size."
+    ),
+)
+@option(
     "--root-path",
     "root_path",
     default=S3_METADATA_STORE_PATH,
@@ -479,6 +489,7 @@ def collect_orphaned_sql_objects_recursive(
 @pass_context
 def detect_broken_partitions(
     ctx: Context,
+    mode: str,
     root_path: str,
     reattach: bool,
     detach: bool,
@@ -506,11 +517,12 @@ def detect_broken_partitions(
             disk_conf=disk_conf,
             detach_unrecoverable=detach,
             reattach_unrecoverable=reattach,
+            mode=mode,
         )
         print_response(ctx, restore_report, default_format="table")
         return
 
-    broken_parts = find_broken_parts(ctx, root_path, s3_client, disk_conf)
+    broken_parts = find_broken_parts(ctx, root_path, s3_client, disk_conf, mode=mode)
     broken_parts_by_partition = group_broken_parts_by_partition(broken_parts)
     repaired_partitions = []
 

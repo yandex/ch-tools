@@ -259,6 +259,65 @@ Feature: chadmin data-store commands
       replicas_to_mark_lost: []
     """
 
+  Scenario: Range mode detects an object whose HEAD succeeds but body cannot be read.
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS object_check_mode;
+    CREATE DATABASE object_check_mode;
+    CREATE TABLE object_check_mode.data (value String, p UInt32)
+    ENGINE=MergeTree() ORDER BY value PARTITION BY p
+    SETTINGS storage_policy='object_storage', min_bytes_for_wide_part=0;
+    INSERT INTO object_check_mode.data
+    SELECT randomPrintableASCII(128), 0 FROM numbers(10000);
+    """
+    And we make s3 objects for active part file value.bin unreadable from table object_check_mode.data on clickhouse01
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detect-broken-partitions
+    """
+    Then we get response
+    """
+    []
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detect-broken-partitions --mode range
+    """
+    Then we get response contains
+    """
+    - table: '`object_check_mode`.`data`'
+      partition: '0'
+    """
+
+  Scenario: Full object check detects a size mismatch after a successful range read.
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS object_check_mode;
+    CREATE DATABASE object_check_mode;
+    CREATE TABLE object_check_mode.data (value UInt32, p UInt32)
+    ENGINE=MergeTree() ORDER BY value PARTITION BY p
+    SETTINGS storage_policy='object_storage', min_bytes_for_wide_part=0;
+    INSERT INTO object_check_mode.data SELECT number, 0 FROM numbers(3);
+    """
+    And we replace s3 objects for active part file columns.txt from table object_check_mode.data on clickhouse01 with content of size 1
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detect-broken-partitions --mode range
+    """
+    Then we get response
+    """
+    []
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detect-broken-partitions --mode full
+    """
+    Then we get response contains
+    """
+    - table: '`object_check_mode`.`data`'
+      partition: '0'
+    """
+
   Scenario Outline: Restore recoverable <filename> file for broken object storage part.
     When we execute queries on clickhouse01
     """
