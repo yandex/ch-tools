@@ -79,8 +79,12 @@ jobs:
           mkdir -p tests/staging
           make test-integration BEHAVE_ARGS="--no-color --format tests.modules.ci_report:CIReport --outfile /dev/fd/3 --format pretty" \
             3>&1 > tests/staging/integration.log 2>&1 || {
+            # Lines of the log must not run workflow commands.
+            token=$(cat /proc/sys/kernel/random/uuid)
             echo "::group::The end of the full log"
+            echo "::stop-commands::$token"
             tail -n 100 tests/staging/integration.log
+            echo "::$token::"
             echo "::endgroup::"
             exit 1
           }

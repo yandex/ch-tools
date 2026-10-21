@@ -6,14 +6,22 @@ On GitHub Actions failures become annotations and the summary goes to the page o
 """
 
 import os
+import re
 import time
+import uuid
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 from behave.formatter.base import Formatter
 from behave.runner_util import collect_feature_locations
 
-STATUSES = ("passed", "failed", "skipped")
+# Behave did not get to untested scenarios.
+STATUSES = {
+    "passed": "passed",
+    "failed": "failed",
+    "skipped": "skipped",
+    "untested": "not run",
+}
 
 
 @dataclass
@@ -63,11 +71,20 @@ class CIReport(Formatter):
         stream.write(text + "\n")
         stream.flush()
 
+    def _write_untrusted(self, text: str) -> None:
+        """Text of tests: on GitHub Actions its lines cannot run workflow commands."""
+        token = uuid.uuid4().hex
+        if self.github:
+            self._write(f"::stop-commands::{token}")
+        self._write(text)
+        if self.github:
+            self._write(f"::{token}::")
+
     def uri(self, uri: str) -> None:
-        self.features.append(FeatureResult(os.path.basename(uri)))
+        self.features.append(FeatureResult(_line(os.path.basename(uri))))
         self.feature_started = time.monotonic()
         self._write(
-            f"{self.features[-1].name} [{len(self.features)}/{len(self.planned)}]"
+            f"[{len(self.features)}/{len(self.planned)}] {self.features[-1].name}"
         )
 
     def scenario(self, scenario: Any) -> None:
@@ -92,9 +109,9 @@ class CIReport(Formatter):
             status = "failed"
         feature = self.features[-1]
         feature.counts[status] += 1
-        label = "FAILED" if status == "failed" else status
+        label = "FAILED" if status == "failed" else STATUSES[status]
         seconds = time.monotonic() - self.scenario_started
-        self._write(f"  {label:<7} {_duration(seconds):>6}  {scenario.name.strip()}")
+        self._write(f"  {label:<7} {_duration(seconds):>6}  {_line(scenario.name)}")
         if status == "failed":
             self._report_failure(feature.name, scenario)
 
@@ -106,35 +123,37 @@ class CIReport(Formatter):
         if step is None:
             failure = Failure(
                 feature,
-                scenario.name.strip(),
+                _line(scenario.name),
                 "a hook of the scenario",
-                str(scenario.location.filename),
-                scenario.location.line,
+                _line(str(scenario.location.filename)),
+                int(scenario.location.line),
                 "see the full log",
             )
         else:
             error = step.exception
             failure = Failure(
                 feature,
-                scenario.name.strip(),
-                f"{step.keyword} {step.name}",
-                str(step.location.filename),
-                step.location.line,
+                _line(scenario.name),
+                _line(f"{step.keyword} {step.name}"),
+                _line(str(step.location.filename)),
+                int(step.location.line),
                 (
-                    " ".join(f"{type(error).__name__}: {error}".split())[:300]
+                    _line(f"{type(error).__name__}: {error}")[:300]
                     if error
                     else f"{step.status.name} step"
                 ),
             )
         self.failures.append(failure)
         indent = " " * 18
-        self._write(f"{indent}{failure.step} ({failure.location}:{failure.line})")
-        self._write(f"{indent}{failure.error}")
+        self._write_untrusted(
+            f"{indent}{failure.step} ({failure.location}:{failure.line})\n"
+            f"{indent}{failure.error}"
+        )
         if self.github:
             message = _escape(f"{failure.scenario}: {failure.step}\n{failure.error}")
             self._write(
-                f"::error file=tests/{failure.location},line={failure.line}"
-                f",title={_escape(feature, prop=True)}::{message}"
+                f"::error file={_escape(f'tests/{failure.location}', prop=True)}"
+                f",line={failure.line},title={_escape(feature, prop=True)}::{message}"
             )
 
     def close(self) -> None:
@@ -146,11 +165,11 @@ class CIReport(Formatter):
         failed = bool(totals["failed"]) or not self.features
         not_run = self.planned[len(self.features) :]
         result = "failed" if failed else "passed"
-        counts = ", ".join(f"{totals[status]} {status}" for status in STATUSES)
+        counts = ", ".join(f"{totals[s]} {name}" for s, name in STATUSES.items())
         elapsed = _duration(time.monotonic() - self.run_started)
         self._write(f"\nIntegration tests {result}: {counts} in {elapsed}.")
         if not_run:
-            self._write(f"Did not run: {', '.join(not_run)}.")
+            self._write(f"Did not run: {', '.join(_line(n) for n in not_run)}.")
         summary = os.getenv("GITHUB_STEP_SUMMARY")
         if self.github and summary:
             with open(summary, "a", encoding="utf-8") as out:
@@ -165,25 +184,25 @@ class CIReport(Formatter):
         if self.failures:
             lines += ["", "### Failures", ""]
             lines += [
-                f"- **{_cell(f.feature)}** · {_cell(f.scenario)}: `{_cell(f.step)}` "
-                f"(`tests/{f.location}:{f.line}`)<br>`{_cell(f.error)}`"
+                f"- **{_text(f.feature)}** · {_text(f.scenario)}: `{_code(f.step)}` "
+                f"(`tests/{_code(f.location)}:{f.line}`)<br>`{_code(f.error)}`"
                 for f in self.failures
             ]
         lines += [
             "",
             "### Features",
             "",
-            "| | Feature | Passed | Failed | Skipped | Time |",
-            "|---|---|--:|--:|--:|--:|",
+            "| | Feature | Passed | Failed | Skipped | Not run | Time |",
+            "|---|---|--:|--:|--:|--:|--:|",
         ]
         for feature in self.features:
             mark = "❌" if feature.counts["failed"] else "✅"
+            counts = " | ".join(str(feature.counts[status]) for status in STATUSES)
             lines.append(
-                f"| {mark} | {_cell(feature.name)} | {feature.counts['passed']} "
-                f"| {feature.counts['failed']} | {feature.counts['skipped']} "
+                f"| {mark} | {_text(feature.name)} | {counts} "
                 f"| {_duration(feature.seconds)} |"
             )
-        lines += [f"| ⏸️ | {_cell(name)} | | | | did not run |" for name in not_run]
+        lines += [f"| ⏸️ | {_text(name)} | | | | | did not run |" for name in not_run]
         lines += [
             "",
             "The full log, the JUnit reports and the logs of the containers are in the "
@@ -204,5 +223,16 @@ def _escape(text: str, *, prop: bool = False) -> str:
     return text.replace(":", "%3A").replace(",", "%2C") if prop else text
 
 
-def _cell(text: Optional[str]) -> str:
-    return (text or "").replace("|", "\\|").replace("`", "'").replace("\n", " ")
+def _line(text: str) -> str:
+    """Names of tests on one line: the next line of a log could be a workflow command."""
+    return " ".join(text.split())
+
+
+def _text(text: str) -> str:
+    """Text of tests renders as is: no links, images, HTML or cells of its own."""
+    return re.sub(r"([\\`*_{}\[\]()<>#+\-.!|~@:&])", r"\\\1", _line(text))
+
+
+def _code(text: str) -> str:
+    """Text of tests in a code span: it cannot close the span or the cell."""
+    return _line(text).replace("`", "'").replace("|", "\\|")
