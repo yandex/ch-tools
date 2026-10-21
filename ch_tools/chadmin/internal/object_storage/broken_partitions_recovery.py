@@ -766,14 +766,17 @@ def make_partition_reports(
 ) -> List[Dict[str, Any]]:
     actions = action_reports or []
     actions_by_file: Dict[Tuple[str, str, str, str], List[Dict[str, Any]]] = {}
+    actions_by_partition: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
     for action in actions:
-        key = (
+        action_partition_key = (action["table"], action["partition"])
+        actions_by_partition.setdefault(action_partition_key, []).append(action)
+        file_key = (
             action["table"],
             action["partition"],
             action["part"],
             action["file"],
         )
-        actions_by_file.setdefault(key, []).append(action)
+        actions_by_file.setdefault(file_key, []).append(action)
 
     result: List[Dict[str, Any]] = []
     for partition_key, partition_parts in sorted(
@@ -784,12 +787,9 @@ def make_partition_reports(
             for part in partition_parts
             for issue in part.object_issues
         ]
-        partition_actions = [
-            action
-            for action in actions
-            if action["table"] == partition_parts[0].info.table_id
-            and action["partition"] == partition_key.partition_id
-        ]
+        partition_actions = actions_by_partition.get(
+            (partition_parts[0].info.table_id, partition_key.partition_id), []
+        )
         part_reports = [
             _make_part_report(part, actions_by_file) for part in partition_parts
         ]

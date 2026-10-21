@@ -1,6 +1,7 @@
 import os
 import shutil
 import subprocess
+import sys
 from typing import Any, Dict, List, Optional
 
 import boto3
@@ -18,6 +19,7 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
     remove_from_ch_disk,
 )
 from ch_tools.chadmin.internal.object_storage.broken_partitions_recovery import (
+    BrokenPart,
     detach_broken_partition,
     ensure_actions_are_safe,
     find_broken_parts,
@@ -536,11 +538,16 @@ def detect_broken_partitions(
     action_reports: List[Dict[str, Any]] = []
     actionable_parts = broken_parts
     if restore_recoverable or detach or reattach:
-        ensure_actions_are_safe(
-            broken_parts,
-            parts_checked,
-            max_broken_parts_percentage,
-        )
+        try:
+            ensure_actions_are_safe(
+                broken_parts,
+                parts_checked,
+                max_broken_parts_percentage,
+            )
+        except RuntimeError:
+            _print_broken_partitions_report(ctx, broken_parts, action_reports)
+            sys.stdout.flush()
+            raise
         actionable_parts = select_actionable_broken_parts(broken_parts)
 
     if restore_recoverable:
@@ -573,6 +580,19 @@ def detect_broken_partitions(
                     )
                 )
 
+    _print_broken_partitions_report(ctx, broken_parts, action_reports)
+
+    logging.debug(
+        "Found parts with object-storage check failures. Local paths: {}",
+        [broken_part.path for broken_part in broken_parts],
+    )
+
+
+def _print_broken_partitions_report(
+    ctx: Context,
+    broken_parts: List[BrokenPart],
+    action_reports: List[Dict[str, Any]],
+) -> None:
     reports = make_partition_reports(broken_parts, action_reports)
     if ctx.obj.get("format") in {"json", "yaml"}:
         print_response(ctx, {"data": reports}, default_format="table")
@@ -583,8 +603,3 @@ def detect_broken_partitions(
             default_format="table",
             table_formatter=make_partition_table_row,
         )
-
-    logging.debug(
-        "Found parts with object-storage check failures. Local paths: {}",
-        [broken_part.path for broken_part in broken_parts],
-    )

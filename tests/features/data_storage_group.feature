@@ -297,6 +297,14 @@ Feature: chadmin data-store commands
     """
     S3 check circuit breaker: 1 of 1 checked part(s) are broken (100.00%), threshold is 50.00%; no actions were performed
     """
+    And we get response contains
+    """
+    - database: object_check_mode
+      table: data
+      partition_id: '0'
+      check: unknown
+      action: none
+    """
     When we execute command on clickhouse01
     """
     chadmin --format yaml data-store detect-broken-partitions --mode range --detach --max-broken-parts-percentage 100
