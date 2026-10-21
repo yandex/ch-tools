@@ -1,10 +1,12 @@
 import os
 import shutil
 import subprocess
+import sys
 from typing import Any, Dict, List, Optional
 
 import boto3
-from click import Context, group, option, pass_context
+from botocore.client import Config
+from click import Choice, Context, FloatRange, group, option, pass_context
 from cloup.constraints import AcceptAtMost, constraint
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -17,11 +19,16 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
     remove_from_ch_disk,
 )
 from ch_tools.chadmin.internal.object_storage.broken_partitions_recovery import (
+    BrokenPart,
     detach_broken_partition,
+    ensure_actions_are_safe,
     find_broken_parts,
     group_broken_parts_by_partition,
-    make_partition_report,
+    make_partition_action_report,
+    make_partition_reports,
+    make_partition_table_row,
     restore_recoverable_broken_partitions,
+    select_actionable_broken_parts,
 )
 from ch_tools.chadmin.internal.object_storage.parts_quarantine import (
     DETACHED_PREFIX,
@@ -452,6 +459,26 @@ def collect_orphaned_sql_objects_recursive(
 
 @data_store_group.command("detect-broken-partitions")
 @option(
+    "--mode",
+    type=Choice(["head", "range", "full"]),
+    default="head",
+    show_default=True,
+    help=(
+        "S3 object check depth: 'head' checks object metadata; 'range' reads "
+        "the first byte; 'full' streams the complete object and checks its size."
+    ),
+)
+@option(
+    "--max-broken-parts-percentage",
+    type=FloatRange(0.0, 100.0),
+    default=50.0,
+    show_default=True,
+    help=(
+        "Abort requested actions when the percentage of broken parts among "
+        "checked active object-storage parts exceeds this value."
+    ),
+)
+@option(
     "--root-path",
     "root_path",
     default=S3_METADATA_STORE_PATH,
@@ -479,6 +506,8 @@ def collect_orphaned_sql_objects_recursive(
 @pass_context
 def detect_broken_partitions(
     ctx: Context,
+    mode: str,
+    max_broken_parts_percentage: float,
     root_path: str,
     reattach: bool,
     detach: bool,
@@ -491,49 +520,86 @@ def detect_broken_partitions(
         "object_storage",
         ctx.obj["config"]["object_storage"]["bucket_name_prefix"],
     )
+    retries = ctx.obj["config"]["object_storage"].get("retries")
+    boto_config_args: Dict[str, Any] = {"s3": {"addressing_style": "auto"}}
+    if retries is not None:
+        boto_config_args["retries"] = retries
     s3_client = boto3.client(
         "s3",
         endpoint_url=disk_conf.endpoint_url,
         aws_access_key_id=disk_conf.access_key_id,
         aws_secret_access_key=disk_conf.secret_access_key,
+        config=Config(**boto_config_args),
     )
 
+    broken_parts, parts_checked = find_broken_parts(
+        ctx, root_path, s3_client, disk_conf, mode=mode
+    )
+    action_reports: List[Dict[str, Any]] = []
+    actionable_parts = broken_parts
+    if restore_recoverable or detach or reattach:
+        try:
+            ensure_actions_are_safe(
+                broken_parts,
+                parts_checked,
+                max_broken_parts_percentage,
+            )
+        except RuntimeError:
+            _print_broken_partitions_report(ctx, broken_parts, action_reports)
+            sys.stdout.flush()
+            raise
+        actionable_parts = select_actionable_broken_parts(broken_parts)
+
     if restore_recoverable:
-        restore_report = restore_recoverable_broken_partitions(
+        action_reports = restore_recoverable_broken_partitions(
             ctx=ctx,
-            root_path=root_path,
             s3_client=s3_client,
             disk_conf=disk_conf,
+            broken_parts=actionable_parts,
             detach_unrecoverable=detach,
             reattach_unrecoverable=reattach,
         )
-        print_response(ctx, restore_report, default_format="table")
-        return
+    else:
+        broken_parts_by_partition = group_broken_parts_by_partition(actionable_parts)
+        for partition_key in sorted(broken_parts_by_partition):
+            partition_broken_parts = broken_parts_by_partition[partition_key]
+            part_info = partition_broken_parts[0].info
+            logging.debug(
+                "Found a broken object-storage partition: paths={} table={} partition={}",
+                [item.path for item in partition_broken_parts],
+                part_info.table_id,
+                part_info.partition_id,
+            )
+            if detach or reattach:
+                success = detach_broken_partition(ctx, part_info, reattach=reattach)
+                action_reports.append(
+                    make_partition_action_report(
+                        part_info,
+                        reattach=reattach,
+                        success=success,
+                    )
+                )
 
-    broken_parts = find_broken_parts(ctx, root_path, s3_client, disk_conf)
-    broken_parts_by_partition = group_broken_parts_by_partition(broken_parts)
-    repaired_partitions = []
-
-    for partition_key in sorted(broken_parts_by_partition):
-        partition_broken_parts = broken_parts_by_partition[partition_key]
-        broken_part = partition_broken_parts[0]
-        part_info = broken_part.info
-        repaired_partitions.append(make_partition_report(part_info))
-
-        logging.debug(
-            "Found the partition with missing blobs in object storage: paths={} table={} partition={}",
-            [item.path for item in partition_broken_parts],
-            part_info.table_id,
-            part_info.partition_id,
-        )
-        if detach:
-            detach_broken_partition(ctx, part_info, reattach=False)
-        elif reattach:
-            detach_broken_partition(ctx, part_info)
-
-    print_response(ctx, repaired_partitions, default_format="table")
+    _print_broken_partitions_report(ctx, broken_parts, action_reports)
 
     logging.debug(
-        "Found parts with missing s3 keys. Local paths of parts: {}",
+        "Found parts with object-storage check failures. Local paths: {}",
         [broken_part.path for broken_part in broken_parts],
     )
+
+
+def _print_broken_partitions_report(
+    ctx: Context,
+    broken_parts: List[BrokenPart],
+    action_reports: List[Dict[str, Any]],
+) -> None:
+    reports = make_partition_reports(broken_parts, action_reports)
+    if ctx.obj.get("format") in {"json", "yaml"}:
+        print_response(ctx, {"data": reports}, default_format="table")
+    else:
+        print_response(
+            ctx,
+            reports,
+            default_format="table",
+            table_formatter=make_partition_table_row,
+        )
