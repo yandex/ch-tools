@@ -248,25 +248,24 @@ def step_make_s3_objects_for_active_part_file_unreadable(
     minio_container = get_container(context, context.conf["s3"]["container"])
     for object_key in object_keys:
         object_path = os.path.join("/export", bucket, object_key.lstrip("/"))
-        # Keep xl.meta intact so HEAD succeeds and listing sees the object, but
-        # move its payload so GetObject fails while reading the body.
-        list_result = minio_container.exec_run(
-            ["sh", "-c", f"ls -1 {shlex.quote(object_path)}/*/part.1"]
+        # Keep xl.meta intact so HEAD succeeds, but move the payload so
+        # GetObject fails while reading the body.
+        move_result = minio_container.exec_run(
+            [
+                "sh",
+                "-c",
+                (
+                    'set -- "$1"/*/part.1; [ -f "$1" ] || exit 1; '
+                    'for path in "$@"; do mv "$path" "$path.unreadable" || exit 1; done'
+                ),
+                "sh",
+                object_path,
+            ]
         )
-        assert list_result.exit_code == 0, (
+        assert move_result.exit_code == 0, (
             f"Expected non-inline MinIO data for {object_key}: "
-            f"{list_result.output.decode(errors='replace')}"
+            f"{move_result.output.decode(errors='replace')}"
         )
-
-        data_paths = list_result.output.decode().splitlines()
-        assert data_paths, f"No MinIO data files found for {object_key}"
-        for data_path in data_paths:
-            move_result = minio_container.exec_run(
-                ["mv", data_path, f"{data_path}.unreadable"]
-            )
-            assert move_result.exit_code == 0, move_result.output.decode(
-                errors="replace"
-            )
 
 
 def get_active_part_path(

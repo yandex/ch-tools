@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import posixpath
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
 from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,12 +12,13 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import boto3
 from botocore.client import Config
-from botocore.exceptions import ClientError
 from click import Context
 
+from ch_tools.chadmin.internal.object_storage.s3_object_checker import (
+    S3ObjectChecker,
+)
 from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
     S3ObjectLocalMetaData,
-    get_object_storage_key,
 )
 from ch_tools.chadmin.internal.part import (
     list_detached_parts,
@@ -39,10 +40,7 @@ from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 
-READ_CHUNK_SIZE = 8 * 1024 * 1024
-MISSING_OBJECT_ERROR_CODES = {"404", "NoSuchKey", "NotFound"}
 MAX_REPORTED_ERRORS = 5
-MAX_CACHED_OBJECT_PROBES = 10_000
 
 # Keep this in sync with ClickHouse's DetachedPartInfo::DETACH_REASONS.  A
 # custom prefix is not parsed as a detached-part reason reliably by ClickHouse.
@@ -68,13 +66,6 @@ class PartitionKey:
     database: str
     table: str
     partition_id: str
-
-
-@dataclass(frozen=True)
-class ObjectProbe:
-    exists: bool
-    reported_size: Optional[int] = None
-    read_size: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -125,80 +116,6 @@ class PartRename:
     source: str
     destination: str
     kind: str
-
-
-class S3ObjectChecker:
-    """Probe S3 objects, caching only results when parts share a remote blob."""
-
-    def __init__(
-        self,
-        client: Any,
-        bucket: str,
-        prefix: str,
-        method: str,
-    ) -> None:
-        if method not in {"head", "get"}:
-            raise ValueError(f"Unsupported S3 check method: {method}")
-        self.client = client
-        self.bucket = bucket
-        self.prefix = prefix
-        self.method = method
-        self.cache: OrderedDict[str, ObjectProbe] = OrderedDict()
-
-    def check(self, object_info: Any) -> Optional[str]:
-        key = get_object_storage_key(self.prefix, object_info)
-        try:
-            probe = self.cache.pop(key)
-        except KeyError:
-            probe = self._probe(key)
-            if len(self.cache) >= MAX_CACHED_OBJECT_PROBES:
-                self.cache.popitem(last=False)
-        self.cache[key] = probe
-
-        if not probe.exists:
-            return f"S3 object is missing: {key}"
-        if probe.reported_size != object_info.size:
-            return (
-                f"S3 object size mismatch for {key}: expected {object_info.size}, "
-                f"reported {probe.reported_size}"
-            )
-        if self.method == "get" and probe.read_size != object_info.size:
-            return (
-                f"S3 object read size mismatch for {key}: expected "
-                f"{object_info.size}, read {probe.read_size}"
-            )
-        return None
-
-    def _probe(self, key: str) -> ObjectProbe:
-        try:
-            if self.method == "head":
-                response = self.client.head_object(Bucket=self.bucket, Key=key)
-                return ObjectProbe(
-                    exists=True,
-                    reported_size=_content_length(response),
-                )
-
-            response = self.client.get_object(Bucket=self.bucket, Key=key)
-            body = response["Body"]
-            read_size = 0
-            try:
-                while True:
-                    chunk = body.read(READ_CHUNK_SIZE)
-                    if not chunk:
-                        break
-                    read_size += len(chunk)
-            finally:
-                body.close()
-            return ObjectProbe(
-                exists=True,
-                reported_size=_content_length(response),
-                read_size=read_size,
-            )
-        except ClientError as error:
-            code = error.response.get("Error", {}).get("Code", "")
-            if code in MISSING_OBJECT_ERROR_CODES:
-                return ObjectProbe(exists=False)
-            raise
 
 
 def attach_checked_partitions(
@@ -880,8 +797,3 @@ def _restore_prefixes(renamed: List[PartRename]) -> None:
                 plan.source,
                 error,
             )
-
-
-def _content_length(response: Dict[str, Any]) -> Optional[int]:
-    value = response.get("ContentLength")
-    return int(value) if value is not None else None
