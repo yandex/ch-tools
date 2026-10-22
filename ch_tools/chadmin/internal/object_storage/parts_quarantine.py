@@ -905,6 +905,7 @@ def quarantine_object_storage_parts(
 
     def execute(zk: Optional[KazooClient]) -> QuarantineReport:
         if zk is not None:
+            ensure_clickhouse_server_stopped()
             ensure_nonlocal_zookeeper_replicas_inactive(zk, keeper_tables, keep_going)
             nodes = collect_zookeeper_part_nodes(zk, parts, keep_going)
             lost_plan = plan_replicas_to_mark_lost(
