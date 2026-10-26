@@ -72,10 +72,10 @@ def _object_storage_store_path(data_path: str, disk_name: str) -> str:
 @data_store_group.command("detach-object-storage-parts")
 @option(
     "--check-s3-objects",
-    type=Choice(["head", "get"]),
+    type=Choice(["head", "range", "get"]),
     help=(
         "Detach only parts with failed S3 checks. 'head' checks existence and "
-        "size; 'get' also reads every object completely."
+        "size; 'range' also reads the first byte; 'get' reads the whole object."
     ),
 )
 @option(

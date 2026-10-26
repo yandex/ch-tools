@@ -67,10 +67,11 @@ def test_get_reads_the_whole_object_and_checks_actual_size() -> None:
     assert "expected 3, read 2" in result
 
 
-@pytest.mark.parametrize("method", ["head", "get"])
+@pytest.mark.parametrize("method", ["head", "range", "get"])
 def test_missing_object_is_a_failed_check(method: str) -> None:
     client = MagicMock()
-    getattr(client, f"{method}_object").side_effect = client_error("NoSuchKey")
+    operation = "head_object" if method == "head" else "get_object"
+    getattr(client, operation).side_effect = client_error("NoSuchKey")
     checker = S3ObjectChecker(client, "bucket", "unused", method)
 
     assert checker.check(object_info()) == "S3 object is missing: prefix/object"
@@ -736,3 +737,52 @@ def test_old_zero_copy_lock_cleanup_requires_reason() -> None:
             keep_going=False,
             cleanup_old_zero_copy_locks=True,
         )
+
+
+@pytest.mark.parametrize(
+    "size,total,data,error",
+    [
+        (3, 3, b"x", None),
+        (3, 4, b"x", "size mismatch"),
+        (3, 3, b"", "read size mismatch"),
+        (0, 0, b"", None),
+    ],
+)
+def test_range_checks_first_byte_and_total_size(
+    size: int,
+    total: int,
+    data: bytes,
+    error: str | None,
+) -> None:
+    client = MagicMock()
+    body = BytesIO(data)
+    response = {"ContentLength": total, "Body": body}
+    if size:
+        response.update(
+            ContentLength=1,
+            ContentRange=f"bytes 0-0/{total}",
+            ResponseMetadata={"HTTPStatusCode": 206},
+        )
+    client.get_object.return_value = response
+    result = S3ObjectChecker(client, "bucket", "unused", "range").check(
+        object_info(size)
+    )
+    if error is None:
+        assert result is None
+    else:
+        assert result is not None and error in result
+    client.get_object.assert_called_once_with(
+        Bucket="bucket",
+        Key="prefix/object",
+        **({"Range": "bytes=0-0"} if size else {}),
+    )
+    assert body.closed
+
+
+def test_range_rejects_unsupported_response() -> None:
+    client = MagicMock()
+    body = BytesIO(b"abc")
+    client.get_object.return_value = {"ContentLength": 3, "Body": body}
+    with pytest.raises(ValueError, match="Invalid S3 range response"):
+        S3ObjectChecker(client, "bucket", "unused", "range").check(object_info())
+    assert body.closed

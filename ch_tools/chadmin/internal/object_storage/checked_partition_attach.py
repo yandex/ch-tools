@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import posixpath
+import re
 from collections import OrderedDict, defaultdict
 from contextlib import nullcontext
 from dataclasses import dataclass
@@ -137,7 +138,7 @@ class S3ObjectChecker:
         prefix: str,
         method: str,
     ) -> None:
-        if method not in {"head", "get"}:
+        if method not in {"head", "range", "get"}:
             raise ValueError(f"Unsupported S3 check method: {method}")
         self.client = client
         self.bucket = bucket
@@ -150,7 +151,7 @@ class S3ObjectChecker:
         try:
             probe = self.cache.pop(key)
         except KeyError:
-            probe = self._probe(key)
+            probe = self._probe(key, object_info.size)
             if len(self.cache) >= MAX_CACHED_OBJECT_PROBES:
                 self.cache.popitem(last=False)
         self.cache[key] = probe
@@ -162,14 +163,17 @@ class S3ObjectChecker:
                 f"S3 object size mismatch for {key}: expected {object_info.size}, "
                 f"reported {probe.reported_size}"
             )
-        if self.method == "get" and probe.read_size != object_info.size:
+        expected_read_size = (
+            min(object_info.size, 1) if self.method == "range" else object_info.size
+        )
+        if self.method in {"range", "get"} and probe.read_size != expected_read_size:
             return (
                 f"S3 object read size mismatch for {key}: expected "
-                f"{object_info.size}, read {probe.read_size}"
+                f"{expected_read_size}, read {probe.read_size}"
             )
         return None
 
-    def _probe(self, key: str) -> ObjectProbe:
+    def _probe(self, key: str, expected_size: int) -> ObjectProbe:
         try:
             if self.method == "head":
                 response = self.client.head_object(Bucket=self.bucket, Key=key)
@@ -178,10 +182,33 @@ class S3ObjectChecker:
                     reported_size=_content_length(response),
                 )
 
-            response = self.client.get_object(Bucket=self.bucket, Key=key)
+            ranged = self.method == "range" and expected_size > 0
+            response = self.client.get_object(
+                Bucket=self.bucket,
+                Key=key,
+                **({"Range": "bytes=0-0"} if ranged else {}),
+            )
             body = response["Body"]
             read_size = 0
             try:
+                if self.method == "range":
+                    reported_size = _content_length(response)
+                    if ranged:
+                        match = re.fullmatch(
+                            r"bytes 0-0/([1-9][0-9]*)",
+                            str(response.get("ContentRange", "")),
+                        )
+                        status = response.get("ResponseMetadata", {}).get(
+                            "HTTPStatusCode"
+                        )
+                        if match is None or status != 206 or reported_size != 1:
+                            raise ValueError(f"Invalid S3 range response for {key}")
+                        reported_size = int(match.group(1))
+                    return ObjectProbe(
+                        exists=True,
+                        reported_size=reported_size,
+                        read_size=len(body.read(1)),
+                    )
                 while True:
                     chunk = body.read(READ_CHUNK_SIZE)
                     if not chunk:
@@ -214,7 +241,7 @@ def attach_checked_partitions(
     """Check selected detached parts and attach only safe partition contents."""
     if cleanup_old_zero_copy_locks and not reason:
         raise ValueError("Old zero-copy locks can only be cleaned with --reason")
-    if check_method not in {None, "head", "get"}:
+    if check_method not in {None, "head", "range", "get"}:
         raise ValueError(f"Unsupported S3 check method: {check_method}")
     if (
         quarantine_failed_unprefixed is not None

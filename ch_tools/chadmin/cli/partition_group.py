@@ -226,10 +226,11 @@ def list_partitions_command(ctx: Context, **kwargs: Any) -> None:
     ),
     option(
         "--check-s3-objects",
-        type=Choice(["head", "get"]),
+        type=Choice(["head", "range", "get"]),
         help=(
             "Validate every referenced S3 object before attach. 'head' checks "
-            "existence and size; 'get' also reads every object completely."
+            "existence and size; 'range' also reads the first byte; "
+            "'get' reads the whole object."
         ),
     ),
     option(

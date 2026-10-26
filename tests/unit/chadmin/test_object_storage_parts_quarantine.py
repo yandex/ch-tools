@@ -870,7 +870,7 @@ def test_cli_builds_store_path_from_disk_name(
             "--no-mark-replicas-lost",
             "--dry-run",
             "--check-s3-objects",
-            "get",
+            "range",
         ],
         obj={"config": {"loguru": {"handlers": {}, "formatters": {}}}},
     )
@@ -886,7 +886,7 @@ def test_cli_builds_store_path_from_disk_name(
         keep_going=True,
         mark_replicas_lost=False,
         disk_name="cold_s3",
-        check_s3_objects="get",
+        check_s3_objects="range",
     )
 
 
