@@ -583,12 +583,17 @@ def _tables_by_zookeeper_path(
     return result
 
 
-def ensure_zookeeper_replicas_inactive(
+def ensure_nonlocal_zookeeper_replicas_inactive(
     zk: KazooClient,
     tables: Dict[str, OfflineTable],
     keep_going: bool = False,
 ) -> None:
-    """Fail if any replica of a selected table is active in Keeper."""
+    """Fail if a non-local replica of a selected table is active in Keeper.
+
+    The local server is checked via ``ensure_clickhouse_server_stopped``.
+    Its ``is_active`` znode can outlive server shutdown briefly, so it must not
+    be used to decide whether this offline operation is safe.
+    """
     for zookeeper_path, root_tables in _tables_by_zookeeper_path(tables).items():
         table_names = ", ".join(sorted(table.display_name for table in root_tables))
         replicas_path = posixpath.join(zookeeper_path, "replicas")
@@ -602,7 +607,14 @@ def ensure_zookeeper_replicas_inactive(
             logging.warning("{}; continuing in keep-going mode", message)
             continue
 
+        local_replicas = {
+            table.replica_name
+            for table in root_tables
+            if table.replica_name is not None
+        }
         for replica in sorted(get_children(zk, replicas_path)):
+            if replica in local_replicas:
+                continue
             active_path = posixpath.join(replicas_path, replica, "is_active")
             if zk.exists(active_path) is not None:
                 raise RuntimeError(
@@ -892,8 +904,9 @@ def quarantine_object_storage_parts(
     }
 
     def execute(zk: Optional[KazooClient]) -> QuarantineReport:
+        ensure_clickhouse_server_stopped()
         if zk is not None:
-            ensure_zookeeper_replicas_inactive(zk, keeper_tables, keep_going)
+            ensure_nonlocal_zookeeper_replicas_inactive(zk, keeper_tables, keep_going)
             nodes = collect_zookeeper_part_nodes(zk, parts, keep_going)
             lost_plan = plan_replicas_to_mark_lost(
                 zk, keeper_tables, mark_replicas_lost
@@ -928,9 +941,10 @@ def quarantine_object_storage_parts(
 
         moved = move_parts_to_detached(parts)
         if zk is not None:
-            # Close the most useful race window: a replica may have been
-            # started while local directories were being renamed.
-            ensure_zookeeper_replicas_inactive(zk, keeper_tables, keep_going)
+            # Close the race where a server starts while local directories are
+            # being renamed, before modifying Keeper state.
+            ensure_clickhouse_server_stopped()
+            ensure_nonlocal_zookeeper_replicas_inactive(zk, keeper_tables, keep_going)
             if mark_replicas_lost:
                 current_lost_plan = plan_replicas_to_mark_lost(
                     zk, keeper_tables, mark_replicas_lost=True

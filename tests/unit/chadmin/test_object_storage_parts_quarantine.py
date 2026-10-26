@@ -22,6 +22,7 @@ from ch_tools.chadmin.internal.object_storage.parts_quarantine import (
     discover_object_storage_parts,
     ensure_broken_detached_parts_are_not_cleaned,
     ensure_clickhouse_server_stopped,
+    ensure_nonlocal_zookeeper_replicas_inactive,
     load_offline_tables,
     plan_replicas_to_mark_lost,
     preflight_local_moves,
@@ -727,6 +728,17 @@ def test_keep_going_skips_missing_replica_parts_path(
     assert zk.deleted == [f"{TABLE_ZK_PATH}/replicas/r1/parts/all_1_1_0"]
 
 
+def test_stale_local_keeper_is_active_is_ignored() -> None:
+    zk = make_zookeeper({"all_1_1_0"})
+    zk.children[f"{TABLE_ZK_PATH}/replicas/r1/is_active"] = set()
+    table = OfflineTable("test", "table", TABLE_UUID, TABLE_ZK_PATH, replica_name="r1")
+
+    ensure_nonlocal_zookeeper_replicas_inactive(
+        zk,
+        {TABLE_UUID: table},
+    )
+
+
 def test_active_replica_blocks_operation_before_local_move(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -744,12 +756,7 @@ def test_active_replica_blocks_operation_before_local_move(
 
     with pytest.raises(RuntimeError, match="Keeper replica is active"):
         quarantine_object_storage_parts(
-            MagicMock(),
-            str(store),
-            str(metadata),
-            None,
-            dry_run=False,
-            keep_going=True,
+            MagicMock(), str(store), str(metadata), None, dry_run=False
         )
 
     assert source.is_dir()
