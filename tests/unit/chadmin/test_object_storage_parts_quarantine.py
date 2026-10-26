@@ -1069,7 +1069,13 @@ def test_checked_detach_does_not_remove_healthy_active_copy_from_keeper(
         write_s3_metadata(active / filename, "prefix/good")
         write_s3_metadata(detached / filename, "prefix/bad")
     client = MagicMock()
-    client.head_object.return_value = {"ContentLength": 3}
+
+    def response(**kwargs: Any) -> dict[str, Any]:
+        if kwargs["Key"] == "prefix/bad":
+            raise ClientError({"Error": {"Code": "NoSuchKey"}}, "HeadObject")
+        return {"ContentLength": 3}
+
+    client.head_object.side_effect = response
     checker = S3ObjectChecker(client, "bucket", "prefix", "head")
     monkeypatch.setattr(parts_quarantine, "_make_s3_checker", lambda *_args: checker)
     zk_client = MagicMock()
@@ -1152,3 +1158,78 @@ def test_default_part_check_still_raises_stream_errors(tmp_path: Path) -> None:
         parts_quarantine._check_part(
             parts_quarantine.PartCheck({"path": str(source)}), checker
         )
+
+
+@pytest.mark.parametrize("method", ["head", "get"])
+def test_checked_detach_resumes_keeper_cleanup_when_objects_recover(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+) -> None:
+    store, table_path = make_store(tmp_path)
+    healthy = make_part(table_path, "all_1_1_0")
+    broken = make_part(table_path, "all_2_2_0")
+    for path in (healthy, broken):
+        for filename in ("columns.txt", "checksums.txt"):
+            write_s3_metadata(path / filename, f"prefix/{path.name}")
+    metadata = make_metadata(tmp_path)
+    zk = make_zookeeper({healthy.name, broken.name})
+    missing = True
+
+    def response(**kwargs: Any) -> dict[str, Any]:
+        if missing and kwargs["Key"] == "prefix/all_2_2_0":
+            raise ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
+        return {"ContentLength": 3, "Body": BytesIO(b"abc")}
+
+    client = MagicMock()
+    getattr(client, f"{method}_object").side_effect = response
+    monkeypatch.setattr(
+        parts_quarantine,
+        "_make_s3_checker",
+        lambda *_args: S3ObjectChecker(client, "bucket", "prefix", method),
+    )
+
+    @contextmanager
+    def fake_zk_client(_ctx: object) -> Generator[FakeZooKeeper, None, None]:
+        yield zk
+
+    monkeypatch.setattr(parts_quarantine, "zk_client", fake_zk_client)
+    delete_nodes = parts_quarantine.delete_zookeeper_part_nodes
+    monkeypatch.setattr(
+        parts_quarantine,
+        "delete_zookeeper_part_nodes",
+        MagicMock(side_effect=RuntimeError("Keeper cleanup failed")),
+    )
+    with pytest.raises(RuntimeError, match="Keeper cleanup failed"):
+        quarantine_object_storage_parts(
+            MagicMock(),
+            str(store),
+            str(metadata),
+            None,
+            dry_run=False,
+            check_s3_objects=method,
+        )
+    detached = table_path / "detached" / f"{DETACHED_PREFIX}{broken.name}"
+    assert detached.is_dir()
+    assert not broken.exists()
+    assert not zk.deleted
+
+    missing = False
+    monkeypatch.setattr(parts_quarantine, "delete_zookeeper_part_nodes", delete_nodes)
+    report = quarantine_object_storage_parts(
+        MagicMock(),
+        str(store),
+        str(metadata),
+        None,
+        dry_run=False,
+        check_s3_objects=method,
+    )
+    assert report.moved == 0
+    assert report.already_detached == 1
+    assert [part.part_name for part in report.parts] == [broken.name]
+    assert detached.is_dir()
+    assert healthy.is_dir()
+    for replica in ("r1", "r2"):
+        nodes = zk.children[f"{TABLE_ZK_PATH}/replicas/{replica}/parts"]
+        assert healthy.name in nodes
+        assert broken.name not in nodes

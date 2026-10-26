@@ -856,6 +856,7 @@ def _write_new_manifest(path: Path, payload: Dict[str, Any]) -> None:
 def select_unreadable_s3_parts(
     ctx: Context, parts: List[QuarantinedPart], disk_name: str, method: str
 ) -> List[QuarantinedPart]:
+    """Select unreadable parts and retain previously quarantined parts for cleanup."""
     checker = _make_s3_checker(ctx, disk_name, method)
     selected = []
     for part in parts:
@@ -863,8 +864,9 @@ def select_unreadable_s3_parts(
         check = PartCheck({"path": str(path)})
         _check_part(check, checker, strict_metadata=True)
         if not check.passed:
-            part.s3_error = check.error
             logging.warning("{}: {}", path, check.error)
+        if not check.passed or part.already_detached:
+            part.s3_error = check.error
             selected.append(part)
     return selected
 
