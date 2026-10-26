@@ -616,7 +616,7 @@ def _check_part(  # pylint: disable=too-many-branches
                     key = get_object_storage_key(checker.prefix, object_info)
                     object_error = f"Cannot read S3 object {key}: {error}"
                 if object_error is not None:
-                    object_errors.append(object_error)
+                    (object_errors if strict_metadata else errors).append(object_error)
 
     errors.extend(f"cannot traverse {part_path}: {error}" for error in walk_errors)
     if not files_found:

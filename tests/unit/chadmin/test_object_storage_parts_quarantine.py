@@ -4,7 +4,7 @@ from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Generator
-from unittest.mock import ANY, MagicMock
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 from botocore.exceptions import ClientError, IncompleteReadError, ReadTimeoutError
@@ -992,11 +992,18 @@ def test_checked_detach_selects_only_unreadable_parts(
     assert good.is_dir()
     assert bad.exists() == (dry_run or already_detached)
     assert [part.part_name for part in report.parts] == ["all_2_2_0"]
-    assert "prefix/bad" in report.parts[0].s3_error
-    assert report.details()[0]["s3_error"] == report.parts[0].s3_error
+    if already_detached:
+        assert report.parts[0].s3_error == ""
+        assert all(
+            call.kwargs["Key"] != "prefix/bad"
+            for call in getattr(client, f"{method}_object").call_args_list
+        )
+    else:
+        assert "prefix/bad" in report.parts[0].s3_error
+    assert report.details()[0].get("s3_error", "") == report.parts[0].s3_error
     manifest = json.loads(parts_file.read_text(encoding="utf-8"))
     assert [part["part_name"] for part in manifest["parts"]] == ["all_2_2_0"]
-    assert manifest["parts"][0]["s3_error"] == report.parts[0].s3_error
+    assert manifest["parts"][0].get("s3_error", "") == report.parts[0].s3_error
     for replica in ("r1", "r2"):
         nodes = zk.children[f"{TABLE_ZK_PATH}/replicas/{replica}/parts"]
         assert "all_1_1_0" in nodes
@@ -1233,3 +1240,103 @@ def test_checked_detach_resumes_keeper_cleanup_when_objects_recover(
         nodes = zk.children[f"{TABLE_ZK_PATH}/replicas/{replica}/parts"]
         assert healthy.name in nodes
         assert broken.name not in nodes
+
+
+@pytest.mark.parametrize("method", ["head", "get"])
+@pytest.mark.parametrize("code", ["403", "500"])
+def test_checked_detach_does_not_need_s3_for_previous_quarantine(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+    code: str,
+) -> None:
+    store, table_path = make_store(tmp_path)
+    detached = make_part(table_path / "detached", f"{DETACHED_PREFIX}all_1_1_0")
+    for filename in ("columns.txt", "checksums.txt"):
+        write_s3_metadata(detached / filename, "prefix/object")
+    client = MagicMock()
+    getattr(client, f"{method}_object").side_effect = ClientError(
+        {"Error": {"Code": code}},
+        "GetObject",
+    )
+    checker = S3ObjectChecker(client, "bucket", "prefix", method)
+    factory = MagicMock(return_value=checker)
+    monkeypatch.setattr(parts_quarantine, "_make_s3_checker", factory)
+    zk = make_zookeeper({"all_1_1_0"})
+
+    @contextmanager
+    def fake_zk_client(_ctx: object) -> Generator[FakeZooKeeper, None, None]:
+        yield zk
+
+    monkeypatch.setattr(parts_quarantine, "zk_client", fake_zk_client)
+    report = quarantine_object_storage_parts(
+        MagicMock(),
+        str(store),
+        str(make_metadata(tmp_path)),
+        None,
+        dry_run=False,
+        check_s3_objects=method,
+    )
+    assert report.already_detached == 1
+    assert report.moved == 0
+    assert detached.is_dir()
+    assert len(zk.deleted) == 2
+    factory.assert_not_called()
+    client.head_object.assert_not_called()
+    client.get_object.assert_not_called()
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_checked_detach_skips_empty_tmp_but_rejects_invalid_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    empty: bool,
+) -> None:
+    store, table_path = make_store(tmp_path)
+    temporary = make_part(table_path, "tmp_merge_all_1_2_1", markers=False)
+    if not empty:
+        (temporary / "columns.txt").write_text("invalid", encoding="utf-8")
+    client = MagicMock()
+    checker = S3ObjectChecker(client, "bucket", "prefix", "head")
+    monkeypatch.setattr(parts_quarantine, "_make_s3_checker", lambda *_args: checker)
+    zk_client = MagicMock()
+    monkeypatch.setattr(parts_quarantine, "zk_client", zk_client)
+
+    def run() -> parts_quarantine.QuarantineReport:
+        return quarantine_object_storage_parts(
+            MagicMock(),
+            str(store),
+            str(tmp_path / "metadata"),
+            None,
+            dry_run=False,
+            keep_going=True,
+            check_s3_objects="head",
+        )
+
+    if empty:
+        assert run().parts == []
+    else:
+        with pytest.raises(ValueError, match="cannot parse"):
+            run()
+    assert temporary.is_dir()
+    client.head_object.assert_not_called()
+    zk_client.assert_not_called()
+
+
+def test_default_part_check_preserves_error_order(tmp_path: Path) -> None:
+    source = tmp_path / "all_1_1_0"
+    source.mkdir()
+    write_s3_metadata(source / "missing.bin", "prefix/missing")
+    (source / "invalid.bin").write_text("invalid", encoding="utf-8")
+    client = MagicMock()
+    client.head_object.side_effect = ClientError(
+        {"Error": {"Code": "404"}}, "HeadObject"
+    )
+    checker = S3ObjectChecker(client, "bucket", "prefix", "head")
+    check = parts_quarantine.PartCheck({"path": str(source)})
+    with patch(
+        "ch_tools.chadmin.internal.object_storage.checked_partition_attach.os.walk",
+        return_value=[(str(source), [], ["missing.bin", "invalid.bin"])],
+    ):
+        parts_quarantine._check_part(check, checker)
+    assert check.error.startswith("S3 object is missing: prefix/missing; cannot parse")
