@@ -13,7 +13,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import boto3
 from botocore.client import Config
-from botocore.exceptions import ClientError, IncompleteReadError, ResponseStreamingError
+from botocore.exceptions import ClientError
 from click import Context
 
 from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
@@ -588,19 +588,16 @@ def _make_s3_checker(ctx: Context, disk_name: str, method: str) -> S3ObjectCheck
     )
 
 
-def _check_part(  # pylint: disable=too-many-branches
-    check: PartCheck, checker: S3ObjectChecker, *, strict_metadata: bool = False
+def _check_part(
+    check: PartCheck, checker: S3ObjectChecker, *, keep_going: bool = False
 ) -> None:
     part_path = Path(check.part["path"])
     errors: List[str] = []
-    object_errors: List[str] = []
     if not part_path.is_dir() or part_path.is_symlink():
         check.passed = False
         check.check_result = "failed"
         check.action = "skipped"
         check.error = f"part path is not a regular directory: {part_path}"
-        if strict_metadata:
-            raise ValueError(check.error)
         return
 
     files_found = False
@@ -637,20 +634,17 @@ def _check_part(  # pylint: disable=too-many-branches
                 check.bytes_checked += object_info.size
                 try:
                     object_error = checker.check(object_info)
-                except (IncompleteReadError, ResponseStreamingError) as error:
-                    if not strict_metadata:
+                except Exception as error:
+                    if not keep_going:
                         raise
                     key = get_object_storage_key(checker.prefix, object_info)
                     object_error = f"Cannot read S3 object {key}: {error}"
                 if object_error is not None:
-                    (object_errors if strict_metadata else errors).append(object_error)
+                    errors.append(object_error)
 
     errors.extend(f"cannot traverse {part_path}: {error}" for error in walk_errors)
     if not files_found:
         errors.append(f"part directory contains no metadata files: {part_path}")
-    if strict_metadata and errors:
-        raise ValueError(_summarize_errors(errors))
-    errors.extend(object_errors)
     if errors:
         check.passed = False
         check.check_result = "failed"

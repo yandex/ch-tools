@@ -869,7 +869,7 @@ def select_unreadable_s3_parts(
         if checker is None:
             checker = _make_s3_checker(ctx, disk_name, method)
         check = PartCheck({"path": str(path)})
-        _check_part(check, checker, strict_metadata=True)
+        _check_part(check, checker, keep_going=True)
         if not check.passed:
             logging.warning("{}: {}", path, check.error)
             part.s3_error = check.error

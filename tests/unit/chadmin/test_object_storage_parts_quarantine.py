@@ -921,25 +921,34 @@ def write_s3_part_metadata(path: Path, key: str) -> None:
         (path / name).write_text(f"5\n1 3\n3 {key}\n0\n0\n", encoding="utf-8")
 
 
-@pytest.mark.parametrize("dry_run", [False, True])
+@pytest.mark.parametrize(
+    "dry_run,failure", [(False, "500"), (False, "metadata"), (True, "stream")]
+)
 def test_checked_detach_selects_only_unreadable_parts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     dry_run: bool,
+    failure: str,
 ) -> None:
     store, table_path = make_store(tmp_path)
-    good = make_part(table_path, "all_1_1_0")
-    bad = make_part(table_path, "all_2_2_0")
+    good = make_part(table_path, "all_2_2_0")
+    bad = make_part(table_path, "all_1_1_0")
     sibling = make_part(table_path / "detached", f"{DETACHED_PREFIX}{good.name}")
     for path, key in ((good, "good"), (bad, "bad"), (sibling, "detached")):
         write_s3_part_metadata(path, f"prefix/{key}")
+    if failure == "metadata":
+        (bad / "columns.txt").write_text("invalid", encoding="utf-8")
     zk = make_zookeeper({good.name, bad.name})
     monkeypatch.setattr(parts_quarantine, "zk_client", lambda _ctx: nullcontext(zk))
 
     def response(**kwargs: Any) -> dict[str, Any]:
         if kwargs["Key"] == "prefix/detached":
             raise ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
-        data = b"ab" if kwargs["Key"] == "prefix/bad" else b"abc"
+        if kwargs["Key"] == "prefix/bad" and failure == "500":
+            raise ClientError({"Error": {"Code": "500"}}, "GetObject")
+        data = (
+            b"ab" if kwargs["Key"] == "prefix/bad" and failure == "stream" else b"abc"
+        )
         return {"ContentLength": 3, "Body": StreamingBody(BytesIO(data), 3)}
 
     client = MagicMock()
@@ -965,11 +974,14 @@ def test_checked_detach_selects_only_unreadable_parts(
     assert [part.part_name for part in report.parts] == [bad.name]
     manifest = json.loads(parts_file.read_text(encoding="utf-8"))
     assert [part["part_name"] for part in manifest["parts"]] == [bad.name]
-    assert "prefix/bad" in manifest["parts"][0]["s3_error"]
-    assert all(
-        call.kwargs["Key"] != "prefix/detached"
-        for call in client.get_object.call_args_list
-    )
+    message = "cannot parse" if failure == "metadata" else "prefix/bad"
+    assert message in manifest["parts"][0]["s3_error"]
+    if failure == "500":
+        assert "500" in manifest["parts"][0]["s3_error"]
+    assert {call.kwargs["Key"] for call in client.get_object.call_args_list} == {
+        "prefix/good",
+        "prefix/bad",
+    }
     for replica in ("r1", "r2"):
         nodes = zk.children[f"{TABLE_ZK_PATH}/replicas/{replica}/parts"]
         assert good.name in nodes
@@ -978,45 +990,26 @@ def test_checked_detach_selects_only_unreadable_parts(
         assert not zk.updated
 
 
-@pytest.mark.parametrize("failure", ["metadata", "s3"])
-def test_checked_detach_aborts_before_mutations(
+def test_checked_detach_configuration_error_aborts_before_mutations(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    failure: str,
 ) -> None:
     store, table_path = make_store(tmp_path)
-    paths = [make_part(table_path, f"all_{i}_{i}_0") for i in (1, 2)]
-    for path in paths:
-        write_s3_part_metadata(path, f"prefix/{path.name}")
-    if failure == "metadata":
-        (paths[1] / "columns.txt").write_text("invalid", encoding="utf-8")
-    client = MagicMock()
-    client.head_object.side_effect = [
-        ClientError({"Error": {"Code": "NoSuchKey"}}, "HeadObject"),
-        (
-            ClientError({"Error": {"Code": "500"}}, "HeadObject")
-            if failure == "s3"
-            else {"ContentLength": 3}
-        ),
-    ]
-    checker = S3ObjectChecker(client, "bucket", "prefix", "head")
-    monkeypatch.setattr(parts_quarantine, "_make_s3_checker", lambda *_args: checker)
+    source = make_part(table_path, "all_1_1_0")
+    factory = MagicMock(side_effect=ValueError("Invalid S3 configuration"))
+    monkeypatch.setattr(parts_quarantine, "_make_s3_checker", factory)
     zk_client = MagicMock()
     monkeypatch.setattr(parts_quarantine, "zk_client", zk_client)
-    error, message = (
-        (ValueError, "cannot parse") if failure == "metadata" else (ClientError, "500")
-    )
-    with pytest.raises(error, match=message):
+    with pytest.raises(ValueError, match="Invalid S3 configuration"):
         quarantine_object_storage_parts(
             MagicMock(),
             str(store),
             str(make_metadata(tmp_path)),
             None,
             dry_run=False,
-            keep_going=True,
-            check_s3_objects="head",
+            check_s3_objects="get",
         )
-    assert all(path.is_dir() for path in paths)
+    assert source.is_dir()
     assert list((table_path / "detached").iterdir()) == []
     zk_client.assert_not_called()
 
