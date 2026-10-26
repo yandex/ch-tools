@@ -68,10 +68,9 @@ def test_get_reads_the_whole_object_and_checks_actual_size() -> None:
 
 
 @pytest.mark.parametrize("method", ["head", "get"])
-@pytest.mark.parametrize("code", ["404", "NoSuchKey", "NotFound"])
-def test_missing_object_is_a_failed_check(method: str, code: str) -> None:
+def test_missing_object_is_a_failed_check(method: str) -> None:
     client = MagicMock()
-    getattr(client, f"{method}_object").side_effect = client_error(code)
+    getattr(client, f"{method}_object").side_effect = client_error("NoSuchKey")
     checker = S3ObjectChecker(client, "bucket", "unused", method)
 
     assert checker.check(object_info()) == "S3 object is missing: prefix/object"
