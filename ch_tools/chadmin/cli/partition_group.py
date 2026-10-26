@@ -19,6 +19,7 @@ from cloup.constraints import (
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.object_storage.checked_partition_attach import (
     DETACHED_PART_REASONS,
+    S3_CHECK_METHODS,
     attach_checked_partitions,
 )
 from ch_tools.chadmin.internal.partition import (
@@ -226,7 +227,7 @@ def list_partitions_command(ctx: Context, **kwargs: Any) -> None:
     ),
     option(
         "--check-s3-objects",
-        type=Choice(["head", "range", "get"]),
+        type=Choice(S3_CHECK_METHODS),
         help=(
             "Validate every referenced S3 object before attach. 'head' checks "
             "existence and size; 'range' also reads the first byte; "

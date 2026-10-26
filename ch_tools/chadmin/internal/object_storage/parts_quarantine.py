@@ -111,6 +111,7 @@ class QuarantineReport:
         }
 
     def details(self) -> List[Dict[str, Any]]:
+        has_errors = any(part.s3_error for part in self.parts)
         result = []
         for part in self.parts:
             result.append(
@@ -121,7 +122,7 @@ class QuarantineReport:
                     "temporary": part.temporary,
                     "local_action": part.local_action,
                     "zookeeper_nodes": len(part.zookeeper_nodes),
-                    **({"s3_error": part.s3_error} if part.s3_error else {}),
+                    **({"s3_error": part.s3_error} if has_errors else {}),
                     "source": str(part.source_path),
                     "destination": str(part.detached_path),
                 }
@@ -864,8 +865,12 @@ def select_unreadable_s3_parts(
             selected.append(part)
             continue
         path = part.source_path
-        if part.temporary and not any(path.iterdir()):
-            continue
+        if part.temporary:
+            try:
+                if not any(path.iterdir()):
+                    continue
+            except OSError:
+                pass  # The shared check records traversal errors for this part.
         if checker is None:
             checker = _make_s3_checker(ctx, disk_name, method)
         check = PartCheck({"path": str(path)})
@@ -901,7 +906,7 @@ def quarantine_object_storage_parts(
     ensure_broken_detached_parts_are_not_cleaned(ctx)
 
     parts = discover_object_storage_parts(root, detached_prefix)
-    if check_s3_objects is not None and parts:
+    if check_s3_objects is not None:
         parts = preflight_local_moves(parts, keep_going)
         parts = select_unreadable_s3_parts(ctx, parts, disk_name, check_s3_objects)
     if not parts:
@@ -920,14 +925,8 @@ def quarantine_object_storage_parts(
         keep_going=keep_going,
     )
     bind_parts_to_tables(parts, tables)
+    # Revalidate local paths after potentially lengthy S3 checks.
     parts = preflight_local_moves(parts, keep_going)
-    selected_table_uuids = {part.table_uuid for part in parts}
-    tables = {
-        table_uuid: table
-        for table_uuid, table in tables.items()
-        if table_uuid in selected_table_uuids
-    }
-
     replicated_table_uuids = {
         part.table.uuid
         for part in parts

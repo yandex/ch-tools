@@ -40,6 +40,7 @@ from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 
+S3_CHECK_METHODS = ("head", "range", "get")
 READ_CHUNK_SIZE = 8 * 1024 * 1024
 MISSING_OBJECT_ERROR_CODES = {"404", "NoSuchKey", "NotFound"}
 MAX_REPORTED_ERRORS = 5
@@ -138,7 +139,7 @@ class S3ObjectChecker:
         prefix: str,
         method: str,
     ) -> None:
-        if method not in {"head", "range", "get"}:
+        if method not in S3_CHECK_METHODS:
             raise ValueError(f"Unsupported S3 check method: {method}")
         self.client = client
         self.bucket = bucket
@@ -183,42 +184,36 @@ class S3ObjectChecker:
                 )
 
             ranged = self.method == "range" and expected_size > 0
-            response = self.client.get_object(
-                Bucket=self.bucket,
-                Key=key,
-                **({"Range": "bytes=0-0"} if ranged else {}),
-            )
+            request = {"Bucket": self.bucket, "Key": key}
+            if ranged:
+                request["Range"] = "bytes=0-0"
+            response = self.client.get_object(**request)
             body = response["Body"]
             read_size = 0
             try:
-                if self.method == "range":
-                    reported_size = _content_length(response)
-                    if ranged:
-                        match = re.fullmatch(
-                            r"bytes 0-0/([1-9][0-9]*)",
-                            str(response.get("ContentRange", "")),
-                        )
-                        status = response.get("ResponseMetadata", {}).get(
-                            "HTTPStatusCode"
-                        )
-                        if match is None or status != 206 or reported_size != 1:
-                            raise ValueError(f"Invalid S3 range response for {key}")
-                        reported_size = int(match.group(1))
-                    return ObjectProbe(
-                        exists=True,
-                        reported_size=reported_size,
-                        read_size=len(body.read(1)),
+                reported_size = _content_length(response)
+                if ranged:
+                    match = re.fullmatch(
+                        r"bytes 0-0/([1-9][0-9]*)",
+                        str(response.get("ContentRange", "")),
                     )
-                while True:
-                    chunk = body.read(READ_CHUNK_SIZE)
-                    if not chunk:
-                        break
-                    read_size += len(chunk)
+                    status = response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+                    if match is None or status != 206 or reported_size != 1:
+                        raise ValueError(f"Invalid S3 range response for {key}")
+                    reported_size = int(match.group(1))
+                if self.method == "range":
+                    read_size = len(body.read(1))
+                else:
+                    while True:
+                        chunk = body.read(READ_CHUNK_SIZE)
+                        if not chunk:
+                            break
+                        read_size += len(chunk)
             finally:
                 body.close()
             return ObjectProbe(
                 exists=True,
-                reported_size=_content_length(response),
+                reported_size=reported_size,
                 read_size=read_size,
             )
         except ClientError as error:
@@ -241,7 +236,7 @@ def attach_checked_partitions(
     """Check selected detached parts and attach only safe partition contents."""
     if cleanup_old_zero_copy_locks and not reason:
         raise ValueError("Old zero-copy locks can only be cleaned with --reason")
-    if check_method not in {None, "head", "range", "get"}:
+    if check_method is not None and check_method not in S3_CHECK_METHODS:
         raise ValueError(f"Unsupported S3 check method: {check_method}")
     if (
         quarantine_failed_unprefixed is not None

@@ -4,7 +4,7 @@ from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Generator
-from unittest.mock import ANY, MagicMock
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 from botocore.exceptions import ClientError
@@ -35,6 +35,7 @@ from ch_tools.chadmin.internal.object_storage.parts_quarantine import (
     quarantine_object_storage_parts,
 )
 from ch_tools.chadmin.internal.system import SYSTEMCTL_PATH
+from ch_tools.common.cli.formatting import print_csv
 
 TABLE_UUID = "a99cbcd7-af44-43fe-bb67-591133b8e6c7"
 TABLE_ZK_PATH = f"/clickhouse/tables/01/{TABLE_UUID}"
@@ -1039,3 +1040,79 @@ def test_checked_detach_finishes_previous_keeper_cleanup_without_s3(
             "unrelated_2_2_0"
         }
     factory.assert_not_called()
+
+
+def test_checked_detach_details_support_mixed_csv_rows(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    store, table_path = make_store(tmp_path)
+    make_part(table_path, "all_2_2_0")
+    make_part(table_path / "detached", f"{DETACHED_PREFIX}all_1_1_0")
+    # Put the already-detached row without an error before the failed row.
+    parts = list(reversed(discover_object_storage_parts(store)))
+    assert "s3_error" not in QuarantineReport(parts, 0, 1, 0, True).details()[0]
+    parts[1].s3_error = "HTTP 500"
+    print_csv(QuarantineReport(parts, 0, 1, 0, True).details())
+    output = capsys.readouterr().out
+    assert "s3_error" in output and "HTTP 500" in output
+
+
+def test_checked_detach_selects_unreadable_temporary_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store, table_path = make_store(tmp_path)
+    make_part(table_path, "tmp_merge_all_1_2_1", markers=False)
+    parts = discover_object_storage_parts(store)
+    checker = S3ObjectChecker(MagicMock(), "bucket", "prefix", "head")
+    monkeypatch.setattr(parts_quarantine, "_make_s3_checker", lambda *_args: checker)
+    with (
+        patch.object(
+            Path, "iterdir", side_effect=PermissionError("cannot read tmp part")
+        ),
+        patch("os.scandir", side_effect=PermissionError("cannot read tmp part")),
+    ):
+        selected = parts_quarantine.select_unreadable_s3_parts(
+            MagicMock(),
+            parts,
+            "object_storage",
+            "head",
+        )
+    assert selected == parts
+    assert "cannot read tmp part" in selected[0].s3_error
+
+
+def test_checked_detach_revalidates_paths_after_s3_checks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store, table_path = make_store(tmp_path)
+    sources = [make_part(table_path, f"all_{i}_{i}_0") for i in (1, 2)]
+    for source in sources:
+        write_s3_part_metadata(source, source.name)
+    destination = table_path / "detached" / f"{DETACHED_PREFIX}{sources[1].name}"
+
+    def response(**kwargs: Any) -> dict[str, Any]:
+        if kwargs["Key"] == sources[1].name:
+            destination.mkdir()
+            (destination / "sentinel").touch()
+        raise ClientError({"Error": {"Code": "NoSuchKey"}}, "HeadObject")
+
+    client = MagicMock()
+    client.head_object.side_effect = response
+    checker = S3ObjectChecker(client, "bucket", "", "head")
+    monkeypatch.setattr(parts_quarantine, "_make_s3_checker", lambda *_args: checker)
+    zk = make_zookeeper({source.name for source in sources})
+    monkeypatch.setattr(parts_quarantine, "zk_client", lambda _ctx: nullcontext(zk))
+    with pytest.raises(ValueError, match="Destination already exists"):
+        quarantine_object_storage_parts(
+            MagicMock(),
+            str(store),
+            str(make_metadata(tmp_path)),
+            None,
+            dry_run=False,
+            check_s3_objects="head",
+        )
+    assert all(source.is_dir() for source in sources)
+    assert not zk.deleted
