@@ -4,7 +4,7 @@ import subprocess
 from typing import Any, Dict, List, Optional
 
 import boto3
-from click import Context, group, option, pass_context
+from click import Choice, Context, group, option, pass_context
 from cloup.constraints import AcceptAtMost, constraint
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -71,6 +71,14 @@ def _object_storage_store_path(data_path: str, disk_name: str) -> str:
 
 @data_store_group.command("detach-object-storage-parts")
 @option(
+    "--check-s3-objects",
+    type=Choice(["head", "get"]),
+    help=(
+        "Detach only parts with failed S3 checks. 'head' checks existence and "
+        "size; 'get' also reads every object completely."
+    ),
+)
+@option(
     "--disk",
     "disk_name",
     default="object_storage",
@@ -119,6 +127,7 @@ def _object_storage_store_path(data_path: str, disk_name: str) -> str:
 def detach_object_storage_parts_command(
     ctx: Context,
     disk_name: str,
+    check_s3_objects: Optional[str],
     detached_prefix: str,
     parts_file: Optional[str],
     dry_run: bool,
@@ -138,6 +147,8 @@ def detach_object_storage_parts_command(
         detached_prefix=detached_prefix,
         keep_going=keep_going,
         mark_replicas_lost=mark_replicas_lost,
+        disk_name=disk_name,
+        check_s3_objects=check_s3_objects,
     )
     if verbose:
         print_response(ctx, [report.summary()], default_format="table")

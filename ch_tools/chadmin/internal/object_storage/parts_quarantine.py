@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 """Offline quarantine of object-storage MergeTree parts."""
 
 from __future__ import annotations
@@ -15,6 +16,11 @@ from uuid import UUID
 from click import Context
 from kazoo.client import KazooClient
 
+from ch_tools.chadmin.internal.object_storage.checked_partition_attach import (
+    PartCheck,
+    _check_part,
+    _make_s3_checker,
+)
 from ch_tools.chadmin.internal.system import ensure_clickhouse_server_stopped
 from ch_tools.chadmin.internal.table_metadata_parser import (
     UUID_PATTERN,
@@ -74,6 +80,7 @@ class QuarantinedPart:
     already_detached: bool
     table: Optional[OfflineTable] = None
     zookeeper_nodes: List[str] = field(default_factory=list)
+    s3_error: str = ""
 
     @property
     def local_action(self) -> str:
@@ -114,6 +121,7 @@ class QuarantineReport:
                     "temporary": part.temporary,
                     "local_action": part.local_action,
                     "zookeeper_nodes": len(part.zookeeper_nodes),
+                    **({"s3_error": part.s3_error} if part.s3_error else {}),
                     "source": str(part.source_path),
                     "destination": str(part.detached_path),
                 }
@@ -826,6 +834,7 @@ def _manifest_payload(
             {
                 "database": part.table.database if part.table else None,
                 "table": part.table.table if part.table else None,
+                **({"s3_error": part.s3_error} if part.s3_error else {}),
                 "table_uuid": part.table_uuid,
                 "part_name": part.part_name,
                 "detached_path": str(part.detached_path),
@@ -844,6 +853,22 @@ def _write_new_manifest(path: Path, payload: Dict[str, Any]) -> None:
         os.fsync(manifest.fileno())
 
 
+def select_unreadable_s3_parts(
+    ctx: Context, parts: List[QuarantinedPart], disk_name: str, method: str
+) -> List[QuarantinedPart]:
+    checker = _make_s3_checker(ctx, disk_name, method)
+    selected = []
+    for part in parts:
+        path = part.detached_path if part.already_detached else part.source_path
+        check = PartCheck({"path": str(path)})
+        _check_part(check, checker, strict_metadata=True)
+        if not check.passed:
+            part.s3_error = check.error
+            logging.warning("{}: {}", path, check.error)
+            selected.append(part)
+    return selected
+
+
 def quarantine_object_storage_parts(
     ctx: Context,
     root_path: str,
@@ -853,6 +878,8 @@ def quarantine_object_storage_parts(
     detached_prefix: str = DETACHED_PREFIX,
     keep_going: bool = False,
     mark_replicas_lost: bool = True,
+    disk_name: str = "object_storage",
+    check_s3_objects: Optional[str] = None,
 ) -> QuarantineReport:
     """Move object-storage parts offline and remove their replica part znodes."""
     root = Path(root_path)
@@ -866,6 +893,9 @@ def quarantine_object_storage_parts(
     ensure_broken_detached_parts_are_not_cleaned(ctx)
 
     parts = discover_object_storage_parts(root, detached_prefix)
+    if check_s3_objects is not None and parts:
+        parts = preflight_local_moves(parts, keep_going)
+        parts = select_unreadable_s3_parts(ctx, parts, disk_name, check_s3_objects)
     if not parts:
         if manifest_path is not None:
             _write_new_manifest(manifest_path, _manifest_payload(parts, dry_run))
