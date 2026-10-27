@@ -231,10 +231,7 @@ def discover_object_storage_parts(
             table_uuid = "" if prefix_dir.parent.name == "data" else table_dir.name
             detached_dir = table_dir / "detached"
             if not detached_dir.is_dir() or detached_dir.is_symlink():
-                raise ValueError(
-                    f"Detached directory does not exist or is not a real directory: "
-                    f"{detached_dir}"
-                )
+                continue
             for source_path in sorted(table_dir.iterdir()):
                 if (
                     not source_path.is_dir()

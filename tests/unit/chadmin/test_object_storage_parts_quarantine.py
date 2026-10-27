@@ -170,6 +170,7 @@ def silence_logging(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
 
 def test_discovers_parts_tmp_directories_and_previous_run(tmp_path: Path) -> None:
     store, table_path = make_store(tmp_path)
+    make_part(store.parent / "data" / "test" / "without_detached", "all_6_6_0")
     make_part(table_path, "all_1_1_0")
     make_part(table_path, "tmp_merge_all_1_2_1", markers=False)
     make_part(table_path, "all_2_2_0", markers=False)
@@ -607,13 +608,12 @@ def test_second_run_cleans_keeper_for_already_detached_part(
     assert len(zk.deleted) == 2
 
 
-def test_fails_when_detached_directory_is_missing(tmp_path: Path) -> None:
+def test_skips_table_when_detached_directory_is_missing(tmp_path: Path) -> None:
     store, table_path = make_store(tmp_path)
     (table_path / "detached").rmdir()
     make_part(table_path, "all_1_1_0")
 
-    with pytest.raises(ValueError, match="Detached directory does not exist"):
-        discover_object_storage_parts(store)
+    assert discover_object_storage_parts(store) == []
 
 
 def test_custom_detached_prefix_is_used_and_discovered(tmp_path: Path) -> None:
