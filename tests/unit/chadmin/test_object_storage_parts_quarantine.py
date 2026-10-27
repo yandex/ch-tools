@@ -1065,21 +1065,24 @@ def test_checked_detach_selects_only_unreadable_parts(
         assert not zk.updated
 
 
-@pytest.mark.parametrize("during_request", [False, True])
+@pytest.mark.parametrize(
+    "error",
+    [
+        ValueError("Invalid S3 configuration"),
+        NoCredentialsError(),
+        ClientError({"Error": {"Code": "403"}}, "GetObject"),
+        ClientError({"Error": {"Code": "NoSuchBucket"}}, "GetObject"),
+    ],
+)
 def test_checked_detach_configuration_error_aborts_before_mutations(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    during_request: bool,
+    error: Exception,
 ) -> None:
     store, table_path = make_store(tmp_path)
     source = make_part(table_path, "all_1_1_0")
-    error = (
-        NoCredentialsError()
-        if during_request
-        else ValueError("Invalid S3 configuration")
-    )
     factory = MagicMock(side_effect=error)
-    if during_request:
+    if not isinstance(error, ValueError):
         write_s3_part_metadata(source, "prefix/object")
         client = MagicMock()
         client.get_object.side_effect = error
@@ -1089,15 +1092,17 @@ def test_checked_detach_configuration_error_aborts_before_mutations(
     monkeypatch.setattr(parts_quarantine, "_make_s3_checker", factory)
     zk_client = MagicMock()
     monkeypatch.setattr(parts_quarantine, "zk_client", zk_client)
-    with pytest.raises(type(error), match=str(error)):
+    with pytest.raises(type(error)) as raised:
         quarantine_object_storage_parts(
             MagicMock(),
             str(store),
             str(make_metadata(tmp_path)),
             None,
             dry_run=False,
+            keep_going=True,
             check_s3_objects="get",
         )
+    assert raised.value is error
     assert source.is_dir()
     assert list((table_path / "detached").iterdir()) == []
     zk_client.assert_not_called()

@@ -13,6 +13,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 import boto3
 from botocore.client import Config
 from botocore.exceptions import (
+    ClientError,
     CredentialRetrievalError,
     NoCredentialsError,
     PartialCredentialsError,
@@ -20,6 +21,7 @@ from botocore.exceptions import (
 from click import Context
 
 from ch_tools.chadmin.internal.object_storage.s3_object_checker import (
+    FATAL_OBJECT_ERROR_CODES,
     S3ObjectChecker,
 )
 from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
@@ -538,7 +540,11 @@ def _check_part(
                 ):
                     raise
                 except Exception as error:
-                    if not keep_going:
+                    if not keep_going or (
+                        isinstance(error, ClientError)
+                        and getattr(error, "response").get("Error", {}).get("Code", "")
+                        in FATAL_OBJECT_ERROR_CODES
+                    ):
                         raise
                     key = get_object_storage_key(checker.prefix, object_info)
                     object_error = f"Cannot read S3 object {key}: {error}"
