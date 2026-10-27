@@ -4,16 +4,20 @@ import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from boto3 import client as Boto3Client
 from click import Context
 
+from ch_tools.chadmin.internal.object_storage.s3_object_checker import (
+    ObjectCheckResult,
+    ObjectCheckStatus,
+    S3ObjectChecker,
+)
 from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
     S3ObjectLocalInfo,
     S3ObjectLocalMetaData,
     get_object_storage_key,
-    object_exists,
     restore_empty_object,
 )
 from ch_tools.chadmin.internal.part import (
@@ -30,6 +34,7 @@ from ch_tools.common import logging
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 
 ATTACH_DETACH_QUERY_RETRY = 10
+OBJECT_CHECK_MODES = ("head", "range", "full")
 
 
 @dataclass(frozen=True, order=True)
@@ -55,19 +60,32 @@ class BrokenPartInfo:
 
 
 @dataclass(frozen=True)
-class MissingObject:
+class ObjectIssue:
     filename: str
     metadata_path: Path
     metadata: S3ObjectLocalMetaData
     object_info: S3ObjectLocalInfo
-    object_key: str
+    check: ObjectCheckResult
+
+    @property
+    def object_key(self) -> str:
+        return self.check.key
 
 
 @dataclass
 class BrokenPart:
     path: str
     info: BrokenPartInfo
-    missing_objects: List[MissingObject]
+    object_issues: List[ObjectIssue]
+    objects_checked: int = 0
+
+    @property
+    def missing_objects(self) -> List[ObjectIssue]:
+        return [
+            issue
+            for issue in self.object_issues
+            if issue.check.status == ObjectCheckStatus.MISSING
+        ]
 
 
 @dataclass
@@ -80,13 +98,12 @@ class PartRecoveryResult:
 
 def restore_recoverable_broken_partitions(
     ctx: Context,
-    root_path: str,
     s3_client: Boto3Client,
     disk_conf: S3DiskConfiguration,
+    broken_parts: List[BrokenPart],
     detach_unrecoverable: bool,
     reattach_unrecoverable: bool,
 ) -> List[Dict[str, Any]]:
-    broken_parts = find_broken_parts(ctx, root_path, s3_client, disk_conf)
     result: List[Dict[str, Any]] = []
 
     broken_parts_by_partition = group_broken_parts_by_partition(broken_parts)
@@ -167,14 +184,27 @@ def find_broken_parts(
     root_path: str,
     s3_client: Boto3Client,
     disk_conf: S3DiskConfiguration,
-) -> List[BrokenPart]:
+    mode: str = "head",
+) -> Tuple[List[BrokenPart], int]:
+    if mode not in OBJECT_CHECK_MODES:
+        raise ValueError(f"Unsupported S3 object check mode: {mode}")
+
     active_parts_by_path = get_active_parts_by_path(ctx)
     broken_parts_by_path: Dict[str, BrokenPart] = {}
+    objects_checked_by_path: Dict[str, int] = {}
+    checked_part_paths: Set[str] = set()
+    checker = S3ObjectChecker(
+        s3_client,
+        disk_conf.bucket_name,
+        disk_conf.prefix,
+        mode,
+    )
 
     for path, _, files in os.walk(root_path):
         part_info = active_parts_by_path.get(f"{path}/")
         if part_info is None:
             continue
+        checked_part_paths.add(path)
 
         for file in files:
             metadata_path = Path(path) / file
@@ -187,25 +217,31 @@ def find_broken_parts(
                 continue
 
             for object_info in metadata.objects:
-                object_key = get_object_storage_key(disk_conf.prefix, object_info)
-                if object_exists(s3_client, disk_conf.bucket_name, object_key):
+                objects_checked_by_path[path] = objects_checked_by_path.get(path, 0) + 1
+                check = checker.inspect(object_info)
+                if check.status == ObjectCheckStatus.OK:
                     continue
 
                 broken_part = broken_parts_by_path.setdefault(
                     path,
-                    BrokenPart(path=path, info=part_info, missing_objects=[]),
+                    BrokenPart(path=path, info=part_info, object_issues=[]),
                 )
-                broken_part.missing_objects.append(
-                    MissingObject(
+                broken_part.object_issues.append(
+                    ObjectIssue(
                         filename=file,
                         metadata_path=metadata_path,
                         metadata=metadata,
                         object_info=object_info,
-                        object_key=object_key,
+                        check=check,
                     )
                 )
 
-    return sorted(broken_parts_by_path.values(), key=lambda item: item.path)
+    for path, broken_part in broken_parts_by_path.items():
+        broken_part.objects_checked = objects_checked_by_path[path]
+    return (
+        sorted(broken_parts_by_path.values(), key=lambda item: item.path),
+        len(checked_part_paths),
+    )
 
 
 def restore_recoverable_broken_part(
@@ -216,9 +252,21 @@ def restore_recoverable_broken_part(
 ) -> PartRecoveryResult:
     report: List[Dict[str, Any]] = []
 
-    missing_by_file: Dict[str, List[MissingObject]] = {}
+    missing_by_file: Dict[str, List[ObjectIssue]] = {}
     for missing_object in broken_part.missing_objects:
         missing_by_file.setdefault(missing_object.filename, []).append(missing_object)
+
+    for issue in broken_part.object_issues:
+        if issue.check.status == ObjectCheckStatus.MISSING:
+            continue
+        report.append(
+            make_restore_report(
+                broken_part.info,
+                issue.filename,
+                "unrecoverable",
+                f"object check is {issue.check.status.value}: {issue.check.reason}",
+            )
+        )
 
     supported_attach_files = {"checksums.txt", "columns.txt"}
     attach_files = sorted(set(missing_by_file).intersection(supported_attach_files))
@@ -306,7 +354,7 @@ def restore_recoverable_broken_part(
 
 def restore_empty_objects(
     part_info: BrokenPartInfo,
-    missing_objects: List[MissingObject],
+    missing_objects: List[ObjectIssue],
     s3_client: Boto3Client,
     bucket: str,
 ) -> List[Dict[str, Any]]:
@@ -337,7 +385,7 @@ def restore_generated_file(
     part_info: BrokenPartInfo,
     filename: str,
     content: bytes,
-    missing_objects: List[MissingObject],
+    missing_objects: List[ObjectIssue],
     s3_client: Boto3Client,
     bucket: str,
     prefix: str,
@@ -675,8 +723,216 @@ def make_restore_report(
     }
 
 
-def make_partition_report(part_info: BrokenPartInfo) -> Dict[str, Any]:
-    return {"table": part_info.table_id, "partition": part_info.partition_id}
+def ensure_actions_are_safe(
+    broken_parts: List[BrokenPart],
+    parts_checked: int,
+    max_broken_parts_percentage: float,
+) -> None:
+    if not broken_parts:
+        return
+    if parts_checked <= 0:
+        raise ValueError(
+            "Cannot calculate broken parts percentage without checked parts"
+        )
+
+    broken_parts_percentage = len(broken_parts) / parts_checked * 100
+    if broken_parts_percentage > max_broken_parts_percentage:
+        raise RuntimeError(
+            "S3 check circuit breaker: "
+            f"{len(broken_parts)} of {parts_checked} checked part(s) are broken "
+            f"({broken_parts_percentage:.2f}%), threshold is "
+            f"{max_broken_parts_percentage:.2f}%; no actions were performed"
+        )
+
+
+def select_actionable_broken_parts(
+    broken_parts: List[BrokenPart],
+) -> List[BrokenPart]:
+    return [
+        part
+        for partition_parts in group_broken_parts_by_partition(broken_parts).values()
+        if not any(
+            issue.check.status == ObjectCheckStatus.UNKNOWN
+            for part in partition_parts
+            for issue in part.object_issues
+        )
+        for part in partition_parts
+    ]
+
+
+def make_partition_reports(
+    broken_parts: List[BrokenPart],
+    action_reports: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    actions = action_reports or []
+    actions_by_file: Dict[Tuple[str, str, str, str], List[Dict[str, Any]]] = {}
+    actions_by_partition: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+    for action in actions:
+        action_partition_key = (action["table"], action["partition"])
+        actions_by_partition.setdefault(action_partition_key, []).append(action)
+        file_key = (
+            action["table"],
+            action["partition"],
+            action["part"],
+            action["file"],
+        )
+        actions_by_file.setdefault(file_key, []).append(action)
+
+    result: List[Dict[str, Any]] = []
+    for partition_key, partition_parts in sorted(
+        group_broken_parts_by_partition(broken_parts).items()
+    ):
+        object_statuses = [
+            issue.check.status
+            for part in partition_parts
+            for issue in part.object_issues
+        ]
+        partition_actions = actions_by_partition.get(
+            (partition_parts[0].info.table_id, partition_key.partition_id), []
+        )
+        part_reports = [
+            _make_part_report(part, actions_by_file) for part in partition_parts
+        ]
+        result.append(
+            {
+                "database": partition_key.database,
+                "table": partition_key.table,
+                "partition_id": partition_key.partition_id,
+                "check": _aggregate_check(object_statuses),
+                "action": _aggregate_action(partition_actions),
+                "parts_affected": len(partition_parts),
+                "objects_checked": sum(
+                    part.objects_checked for part in partition_parts
+                ),
+                "objects_missing": object_statuses.count(ObjectCheckStatus.MISSING),
+                "objects_corrupted": object_statuses.count(ObjectCheckStatus.CORRUPTED),
+                "objects_unknown": object_statuses.count(ObjectCheckStatus.UNKNOWN),
+                "parts": part_reports,
+            }
+        )
+    return result
+
+
+def make_partition_table_row(report: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "database": report["database"],
+        "table": report["table"],
+        "partition_id": report["partition_id"],
+        "check": report["check"],
+        "action": report["action"],
+        "parts_affected": report["parts_affected"],
+        "objects_checked": report["objects_checked"],
+        "objects_missing": report["objects_missing"],
+        "objects_corrupted": report["objects_corrupted"],
+        "objects_unknown": report["objects_unknown"],
+    }
+
+
+def _make_part_report(
+    broken_part: BrokenPart,
+    actions_by_file: Dict[Tuple[str, str, str, str], List[Dict[str, Any]]],
+) -> Dict[str, Any]:
+    issues_by_file: Dict[str, List[ObjectIssue]] = {}
+    for issue in broken_part.object_issues:
+        issues_by_file.setdefault(issue.filename, []).append(issue)
+
+    file_reports = []
+    for filename, issues in sorted(issues_by_file.items()):
+        action_key = (
+            broken_part.info.table_id,
+            broken_part.info.partition_id,
+            broken_part.info.name,
+            filename,
+        )
+        file_actions = actions_by_file.get(action_key, [])
+        file_report: Dict[str, Any] = {
+            "name": filename,
+            "check": _aggregate_check([issue.check.status for issue in issues]),
+            "recoverable": _file_is_recoverable(broken_part.info, filename, issues),
+            "action": _aggregate_action(file_actions),
+        }
+        if file_actions:
+            file_report["action_detail"] = "; ".join(
+                action["detail"] for action in file_actions
+            )
+        file_report["objects"] = [_make_object_report(issue) for issue in issues]
+        file_reports.append(file_report)
+
+    return {
+        "name": broken_part.info.name,
+        "check": _aggregate_check(
+            [issue.check.status for issue in broken_part.object_issues]
+        ),
+        "objects_checked": broken_part.objects_checked,
+        "files": file_reports,
+    }
+
+
+def _make_object_report(issue: ObjectIssue) -> Dict[str, Any]:
+    check = issue.check
+    report: Dict[str, Any] = {
+        "key": check.key,
+        "size": check.expected_size,
+        "check": check.status.value,
+        "reason": check.reason,
+    }
+    if check.read_size is not None:
+        report["read_size"] = check.read_size
+    if check.error:
+        report["error"] = check.error
+    return report
+
+
+def _aggregate_check(statuses: List[ObjectCheckStatus]) -> str:
+    if ObjectCheckStatus.UNKNOWN in statuses:
+        return ObjectCheckStatus.UNKNOWN.value
+    if ObjectCheckStatus.CORRUPTED in statuses:
+        return ObjectCheckStatus.CORRUPTED.value
+    if ObjectCheckStatus.MISSING in statuses:
+        return ObjectCheckStatus.MISSING.value
+    return ObjectCheckStatus.OK.value
+
+
+def _aggregate_action(actions: List[Dict[str, Any]]) -> str:
+    if not actions:
+        return "none"
+    statuses = [action["status"] for action in actions]
+    partition_statuses = [
+        status
+        for status in statuses
+        if status
+        in {
+            "detached",
+            "detach_failed",
+            "reattached",
+            "reattach_failed",
+        }
+    ]
+    if partition_statuses:
+        return partition_statuses[-1]
+    if all(status == "restored" for status in statuses):
+        return "restored"
+    if "restored" in statuses:
+        return "partially-restored"
+    return statuses[-1]
+
+
+def _file_is_recoverable(
+    part_info: BrokenPartInfo,
+    filename: str,
+    issues: List[ObjectIssue],
+) -> bool:
+    if any(issue.check.status != ObjectCheckStatus.MISSING for issue in issues):
+        return False
+    if all(issue.object_info.size == 0 for issue in issues):
+        return True
+    if filename == "columns.txt":
+        return can_restore_columns_txt(part_info)
+    return filename in {
+        "checksums.txt",
+        "count.txt",
+        "default_compression_codec.txt",
+    }
 
 
 def get_active_parts_by_path(ctx: Context) -> Dict[str, BrokenPartInfo]:

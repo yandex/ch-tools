@@ -73,7 +73,11 @@ DEFAULT_CONFIG = {
             },
         },
         # see https://docs.aws.amazon.com/botocore/latest/reference/config.html for details
-        "retries": None,
+        "retries": {
+            "mode": "standard",
+            # Four retries in addition to the initial request.
+            "max_attempts": 4,
+        },
     },
     "zookeeper": {
         "connect_timeout": 20,

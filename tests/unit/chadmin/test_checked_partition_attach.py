@@ -8,8 +8,11 @@ import pytest
 from botocore.exceptions import ClientError
 
 from ch_tools.chadmin.internal.object_storage.checked_partition_attach import (
-    S3ObjectChecker,
     attach_checked_partitions,
+)
+from ch_tools.chadmin.internal.object_storage.s3_object_checker import (
+    ObjectCheckStatus,
+    S3ObjectChecker,
 )
 from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
     S3ObjectLocalInfo,
@@ -65,6 +68,32 @@ def test_get_reads_the_whole_object_and_checks_actual_size() -> None:
     result = checker.check(object_info())
     assert result is not None
     assert "expected 3, read 2" in result
+
+
+def test_range_reads_zero_size_object_without_range_header() -> None:
+    client = MagicMock()
+    client.get_object.return_value = {
+        "ContentLength": 0,
+        "Body": BytesIO(b""),
+    }
+    checker = S3ObjectChecker(client, "bucket", "unused", "range")
+
+    assert checker.inspect(object_info(size=0)).status == ObjectCheckStatus.OK
+    client.get_object.assert_called_once_with(Bucket="bucket", Key="prefix/object")
+
+
+def test_inspect_distinguishes_unknown_and_fatal_errors() -> None:
+    client = MagicMock()
+    checker = S3ObjectChecker(client, "bucket", "unused", "range")
+    client.get_object.side_effect = client_error("InternalError")
+
+    result = checker.inspect(object_info())
+    assert result.status == ObjectCheckStatus.UNKNOWN
+    assert result.reason == "request_error"
+
+    client.get_object.side_effect = client_error("AccessDenied")
+    with pytest.raises(ClientError):
+        checker.inspect(object_info(key="prefix/forbidden"))
 
 
 @pytest.mark.parametrize("method", ["head", "get"])
