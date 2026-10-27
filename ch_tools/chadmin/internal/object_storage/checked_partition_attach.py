@@ -12,13 +12,21 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import boto3
 from botocore.client import Config
+from botocore.exceptions import (
+    ClientError,
+    CredentialRetrievalError,
+    NoCredentialsError,
+    PartialCredentialsError,
+)
 from click import Context
 
 from ch_tools.chadmin.internal.object_storage.s3_object_checker import (
+    FATAL_OBJECT_ERROR_CODES,
     S3ObjectChecker,
 )
 from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
     S3ObjectLocalMetaData,
+    get_object_storage_key,
 )
 from ch_tools.chadmin.internal.part import (
     list_detached_parts,
@@ -40,6 +48,7 @@ from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 
+S3_CHECK_METHODS = ("head", "range", "get")
 MAX_REPORTED_ERRORS = 5
 
 # Keep this in sync with ClickHouse's DetachedPartInfo::DETACH_REASONS.  A
@@ -131,7 +140,7 @@ def attach_checked_partitions(
     """Check selected detached parts and attach only safe partition contents."""
     if cleanup_old_zero_copy_locks and not reason:
         raise ValueError("Old zero-copy locks can only be cleaned with --reason")
-    if check_method not in {None, "head", "get"}:
+    if check_method is not None and check_method not in S3_CHECK_METHODS:
         raise ValueError(f"Unsupported S3 check method: {check_method}")
     if (
         quarantine_failed_unprefixed is not None
@@ -478,7 +487,9 @@ def _make_s3_checker(ctx: Context, disk_name: str, method: str) -> S3ObjectCheck
     )
 
 
-def _check_part(check: PartCheck, checker: S3ObjectChecker) -> None:
+def _check_part(
+    check: PartCheck, checker: S3ObjectChecker, *, keep_going: bool = False
+) -> None:
     part_path = Path(check.part["path"])
     errors: List[str] = []
     if not part_path.is_dir() or part_path.is_symlink():
@@ -520,7 +531,23 @@ def _check_part(check: PartCheck, checker: S3ObjectChecker) -> None:
             for object_info in metadata.objects:
                 check.objects_checked += 1
                 check.bytes_checked += object_info.size
-                object_error = checker.check(object_info)
+                try:
+                    object_error = checker.check(object_info)
+                except (
+                    NoCredentialsError,
+                    PartialCredentialsError,
+                    CredentialRetrievalError,
+                ):
+                    raise
+                except Exception as error:
+                    if not keep_going or (
+                        isinstance(error, ClientError)
+                        and getattr(error, "response").get("Error", {}).get("Code", "")
+                        in FATAL_OBJECT_ERROR_CODES
+                    ):
+                        raise
+                    key = get_object_storage_key(checker.prefix, object_info)
+                    object_error = f"Cannot read S3 object {key}: {error}"
                 if object_error is not None:
                     errors.append(object_error)
 

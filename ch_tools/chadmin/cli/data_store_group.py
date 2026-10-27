@@ -30,6 +30,9 @@ from ch_tools.chadmin.internal.object_storage.broken_partitions_recovery import 
     restore_recoverable_broken_partitions,
     select_actionable_broken_parts,
 )
+from ch_tools.chadmin.internal.object_storage.checked_partition_attach import (
+    S3_CHECK_METHODS,
+)
 from ch_tools.chadmin.internal.object_storage.parts_quarantine import (
     DETACHED_PREFIX,
     quarantine_object_storage_parts,
@@ -77,6 +80,15 @@ def _object_storage_store_path(data_path: str, disk_name: str) -> str:
 
 
 @data_store_group.command("detach-object-storage-parts")
+@option(
+    "--check-s3-objects",
+    type=Choice(S3_CHECK_METHODS),
+    help=(
+        "Detach only parts with failed S3 checks. 'head' checks existence and "
+        "size; 'range' also reads the first byte; 'get' reads the whole object. "
+        "Previously quarantined parts finish Keeper cleanup without S3 checks."
+    ),
+)
 @option(
     "--disk",
     "disk_name",
@@ -126,6 +138,7 @@ def _object_storage_store_path(data_path: str, disk_name: str) -> str:
 def detach_object_storage_parts_command(
     ctx: Context,
     disk_name: str,
+    check_s3_objects: Optional[str],
     detached_prefix: str,
     parts_file: Optional[str],
     dry_run: bool,
@@ -145,6 +158,8 @@ def detach_object_storage_parts_command(
         detached_prefix=detached_prefix,
         keep_going=keep_going,
         mark_replicas_lost=mark_replicas_lost,
+        disk_name=disk_name,
+        check_s3_objects=check_s3_objects,
     )
     if verbose:
         print_response(ctx, [report.summary()], default_format="table")

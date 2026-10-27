@@ -131,7 +131,7 @@ class TableMetadataParser:
     """Table metadata file parser."""
 
     @staticmethod
-    def parse(table_metadata_path: str) -> TableMetadata:
+    def parse(table_metadata_path: str, *, require_uuid: bool = True) -> TableMetadata:
         """Parse metadata from .sql file."""
         if not table_metadata_path.endswith(".sql"):
             raise MetadataParseError(
@@ -170,7 +170,7 @@ class TableMetadataParser:
                 f"Failed to read metadata file '{table_metadata_path}': {e}"
             ) from e
 
-        if table_uuid is None:
+        if table_uuid is None and require_uuid:
             raise RuntimeError(
                 f"Empty UUID from table metadata: '{table_metadata_path}'"
             )
@@ -180,7 +180,7 @@ class TableMetadataParser:
                 f"Empty table engine from table metadata: '{table_metadata_path}'"
             )
 
-        return TableMetadata(table_uuid, table_engine, replica_path, replica_name)
+        return TableMetadata(table_uuid or "", table_engine, replica_path, replica_name)
 
     @staticmethod
     def _parse_engine(line: str) -> MergeTreeFamilyEngines:

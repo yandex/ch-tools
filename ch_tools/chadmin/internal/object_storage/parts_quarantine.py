@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 """Offline quarantine of object-storage MergeTree parts."""
 
 from __future__ import annotations
@@ -15,6 +16,11 @@ from uuid import UUID
 from click import Context
 from kazoo.client import KazooClient
 
+from ch_tools.chadmin.internal.object_storage.checked_partition_attach import (
+    PartCheck,
+    _check_part,
+    _make_s3_checker,
+)
 from ch_tools.chadmin.internal.system import ensure_clickhouse_server_stopped
 from ch_tools.chadmin.internal.table_metadata_parser import (
     UUID_PATTERN,
@@ -49,7 +55,7 @@ class ReplicaIdentityError(ValueError):
 
 @dataclass(frozen=True)
 class OfflineTable:
-    """Local metadata required to map a table UUID to its Keeper root."""
+    """Local metadata required to map a table to its Keeper root."""
 
     database: str
     table: str
@@ -74,6 +80,13 @@ class QuarantinedPart:
     already_detached: bool
     table: Optional[OfflineTable] = None
     zookeeper_nodes: List[str] = field(default_factory=list)
+    s3_error: str = ""
+
+    @property
+    def table_id(self) -> str:
+        """UUID for Atomic, or escaped database/table for Ordinary."""
+        table_path = self.source_path.parent
+        return self.table_uuid or f"{table_path.parent.name}/{table_path.name}"
 
     @property
     def local_action(self) -> str:
@@ -104,6 +117,7 @@ class QuarantineReport:
         }
 
     def details(self) -> List[Dict[str, Any]]:
+        has_errors = any(part.s3_error for part in self.parts)
         result = []
         for part in self.parts:
             result.append(
@@ -114,6 +128,7 @@ class QuarantineReport:
                     "temporary": part.temporary,
                     "local_action": part.local_action,
                     "zookeeper_nodes": len(part.zookeeper_nodes),
+                    **({"s3_error": part.s3_error} if has_errors else {}),
                     "source": str(part.source_path),
                     "destination": str(part.detached_path),
                 }
@@ -187,29 +202,41 @@ def discover_object_storage_parts(
     root_path: Path, detached_prefix: str = DETACHED_PREFIX
 ) -> List[QuarantinedPart]:
     """Discover active, temporary, and already quarantined part directories."""
-    if not root_path.is_dir():
-        raise ValueError(f"Object-storage store directory does not exist: {root_path}")
+    roots = [root_path]
+    if root_path.name == "store":
+        roots.append(root_path.with_name("data"))
+    roots = [path for path in roots if path.is_dir()]
+    if not roots:
+        raise ValueError(f"Object-storage data directory does not exist: {root_path}")
     if not detached_prefix or "/" in detached_prefix or detached_prefix in {".", ".."}:
         raise ValueError(f"Invalid detached part prefix: {detached_prefix!r}")
 
     result: List[QuarantinedPart] = []
-    for prefix_dir in sorted(root_path.iterdir()):
+    for prefix_dir in [
+        directory for root in roots for directory in sorted(root.iterdir())
+    ]:
         if not prefix_dir.is_dir() or prefix_dir.is_symlink():
             continue
         for table_dir in sorted(prefix_dir.iterdir()):
             if (
                 not table_dir.is_dir()
                 or table_dir.is_symlink()
-                or not _valid_table_uuid(table_dir)
+                or (
+                    prefix_dir.parent.name != "data"
+                    and not _valid_table_uuid(table_dir)
+                )
             ):
                 continue
 
+            table_uuid = "" if prefix_dir.parent.name == "data" else table_dir.name
             detached_dir = table_dir / "detached"
             if not detached_dir.is_dir() or detached_dir.is_symlink():
-                raise ValueError(
-                    f"Detached directory does not exist or is not a real directory: "
-                    f"{detached_dir}"
+                logging.warning(
+                    "Skipping table {}: detached path is not a real directory: {}",
+                    table_dir,
+                    detached_dir,
                 )
+                continue
             for source_path in sorted(table_dir.iterdir()):
                 if (
                     not source_path.is_dir()
@@ -220,7 +247,7 @@ def discover_object_storage_parts(
                     continue
                 result.append(
                     QuarantinedPart(
-                        table_uuid=table_dir.name,
+                        table_uuid=table_uuid,
                         part_name=source_path.name,
                         source_path=source_path,
                         detached_path=detached_dir
@@ -240,7 +267,7 @@ def discover_object_storage_parts(
                     continue
                 result.append(
                     QuarantinedPart(
-                        table_uuid=table_dir.name,
+                        table_uuid=table_uuid,
                         part_name=part_name,
                         source_path=table_dir / part_name,
                         detached_path=detached_path,
@@ -259,7 +286,7 @@ def _expand_zookeeper_path(
         path,
         {
             **macros,
-            "uuid": table_uuid,
+            **({"uuid": table_uuid} if table_uuid else {}),
             "database": database,
             "table": table,
         },
@@ -292,7 +319,7 @@ def _expand_replica_name(
         replica_name,
         {
             **macros,
-            "uuid": table_uuid,
+            **({"uuid": table_uuid} if table_uuid else {}),
             "database": database,
             "table": table,
         },
@@ -348,9 +375,10 @@ def _load_offline_table(
     default_replica_path: Optional[str],
     default_replica_name: Optional[str],
     require_replica_name: bool,
+    require_uuid: bool,
 ) -> OfflineTable:
     """Parse one table and resolve its effective offline replica identity."""
-    metadata = TableMetadataParser.parse(str(metadata_file))
+    metadata = TableMetadataParser.parse(str(metadata_file), require_uuid=require_uuid)
     database = unescape_for_file_name(metadata_file.parent.name)
     table = unescape_for_file_name(metadata_file.stem)
     if not metadata.is_replicated():
@@ -358,10 +386,10 @@ def _load_offline_table(
 
     # Replicated databases override {shard}/{replica} for their tables. Apply
     # those macros to both engine arguments, not only to the replica name.
-    replica_macros = _database_replica_macros(
-        metadata_path,
-        metadata_file.parent.name,
-        macros,
+    replica_macros = (
+        _database_replica_macros(metadata_path, metadata_file.parent.name, macros)
+        if metadata.table_uuid
+        else macros
     )
     replica_path = metadata.effective_replica_path(default_replica_path)
     zookeeper_path = _expand_zookeeper_path(
@@ -415,7 +443,7 @@ def _load_offline_table(
 
 def load_offline_tables(
     metadata_path: Path,
-    table_uuids: Set[str],
+    table_ids: Set[str],
     macros: Dict[str, str],
     default_replica_path: Optional[str] = None,
     default_replica_name: Optional[str] = None,
@@ -431,7 +459,7 @@ def load_offline_tables(
         return {}
 
     tables: Dict[str, OfflineTable] = {}
-    invalid_uuids: Set[str] = set()
+    invalid_ids: Set[str] = set()
     for metadata_file in sorted(metadata_path.glob("*/*.sql")):
         try:
             metadata_text = metadata_file.read_text(encoding="utf-8")
@@ -443,11 +471,15 @@ def load_offline_tables(
             logging.warning("Cannot read table metadata {}: {!r}", metadata_file, error)
             continue
         uuid_match = UUID_PATTERN.search(metadata_text)
-        if uuid_match is None or uuid_match.group(1) not in table_uuids:
+        table_id = (
+            uuid_match.group(1)
+            if uuid_match is not None
+            else str(metadata_file.relative_to(metadata_path).with_suffix(""))
+        )
+        if table_id not in table_ids:
             continue
 
-        table_uuid = uuid_match.group(1)
-        if table_uuid in invalid_uuids:
+        if table_id in invalid_ids:
             continue
         if CLEAR_OLD_BROKEN_DETACHED_RE.search(metadata_text):
             raise RuntimeError(
@@ -463,35 +495,35 @@ def load_offline_tables(
                 default_replica_path,
                 default_replica_name,
                 require_replica_name,
+                require_uuid=uuid_match is not None,
             )
-            previous = tables.setdefault(offline_table.uuid, offline_table)
+            previous = tables.setdefault(table_id, offline_table)
             if previous != offline_table:
                 raise ValueError(
-                    f"Table UUID {offline_table.uuid} belongs to multiple metadata files"
+                    f"Table ID {table_id} belongs to multiple metadata files"
                 )
         except Exception as error:
             if isinstance(error, ReplicaIdentityError):
                 raise
             if not keep_going:
                 raise
-            tables.pop(table_uuid, None)
-            invalid_uuids.add(table_uuid)
+            tables.pop(table_id, None)
+            invalid_ids.add(table_id)
             logging.warning(
-                "Cannot use metadata {} for table UUID {}: {!r}; "
+                "Cannot use metadata {} for table ID {}: {!r}; "
                 "the local parts will still be detached",
                 metadata_file,
-                table_uuid,
+                table_id,
                 error,
             )
 
-    for table_uuid in invalid_uuids:
-        tables.pop(table_uuid, None)
+    for table_id in invalid_ids:
+        tables.pop(table_id, None)
 
-    missing = sorted(table_uuids - set(tables))
+    missing = sorted(table_ids - set(tables))
     if missing:
-        message = (
-            "Cannot map object-storage table UUIDs to local metadata: "
-            + ", ".join(missing)
+        message = "Cannot map object-storage tables to local metadata: " + ", ".join(
+            missing
         )
         if not keep_going:
             raise ValueError(message)
@@ -503,7 +535,7 @@ def bind_parts_to_tables(
     parts: List[QuarantinedPart], tables: Dict[str, OfflineTable]
 ) -> None:
     for part in parts:
-        part.table = tables.get(part.table_uuid)
+        part.table = tables.get(part.table_id)
 
 
 def preflight_local_moves(
@@ -512,12 +544,12 @@ def preflight_local_moves(
     """Resolve local destinations before the first mutation."""
     parts_by_key: Dict[tuple[str, str], List[QuarantinedPart]] = {}
     for part in parts:
-        key = (part.table_uuid, part.part_name)
+        key = (part.table_id, part.part_name)
         parts_by_key.setdefault(key, []).append(part)
 
     result = []
     reserved_paths: Set[Path] = set()
-    for (table_uuid, part_name), copies in parts_by_key.items():
+    for (table_id, part_name), copies in parts_by_key.items():
         active_copies = [part for part in copies if not part.already_detached]
         detached_copies = [part for part in copies if part.already_detached]
         if not active_copies:
@@ -538,10 +570,10 @@ def preflight_local_moves(
             if not keep_going:
                 raise ValueError(
                     f"Both active and detached copies exist for "
-                    f"{table_uuid}/{part_name}"
+                    f"{table_id}/{part_name}"
                 )
             conflict = (
-                f"Both active and detached copies exist for {table_uuid}/{part_name}"
+                f"Both active and detached copies exist for {table_id}/{part_name}"
             )
         elif os.path.lexists(part.detached_path):
             if not keep_going:
@@ -826,6 +858,7 @@ def _manifest_payload(
             {
                 "database": part.table.database if part.table else None,
                 "table": part.table.table if part.table else None,
+                **({"s3_error": part.s3_error} if part.s3_error else {}),
                 "table_uuid": part.table_uuid,
                 "part_name": part.part_name,
                 "detached_path": str(part.detached_path),
@@ -844,6 +877,34 @@ def _write_new_manifest(path: Path, payload: Dict[str, Any]) -> None:
         os.fsync(manifest.fileno())
 
 
+def select_unreadable_s3_parts(
+    ctx: Context, parts: List[QuarantinedPart], disk_name: str, method: str
+) -> List[QuarantinedPart]:
+    """Select unreadable parts and retain previously quarantined parts for cleanup."""
+    checker = None
+    selected = []
+    for part in parts:
+        if part.already_detached:
+            selected.append(part)
+            continue
+        path = part.source_path
+        if part.temporary:
+            try:
+                if not any(path.iterdir()):
+                    continue
+            except OSError:
+                pass  # The shared check records traversal errors for this part.
+        if checker is None:
+            checker = _make_s3_checker(ctx, disk_name, method)
+        check = PartCheck({"path": str(path)})
+        _check_part(check, checker, keep_going=True)
+        if not check.passed:
+            logging.warning("{}: {}", path, check.error)
+            part.s3_error = check.error
+            selected.append(part)
+    return selected
+
+
 def quarantine_object_storage_parts(
     ctx: Context,
     root_path: str,
@@ -853,6 +914,8 @@ def quarantine_object_storage_parts(
     detached_prefix: str = DETACHED_PREFIX,
     keep_going: bool = False,
     mark_replicas_lost: bool = True,
+    disk_name: str = "object_storage",
+    check_s3_objects: Optional[str] = None,
 ) -> QuarantineReport:
     """Move object-storage parts offline and remove their replica part znodes."""
     root = Path(root_path)
@@ -866,6 +929,9 @@ def quarantine_object_storage_parts(
     ensure_broken_detached_parts_are_not_cleaned(ctx)
 
     parts = discover_object_storage_parts(root, detached_prefix)
+    if check_s3_objects is not None:
+        parts = preflight_local_moves(parts, keep_going)
+        parts = select_unreadable_s3_parts(ctx, parts, disk_name, check_s3_objects)
     if not parts:
         if manifest_path is not None:
             _write_new_manifest(manifest_path, _manifest_payload(parts, dry_run))
@@ -874,7 +940,7 @@ def quarantine_object_storage_parts(
     clickhouse_config = get_clickhouse_config(ctx)
     tables = load_offline_tables(
         metadata,
-        {part.table_uuid for part in parts},
+        {part.table_id for part in parts},
         get_macros(ctx),
         default_replica_path=clickhouse_config.default_replica_path,
         default_replica_name=clickhouse_config.default_replica_name,
@@ -882,25 +948,19 @@ def quarantine_object_storage_parts(
         keep_going=keep_going,
     )
     bind_parts_to_tables(parts, tables)
+    # Revalidate local paths after potentially lengthy S3 checks.
     parts = preflight_local_moves(parts, keep_going)
-    selected_table_uuids = {part.table_uuid for part in parts}
-    tables = {
-        table_uuid: table
-        for table_uuid, table in tables.items()
-        if table_uuid in selected_table_uuids
-    }
-
-    replicated_table_uuids = {
-        part.table.uuid
+    replicated_table_ids = {
+        part.table_id
         for part in parts
         if part.table is not None
         and part.table.zookeeper_path is not None
         and not part.temporary
     }
     keeper_tables = {
-        table_uuid: table
-        for table_uuid, table in tables.items()
-        if table_uuid in replicated_table_uuids
+        table_id: table
+        for table_id, table in tables.items()
+        if table_id in replicated_table_ids
     }
 
     def execute(zk: Optional[KazooClient]) -> QuarantineReport:
@@ -973,7 +1033,7 @@ def quarantine_object_storage_parts(
             )
         return report
 
-    if replicated_table_uuids:
+    if replicated_table_ids:
         with zk_client(ctx) as zk:
             return execute(zk)
     return execute(None)

@@ -1,5 +1,6 @@
 """Reusable S3 object probes for object-storage maintenance commands."""
 
+import re
 from collections import OrderedDict
 from dataclasses import dataclass
 from enum import Enum
@@ -80,7 +81,7 @@ class S3ObjectChecker:
         self.cache: OrderedDict[str, ObjectProbe] = OrderedDict()
 
     def check(self, object_info: Any) -> Optional[str]:
-        """Keep the checked-attach API and its strict HEAD/GET semantics."""
+        """Keep the checked-attach API and its strict size checks."""
         key = get_object_storage_key(self.prefix, object_info)
         probe = self._cached_probe(key, object_info.size)
 
@@ -91,10 +92,13 @@ class S3ObjectChecker:
                 f"S3 object size mismatch for {key}: expected {object_info.size}, "
                 f"reported {probe.reported_size}"
             )
-        if self.method in {"get", "full"} and probe.read_size != object_info.size:
+        expected_read_size = (
+            min(object_info.size, 1) if self.method == "range" else object_info.size
+        )
+        if self.method != "head" and probe.read_size != expected_read_size:
             return (
                 f"S3 object read size mismatch for {key}: expected "
-                f"{object_info.size}, read {probe.read_size}"
+                f"{expected_read_size}, read {probe.read_size}"
             )
         return None
 
@@ -191,6 +195,16 @@ class S3ObjectChecker:
             body = response["Body"]
             read_size = 0
             try:
+                reported_size = _content_length(response)
+                if "Range" in get_kwargs:
+                    match = re.fullmatch(
+                        r"bytes 0-0/([1-9][0-9]*)",
+                        str(response.get("ContentRange", "")),
+                    )
+                    status = response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+                    if match is None or status != 206 or reported_size != 1:
+                        raise ValueError(f"Invalid S3 range response for {key}")
+                    reported_size = int(match.group(1))
                 if self.method == "range":
                     read_size = len(body.read(1))
                 else:
@@ -203,7 +217,7 @@ class S3ObjectChecker:
                 body.close()
             return ObjectProbe(
                 exists=True,
-                reported_size=_content_length(response),
+                reported_size=reported_size,
                 read_size=read_size,
             )
         except ClientError as error:
