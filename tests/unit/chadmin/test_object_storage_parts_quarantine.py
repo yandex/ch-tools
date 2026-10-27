@@ -7,7 +7,7 @@ from typing import Any, Generator
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, NoCredentialsError
 from botocore.response import StreamingBody
 from click.testing import CliRunner
 from kazoo.exceptions import NoNodeError
@@ -991,17 +991,31 @@ def test_checked_detach_selects_only_unreadable_parts(
         assert not zk.updated
 
 
+@pytest.mark.parametrize("during_request", [False, True])
 def test_checked_detach_configuration_error_aborts_before_mutations(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    during_request: bool,
 ) -> None:
     store, table_path = make_store(tmp_path)
     source = make_part(table_path, "all_1_1_0")
-    factory = MagicMock(side_effect=ValueError("Invalid S3 configuration"))
+    error = (
+        NoCredentialsError()
+        if during_request
+        else ValueError("Invalid S3 configuration")
+    )
+    factory = MagicMock(side_effect=error)
+    if during_request:
+        write_s3_part_metadata(source, "prefix/object")
+        client = MagicMock()
+        client.get_object.side_effect = error
+        factory = MagicMock(
+            return_value=S3ObjectChecker(client, "bucket", "prefix", "get")
+        )
     monkeypatch.setattr(parts_quarantine, "_make_s3_checker", factory)
     zk_client = MagicMock()
     monkeypatch.setattr(parts_quarantine, "zk_client", zk_client)
-    with pytest.raises(ValueError, match="Invalid S3 configuration"):
+    with pytest.raises(type(error), match=str(error)):
         quarantine_object_storage_parts(
             MagicMock(),
             str(store),

@@ -259,6 +259,125 @@ Feature: chadmin data-store commands
       replicas_to_mark_lost: []
     """
 
+  Scenario: Range mode detects an object whose HEAD succeeds but body cannot be read.
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS object_check_mode;
+    CREATE DATABASE object_check_mode;
+    CREATE TABLE object_check_mode.data (value String, p UInt32)
+    ENGINE=MergeTree() ORDER BY value PARTITION BY p
+    SETTINGS storage_policy='object_storage', min_bytes_for_wide_part=0;
+    INSERT INTO object_check_mode.data
+    SELECT randomPrintableASCII(128), 0 FROM numbers(10000);
+    """
+    And we make s3 objects for active part file value.bin unreadable from table object_check_mode.data on clickhouse01
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detect-broken-partitions
+    """
+    Then we get response
+    """
+    data: []
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detect-broken-partitions --mode range
+    """
+    Then we get response contains
+    """
+    - database: object_check_mode
+      table: data
+      partition_id: '0'
+    """
+    When we try to execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detect-broken-partitions --mode range --detach
+    """
+    Then it fails with response contains
+    """
+    S3 check circuit breaker: 1 of 1 checked part(s) are broken (100.00%), threshold is 50.00%; no actions were performed
+    """
+    And we get response contains
+    """
+    - database: object_check_mode
+      table: data
+      partition_id: '0'
+      check: unknown
+      action: none
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detect-broken-partitions --mode range --detach --max-broken-parts-percentage 100
+    """
+    Then we get response contains
+    """
+      check: unknown
+      action: none
+    """
+    And we get response contains
+    """
+        - name: value.bin
+          check: unknown
+          recoverable: false
+          action: none
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT count() FROM system.parts
+    WHERE database = 'object_check_mode' AND table = 'data' AND active
+    """
+    Then we get response
+    """
+    1
+    """
+
+  Scenario: Full object check detects a size mismatch after a successful range read.
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS object_check_mode;
+    CREATE DATABASE object_check_mode;
+    CREATE TABLE object_check_mode.data (value UInt32, p UInt32)
+    ENGINE=MergeTree() ORDER BY value PARTITION BY p
+    SETTINGS storage_policy='object_storage', min_bytes_for_wide_part=0;
+    INSERT INTO object_check_mode.data SELECT number, 0 FROM numbers(3);
+    """
+    And we replace s3 objects for active part file columns.txt from table object_check_mode.data on clickhouse01 with content of size 1
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detect-broken-partitions --mode range
+    """
+    Then we get response
+    """
+    data: []
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detect-broken-partitions --mode full
+    """
+    Then we get response contains
+    """
+    - database: object_check_mode
+      table: data
+      partition_id: '0'
+      check: corrupted
+    """
+    And we get response contains
+    """
+        - name: columns.txt
+          check: corrupted
+          recoverable: false
+          action: none
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format json data-store detect-broken-partitions --mode full > /tmp/broken-partitions.json
+    chadmin partition attach --dry-run --use-partition-list-from-json /tmp/broken-partitions.json
+    """
+    Then we get response contains
+    """
+    ALTER TABLE `object_check_mode`.`data` ATTACH PARTITION ID '0'
+    """
+
   Scenario Outline: Restore recoverable <filename> file for broken object storage part.
     When we execute queries on clickhouse01
     """
@@ -270,13 +389,15 @@ Feature: chadmin data-store commands
     And we remove s3 object for active part file <filename> from table restore_recoverable.file_restore on clickhouse01
     When we execute command on clickhouse01
     """
-    chadmin --format yaml data-store detect-broken-partitions --restore-recoverable
+    chadmin --format yaml data-store detect-broken-partitions --restore-recoverable --max-broken-parts-percentage 100
     """
     Then we get response contains
     """
-      file: <filename>
-      status: restored
-      detail: <detail>
+        - name: <filename>
+          check: missing
+          recoverable: true
+          action: restored
+          action_detail: <detail>
     """
     When we execute query on clickhouse01
     """
@@ -315,31 +436,39 @@ Feature: chadmin data-store commands
     And we remove s3 object for active part file default_compression_codec.txt from table restore_recoverable.file_restore on clickhouse01
     When we execute command on clickhouse01
     """
-    chadmin --format yaml data-store detect-broken-partitions --restore-recoverable
+    chadmin --format yaml data-store detect-broken-partitions --restore-recoverable --max-broken-parts-percentage 100
     """
     Then we get response contains
     """
-      file: checksums.txt
-      status: restored
-      detail: regenerated by ClickHouse ATTACH PARTITION
+        - name: checksums.txt
+          check: missing
+          recoverable: true
+          action: restored
+          action_detail: regenerated by ClickHouse ATTACH PARTITION
     """
     And we get response contains
     """
-      file: columns.txt
-      status: restored
-      detail: regenerated by ClickHouse ATTACH PARTITION
+        - name: columns.txt
+          check: missing
+          recoverable: true
+          action: restored
+          action_detail: regenerated by ClickHouse ATTACH PARTITION
     """
     And we get response contains
     """
-      file: count.txt
-      status: restored
-      detail: uploaded generated content with exact metadata size
+        - name: count.txt
+          check: missing
+          recoverable: true
+          action: restored
+          action_detail: uploaded generated content with exact metadata size
     """
     And we get response contains
     """
-      file: default_compression_codec.txt
-      status: restored
-      detail: uploaded generated content with exact metadata size
+        - name: default_compression_codec.txt
+          check: missing
+          recoverable: true
+          action: restored
+          action_detail: uploaded generated content with exact metadata size
     """
     When we execute query on clickhouse01
     """
@@ -364,24 +493,27 @@ Feature: chadmin data-store commands
     And we remove s3 object for active part 1 file columns.txt from table restore_recoverable.multi_part on clickhouse01
     When we execute command on clickhouse01
     """
-    chadmin --format yaml data-store detect-broken-partitions --restore-recoverable <partition_action>
+    chadmin --format yaml data-store detect-broken-partitions --restore-recoverable <partition_action> --max-broken-parts-percentage 100
     """
     Then we get response contains
     """
-      file: checksums.txt
-      status: restored
-      detail: regenerated by ClickHouse ATTACH PARTITION
+        - name: checksums.txt
+          check: missing
+          recoverable: true
+          action: restored
+          action_detail: regenerated by ClickHouse ATTACH PARTITION
     """
     And we get response contains
     """
-      file: columns.txt
-      status: unrecoverable
-      detail: columns.txt can be restored only for Wide parts
+        - name: columns.txt
+          check: missing
+          recoverable: false
+          action: unrecoverable
+          action_detail: columns.txt can be restored only for Wide parts
     """
     And we get response contains
     """
-      file: '*'
-      status: <partition_status>
+      action: <partition_status>
     """
     When we execute query on clickhouse01
     """
@@ -441,20 +573,25 @@ Feature: chadmin data-store commands
     """
     Then we get response contains
     """
-    - table: '`test_db`.`table1`'
-      partition: '1'
-    - table: '`test_db`.`table1`'
-      partition: '2'
-    - table: '`test_db`.`table2`'
-      partition: '1'
-    - table: '`test_db`.`table2`'
-      partition: '2'
-    - table: '`test_db`.`table2`'
-      partition: '3'
+    - database: test_db
+      table: table1
+      partition_id: '1'
+    - database: test_db
+      table: table1
+      partition_id: '2'
+    - database: test_db
+      table: table2
+      partition_id: '1'
+    - database: test_db
+      table: table2
+      partition_id: '2'
+    - database: test_db
+      table: table2
+      partition_id: '3'
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml data-store detect-broken-partitions --reattach
+    chadmin --format yaml data-store detect-broken-partitions --reattach --max-broken-parts-percentage 100
     """
     When we execute queries on clickhouse01
     """
@@ -508,20 +645,25 @@ Feature: chadmin data-store commands
     """
     Then we get response contains
     """
-    - table: '`test_db`.`table1`'
-      partition: '1'
-    - table: '`test_db`.`table1`'
-      partition: '2'
-    - table: '`test_db`.`table2`'
-      partition: '1'
-    - table: '`test_db`.`table2`'
-      partition: '2'
-    - table: '`test_db`.`table2`'
-      partition: '3'
+    - database: test_db
+      table: table1
+      partition_id: '1'
+    - database: test_db
+      table: table1
+      partition_id: '2'
+    - database: test_db
+      table: table2
+      partition_id: '1'
+    - database: test_db
+      table: table2
+      partition_id: '2'
+    - database: test_db
+      table: table2
+      partition_id: '3'
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml data-store detect-broken-partitions --detach
+    chadmin --format yaml data-store detect-broken-partitions --detach --max-broken-parts-percentage 100
     """
     When we execute queries on clickhouse01
     """

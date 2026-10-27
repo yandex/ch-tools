@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import os
 import posixpath
-import re
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
 from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,9 +12,16 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import boto3
 from botocore.client import Config
-from botocore.exceptions import ClientError
+from botocore.exceptions import (
+    CredentialRetrievalError,
+    NoCredentialsError,
+    PartialCredentialsError,
+)
 from click import Context
 
+from ch_tools.chadmin.internal.object_storage.s3_object_checker import (
+    S3ObjectChecker,
+)
 from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
     S3ObjectLocalMetaData,
     get_object_storage_key,
@@ -41,10 +47,7 @@ from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 
 S3_CHECK_METHODS = ("head", "range", "get")
-READ_CHUNK_SIZE = 8 * 1024 * 1024
-MISSING_OBJECT_ERROR_CODES = {"404", "NoSuchKey", "NotFound"}
 MAX_REPORTED_ERRORS = 5
-MAX_CACHED_OBJECT_PROBES = 10_000
 
 # Keep this in sync with ClickHouse's DetachedPartInfo::DETACH_REASONS.  A
 # custom prefix is not parsed as a detached-part reason reliably by ClickHouse.
@@ -70,13 +73,6 @@ class PartitionKey:
     database: str
     table: str
     partition_id: str
-
-
-@dataclass(frozen=True)
-class ObjectProbe:
-    exists: bool
-    reported_size: Optional[int] = None
-    read_size: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -127,100 +123,6 @@ class PartRename:
     source: str
     destination: str
     kind: str
-
-
-class S3ObjectChecker:
-    """Probe S3 objects, caching only results when parts share a remote blob."""
-
-    def __init__(
-        self,
-        client: Any,
-        bucket: str,
-        prefix: str,
-        method: str,
-    ) -> None:
-        if method not in S3_CHECK_METHODS:
-            raise ValueError(f"Unsupported S3 check method: {method}")
-        self.client = client
-        self.bucket = bucket
-        self.prefix = prefix
-        self.method = method
-        self.cache: OrderedDict[str, ObjectProbe] = OrderedDict()
-
-    def check(self, object_info: Any) -> Optional[str]:
-        key = get_object_storage_key(self.prefix, object_info)
-        try:
-            probe = self.cache.pop(key)
-        except KeyError:
-            probe = self._probe(key, object_info.size)
-            if len(self.cache) >= MAX_CACHED_OBJECT_PROBES:
-                self.cache.popitem(last=False)
-        self.cache[key] = probe
-
-        if not probe.exists:
-            return f"S3 object is missing: {key}"
-        if probe.reported_size != object_info.size:
-            return (
-                f"S3 object size mismatch for {key}: expected {object_info.size}, "
-                f"reported {probe.reported_size}"
-            )
-        expected_read_size = (
-            min(object_info.size, 1) if self.method == "range" else object_info.size
-        )
-        if self.method in {"range", "get"} and probe.read_size != expected_read_size:
-            return (
-                f"S3 object read size mismatch for {key}: expected "
-                f"{expected_read_size}, read {probe.read_size}"
-            )
-        return None
-
-    def _probe(self, key: str, expected_size: int) -> ObjectProbe:
-        try:
-            if self.method == "head":
-                response = self.client.head_object(Bucket=self.bucket, Key=key)
-                return ObjectProbe(
-                    exists=True,
-                    reported_size=_content_length(response),
-                )
-
-            ranged = self.method == "range" and expected_size > 0
-            request = {"Bucket": self.bucket, "Key": key}
-            if ranged:
-                request["Range"] = "bytes=0-0"
-            response = self.client.get_object(**request)
-            body = response["Body"]
-            read_size = 0
-            try:
-                reported_size = _content_length(response)
-                if ranged:
-                    match = re.fullmatch(
-                        r"bytes 0-0/([1-9][0-9]*)",
-                        str(response.get("ContentRange", "")),
-                    )
-                    status = response.get("ResponseMetadata", {}).get("HTTPStatusCode")
-                    if match is None or status != 206 or reported_size != 1:
-                        raise ValueError(f"Invalid S3 range response for {key}")
-                    reported_size = int(match.group(1))
-                if self.method == "range":
-                    read_size = len(body.read(1))
-                else:
-                    while True:
-                        chunk = body.read(READ_CHUNK_SIZE)
-                        if not chunk:
-                            break
-                        read_size += len(chunk)
-            finally:
-                body.close()
-            return ObjectProbe(
-                exists=True,
-                reported_size=reported_size,
-                read_size=read_size,
-            )
-        except ClientError as error:
-            code = error.response.get("Error", {}).get("Code", "")
-            if code in MISSING_OBJECT_ERROR_CODES:
-                return ObjectProbe(exists=False)
-            raise
 
 
 def attach_checked_partitions(
@@ -629,6 +531,12 @@ def _check_part(
                 check.bytes_checked += object_info.size
                 try:
                     object_error = checker.check(object_info)
+                except (
+                    NoCredentialsError,
+                    PartialCredentialsError,
+                    CredentialRetrievalError,
+                ):
+                    raise
                 except Exception as error:
                     if not keep_going:
                         raise
@@ -910,8 +818,3 @@ def _restore_prefixes(renamed: List[PartRename]) -> None:
                 plan.source,
                 error,
             )
-
-
-def _content_length(response: Dict[str, Any]) -> Optional[int]:
-    value = response.get("ContentLength")
-    return int(value) if value is not None else None

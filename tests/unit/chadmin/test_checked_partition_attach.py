@@ -7,9 +7,13 @@ from unittest.mock import ANY, MagicMock, patch
 import pytest
 from botocore.exceptions import ClientError
 
+from ch_tools.chadmin.internal.object_storage import broken_partitions_recovery
 from ch_tools.chadmin.internal.object_storage.checked_partition_attach import (
-    S3ObjectChecker,
     attach_checked_partitions,
+)
+from ch_tools.chadmin.internal.object_storage.s3_object_checker import (
+    ObjectCheckStatus,
+    S3ObjectChecker,
 )
 from ch_tools.chadmin.internal.object_storage.s3_object_metadata import (
     S3ObjectLocalInfo,
@@ -65,6 +69,32 @@ def test_get_reads_the_whole_object_and_checks_actual_size() -> None:
     result = checker.check(object_info())
     assert result is not None
     assert "expected 3, read 2" in result
+
+
+def test_range_reads_zero_size_object_without_range_header() -> None:
+    client = MagicMock()
+    client.get_object.return_value = {
+        "ContentLength": 0,
+        "Body": BytesIO(b""),
+    }
+    checker = S3ObjectChecker(client, "bucket", "unused", "range")
+
+    assert checker.inspect(object_info(size=0)).status == ObjectCheckStatus.OK
+    client.get_object.assert_called_once_with(Bucket="bucket", Key="prefix/object")
+
+
+def test_inspect_distinguishes_unknown_and_fatal_errors() -> None:
+    client = MagicMock()
+    checker = S3ObjectChecker(client, "bucket", "unused", "range")
+    client.get_object.side_effect = client_error("InternalError")
+
+    result = checker.inspect(object_info())
+    assert result.status == ObjectCheckStatus.UNKNOWN
+    assert result.reason == "request_error"
+
+    client.get_object.side_effect = client_error("AccessDenied")
+    with pytest.raises(ClientError):
+        checker.inspect(object_info(key="prefix/forbidden"))
 
 
 @pytest.mark.parametrize("method", ["head", "range", "get"])
@@ -786,3 +816,35 @@ def test_range_rejects_unsupported_response() -> None:
     with pytest.raises(ValueError, match="Invalid S3 range response"):
         S3ObjectChecker(client, "bucket", "unused", "range").check(object_info())
     assert body.closed
+
+
+@pytest.mark.parametrize("status", [206, 200])
+def test_detect_range_keeps_healthy_parts_and_skips_unsupported_responses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, status: int
+) -> None:
+    (tmp_path / "columns.txt").write_text("5\n1 3\n3 prefix/object\n0\n0\n")
+    info = broken_partitions_recovery.BrokenPartInfo(
+        "db", "table", "all", "all_1_1_0", "Wide", 1, "LZ4"
+    )
+    monkeypatch.setattr(
+        broken_partitions_recovery,
+        "get_active_parts_by_path",
+        lambda _ctx: {f"{tmp_path}/": info},
+    )
+    client = MagicMock()
+    client.get_object.return_value = {
+        "Body": BytesIO(b"x" if status == 206 else b"abc"),
+        "ContentLength": 1 if status == 206 else 3,
+        "ResponseMetadata": {"HTTPStatusCode": status},
+    }
+    if status == 206:
+        client.get_object.return_value["ContentRange"] = "bytes 0-0/3"
+    parts, checked = broken_partitions_recovery.find_broken_parts(
+        MagicMock(), str(tmp_path), client, s3_disk_config(), mode="range"
+    )
+
+    assert checked == 1
+    assert len(parts) == (status == 200)
+    if parts:
+        assert parts[0].object_issues[0].check.status == ObjectCheckStatus.UNKNOWN
+    assert broken_partitions_recovery.select_actionable_broken_parts(parts) == []
