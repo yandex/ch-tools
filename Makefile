@@ -160,6 +160,7 @@ install-python-package: build-python-packages
 	rm -f $(BIN_DIR)/activate*
 
 	# Install python package
+	$(BIN_DIR)/python -m pip install --upgrade pip
 	$(BIN_DIR)/pip install --no-compile $(BUILD_PYTHON_OUTPUT_DIR)/$(WHL_FILE)
 
 	# Clean python's artefacts
