@@ -293,7 +293,7 @@ Feature: chadmin partitions commands.
     ENGINE=MergeTree()
     PARTITION BY tuple()
     ORDER BY id
-    SETTINGS storage_policy='object_storage', min_bytes_for_wide_part=0;
+    SETTINGS storage_policy='object_storage_cache', min_bytes_for_wide_part=0;
     INSERT INTO checked_s3_attach SELECT number, toString(number) FROM numbers(10);
     """
     And we move parts as broken_on_start for table default.checked_s3_attach on clickhouse01
