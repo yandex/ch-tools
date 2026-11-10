@@ -14,7 +14,6 @@ from click import Context
 
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
-from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
@@ -267,8 +266,8 @@ def assert_equal_table_schema_on_cluster(
     database: str,
     table: str,
     cluster: str,
-    replicas: Optional[list[str]] = None,
-) -> None:
+    skip_unavailable: bool = False,
+) -> set[int]:
     """
     Retrieve table schema from cluster and compare it with local table schema.
     """
@@ -283,12 +282,13 @@ def assert_equal_table_schema_on_cluster(
     # Join is needed in case table doesn't exist on some replicas
     get_cluster_schema_query = """
                         SELECT
+                            replicas.replica_num,
                             replicas.host,
                             coalesce(t.create_table_query, '') AS create_table_query
                         FROM
                         (
-                            SELECT hostName() AS host
-                            FROM {one_table}
+                            SELECT _shard_num AS replica_num, hostName() AS host
+                            FROM clusterAllReplicas('{cluster}', system.one)
                         ) AS replicas
                         LEFT JOIN
                         (
@@ -301,29 +301,21 @@ def assert_equal_table_schema_on_cluster(
         database=database,
         table=table,
     )
-    tables_table = get_table_function_for_scope(
-        ctx, "system.tables", Scope.CLUSTER, cluster_name=cluster, all_replicas=True
-    )
-    one_table = f"clusterAllReplicas('{cluster}', system.one)"
-    sensitive_args = {}
-    if replicas is not None:
-        if not replicas:
-            raise ValueError("Cannot compare table schemas without replicas")
-        tables_table = get_remote_table_for_hosts(ctx, "system.tables", replicas)
-        one_table = get_remote_table_for_hosts(ctx, "system.one", replicas)
-        sensitive_args["user_password"] = clickhouse_client(ctx).password or ""
-    get_cluster_schema = Query(
-        get_cluster_schema_query.format(
-            get_local_schema_query=get_local_schema_query.format(
-                tables_table=tables_table,
-                database=database,
-                table=table,
+    get_cluster_schema = get_cluster_schema_query.format(
+        get_local_schema_query=get_local_schema_query.format(
+            tables_table=get_table_function_for_scope(
+                ctx,
+                "system.tables",
+                Scope.CLUSTER,
+                cluster_name=cluster,
+                all_replicas=True,
             ),
-            one_table=one_table,
-        )
-        + " SETTINGS skip_unavailable_shards=0",
-        sensitive_args=sensitive_args,
+            database=database,
+            table=table,
+        ),
+        cluster=cluster,
     )
+    get_cluster_schema += f" SETTINGS skip_unavailable_shards={int(skip_unavailable)}"
 
     local_schema = execute_query(ctx, get_local_schema, format_="JSONCompact")["data"][
         0
@@ -331,8 +323,8 @@ def assert_equal_table_schema_on_cluster(
     schemas = execute_query(ctx, get_cluster_schema, format_="JSONCompact")["data"]
 
     for row in schemas:
-        replica = row[0]
-        schema = row[1]
+        replica = row[1]
+        schema = row[2]
 
         logging.debug(f"Replica: {replica}, schema: {schema}")
 
@@ -341,3 +333,5 @@ def assert_equal_table_schema_on_cluster(
             raise RuntimeError(
                 f"Table schema for '{full_table_name}' on replica '{replica}' is different from local schema. Local schema: {local_schema}, replica schema: {schema}"
             )
+
+    return {row[0] for row in schemas}

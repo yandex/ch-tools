@@ -161,6 +161,17 @@ Feature: chadmin object-storage commands
     """
     CREATE TABLE test.space_usage_from_object_storage ON CLUSTER '{cluster}'
     (replica Array(String), state String, size UInt64) ENGINE MergeTree ORDER BY (replica, state);
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage space-usage
+    """
+    Then we get response
+    """
+    total: {}
+    """
+    When we execute query on clickhouse01
+    """
     INSERT INTO test.space_usage_from_object_storage VALUES (['clickhouse01'], 'active', 100), (['unknown_replicas'], 'orphaned', 3);
     """
     And we execute queries on clickhouse02
@@ -184,7 +195,10 @@ Feature: chadmin object-storage commands
     <clickhouse>
       <remote_servers>
         <space_usage_cluster>
-          <shard><replica><host>clickhouse01</host><port>9000</port></replica></shard>
+          <shard>
+            <replica><host>clickhouse01</host><port>9000</port></replica>
+            <replica><host>clickhouse01</host><port>9000</port></replica>
+          </shard>
           <shard><replica><host>clickhouse02</host><port>9000</port></replica></shard>
         </space_usage_cluster>
       </remote_servers>
@@ -249,6 +263,48 @@ Feature: chadmin object-storage commands
     Then it fails with response contains
     """
     No available replicas remain in shard 2 of cluster 'space_usage_cluster'
+    """
+    # The server is reachable, but the cluster connection is not. Check the query's
+    # actual participants, using configured names even when they differ from hostName().
+    When we start clickhouse on clickhouse02
+    And we execute command on clickhouse01
+    """
+    cat > /etc/clickhouse-server/config.d/space_usage_cluster.xml <<'EOF'
+    <clickhouse>
+      <remote_servers>
+        <space_usage_cluster>
+          <shard>
+            <replica><host>clickhouse01.ch_tools_test</host><port>9000</port></replica>
+            <replica><host>clickhouse02.ch_tools_test</host><port>9001</port></replica>
+          </shard>
+        </space_usage_cluster>
+      </remote_servers>
+    </clickhouse>
+    EOF
+    chadmin server restart
+    """
+    And we try to execute command on clickhouse01
+    """
+    chadmin object-storage space-usage --cluster space_usage_cluster
+    """
+    Then it fails with response contains
+    """
+    Unavailable replicas without an exemption: clickhouse02.ch_tools_test
+    """
+    Given merged clickhouse-tools configuration on clickhouse01
+    """
+    object_storage:
+      unavailable_hosts: [clickhouse02.ch_tools_test]
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage space-usage --cluster space_usage_cluster
+    """
+    Then we get response contains
+    """
+    total:
+      active: 100
+      orphaned: 3
     """
 
   Scenario: Dry-run clean with guard period
@@ -953,8 +1009,19 @@ Feature: chadmin object-storage commands
     chadmin object-storage clean --to-time 0h --dry-run --use-saved-list --keep-paths
     """
     Then remembered S3 objects of test.only_on_second are present
-    When we execute command on clickhouse01
+    # Check rejoining before GC deletes objects referenced by this replica's metadata.
+    When we start clickhouse on clickhouse02
+    And we execute command on clickhouse01
     """
+    chadmin object-storage collect-info --to-time 0h --traverse-remote &&
+    chadmin object-storage clean --to-time 0h --dry-run --use-saved-list --keep-paths
+    """
+    Then remembered S3 objects of test.only_on_second are present
+    And remembered S3 objects of test.table_s3_01 are present
+    When we stop clickhouse on clickhouse02
+    And we execute command on clickhouse01
+    """
+    chadmin object-storage collect-info --to-time 0h --traverse-remote &&
     chadmin object-storage clean --to-time 0h --use-saved-list --keep-paths
     """
     Then remembered S3 objects of test.only_on_second are deleted
@@ -973,13 +1040,6 @@ Feature: chadmin object-storage commands
     """
     0
     """
-    When we start clickhouse on clickhouse02
-    And we execute command on clickhouse01
-    """
-    chadmin object-storage collect-info --to-time 0h --traverse-remote &&
-    chadmin object-storage clean --to-time 0h --dry-run --use-saved-list --keep-paths
-    """
-    Then remembered S3 objects of test.table_s3_01 are present
 
   @require_version_23.3
   Scenario: Clean with stat partitioning

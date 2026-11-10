@@ -16,6 +16,7 @@ from ch_tools.chadmin.internal.object_storage import cleanup_s3_object_storage
 from ch_tools.chadmin.internal.object_storage.obj_list_item import ObjListItem
 from ch_tools.chadmin.internal.object_storage.replicas import (
     ObjectStorageReplicas,
+    check_object_storage_cluster_replicas,
     get_object_storage_cluster_replicas,
     get_object_storage_replicas,
 )
@@ -249,34 +250,37 @@ def get_object_storage_space_usage(
     table = f"{config['space_usage_table_prefix']}{disk_conf.name}"
 
     full_name = f"{database}.{table}"
-    space_usage_table = full_name
-    sensitive_args = {}
     if scope == Scope.CLUSTER:
         shards = get_object_storage_cluster_replicas(ctx, cluster_name)
-        assert_equal_table_schema_on_cluster(
-            ctx,
-            database,
-            table,
-            cluster_name,
-            replicas=[host for hosts in shards.values() for host in hosts],
+        responding_replicas = assert_equal_table_schema_on_cluster(
+            ctx, database, table, cluster_name, skip_unavailable=True
         )
-        # Statistics are replicated: read exactly one copy from each shard.
-        space_usage_table = get_remote_table_for_hosts(
-            ctx, full_name, [hosts[0] for hosts in shards.values()]
+        check_object_storage_cluster_replicas(
+            ctx, cluster_name, shards, responding_replicas
         )
-        sensitive_args["user_password"] = clickhouse_client(ctx).password or ""
-
-    parts_usage_query = Query(
-        f"SELECT toString(replica) replicas, state, size FROM {space_usage_table} "
-        "ORDER BY replica, state SETTINGS skip_unavailable_shards=0",
-        sensitive_args=sensitive_args,
-    )
-
-    query_result = execute_query(
-        ctx,
-        parts_usage_query,
-        format_="JSON",
-    )["data"]
+        # Aggregate remotely so even an empty table reports its replica.
+        parts_usage_query = f"""
+            SELECT _shard_num AS replica_num, usage
+            FROM clusterAllReplicas('{cluster_name}', view(
+                SELECT groupArray((toString(replica), toString(state), size)) AS usage
+                FROM {full_name}
+            ))
+            SETTINGS skip_unavailable_shards=1, empty_result_for_aggregation_by_empty_set=0
+        """
+        responses = execute_query(ctx, parts_usage_query, format_="JSON")["data"]
+        selected = check_object_storage_cluster_replicas(
+            ctx, cluster_name, shards, {row["replica_num"] for row in responses}
+        )
+        # Statistics are replicated: count exactly one response from each shard.
+        usage_by_replica = {row["replica_num"]: row["usage"] for row in responses}
+        query_result = [
+            {"replicas": replicas, "state": state, "size": size}
+            for replica_num in selected
+            for replicas, state, size in usage_by_replica[replica_num]
+        ]
+    else:
+        parts_usage_query = f"SELECT toString(replica) replicas, state, size FROM {full_name} ORDER BY replica, state"
+        query_result = execute_query(ctx, parts_usage_query, format_="JSON")["data"]
 
     result: dict[str, dict[str, int]] = defaultdict(dict)
     for row in query_result:
@@ -550,10 +554,7 @@ def _local_blobs_table(
             )
 
             timeout = config["antijoin_timeout"]
-            query_settings = {
-                "receive_timeout": timeout,
-                "max_execution_time": 0,
-            }
+            query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
             execute_query(
                 ctx,
                 local_blobs_query,
@@ -895,7 +896,7 @@ def _collect_space_usage(
     truncate_query = f"TRUNCATE TABLE {space_usage_table} SYNC"
     if replicas.excluded:
         truncate_query += " SETTINGS alter_sync=1"
-    execute_query(ctx, truncate_query)
+    execute_query(ctx, truncate_query, format_=None)
     execute_query(
         ctx, f"INSERT INTO {space_usage_table} SELECT * FROM {space_usage_table_new}"
     )
