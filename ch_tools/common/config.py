@@ -47,6 +47,7 @@ DEFAULT_CONFIG = {
     },
     "object_storage": {
         "bucket_name_prefix": "cloud-storage-",
+        "unavailable_hosts": [],
         "clean": {
             "verify": True,
             "verify_paths_regex": {

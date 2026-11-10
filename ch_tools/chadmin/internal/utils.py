@@ -14,6 +14,7 @@ from click import Context
 
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
+from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
@@ -92,7 +93,18 @@ def check_replicas_availability(
 
     Returns True if all replicas are available, False otherwise.
     """
-    replicas = ClickhouseInfo.get_replicas(ctx)
+    return not get_unavailable_replicas(ctx, timeout=timeout)
+
+
+def get_unavailable_replicas(
+    ctx: Context,
+    timeout: int = 5,
+    replicas: Optional[list[str]] = None,
+) -> list[str]:
+    """Probe every replica and return the hosts whose queries failed."""
+    if replicas is None:
+        replicas = ClickhouseInfo.get_replicas(ctx)
+    unavailable = []
 
     for replica in replicas:
         try:
@@ -106,9 +118,9 @@ def check_replicas_availability(
         except Exception:
             # Replica is unavailable
             logging.error(f"Replica {replica} is unavailable")
-            return False
+            unavailable.append(replica)
 
-    return True
+    return unavailable
 
 
 def execute_query_on_shard(
@@ -121,12 +133,14 @@ def execute_query_on_shard(
     stream: bool = False,
     settings: Optional[Any] = None,
     log_query: bool = True,
+    replicas: Optional[list[str]] = None,
     **kwargs: Any,
 ) -> None:
     """
     Execute query on all replicas in the shard.
     """
-    replicas = ClickhouseInfo.get_replicas(ctx)
+    if replicas is None:
+        replicas = ClickhouseInfo.get_replicas(ctx)
 
     for replica in replicas:
         execute_query(
@@ -249,7 +263,11 @@ def get_table_function_for_scope(
 
 
 def assert_equal_table_schema_on_cluster(
-    ctx: Context, database: str, table: str, cluster: str
+    ctx: Context,
+    database: str,
+    table: str,
+    cluster: str,
+    replicas: Optional[list[str]] = None,
 ) -> None:
     """
     Retrieve table schema from cluster and compare it with local table schema.
@@ -270,7 +288,7 @@ def assert_equal_table_schema_on_cluster(
                         FROM
                         (
                             SELECT hostName() AS host
-                            FROM clusterAllReplicas('{cluster}', system.one)
+                            FROM {one_table}
                         ) AS replicas
                         LEFT JOIN
                         (
@@ -283,19 +301,28 @@ def assert_equal_table_schema_on_cluster(
         database=database,
         table=table,
     )
-    get_cluster_schema = get_cluster_schema_query.format(
-        get_local_schema_query=get_local_schema_query.format(
-            tables_table=get_table_function_for_scope(
-                ctx,
-                "system.tables",
-                Scope.CLUSTER,
-                cluster_name=cluster,
-                all_replicas=True,
+    tables_table = get_table_function_for_scope(
+        ctx, "system.tables", Scope.CLUSTER, cluster_name=cluster, all_replicas=True
+    )
+    one_table = f"clusterAllReplicas('{cluster}', system.one)"
+    sensitive_args = {}
+    if replicas is not None:
+        if not replicas:
+            raise ValueError("Cannot compare table schemas without replicas")
+        tables_table = get_remote_table_for_hosts(ctx, "system.tables", replicas)
+        one_table = get_remote_table_for_hosts(ctx, "system.one", replicas)
+        sensitive_args["user_password"] = clickhouse_client(ctx).password or ""
+    get_cluster_schema = Query(
+        get_cluster_schema_query.format(
+            get_local_schema_query=get_local_schema_query.format(
+                tables_table=tables_table,
+                database=database,
+                table=table,
             ),
-            database=database,
-            table=table,
-        ),
-        cluster=cluster,
+            one_table=one_table,
+        )
+        + " SETTINGS skip_unavailable_shards=0",
+        sensitive_args=sensitive_args,
     )
 
     local_schema = execute_query(ctx, get_local_schema, format_="JSONCompact")["data"][
