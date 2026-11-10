@@ -908,6 +908,15 @@ Feature: chadmin object-storage commands
 
   @require_version_23.3
   Scenario: Clean with temporarily unavailable replica succeeds after replica returns
+    # The initial availability probe must keep retrying while the replica starts.
+    # A request timeout does not delay retries when connections are refused.
+    Given merged clickhouse-tools configuration on clickhouse01
+    """
+    clickhouse:
+      retries:
+        max_attempts: 30
+        max_interval: 1
+    """
     When we execute command on clickhouse01
     """
     chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths
