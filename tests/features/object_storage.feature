@@ -154,10 +154,17 @@ Feature: chadmin object-storage commands
     When we execute command on clickhouse01
     """
     chadmin object-storage collect-info --to-time 0h --traverse-remote &&
-    chadmin object-storage space-usage &&
     chadmin object-storage clean --to-time 0h --dry-run
     """
-    And we execute query on clickhouse02
+    And we try to execute command on clickhouse01
+    """
+    chadmin object-storage space-usage
+    """
+    Then it fails with response contains
+    """
+    Cluster 'cluster' contains decommissioned hosts: clickhouse02
+    """
+    When we execute query on clickhouse02
     """
     SYSTEM FLUSH LOGS;
     """

@@ -43,16 +43,6 @@ Feature: Object storage with a configured replica that does not exist
     When we execute command on clickhouse01
     """
     chadmin object-storage collect-info --to-time 0h --traverse-remote &&
-    chadmin --format yaml object-storage space-usage
-    """
-    Then we get response matches
-    """
-    total:
-      active: '?[1-9][0-9]*'?
-      orphaned: '?3'?$
-    """
-    When we execute command on clickhouse01
-    """
     chadmin --format yaml object-storage space-usage --scope shard
     """
     Then we get response matches
@@ -103,7 +93,7 @@ Feature: Object storage with a configured replica that does not exist
     """
 
   @require_version_23.3
-  Scenario: Cluster space usage requires one response from each shard
+  Scenario: Space usage reads each shard with its configured cluster user
     When we execute queries on clickhouse01
     """
     CREATE TABLE space_usage_from_object_storage (replica Array(String), state String, size UInt64) ENGINE = Memory;
@@ -115,7 +105,7 @@ Feature: Object storage with a configured replica that does not exist
     """
     And we try to execute command on clickhouse01
     """
-    chadmin --setting clickhouse.decommissioned_hosts "[]" object-storage space-usage --cluster two_shards
+    chadmin --setting clickhouse.decommissioned_hosts "[]" object-storage space-usage
     """
     Then it fails with response contains
     """
@@ -145,11 +135,17 @@ Feature: Object storage with a configured replica that does not exist
       active: 300
       orphaned: 10
     """
-    When we try to execute command on clickhouse01
+    When we execute query on clickhouse02
     """
-    chadmin object-storage space-usage --cluster missing_shard
+    SYSTEM FLUSH LOGS
     """
-    Then it fails with response contains
+    And we execute query on clickhouse02
     """
-    No active replicas remain in shard 2 of cluster 'missing_shard'
+    SELECT groupUniqArray(user) FROM system.query_log
+    WHERE type = 'QueryFinish' AND NOT is_initial_query AND query_kind = 'Select'
+      AND has(tables, 'default.space_usage_from_object_storage')
+    """
+    Then we get response
+    """
+    ['_monitor']
     """

@@ -43,7 +43,6 @@ from ch_tools.chadmin.internal.utils import (
     chunked,
     execute_query,
     execute_query_on_shard,
-    get_remote_table_for_hosts,
     get_table_function_for_scope,
 )
 from ch_tools.chadmin.internal.zookeeper import has_zk
@@ -57,7 +56,7 @@ from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.common.clickhouse.replicas import (
-    active_cluster_replicas,
+    check_cluster_for_decommissioned_hosts,
     shard_has_decommissioned_hosts,
 )
 
@@ -245,47 +244,27 @@ def get_object_storage_space_usage(
     database = config["database"]
     table = f"{config['space_usage_table_prefix']}{disk_conf.name}"
 
+    # Table is replicated
+    if scope == Scope.SHARD:
+        scope = Scope.HOST
+    elif scope == Scope.CLUSTER:
+        check_cluster_for_decommissioned_hosts(ctx, cluster_name)
+        assert_equal_table_schema_on_cluster(ctx, database, table, cluster_name)
+
     full_name = f"{database}.{table}"
-    select = "SELECT toString(replica) replicas, state, size FROM {} ORDER BY replica, state SETTINGS skip_unavailable_shards=0"
-    shards = (
-        active_cluster_replicas(ctx, cluster_name) if scope == Scope.CLUSTER else {}
+    space_usage_table = get_table_function_for_scope(
+        ctx, full_name, scope, cluster_name
     )
-    if shards:
-        # Use only active endpoints for schema checks. The statistics are replicated within each shard.
-        client = clickhouse_client(ctx)
-        credentials = {
-            "user_password": (client.password or "")
-            .replace("\\", "\\\\")
-            .replace("'", "\\'")
-        }
-        schema = f"SELECT create_table_query FROM {{}} WHERE database = '{database}' AND name = '{table}' SETTINGS skip_unavailable_shards=0"
-        local_schema = client.query_json_data(schema.format("system.tables"))
-        query_result = []
-        for replicas in shards.values():
-            for host, port in replicas:
-                source = get_remote_table_for_hosts(ctx, "system.tables", [host], port)
-                if (
-                    not local_schema
-                    or client.query_json_data(Query(schema.format(source), credentials))
-                    != local_schema
-                ):
-                    raise RuntimeError(
-                        f"Table schema for '{full_name}' on replica '{host}' is different from local schema"
-                    )
-            host, port = replicas[0]
-            source = get_remote_table_for_hosts(ctx, full_name, [host], port)
-            query_result.extend(
-                client.query_json_data(
-                    Query(select.format(source), credentials), compact=False
-                )
-            )
-    else:
-        if scope == Scope.CLUSTER:
-            assert_equal_table_schema_on_cluster(ctx, database, table, cluster_name)
-        else:
-            scope = Scope.HOST
-        source = get_table_function_for_scope(ctx, full_name, scope, cluster_name)
-        query_result = execute_query(ctx, select.format(source), format_="JSON")["data"]
+
+    parts_usage_query = Query(
+        f"SELECT toString(replica) replicas, state, size FROM {space_usage_table} ORDER BY replica, state SETTINGS skip_unavailable_shards=0"
+    )
+
+    query_result = execute_query(
+        ctx,
+        parts_usage_query,
+        format_="JSON",
+    )["data"]
 
     result: dict[str, dict[str, int]] = defaultdict(dict)
     for row in query_result:

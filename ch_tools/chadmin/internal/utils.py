@@ -144,9 +144,7 @@ def execute_query_on_shard(
         )
 
 
-def get_remote_table_for_hosts(
-    ctx: Context, table: str, replicas: list[str], port: Optional[int] = None
-) -> str:
+def get_remote_table_for_hosts(ctx: Context, table: str, replicas: list[str]) -> str:
     """
     Get remote/remoteSecure function for a table with given remote replicas.
     """
@@ -154,17 +152,7 @@ def get_remote_table_for_hosts(
     user_name = ch_client.user or ""
 
     #  It is believed that all hosts in shard have the same port set, so check current for tcp port
-    if port is not None:
-        remote_clause = (
-            "remote"
-            if port == ch_client.ports.get(ClickhousePort.TCP)
-            else "remoteSecure"
-        )
-        replicas = [
-            f"[{h}]:{port}" if ":" in h and not h.startswith("[") else f"{h}:{port}"
-            for h in replicas
-        ]
-    elif ch_client.check_port(ClickhousePort.TCP_SECURE):
+    if ch_client.check_port(ClickhousePort.TCP_SECURE):
         remote_clause = "remoteSecure"
     elif ch_client.check_port(ClickhousePort.TCP):
         remote_clause = "remote"
