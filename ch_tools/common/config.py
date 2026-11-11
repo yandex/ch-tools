@@ -22,8 +22,7 @@ DEFAULT_CONFIG = {
     "clickhouse": {
         "version": None,
         "host": socket.getfqdn(),
-        # Object-storage clean, collect-info and deduplicate skip these system.clusters.host_name values, while
-        # cluster-wide space-usage uses the selected cluster's credentials and requires a cluster without these hosts.
+        # Used by object-storage clean, collect-info, deduplicate, and space-usage --scope cluster.
         "decommissioned_hosts": [],
         "protocol": "https",
         "insecure": False,
