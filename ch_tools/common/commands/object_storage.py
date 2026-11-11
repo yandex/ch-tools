@@ -14,12 +14,6 @@ from humanfriendly import format_size
 
 from ch_tools.chadmin.internal.object_storage import cleanup_s3_object_storage
 from ch_tools.chadmin.internal.object_storage.obj_list_item import ObjListItem
-from ch_tools.chadmin.internal.object_storage.replicas import (
-    ObjectStorageReplicas,
-    check_object_storage_cluster_replicas,
-    get_object_storage_cluster_replicas,
-    get_object_storage_replicas,
-)
 from ch_tools.chadmin.internal.object_storage.s3_cleanup_stats import (
     ResultStat,
     StatisticsPeriod,
@@ -45,10 +39,12 @@ from ch_tools.chadmin.internal.utils import (
     RaisingThread,
     Scope,
     assert_equal_table_schema_on_cluster,
+    check_replicas_availability,
     chunked,
     execute_query,
     execute_query_on_shard,
     get_remote_table_for_hosts,
+    get_table_function_for_scope,
 )
 from ch_tools.chadmin.internal.zookeeper import has_zk
 from ch_tools.common import logging
@@ -60,6 +56,10 @@ from ch_tools.common.clickhouse.client.clickhouse_client import (
 from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
+from ch_tools.common.clickhouse.replicas import (
+    active_cluster_replicas,
+    shard_has_decommissioned_hosts,
+)
 
 # Batch size for inserts in a listing table
 # Set not very big value due to default ClickHouse 'http_max_field_value_size' settings value 128Kb
@@ -134,8 +134,7 @@ def clean(
     config = ctx.obj["config"]["object_storage"]["space_usage"]
     ch_client = clickhouse_client(ctx)
 
-    replicas = get_object_storage_replicas(ctx)
-    _cleanup_old_service_tables_and_queries(ctx, replicas)
+    _cleanup_old_service_tables_and_queries(ctx)
 
     result_stat = ResultStat(stat_partitioning)
 
@@ -146,7 +145,6 @@ def clean(
 
     with _get_blobs_tables(
         ctx,
-        replicas,
         object_name_prefix,
         from_time,
         to_time,
@@ -222,12 +220,10 @@ def collect_object_storage_info(
     Collects object storage usage information.
     Uses temporary unique tables for all blob tables with automatic deletion.
     """
-    replicas = get_object_storage_replicas(ctx)
-    _cleanup_old_service_tables_and_queries(ctx, replicas)
+    _cleanup_old_service_tables_and_queries(ctx)
 
     with _get_blobs_tables(
         ctx,
-        replicas,
         object_name_prefix,
         from_time,
         to_time,
@@ -235,7 +231,7 @@ def collect_object_storage_info(
         keep_table=True,
         use_saved=use_saved,
     ) as (remote_blobs_table, local_blobs_table, orphaned_blobs_table):
-        _collect_space_usage(ctx, replicas, local_blobs_table, orphaned_blobs_table)
+        _collect_space_usage(ctx, local_blobs_table, orphaned_blobs_table)
 
 
 def get_object_storage_space_usage(
@@ -250,37 +246,46 @@ def get_object_storage_space_usage(
     table = f"{config['space_usage_table_prefix']}{disk_conf.name}"
 
     full_name = f"{database}.{table}"
-    if scope == Scope.CLUSTER:
-        shards = get_object_storage_cluster_replicas(ctx, cluster_name)
-        responding_replicas = assert_equal_table_schema_on_cluster(
-            ctx, database, table, cluster_name, skip_unavailable=True
-        )
-        check_object_storage_cluster_replicas(
-            ctx, cluster_name, shards, responding_replicas
-        )
-        # Aggregate remotely so even an empty table reports its replica.
-        parts_usage_query = f"""
-            SELECT _shard_num AS replica_num, usage
-            FROM clusterAllReplicas('{cluster_name}', view(
-                SELECT groupArray((toString(replica), toString(state), size)) AS usage
-                FROM {full_name}
-            ))
-            SETTINGS skip_unavailable_shards=1, empty_result_for_aggregation_by_empty_set=0
-        """
-        responses = execute_query(ctx, parts_usage_query, format_="JSON")["data"]
-        selected = check_object_storage_cluster_replicas(
-            ctx, cluster_name, shards, {row["replica_num"] for row in responses}
-        )
-        # Statistics are replicated: count exactly one response from each shard.
-        usage_by_replica = {row["replica_num"]: row["usage"] for row in responses}
-        query_result = [
-            {"replicas": replicas, "state": state, "size": size}
-            for replica_num in selected
-            for replicas, state, size in usage_by_replica[replica_num]
-        ]
+    select = "SELECT toString(replica) replicas, state, size FROM {} ORDER BY replica, state SETTINGS skip_unavailable_shards=0"
+    shards = (
+        active_cluster_replicas(ctx, cluster_name) if scope == Scope.CLUSTER else {}
+    )
+    if shards:
+        # Use only active endpoints for schema checks. The statistics are replicated within each shard.
+        client = clickhouse_client(ctx)
+        credentials = {
+            "user_password": (client.password or "")
+            .replace("\\", "\\\\")
+            .replace("'", "\\'")
+        }
+        schema = f"SELECT create_table_query FROM {{}} WHERE database = '{database}' AND name = '{table}' SETTINGS skip_unavailable_shards=0"
+        local_schema = client.query_json_data(schema.format("system.tables"))
+        query_result = []
+        for replicas in shards.values():
+            for host, port in replicas:
+                source = get_remote_table_for_hosts(ctx, "system.tables", [host], port)
+                if (
+                    not local_schema
+                    or client.query_json_data(Query(schema.format(source), credentials))
+                    != local_schema
+                ):
+                    raise RuntimeError(
+                        f"Table schema for '{full_name}' on replica '{host}' is different from local schema"
+                    )
+            host, port = replicas[0]
+            source = get_remote_table_for_hosts(ctx, full_name, [host], port)
+            query_result.extend(
+                client.query_json_data(
+                    Query(select.format(source), credentials), compact=False
+                )
+            )
     else:
-        parts_usage_query = f"SELECT toString(replica) replicas, state, size FROM {full_name} ORDER BY replica, state"
-        query_result = execute_query(ctx, parts_usage_query, format_="JSON")["data"]
+        if scope == Scope.CLUSTER:
+            assert_equal_table_schema_on_cluster(ctx, database, table, cluster_name)
+        else:
+            scope = Scope.HOST
+        source = get_table_function_for_scope(ctx, full_name, scope, cluster_name)
+        query_result = execute_query(ctx, select.format(source), format_="JSON")["data"]
 
     result: dict[str, dict[str, int]] = defaultdict(dict)
     for row in query_result:
@@ -387,15 +392,15 @@ def _cleanup_orphaned_objects(
     return result_stat
 
 
-def _cleanup_old_service_tables_and_queries(
-    ctx: Context, replicas: ObjectStorageReplicas
-) -> None:
+def _cleanup_old_service_tables_and_queries(ctx: Context) -> None:
     """
     Remove old service tables (local_blobs, orphaned_blobs, remote_blobs) that have unique names
     (contain UUID and timestamp) and are older than configured retention period.
     This helps prevent accumulation of temporary tables from previous runs.
     Some insert queries may be stuck and they should be killed here.
     """
+    if not check_replicas_availability(ctx):
+        raise RuntimeError("Not all active replicas are available")
     config = ctx.obj["config"]["object_storage"]["space_usage"]
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
 
@@ -442,12 +447,7 @@ def _cleanup_old_service_tables_and_queries(
                         logging.info(f"Removing old service table: {full_table_name}")
 
                         if table_prefix == config["remote_blobs_table_prefix"]:
-                            delete_table_by_full_name(
-                                ctx,
-                                full_table_name,
-                                shard=True,
-                                replicas=replicas.hosts,
-                            )
+                            delete_table_by_full_name(ctx, full_table_name, shard=True)
                         else:
                             delete_table_by_full_name(ctx, full_table_name)
         except:
@@ -475,7 +475,6 @@ def _get_table_name(ctx: Context, table_prefix: str, unique_name: bool = False) 
 @contextmanager
 def _get_blobs_tables(
     ctx: Context,
-    replicas: ObjectStorageReplicas,
     object_name_prefix: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
@@ -491,7 +490,6 @@ def _get_blobs_tables(
     with (
         _remote_blobs_table(
             ctx,
-            replicas,
             object_name_prefix,
             from_time,
             to_time,
@@ -501,7 +499,6 @@ def _get_blobs_tables(
         ) as remote_blobs_table,
         _local_blobs_table(
             ctx,
-            replicas,
             ignore_missing_cloud_storage_backups=ignore_missing_cloud_storage_backups,
         ) as local_blobs_table,
         _orphaned_blobs_table(
@@ -514,7 +511,6 @@ def _get_blobs_tables(
 @contextmanager
 def _local_blobs_table(
     ctx: Context,
-    replicas: ObjectStorageReplicas,
     unique_name: bool = True,
     keep_table: bool = True,
     use_saved: bool = False,
@@ -545,8 +541,8 @@ def _local_blobs_table(
                 drop_existing_table=True,
             )
 
-            remote_data_paths_table = get_remote_table_for_hosts(
-                ctx, REMOTE_DATA_PATHS_TABLE, replicas.hosts
+            remote_data_paths_table = get_table_function_for_scope(
+                ctx, REMOTE_DATA_PATHS_TABLE, Scope.SHARD, cluster_name=None
             )
 
             local_blobs_query = _get_fill_local_blobs_table_query(
@@ -755,7 +751,6 @@ def _orphaned_blobs_table(
 @contextmanager
 def _remote_blobs_table(
     ctx: Context,
-    replicas: ObjectStorageReplicas,
     object_name_prefix: str,
     from_time: Optional[timedelta],
     to_time: timedelta,
@@ -794,7 +789,6 @@ def _remote_blobs_table(
         if recreate_table:
             _create_remote_blobs_table(
                 ctx,
-                replicas,
                 remote_blobs_table,
                 config["zk_path_prefix"],
                 config["storage_policy"],
@@ -809,9 +803,7 @@ def _remote_blobs_table(
         yield remote_blobs_table
     finally:
         if not keep_table:
-            delete_table_by_full_name(
-                ctx, remote_blobs_table, shard=True, replicas=replicas.hosts
-            )
+            delete_table_by_full_name(ctx, remote_blobs_table, shard=True)
 
 
 def _collect_orphaned_blobs(
@@ -848,7 +840,6 @@ def _collect_orphaned_blobs(
 
 def _collect_space_usage(
     ctx: Context,
-    replicas: ObjectStorageReplicas,
     local_blobs_table: str,
     orphaned_blobs_table: str,
 ) -> None:
@@ -862,7 +853,6 @@ def _collect_space_usage(
     # This table will store the actual space usage data after the query
     _create_space_usage_table(
         ctx,
-        replicas,
         space_usage_table_name=space_usage_table_new,
         replica_zk_prefix=config["zk_path_prefix"],
         storage_policy=config["storage_policy"],
@@ -871,7 +861,6 @@ def _collect_space_usage(
     # This table should always exist and store data from the previous run
     _create_space_usage_table(
         ctx,
-        replicas,
         space_usage_table_name=space_usage_table,
         replica_zk_prefix=config["zk_path_prefix"],
         storage_policy=config["storage_policy"],
@@ -893,16 +882,14 @@ def _collect_space_usage(
             settings=query_settings,
         )
 
-    truncate_query = f"TRUNCATE TABLE {space_usage_table} SYNC"
-    if replicas.excluded:
-        truncate_query += " SETTINGS alter_sync=1"
-    execute_query(ctx, truncate_query, format_=None)
+    settings = " SETTINGS alter_sync=1" if shard_has_decommissioned_hosts(ctx) else ""
+    execute_query(
+        ctx, f"TRUNCATE TABLE {space_usage_table} SYNC{settings}", format_=None
+    )
     execute_query(
         ctx, f"INSERT INTO {space_usage_table} SELECT * FROM {space_usage_table_new}"
     )
-    delete_table_by_full_name(
-        ctx, space_usage_table_new, shard=True, replicas=replicas.hosts
-    )
+    delete_table_by_full_name(ctx, space_usage_table_new, shard=True)
 
 
 def _object_list_generator(
@@ -1184,7 +1171,6 @@ def _insert_local_blobs_batch(
 
 def _create_remote_blobs_table(
     ctx: Context,
-    replicas: ObjectStorageReplicas,
     table_name: str,
     replica_zk_prefix: str,
     storage_policy: str,
@@ -1196,17 +1182,15 @@ def _create_remote_blobs_table(
             ctx,
             table_name,
             shard=True,
-            replicas=replicas.hosts,
         )
 
-    # An excluded replica may still own the old Keeper path and listing data.
-    replication_table_name = table_name
-    if replicated and replicas.excluded:
-        replication_table_name += f"_{uuid.uuid4().hex}"
+    keeper_name = table_name
+    if replicated and shard_has_decommissioned_hosts(ctx):
+        keeper_name += f"_{uuid.uuid4().hex}"
     engine = (
         "ReplicatedMergeTree"
         + ZOOKEEPER_ARGS.format(
-            replica_zk_prefix=replica_zk_prefix, table_name=replication_table_name
+            replica_zk_prefix=replica_zk_prefix, table_name=keeper_name
         )
         if replicated
         else "MergeTree"
@@ -1222,7 +1206,6 @@ def _create_remote_blobs_table(
             SETTINGS storage_policy = '{storage_policy}'
         """,
         format_=None,
-        replicas=replicas.hosts,
     )
 
 
@@ -1276,24 +1259,21 @@ def _create_orphaned_blobs_table(
 
 def _create_space_usage_table(
     ctx: Context,
-    replicas: ObjectStorageReplicas,
     space_usage_table_name: str,
     replica_zk_prefix: str,
     storage_policy: str,
     drop_existing_table: bool = True,
 ) -> None:
     if drop_existing_table:
-        delete_table_by_full_name(
-            ctx, space_usage_table_name, shard=True, replicas=replicas.hosts
-        )
+        delete_table_by_full_name(ctx, space_usage_table_name, shard=True)
 
-    replication_table_name = space_usage_table_name
-    if drop_existing_table and replicas.excluded:
-        replication_table_name += f"_{uuid.uuid4().hex}"
+    keeper_name = space_usage_table_name
+    if drop_existing_table and shard_has_decommissioned_hosts(ctx):
+        keeper_name += f"_{uuid.uuid4().hex}"
     engine = (
         "ReplicatedMergeTree"
         + ZOOKEEPER_ARGS.format(
-            replica_zk_prefix=replica_zk_prefix, table_name=replication_table_name
+            replica_zk_prefix=replica_zk_prefix, table_name=keeper_name
         )
         if has_zk()
         else "MergeTree"
@@ -1311,7 +1291,6 @@ def _create_space_usage_table(
                 SETTINGS storage_policy = '{storage_policy}'
         """,
         format_=None,
-        replicas=replicas.hosts,
     )
 
 

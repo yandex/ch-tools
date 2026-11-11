@@ -22,6 +22,8 @@ DEFAULT_CONFIG = {
     "clickhouse": {
         "version": None,
         "host": socket.getfqdn(),
+        # Exact system.clusters host names permanently withdrawn from operations.
+        "decommissioned_hosts": [],
         "protocol": "https",
         "insecure": False,
         "port": 8443,
@@ -47,7 +49,6 @@ DEFAULT_CONFIG = {
     },
     "object_storage": {
         "bucket_name_prefix": "cloud-storage-",
-        "unavailable_hosts": [],
         "clean": {
             "verify": True,
             "verify_paths_regex": {

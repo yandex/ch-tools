@@ -301,15 +301,12 @@ def delete_table(
     echo: bool = False,
     sync_mode: bool = True,
     dry_run: bool = False,
-    replicas: Optional[list[str]] = None,
 ) -> None:
     """
     Perform "DROP TABLE" for the specified table.
     """
     if cluster and shard:
         raise ValueError("`cluster` and `shard` cannot be set both")
-    if replicas is not None and not shard:
-        raise ValueError("`replicas` requires `shard=True`")
 
     logging.info("Deleting table `{}`.`{}`", database_name, table_name)
     timeout = ctx.obj["config"]["clickhouse"]["drop_table_timeout"]
@@ -322,7 +319,6 @@ def delete_table(
         NO DELAY
         {%- endif %}
         """
-    replica_args: dict[str, Any] = {"replicas": replicas} if shard else {}
     (execute_query if not shard else execute_query_on_shard)(
         ctx,
         query,
@@ -334,7 +330,6 @@ def delete_table(
         echo=echo,
         dry_run=dry_run,
         format_=None,
-        **replica_args,
     )
 
 

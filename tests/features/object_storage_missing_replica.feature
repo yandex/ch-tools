@@ -10,6 +10,7 @@ Feature: Object storage with a configured replica that does not exist
     """
     clickhouse:
       user: _admin
+      decommissioned_hosts: [clickhouse03.invalid]
       retries:
         max_attempts: 1
     """
@@ -33,23 +34,15 @@ Feature: Object storage with a configured replica that does not exist
     """
     And we try to execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h --traverse-remote
+    chadmin --setting clickhouse.decommissioned_hosts "[]" object-storage collect-info --to-time 0h --traverse-remote
     """
     Then it fails with response contains
     """
-    Unavailable replicas without an exemption: clickhouse03.invalid
-    """
-    Given merged clickhouse-tools configuration on clickhouse01
-    """
-    object_storage:
-      unavailable_hosts: [clickhouse03.invalid]
+    Not all active replicas are available
     """
     When we execute command on clickhouse01
     """
-    chadmin object-storage collect-info --to-time 0h --traverse-remote
-    """
-    And we execute command on clickhouse01
-    """
+    chadmin object-storage collect-info --to-time 0h --traverse-remote &&
     chadmin --format yaml object-storage space-usage
     """
     Then we get response matches
@@ -122,16 +115,11 @@ Feature: Object storage with a configured replica that does not exist
     """
     And we try to execute command on clickhouse01
     """
-    chadmin object-storage space-usage --cluster two_shards
+    chadmin --setting clickhouse.decommissioned_hosts "[]" object-storage space-usage --cluster two_shards
     """
     Then it fails with response contains
     """
-    Unavailable replicas without an exemption: clickhouse03.invalid
-    """
-    Given merged clickhouse-tools configuration on clickhouse01
-    """
-    object_storage:
-      unavailable_hosts: [clickhouse03.invalid]
+    clickhouse03.invalid
     """
     When we execute command on clickhouse01
     """
@@ -163,5 +151,5 @@ Feature: Object storage with a configured replica that does not exist
     """
     Then it fails with response contains
     """
-    No available replicas remain in shard 2 of cluster 'missing_shard'
+    No active replicas remain in shard 2 of cluster 'missing_shard'
     """

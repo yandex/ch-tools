@@ -127,11 +127,6 @@ Feature: chadmin object-storage commands
 
   @require_version_23.3
   Scenario: Detect different space usage table schema
-    Given merged clickhouse-tools configuration on clickhouse01
-    """
-    object_storage:
-      unavailable_hosts: [clickhouse02]
-    """
     When we execute command on clickhouse01
     """
     chadmin object-storage collect-info --to-time 0h --traverse-remote
@@ -147,6 +142,32 @@ Feature: chadmin object-storage commands
     Then it fails with response contains
     """
     Table schema for 'test.space_usage_from_object_storage' on replica 'clickhouse02' is different from local schema
+    """
+
+    Given merged clickhouse-tools configuration on clickhouse01
+    """
+    clickhouse:
+      decommissioned_hosts: [clickhouse02]
+      settings:
+        log_comment: decommissioned_host_test
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin object-storage collect-info --to-time 0h --traverse-remote &&
+    chadmin object-storage space-usage &&
+    chadmin object-storage clean --to-time 0h --dry-run
+    """
+    And we execute query on clickhouse02
+    """
+    SYSTEM FLUSH LOGS;
+    """
+    And we execute query on clickhouse02
+    """
+    SELECT count() FROM system.query_log WHERE log_comment = 'decommissioned_host_test';
+    """
+    Then we get response
+    """
+    0
     """
 
   Scenario: Dry-run clean with guard period

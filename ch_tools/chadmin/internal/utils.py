@@ -15,7 +15,7 @@ from click import Context
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
-from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
+from ch_tools.common.clickhouse.replicas import active_shard_hosts
 
 DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -92,18 +92,7 @@ def check_replicas_availability(
 
     Returns True if all replicas are available, False otherwise.
     """
-    return not get_unavailable_replicas(ctx, timeout=timeout)
-
-
-def get_unavailable_replicas(
-    ctx: Context,
-    timeout: int = 5,
-    replicas: Optional[list[str]] = None,
-) -> list[str]:
-    """Probe every replica and return the hosts whose queries failed."""
-    if replicas is None:
-        replicas = ClickhouseInfo.get_replicas(ctx)
-    unavailable = []
+    replicas = active_shard_hosts(ctx)
 
     for replica in replicas:
         try:
@@ -117,9 +106,9 @@ def get_unavailable_replicas(
         except Exception:
             # Replica is unavailable
             logging.error(f"Replica {replica} is unavailable")
-            unavailable.append(replica)
+            return False
 
-    return unavailable
+    return True
 
 
 def execute_query_on_shard(
@@ -132,14 +121,12 @@ def execute_query_on_shard(
     stream: bool = False,
     settings: Optional[Any] = None,
     log_query: bool = True,
-    replicas: Optional[list[str]] = None,
     **kwargs: Any,
 ) -> None:
     """
     Execute query on all replicas in the shard.
     """
-    if replicas is None:
-        replicas = ClickhouseInfo.get_replicas(ctx)
+    replicas = active_shard_hosts(ctx)
 
     for replica in replicas:
         execute_query(
@@ -157,7 +144,9 @@ def execute_query_on_shard(
         )
 
 
-def get_remote_table_for_hosts(ctx: Context, table: str, replicas: list[str]) -> str:
+def get_remote_table_for_hosts(
+    ctx: Context, table: str, replicas: list[str], port: Optional[int] = None
+) -> str:
     """
     Get remote/remoteSecure function for a table with given remote replicas.
     """
@@ -165,7 +154,17 @@ def get_remote_table_for_hosts(ctx: Context, table: str, replicas: list[str]) ->
     user_name = ch_client.user or ""
 
     #  It is believed that all hosts in shard have the same port set, so check current for tcp port
-    if ch_client.check_port(ClickhousePort.TCP_SECURE):
+    if port is not None:
+        remote_clause = (
+            "remote"
+            if port == ch_client.ports.get(ClickhousePort.TCP)
+            else "remoteSecure"
+        )
+        replicas = [
+            f"[{h}]:{port}" if ":" in h and not h.startswith("[") else f"{h}:{port}"
+            for h in replicas
+        ]
+    elif ch_client.check_port(ClickhousePort.TCP_SECURE):
         remote_clause = "remoteSecure"
     elif ch_client.check_port(ClickhousePort.TCP):
         remote_clause = "remote"
@@ -256,18 +255,14 @@ def get_table_function_for_scope(
             return f"clusterAllReplicas('{cluster_name}', {table})"
         return f"cluster('{cluster_name}', {table})"
     if scope == Scope.SHARD:
-        return get_remote_table_for_hosts(ctx, table, ClickhouseInfo.get_replicas(ctx))
+        return get_remote_table_for_hosts(ctx, table, active_shard_hosts(ctx))
 
     return table
 
 
 def assert_equal_table_schema_on_cluster(
-    ctx: Context,
-    database: str,
-    table: str,
-    cluster: str,
-    skip_unavailable: bool = False,
-) -> set[int]:
+    ctx: Context, database: str, table: str, cluster: str
+) -> None:
     """
     Retrieve table schema from cluster and compare it with local table schema.
     """
@@ -282,12 +277,11 @@ def assert_equal_table_schema_on_cluster(
     # Join is needed in case table doesn't exist on some replicas
     get_cluster_schema_query = """
                         SELECT
-                            replicas.replica_num,
                             replicas.host,
                             coalesce(t.create_table_query, '') AS create_table_query
                         FROM
                         (
-                            SELECT _shard_num AS replica_num, hostName() AS host
+                            SELECT hostName() AS host
                             FROM clusterAllReplicas('{cluster}', system.one)
                         ) AS replicas
                         LEFT JOIN
@@ -315,16 +309,19 @@ def assert_equal_table_schema_on_cluster(
         ),
         cluster=cluster,
     )
-    get_cluster_schema += f" SETTINGS skip_unavailable_shards={int(skip_unavailable)}"
 
     local_schema = execute_query(ctx, get_local_schema, format_="JSONCompact")["data"][
         0
     ][1]
-    schemas = execute_query(ctx, get_cluster_schema, format_="JSONCompact")["data"]
+    schemas = execute_query(
+        ctx,
+        get_cluster_schema + " SETTINGS skip_unavailable_shards=0",
+        format_="JSONCompact",
+    )["data"]
 
     for row in schemas:
-        replica = row[1]
-        schema = row[2]
+        replica = row[0]
+        schema = row[1]
 
         logging.debug(f"Replica: {replica}, schema: {schema}")
 
@@ -333,5 +330,3 @@ def assert_equal_table_schema_on_cluster(
             raise RuntimeError(
                 f"Table schema for '{full_table_name}' on replica '{replica}' is different from local schema. Local schema: {local_schema}, replica schema: {schema}"
             )
-
-    return {row[0] for row in schemas}
