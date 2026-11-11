@@ -1,0 +1,27 @@
+<clickhouse>
+    <remote_servers>
+        <cluster replace="1">
+            <shard>
+                <internal_replication>true</internal_replication>
+                <replica><host>clickhouse01</host><port>9000</port></replica>
+                <replica><host>clickhouse03.invalid</host><port>9000</port></replica>
+                <replica><host>clickhouse02</host><port>9000</port></replica>
+            </shard>
+        </cluster>
+        <two_shards>
+            <shard>
+                <!-- clusterAllReplicas assigns a single shard number to this repeated endpoint. -->
+                <replica><host>clickhouse01</host><port>9000</port></replica>
+                <replica><host>clickhouse01</host><port>9000</port></replica>
+            </shard>
+            <shard>
+                <replica><host>clickhouse03.invalid</host><port>9000</port></replica>
+                <replica><host>clickhouse02.ch_tools_test</host><port>9000</port></replica>
+            </shard>
+        </two_shards>
+        <missing_shard>
+            <shard><replica><host>clickhouse01</host><port>9000</port></replica></shard>
+            <shard><replica><host>clickhouse03.invalid</host><port>9000</port></replica></shard>
+        </missing_shard>
+    </remote_servers>
+</clickhouse>

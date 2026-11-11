@@ -104,10 +104,7 @@ def step_background_command_fail_response_contains(context: ContextT) -> None:
 @then("background command completes successfully")
 def step_background_command_completes_successfully(context: ContextT) -> None:
     _wait_background_command(context)
-    assert context.exit_code == 0, (
-        f'"{context.command}" failed with exit code {context.exit_code},'
-        f" output:\n {context.response}"
-    )
+    step_complete_successfully(context)
 
 
 @then("we get response")

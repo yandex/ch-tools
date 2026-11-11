@@ -57,7 +57,10 @@ def startup_containers(context: ContextT) -> None:
     """
     Start up docker containers.
     """
-    _call_compose(context.conf, "up -d")
+    action = "up -d"
+    if "with_missing_replica" in getattr(context, "tags", ()):
+        action = f"--file fixtures/missing_replica/compose.yml {action}"
+    _call_compose(context.conf, action)
 
 
 @utils.env_stage("stop", fail=False)
