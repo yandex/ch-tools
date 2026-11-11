@@ -32,7 +32,7 @@ def shard_has_decommissioned_hosts(ctx: Context) -> bool:
 
 
 def check_cluster_for_decommissioned_hosts(ctx: Context, cluster: str) -> None:
-    """Check the named cluster locally before any distributed space-usage query."""
+    """Check whether the named cluster contains decommissioned hosts."""
     retired = decommissioned_hosts(ctx)
     if not retired:
         return
