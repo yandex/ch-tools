@@ -22,7 +22,7 @@ DEFAULT_CONFIG = {
     "clickhouse": {
         "version": None,
         "host": socket.getfqdn(),
-        # Exact system.clusters host names permanently withdrawn from operations.
+        # Skip these system.clusters.host_name values in object-storage clean, collect-info, space-usage (cluster scope), and deduplicate.
         "decommissioned_hosts": [],
         "protocol": "https",
         "insecure": False,
