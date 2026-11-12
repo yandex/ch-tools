@@ -88,6 +88,8 @@ dependencies = [
 [dependency-groups]
 dev = [
     "behave",
+    # Behave 1.2.6 parses boolean userdata through distutils.util.strtobool.
+    "setuptools; python_version >= '3.12'",
     "docker >= 7.1",
     "pyhamcrest",
     "pytest",
@@ -130,6 +132,7 @@ profile = "black"
 
 
 [tool.codespell]
+skip = "tests/staging"
 ignore-words-list = 'sav,fpr'  # `fpr` is used in parsing GPG output
 
 

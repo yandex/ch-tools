@@ -9,28 +9,28 @@ from types import SimpleNamespace
 from typing import Any
 
 import configuration
-from modules import compose, docker, minio, templates
+from modules import clickhouse, compose, docker, minio, templates
 from modules.typing import ContextT
+from modules.utils import configure_test_logging
 
 from ch_tools.common import logging
 
 SESSION_STATE_CONF = ".session_conf.sav"
+START_STEPS = [
+    docker.create_network,
+    compose.start_storage_and_keeper,
+    minio.initialize,
+    compose.startup_containers,
+    clickhouse.wait_for_cluster,
+]
 STAGES = {
     "create": [
         templates.render_docker_configs,
         compose.create_config,
         compose.build_images,
     ],
-    "start": [
-        docker.create_network,
-        compose.startup_containers,
-        minio.initialize,
-    ],
-    "restart": [
-        compose.shutdown_containers,
-        docker.create_network,
-        compose.startup_containers,
-    ],
+    "start": START_STEPS,
+    "restart": [compose.shutdown_containers, *START_STEPS],
     "stop": [
         compose.shutdown_containers,
         docker.shutdown_network,
@@ -46,6 +46,14 @@ def create(context: ContextT) -> None:
 
     with open(context.state_file, "wb") as session_conf:
         pickle.dump(context.conf, session_conf)
+
+
+def load(context: ContextT) -> None:
+    """Load the configuration prepared by this worker before running Behave."""
+    if not hasattr(context, "state_file"):
+        context.state_file = SESSION_STATE_CONF
+    with open(context.state_file, "rb") as session_conf:
+        context.conf = pickle.load(session_conf)
 
 
 def start(context: ContextT) -> None:
@@ -96,8 +104,7 @@ def _init_context(context: ContextT, reuse_state: bool = True) -> None:
 
     if reuse_state:
         try:
-            with open(context.state_file, "rb") as session_conf:
-                context.conf = pickle.load(session_conf)
+            load(context)
             return
         except FileNotFoundError:
             pass
@@ -110,6 +117,7 @@ def cli_main() -> None:
     """
     CLI entry.
     """
+    configure_test_logging()
     commands = {
         "create": create,
         "start": start,

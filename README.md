@@ -108,3 +108,27 @@ CLICKHOUSE_VERSION="1.2.3.4" make test-integration
 # For building deb packages
 make build-deb-package
 ```
+
+### Parallel integration tests
+
+```bash
+make test-integration-parallel
+make test-integration-parallel INTEGRATION_JOBS=2 BEHAVE_ARGS='-i "chadmin_replica|chadmin_zero_copy"'
+make setup && uv run python tests/parallel.py --dry-run
+```
+
+Both CI workflows use the runner's `INTEGRATION_JOBS`, defaulting to three slots.
+The coordinator discovers `tests/features/*.feature` and runs whole files. It
+starts the files with the most selected scenarios first. A feature tagged
+`@parallel_heavy` reserves up to two slots and `@parallel_exclusive` reserves
+all slots. After a failure, active features finish and pending files stay
+marked as not run. Use `make test-integration` for serial debugging.
+
+Each worker has its own checkout snapshot, session, Compose project and network.
+Workers install the same wheel and build their tagged images sequentially using
+the Docker build cache. The coordinator prints the path to
+`tests/staging/parallel/<run-id>/results/`. It contains `summary.json`, setup
+logs, per-feature Behave logs, JUnit XML and selected container logs from each
+scenario. Failed runs also retain container state and detailed diagnostics.
+GitHub Actions uploads the results for each attempt. Run `make clean` after
+all workers finish to remove local workspaces and reports.

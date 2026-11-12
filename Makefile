@@ -25,6 +25,7 @@ else
 endif
 
 export CLICKHOUSE_VERSION ?= latest
+export INTEGRATION_JOBS ?= 3
 
 PREFIX ?= /opt/yandex/$(PROJECT_NAME)
 export BUILD_PYTHON_OUTPUT_DIR ?= dist
@@ -45,7 +46,7 @@ VENV_DIR := .venv
 VERSION_FILE := ch_tools/version.txt
 
 # Pass arguments for testing tools
-BEHAVE_ARGS ?=
+export BEHAVE_ARGS ?=
 PYTEST_ARGS ?=
 
 # Different ways of passing signing key for building debian package
@@ -136,6 +137,11 @@ test-integration: check-docker-compose build-python-packages
 	cd $(TESTS_DIR)
 	export PYTHONPATH=$(CURDIR):$$PATH
 	uv run behave --show-timings --stop --junit $(BEHAVE_ARGS)
+
+
+.PHONY: test-integration-parallel
+test-integration-parallel: check-docker-compose build-python-packages
+	uv run python tests/parallel.py
 
 
 .PHONY: publish
@@ -315,6 +321,7 @@ help:
 	echo "  lint                       Run linters. Alias for \"isort black codespell ruff pylint mypy\"."
 	echo "  test-unit                  Run unit tests."
 	echo "  test-integration           Run integration tests."
+	echo "  test-integration-parallel  Run integration features in isolated Docker environments."
 	echo "  isort                      Perform isort checks."
 	echo "  black                      Perform black checks."
 	echo "  codespell                  Perform codespell checks."
@@ -331,5 +338,6 @@ help:
 	echo "Environment Variables:"
 	echo "  UV_PYTHON                  Python version to use (default: \"$(PYTHON_VERSION)\")."
 	echo "  PYTEST_ARGS                Arguments to pass to pytest (unit tests)."
+	echo "  INTEGRATION_JOBS           Parallel integration slot budget (default: 3)."
 	echo "  BEHAVE_ARGS                Arguments to pass to behave (integration tests)."
 	echo "  CLICKHOUSE_VERSION         ClickHouse version to use in integration tests (default: \"$(CLICKHOUSE_VERSION)\")."

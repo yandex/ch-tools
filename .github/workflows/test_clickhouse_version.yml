@@ -33,4 +33,6 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v7
       - name: run integration tests
-        run:  make test-integration
+        uses: ./.github/actions/test-integration
+        with:
+          artifact-suffix: clickhouse-${{ inputs.clickhouse_version }}

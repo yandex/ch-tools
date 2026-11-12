@@ -1,0 +1,242 @@
+"""Workspace snapshots, owned-resource cleanup and parallel test reports."""
+
+import fcntl
+import json
+import re
+import shutil
+import sys
+import uuid
+import xml.etree.ElementTree as ET
+from collections import Counter
+from contextlib import closing
+from pathlib import Path
+
+import docker
+import yaml
+
+ENVIRONMENT_LABEL = "ch-tools.integration.environment"
+
+
+def snapshot(root: Path, destination: Path) -> None:
+    """Copy inputs, including uncommitted source changes, without writable links."""
+    destination.mkdir(parents=True)
+    ignored = shutil.ignore_patterns(
+        "__pycache__",
+        "*.pyc",
+        ".pytest_cache",
+        "staging",
+        "reports",
+        ".session_conf.sav",
+    )
+    for directory in ("ch_tools", "tests", "resources"):
+        shutil.copytree(root / directory, destination / directory, ignore=ignored)
+    for name in (
+        "pyproject.toml",
+        "uv.lock",
+        "README.md",
+        ".python-version",
+        "Makefile",
+    ):
+        shutil.copy2(root / name, destination / name)
+    version = (root / "ch_tools/version.txt").read_text().strip()
+    wheels = list((root / "dist").glob(f"clickhouse_tools-{version}-*.whl"))
+    if len(wheels) != 1:
+        raise ValueError(f"Expected one built wheel for {version}, found {len(wheels)}")
+    (destination / "dist").mkdir()
+    shutil.copy2(wheels[0], destination / "dist" / wheels[0].name)
+
+
+def image_inventory(workspace: Path) -> dict[str, str]:
+    """Record exact image IDs; also used to remove only this run's image tags."""
+    config_file = workspace / "tests/staging/docker-compose.yml"
+    if not config_file.exists():
+        return {}
+    services = yaml.safe_load(config_file.read_text())["services"]
+    result = {}
+    with closing(docker.from_env(timeout=10)) as client:
+        for service in services.values():
+            name = service["image"]
+            try:
+                result[name] = client.images.get(name).id
+            except docker.errors.ImageNotFound:
+                continue
+    return result
+
+
+def cleanup_environment(environment: str, destination: Path) -> list[str]:
+    """Remove only resources with the exact environment ownership label."""
+    errors = []
+    destination.mkdir(parents=True, exist_ok=True)
+    with closing(docker.from_env(timeout=30)) as client:
+        containers = client.containers.list(
+            all=True, filters={"label": f"{ENVIRONMENT_LABEL}={environment}"}
+        )
+        for container in containers:
+            try:
+                (destination / f"{container.name}.json").write_text(
+                    json.dumps(
+                        {
+                            "id": container.id,
+                            "image": container.attrs["Image"],
+                            "state": container.attrs.get("State"),
+                        },
+                        indent=2,
+                    )
+                )
+                (destination / f"{container.name}.log").write_bytes(
+                    container.logs(tail=2000, timestamps=True)
+                )
+            except Exception as error:
+                errors.append(f"Diagnostics for {container.name}: {error}")
+            try:
+                container.remove(force=True, v=True)
+            except docker.errors.NotFound:
+                continue
+            except Exception as error:
+                errors.append(f"Removing {container.name}: {error}")
+        networks = client.networks.list(
+            filters={"label": f"{ENVIRONMENT_LABEL}={environment}"}
+        )
+        for network in networks:
+            if network.name != environment:
+                errors.append(f"Unexpected owned network name: {network.name}")
+                continue
+            try:
+                network.remove()
+            except docker.errors.NotFound:
+                continue
+            except Exception as error:
+                errors.append(f"Removing network {network.name}: {error}")
+    return errors
+
+
+def remove_image_tags(images: dict[str, str]) -> list[str]:
+    """Remove run-specific tags without pruning the shared build cache."""
+    errors = []
+    with closing(docker.from_env(timeout=30)) as client:
+        for name, image_id in images.items():
+            try:
+                if client.images.get(name).id != image_id:
+                    errors.append(f"Image tag changed during run: {name}")
+                    continue
+                client.images.remove(name, noprune=True)
+            except docker.errors.ImageNotFound:
+                continue
+            except Exception as error:
+                errors.append(f"Removing image tag {name}: {error}")
+    return errors
+
+
+def cleanup_worker(
+    workspace: Path, environment: str, results: Path, images: dict[str, str] | None
+) -> list[str]:
+    errors = []
+    try:
+        errors.extend(
+            cleanup_environment(environment, results / workspace.name / "cleanup")
+        )
+        if images is None:
+            images = image_inventory(workspace)
+        errors.extend(remove_image_tags(images))
+    except Exception as error:
+        errors.append(f"Cleanup {workspace.name}: {error}")
+    return errors
+
+
+def finish_cancelled_run(run_id: str) -> None:
+    """GitHub may kill make and its children before the coordinator finishes cleanup."""
+    run_id = uuid.UUID(run_id).hex
+    directory = Path("tests/staging/parallel") / run_id
+    summary = directory / "results/summary.json"
+    if not summary.exists():
+        return
+    # A cancelled Actions shell can leave its coordinator running. Ask it to
+    # stop its process groups and wait before touching their Docker resources.
+    (directory / "cancel-requested").touch()
+    with (directory / "coordinator.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        _finish_cancelled_summary(directory, summary, run_id)
+
+
+def _finish_cancelled_summary(directory: Path, summary: Path, run_id: str) -> None:
+    report = json.loads(summary.read_text())
+    if report["run_id"] != run_id:
+        raise ValueError("Integration run ID mismatch")
+    if report["status"] != "running":
+        return
+    errors = []
+    for workspace in directory.glob("worker-*"):
+        match = re.fullmatch(r"worker-([1-9][0-9]*)", workspace.name)
+        if match:
+            environment = f"cht-{run_id}-w{match[1]}"
+            images = report["workers"].get(workspace.name, {}).get("images")
+            errors.extend(
+                cleanup_worker(workspace, environment, summary.parent, images)
+            )
+    report["status"] = "cancelled"
+    report["errors"].extend(errors)
+    for feature in report["features"].values():
+        if feature["status"] == "running":
+            feature["status"] = "cancelled"
+        elif feature["status"] == "not_run":
+            feature["not_run_reason"] = "cancelled"
+    temporary = summary.with_suffix(".tmp")
+    temporary.write_text(json.dumps(report, indent=2) + "\n")
+    temporary.replace(summary)
+    if errors:
+        raise RuntimeError("\n".join(errors))
+
+
+def read_outcome(destination: Path, returncode: int, expected: int) -> dict:
+    """Missing, incomplete or contradictory reports cannot turn a run green."""
+    outcome: dict = {"status": "failed", "returncode": returncode}
+    try:
+        reports = list((destination / "junit").glob("*.xml"))
+        if not reports:
+            raise ValueError("Missing JUnit report")
+        cases = [
+            case for report in reports for case in ET.parse(report).iter("testcase")
+        ]
+        if len(cases) != expected:
+            raise ValueError(
+                f"JUnit report has {len(cases)} scenarios, expected {expected}"
+            )
+        statuses = [case.get("status") for case in cases]
+        outcome["scenarios"] = dict(Counter(statuses))
+        problems = [
+            problem
+            for case in cases
+            for problem in (case.find("failure"), case.find("error"))
+            if problem is not None
+        ]
+        if problems:
+            message = problems[0].get("message") or problems[0].get("type") or ""
+            # Behave 1.2.6 puts an undefined step in the XML body with message="None".
+            if message in ("", "None"):
+                message = problems[0].text or message
+            outcome["message"] = " ".join(message.split())[:300]
+        complete = all(status in ("passed", "skipped") for status in statuses)
+        junit_failed = bool(problems)
+        stage_failures_path = destination / "stage-failures.jsonl"
+        stage_failures = (
+            [
+                json.loads(line)
+                for line in stage_failures_path.read_text().splitlines()
+                if line
+            ]
+            if stage_failures_path.exists()
+            else []
+        )
+        if stage_failures:
+            outcome["stage_failures"] = stage_failures
+        if returncode == 0 and complete and not junit_failed and not stage_failures:
+            outcome["status"] = (
+                "skipped" if all(s == "skipped" for s in statuses) else "passed"
+            )
+    except (OSError, ValueError, KeyError, TypeError, ET.ParseError) as error:
+        outcome["error"] = str(error)
+    return outcome
+
+
+if __name__ == "__main__":
+    finish_cancelled_run(sys.argv[1])

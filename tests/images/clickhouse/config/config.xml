@@ -121,7 +121,7 @@
     </keeper_server>
 
     <macros>
-        <replica>{{ instance_name }}.{{ conf.network_name }}</replica>
+        <replica>{{ instance_name }}.{{ conf.domain_name }}</replica>
         <cluster>cluster</cluster>
         <shard>shard1</shard>
     </macros>
