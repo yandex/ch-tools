@@ -211,6 +211,9 @@ def read_outcome(destination: Path, returncode: int, expected: int) -> dict:
         ]
         if problems:
             message = problems[0].get("message") or problems[0].get("type") or ""
+            # Behave 1.2.6 puts an undefined step in the XML body with message="None".
+            if message in ("", "None"):
+                message = problems[0].text or message
             outcome["message"] = " ".join(message.split())[:300]
         complete = all(status in ("passed", "skipped") for status in statuses)
         junit_failed = bool(problems)

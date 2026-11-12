@@ -104,7 +104,7 @@ Feature: chadmin data-store commands
     SYSTEM SYNC REPLICA quarantine_parts.parts
     """
     Then query was completed successfully
-    And we execute query on clickhouse02
+    When we execute query on clickhouse02
     """
     SELECT count() FROM quarantine_parts.parts
     """
