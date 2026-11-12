@@ -70,7 +70,7 @@ def after_step(context: ContextT, step: model.Step) -> None:
 def after_scenario(context: ContextT, scenario: model.Scenario) -> None:
     """Keep selected worker logs before the next scenario resets the containers."""
     if os.getenv("INTEGRATION_SAVED_LOGS") and scenario.status != "skipped":
-        save_logs(context, full=False)
+        save_logs(context, full=scenario.hook_failed)
 
 
 def after_all(context: ContextT) -> None:
