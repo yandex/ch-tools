@@ -1,6 +1,7 @@
 """Run isolated whole-feature Behave processes on one Docker host."""
 
 import argparse
+import fcntl
 import json
 import os
 import re
@@ -114,6 +115,12 @@ class ParallelRun:
     def _signal(self, signum: int, _frame: FrameType | None) -> None:
         self.cancelled = signum
         self.queue.stopped = True
+        for running in self.active:
+            self._kill_group(running.process, signal.SIGTERM)
+
+    def _check_cancellation(self) -> None:
+        if not self.cancelled and (self.directory / "cancel-requested").exists():
+            self._signal(signal.SIGTERM, None)
 
     def _save(self) -> None:
         temporary = self.results / "summary.tmp"
@@ -129,14 +136,19 @@ class ParallelRun:
     def execute(self) -> int:
         """Always retain a final report, including setup and cancellation failures."""
         self.results.mkdir(parents=True)
-        if github_output := os.getenv("GITHUB_OUTPUT"):
-            with open(github_output, "a", encoding="utf-8") as output:
-                output.write(f"run_id={self.run_id}\n")
+        with (self.directory / "coordinator.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            return self._execute_locked()
+
+    def _execute_locked(self) -> int:
         handlers = {
             sig: signal.signal(sig, self._signal)
             for sig in (signal.SIGINT, signal.SIGTERM)
         }
         self._save()
+        if github_output := os.getenv("GITHUB_OUTPUT"):
+            with open(github_output, "a", encoding="utf-8") as output:
+                output.write(f"run_id={self.run_id}\n")
         print(
             f"Integration tests: {len(self.queue.pending)} features, "
             f"{self.queue.jobs} slots. Results: {self.results}",
@@ -197,6 +209,7 @@ class ParallelRun:
     def _wait(self, process: subprocess.Popen) -> int:
         interrupted = None
         while process.poll() is None:
+            self._check_cancellation()
             for running in self.active:
                 self._report_failure(running)
             if self.cancelled:
@@ -413,6 +426,7 @@ class ParallelRun:
 
     def _schedule(self) -> None:
         while self.active or (self.queue.pending and not self.queue.stopped):
+            self._check_cancellation()
             # Reap every completion before handing out any new work.
             for running in list(self.active):
                 self._report_failure(running)

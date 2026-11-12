@@ -1,5 +1,6 @@
 """Workspace snapshots, owned-resource cleanup and parallel test reports."""
 
+import fcntl
 import json
 import re
 import shutil
@@ -149,6 +150,15 @@ def finish_cancelled_run(run_id: str) -> None:
     summary = directory / "results/summary.json"
     if not summary.exists():
         return
+    # A cancelled Actions shell can leave its coordinator running. Ask it to
+    # stop its process groups and wait before touching their Docker resources.
+    (directory / "cancel-requested").touch()
+    with (directory / "coordinator.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        _finish_cancelled_summary(directory, summary, run_id)
+
+
+def _finish_cancelled_summary(directory: Path, summary: Path, run_id: str) -> None:
     report = json.loads(summary.read_text())
     if report["run_id"] != run_id:
         raise ValueError("Integration run ID mismatch")

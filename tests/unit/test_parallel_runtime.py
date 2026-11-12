@@ -1,7 +1,10 @@
 """Regression checks for interrupted runs and worker snapshots under tests/staging."""
 
+import fcntl
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event
 from unittest.mock import Mock
 
 import parallel_runtime
@@ -51,6 +54,34 @@ def test_finish_cancelled_run_only_cleans_its_own_workers(
         "two": {"status": "not_run", "not_run_reason": "cancelled"},
         "three": {"status": "passed"},
     }
+
+
+def test_recovery_waits_for_a_surviving_coordinator(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    run_id = "c" * 32
+    directory = Path("tests/staging/parallel") / run_id
+    (directory / "results").mkdir(parents=True)
+    summary = directory / "results/summary.json"
+    summary.write_text(json.dumps({"run_id": run_id, "status": "running"}))
+    requested = Event()
+    original_touch = Path.touch
+
+    def notify_request(path: Path) -> None:
+        original_touch(path)
+        assert path == directory / "cancel-requested"
+        requested.set()
+
+    monkeypatch.setattr(Path, "touch", notify_request)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        with (directory / "coordinator.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            recovery = executor.submit(parallel_runtime.finish_cancelled_run, run_id)
+            assert requested.wait(timeout=5)
+            assert not recovery.done()
+            summary.write_text(json.dumps({"run_id": run_id, "status": "cancelled"}))
+        recovery.result(timeout=5)
 
 
 def test_snapshot_excludes_previous_sessions_and_its_own_destination(
