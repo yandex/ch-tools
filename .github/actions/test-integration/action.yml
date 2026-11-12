@@ -1,0 +1,42 @@
+name: Parallel integration tests
+description: Run Behave features on isolated workers and upload their results.
+inputs:
+  artifact-suffix:
+    description: Identifies this combination of Python and ClickHouse.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Run integration tests
+      shell: bash
+      run: make test-integration-parallel
+    - name: collect runner diagnostics
+      if: ${{ failure() }}
+      shell: bash
+      run: |
+        mkdir -p tests/staging/ci-diagnostics
+        timeout 15 docker version > tests/staging/ci-diagnostics/docker-version.txt 2>&1 || true
+        timeout 15 docker info --format 'Server={{.ServerVersion}} Storage={{.Driver}} Cgroup={{.CgroupDriver}} CPUs={{.NCPU}} Memory={{.MemTotal}} Containers={{.Containers}} Running={{.ContainersRunning}}' > tests/staging/ci-diagnostics/docker-info.txt 2>&1 || true
+        # Per-worker cleanup already saves owned container state/logs before removal.
+        # Avoid listing other environments on a shared Docker daemon here.
+        timeout 15 df -h . > tests/staging/ci-diagnostics/disk-space.txt 2>&1 || true
+        timeout 15 df -i . > tests/staging/ci-diagnostics/inodes.txt 2>&1 || true
+        free -m > tests/staging/ci-diagnostics/memory.txt 2>&1 || true
+        # Our GitHub-hosted jobs get a fresh VM; self-hosted daemons may be shared.
+        if [ "${RUNNER_ENVIRONMENT:-}" = "github-hosted" ]; then
+          timeout 15 sudo -n journalctl -u docker.service -u containerd.service --since '-30 min' --lines 1000 --no-pager > tests/staging/ci-diagnostics/container-runtime.txt 2>&1 || true
+        else
+          printf '%s\n' 'Host-wide runtime journal omitted on self-hosted or unknown runners. Per-worker container state and logs are in integration-test-results.' > tests/staging/ci-diagnostics/container-runtime.txt
+        fi
+    - uses: actions/upload-artifact@v7
+      if: ${{ failure() }}
+      with:
+        name: runner-diagnostics-${{ inputs.artifact-suffix }}-attempt-${{ github.run_attempt }}
+        path: tests/staging/ci-diagnostics/
+        if-no-files-found: ignore
+    - uses: actions/upload-artifact@v7
+      if: ${{ always() }}
+      with:
+        name: integration-test-results-${{ inputs.artifact-suffix }}-attempt-${{ github.run_attempt }}
+        path: tests/staging/parallel/*/results/
+        if-no-files-found: ignore

@@ -8,13 +8,12 @@ import shlex
 import shutil
 import subprocess
 
-import docker
 import yaml
 
-from . import utils
-from .typing import ContextT
+from ch_tools.common import logging
 
-DOCKER_API = docker.from_env()
+from . import docker, utils
+from .typing import ContextT
 
 
 @utils.env_stage("create", fail=True)
@@ -60,12 +59,22 @@ def startup_containers(context: ContextT) -> None:
     _call_compose(context.conf, "up -d")
 
 
-@utils.env_stage("stop", fail=False)
+@utils.env_stage("stop", fail=True)
 def shutdown_containers(context: ContextT) -> None:
     """
     Shutdown and remove docker containers.
     """
-    _call_compose(context.conf, "down --volumes")
+    try:
+        _call_compose(context.conf, "kill")
+    except subprocess.CalledProcessError:
+        logging.exception("Container kill failed; attempting Compose down")
+    _call_compose(context.conf, "down --volumes --remove-orphans --timeout 30")
+    remaining = docker.get_containers(context)
+    if remaining:
+        raise RuntimeError(
+            "Containers survived environment reset: "
+            + ", ".join(container.name for container in remaining)
+        )
 
 
 @utils.env_stage("create", fail=True)
@@ -147,8 +156,11 @@ def _generate_service_config(
     All paths are relative to the location of compose-config.yaml
     (which is ./staging/compose-config.yaml by default)
     """
-    staging_dir = "tests/" + config["staging_dir"]
+    staging_dir = os.path.relpath(
+        config["staging_dir"], os.path.join(config["staging_dir"], "../..")
+    )
     network_name = config["network_name"]
+    domain = config.get("domain_name", network_name)
 
     volumes = []
     if os.path.exists(
@@ -174,16 +186,20 @@ def _generate_service_config(
         },
         "image": f"{instance_name}:{network_name}",
         "hostname": instance_name,
-        "domainname": network_name,
+        "domainname": domain,
         "depends_on": dependencies,
         # Networks. We use external anyway.
-        "networks": instance_config.get("networks", ["test_net"]),
+        "networks": instance_config.get(
+            "networks", {"test_net": {"aliases": [f"{instance_name}.{domain}"]}}
+        ),
         "environment": instance_config.get("environment", []),
         # Nice container name with domain name part.
         # This results, however, in a strange rdns name:
         # the domain part will end up there twice.
         # Does not affect A or AAAA, though.
         "container_name": f"{instance_name}.{network_name}",
+        "init": True,
+        "labels": {docker.ENVIRONMENT_LABEL: network_name},
         # Ports exposure
         "ports": ports_list,
         "volumes": volumes + instance_config.get("volumes", []),

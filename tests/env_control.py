@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import configuration
-from modules import compose, docker, minio, templates
+from modules import clickhouse, compose, docker, minio, templates
 from modules.typing import ContextT
 
 from ch_tools.common import logging
@@ -24,12 +24,14 @@ STAGES = {
     "start": [
         docker.create_network,
         compose.startup_containers,
+        clickhouse.wait_for_cluster,
         minio.initialize,
     ],
     "restart": [
         compose.shutdown_containers,
         docker.create_network,
         compose.startup_containers,
+        clickhouse.wait_for_cluster,
     ],
     "stop": [
         compose.shutdown_containers,
@@ -46,6 +48,14 @@ def create(context: ContextT) -> None:
 
     with open(context.state_file, "wb") as session_conf:
         pickle.dump(context.conf, session_conf)
+
+
+def load(context: ContextT) -> None:
+    """Load the configuration prepared by this worker before running Behave."""
+    if not hasattr(context, "state_file"):
+        context.state_file = SESSION_STATE_CONF
+    with open(context.state_file, "rb") as session_conf:
+        context.conf = pickle.load(session_conf)
 
 
 def start(context: ContextT) -> None:
@@ -96,8 +106,7 @@ def _init_context(context: ContextT, reuse_state: bool = True) -> None:
 
     if reuse_state:
         try:
-            with open(context.state_file, "rb") as session_conf:
-                context.conf = pickle.load(session_conf)
+            load(context)
             return
         except FileNotFoundError:
             pass

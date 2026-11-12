@@ -12,21 +12,19 @@ from modules.clickhouse import (
     get_all_user_data,
     get_all_user_schemas,
     get_response,
-    ping,
+    wait_for_clickhouse_ready,
 )
 from modules.docker import get_container
 from modules.typing import ContextT
-from tenacity import retry, stop_after_attempt, wait_fixed
 
 
 @given("a working clickhouse on {node:w}")
 @then("a clickhouse will be worked on {node:w}")
-@retry(wait=wait_fixed(0.5), stop=stop_after_attempt(40))
 def step_wait_for_clickhouse_alive(context: ContextT, node: str) -> None:
     """
     Wait until clickhouse is ready to accept incoming requests.
     """
-    ping(context, node)
+    wait_for_clickhouse_ready(context, node)
 
 
 @given("we have executed query on {node:w}")
@@ -125,6 +123,7 @@ def step_put_config(context: ContextT, path: str, node: str) -> None:
         ["bash", "-c", "supervisorctl restart clickhouse-server"], user="root"
     )
     assert_that(result.exit_code, equal_to(0))
+    wait_for_clickhouse_ready(context, node)
 
 
 @then("save uuid table {table} in context on {node:w}")

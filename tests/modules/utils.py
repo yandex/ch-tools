@@ -8,6 +8,8 @@ from random import choice as random_choise
 from types import SimpleNamespace
 from typing import Any, Callable, Mapping, MutableMapping
 
+from diagnostics import record_stage_failure
+
 from ch_tools.common import logging, utils
 
 from .typing import ContextT
@@ -46,6 +48,7 @@ def env_stage(event: str, fail: bool = False) -> Callable:
                 return fun(*args, **kwargs)
             except Exception as e:
                 logging.error("{} failed: {!r}", stage_name, e)
+                record_stage_failure(stage_name, e)
                 if fail:
                     raise
 

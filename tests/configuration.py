@@ -9,7 +9,9 @@ def create() -> dict:
     """
     Create test configuration (non-idempotent function).
     """
-    network_name = "ch_tools_test"
+    domain_name = "ch_tools_test"
+    network_name = os.getenv("INTEGRATION_ENV_ID", domain_name)
+    tests_dir = os.path.relpath(os.path.dirname(os.path.abspath(__file__)))
     services: dict = {
         "clickhouse": {
             "instances": ["clickhouse01", "clickhouse02"],
@@ -77,25 +79,26 @@ def create() -> dict:
 
     return {
         "ch_version": os.getenv("CLICKHOUSE_VERSION", "latest"),
-        "images_dir": "images",
-        "staging_dir": "staging",
+        "images_dir": os.path.normpath(os.path.join(tests_dir, "images")),
+        "staging_dir": os.path.normpath(os.path.join(tests_dir, "staging")),
         "network_name": network_name,
+        "domain_name": domain_name,
         "s3": s3,
         "ch_backup": {
             "encrypt_key": "keyshouldbe32byteskeyshouldbe32b",
         },
         "services": services,
-        "dbaas_conf": _dbaas_conf(services, network_name),
+        "dbaas_conf": _dbaas_conf(services, domain_name),
     }
 
 
-def _dbaas_conf(services: dict, network_name: str) -> dict:
+def _dbaas_conf(services: dict, domain_name: str) -> dict:
     """
     Generate dbaas.conf contents.
     """
 
     def _fqdn(instance_name: str) -> str:
-        return f"{instance_name}.{network_name}"
+        return f"{instance_name}.{domain_name}"
 
     return {
         "cluster_id": "cid1",

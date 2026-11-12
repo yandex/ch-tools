@@ -2,12 +2,16 @@
 Behave entry point.
 """
 
+import os
+import shutil
 import re
 import sys
 from typing import Optional
 
 import env_control
 from behave import model
+from diagnostics import record_step_failure
+from modules import templates
 from modules.logs import save_logs
 from modules.typing import ContextT
 from modules.utils import version_ge, version_lt
@@ -34,12 +38,18 @@ def before_all(context: ContextT) -> None:
     )
     if not context.config.userdata.getbool("skip_setup"):
         env_control.create(context)
+    else:
+        env_control.load(context)
 
 
 def before_feature(context: ContextT, _feature: model.Feature) -> None:
     """
     Cleanup function executing per feature.
     """
+    if os.getenv("INTEGRATION_ENV_ID"):
+        # The previous feature may have changed or added files in writable bind mounts.
+        shutil.rmtree(os.path.join(context.conf["staging_dir"], "images"))
+        templates.render_docker_configs(context)
     if "dependent-scenarios" in _feature.tags:
         env_control.restart(context)
 
@@ -59,9 +69,16 @@ def after_step(context: ContextT, step: model.Step) -> None:
     Save logs after failed step.
     """
     if step.status in ("failed", "error"):
+        record_step_failure(context, step)
         save_logs(context)
         if context.config.userdata.getbool("debug"):
             pdb.post_mortem(step.exc_traceback)
+
+
+def after_scenario(context: ContextT, scenario: model.Scenario) -> None:
+    """Keep selected worker logs before the next scenario resets the containers."""
+    if os.getenv("INTEGRATION_SAVED_LOGS") and scenario.status != "skipped":
+        save_logs(context, full=False)
 
 
 def after_all(context: ContextT) -> None:

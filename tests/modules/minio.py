@@ -8,7 +8,7 @@ import os
 from docker.models.containers import Container
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
-from .docker import copy_container_dir, get_container
+from .docker import copy_container_path, get_container
 from .typing import ContextT
 
 
@@ -58,7 +58,7 @@ def export_s3_data(context: ContextT, path: str) -> None:
     Export S3 data to the specified directory.
     """
     local_dir = os.path.join(path, "minio")
-    copy_container_dir(_container(context), "/export", local_dir)
+    copy_container_path(_container(context), "/export", local_dir)
 
 
 @retry(

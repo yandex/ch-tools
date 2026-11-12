@@ -8,6 +8,7 @@ from typing import Any, Optional, Sequence, Tuple
 from hamcrest import assert_that
 from requests import HTTPError
 from requests.exceptions import ChunkedEncodingError
+from tenacity import retry, stop_after_delay, wait_fixed
 
 from ch_tools.chadmin.internal.clickhouse_disks import (
     CLICKHOUSE_PATH,
@@ -43,11 +44,15 @@ def clickhouse_client(context: ContextT, node_name: str) -> ClickhouseClient:
     )
 
 
-def ping(context: ContextT, node: str) -> None:
-    """
-    Ping ClickHouse server.
-    """
-    return execute_query(context, node, query=None)
+@retry(wait=wait_fixed(0.5), stop=stop_after_delay(180), reraise=True)
+def wait_for_clickhouse_ready(context: ContextT, node: str) -> None:
+    """Wait until the server accepts a SQL query on its published HTTP port."""
+    assert clickhouse_client(context, node).query("SELECT 1", timeout=2) == "1"
+
+
+def wait_for_cluster(context: ContextT) -> None:
+    for node in context.conf["services"]["clickhouse"]["instances"]:
+        wait_for_clickhouse_ready(context, node)
 
 
 def get_response(context: ContextT, node: str, query: str) -> Tuple[int, str]:
