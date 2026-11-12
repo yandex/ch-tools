@@ -745,6 +745,13 @@ Feature: chadmin object-storage commands
 
   @require_version_23.3
   Scenario: Clean with temporarily unavailable replica succeeds after replica returns
+    Given merged clickhouse-tools configuration on clickhouse01
+    """
+    clickhouse:
+      retries:
+        max_attempts: 30
+        max_interval: 3
+    """
     When we execute command on clickhouse01
     """
     chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths

@@ -99,10 +99,11 @@ Feature: chadmin data-store commands
     PARTITION BY n ORDER BY n SETTINGS storage_policy = 'object_storage';
     INSERT INTO quarantine_parts.parts VALUES (0);
     """
-    And we execute command on clickhouse01
+    And we execute query on clickhouse02
     """
-    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3
+    SYSTEM SYNC REPLICA quarantine_parts.parts
     """
+    Then query was completed successfully
     And we execute query on clickhouse02
     """
     SELECT count() FROM quarantine_parts.parts
@@ -174,10 +175,11 @@ Feature: chadmin data-store commands
     PARTITION BY n ORDER BY n SETTINGS storage_policy = 'object_storage';
     INSERT INTO quarantine_active.parts VALUES (0);
     """
-    And we execute command on clickhouse01
+    And we execute query on clickhouse02
     """
-    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3
+    SYSTEM SYNC REPLICA quarantine_active.parts
     """
+    Then query was completed successfully
     When we stop clickhouse on clickhouse01
     And we sleep for 5 seconds
     And we try to execute command on clickhouse01
@@ -207,10 +209,11 @@ Feature: chadmin data-store commands
     PARTITION BY n ORDER BY n SETTINGS storage_policy = 'object_storage';
     INSERT INTO quarantine_dry_run.parts VALUES (0);
     """
-    And we execute command on clickhouse01
+    And we execute query on clickhouse02
     """
-    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3
+    SYSTEM SYNC REPLICA quarantine_dry_run.parts
     """
+    Then query was completed successfully
     When we stop clickhouse on clickhouse02
     And we stop clickhouse on clickhouse01
     And we sleep for 5 seconds
