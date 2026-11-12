@@ -52,6 +52,14 @@ def build_images(context: ContextT) -> None:
 
 
 @utils.env_stage("start", fail=True)
+def start_storage_and_keeper(context: ContextT) -> None:
+    """Let MinIO create its bucket before ClickHouse checks its S3 disk."""
+    services = context.conf["services"]
+    instances = services["minio"]["instances"] + services["zookeeper"]["instances"]
+    _call_compose(context.conf, "up -d " + " ".join(instances))
+
+
+@utils.env_stage("start", fail=True)
 def startup_containers(context: ContextT) -> None:
     """
     Start up docker containers.

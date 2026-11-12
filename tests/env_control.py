@@ -16,25 +16,21 @@ from modules.utils import configure_test_logging
 from ch_tools.common import logging
 
 SESSION_STATE_CONF = ".session_conf.sav"
+START_STEPS = [
+    docker.create_network,
+    compose.start_storage_and_keeper,
+    minio.initialize,
+    compose.startup_containers,
+    clickhouse.wait_for_cluster,
+]
 STAGES = {
     "create": [
         templates.render_docker_configs,
         compose.create_config,
         compose.build_images,
     ],
-    "start": [
-        docker.create_network,
-        compose.startup_containers,
-        minio.initialize,
-        clickhouse.wait_for_cluster,
-    ],
-    "restart": [
-        compose.shutdown_containers,
-        docker.create_network,
-        compose.startup_containers,
-        minio.initialize,
-        clickhouse.wait_for_cluster,
-    ],
+    "start": START_STEPS,
+    "restart": [compose.shutdown_containers, *START_STEPS],
     "stop": [
         compose.shutdown_containers,
         docker.shutdown_network,
