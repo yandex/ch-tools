@@ -25,13 +25,14 @@ STAGES = {
     "start": [
         docker.create_network,
         compose.startup_containers,
-        clickhouse.wait_for_cluster,
         minio.initialize,
+        clickhouse.wait_for_cluster,
     ],
     "restart": [
         compose.shutdown_containers,
         docker.create_network,
         compose.startup_containers,
+        minio.initialize,
         clickhouse.wait_for_cluster,
     ],
     "stop": [
