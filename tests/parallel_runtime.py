@@ -1,7 +1,10 @@
 """Workspace snapshots, owned-resource cleanup and parallel test reports."""
 
 import json
+import re
 import shutil
+import sys
+import uuid
 import xml.etree.ElementTree as ET
 from collections import Counter
 from contextlib import closing
@@ -123,6 +126,57 @@ def remove_image_tags(images: dict[str, str]) -> list[str]:
     return errors
 
 
+def cleanup_worker(
+    workspace: Path, environment: str, results: Path, images: dict[str, str] | None
+) -> list[str]:
+    errors = []
+    try:
+        errors.extend(
+            cleanup_environment(environment, results / workspace.name / "cleanup")
+        )
+        if images is None:
+            images = image_inventory(workspace)
+        errors.extend(remove_image_tags(images))
+    except Exception as error:
+        errors.append(f"Cleanup {workspace.name}: {error}")
+    return errors
+
+
+def finish_cancelled_run(run_id: str) -> None:
+    """GitHub may kill make and its children before the coordinator finishes cleanup."""
+    run_id = uuid.UUID(run_id).hex
+    directory = Path("tests/staging/parallel") / run_id
+    summary = directory / "results/summary.json"
+    if not summary.exists():
+        return
+    report = json.loads(summary.read_text())
+    if report["run_id"] != run_id:
+        raise ValueError("Integration run ID mismatch")
+    if report["status"] != "running":
+        return
+    errors = []
+    for workspace in directory.glob("worker-*"):
+        match = re.fullmatch(r"worker-([1-9][0-9]*)", workspace.name)
+        if match:
+            environment = f"cht-{run_id}-w{match[1]}"
+            images = report["workers"].get(workspace.name, {}).get("images")
+            errors.extend(
+                cleanup_worker(workspace, environment, summary.parent, images)
+            )
+    report["status"] = "cancelled"
+    report["errors"].extend(errors)
+    for feature in report["features"].values():
+        if feature["status"] == "running":
+            feature["status"] = "cancelled"
+        elif feature["status"] == "not_run":
+            feature["not_run_reason"] = "cancelled"
+    temporary = summary.with_suffix(".tmp")
+    temporary.write_text(json.dumps(report, indent=2) + "\n")
+    temporary.replace(summary)
+    if errors:
+        raise RuntimeError("\n".join(errors))
+
+
 def read_outcome(destination: Path, returncode: int, expected: int) -> dict:
     """Missing, incomplete or contradictory reports cannot turn a run green."""
     outcome: dict = {"status": "failed", "returncode": returncode}
@@ -169,3 +223,7 @@ def read_outcome(destination: Path, returncode: int, expected: int) -> dict:
     except (OSError, ValueError, KeyError, TypeError, ET.ParseError) as error:
         outcome["error"] = str(error)
     return outcome
+
+
+if __name__ == "__main__":
+    finish_cancelled_run(sys.argv[1])

@@ -8,8 +8,15 @@ runs:
   using: composite
   steps:
     - name: Run integration tests
+      id: integration
       shell: bash
       run: make test-integration-parallel
+    - name: Finish cleanup after a cancelled integration step
+      if: ${{ cancelled() && steps.integration.outputs.run_id != '' }}
+      shell: bash
+      env:
+        INTEGRATION_RUN_ID: ${{ steps.integration.outputs.run_id }}
+      run: uv run --locked python tests/parallel_runtime.py "$INTEGRATION_RUN_ID"
     - name: collect runner diagnostics
       if: ${{ failure() }}
       shell: bash

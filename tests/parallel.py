@@ -27,9 +27,9 @@ from modules.utils import configure_test_logging
 from parallel_runtime import (
     ENVIRONMENT_LABEL,
     cleanup_environment,
+    cleanup_worker,
     image_inventory,
     read_outcome,
-    remove_image_tags,
     snapshot,
 )
 
@@ -129,6 +129,9 @@ class ParallelRun:
     def execute(self) -> int:
         """Always retain a final report, including setup and cancellation failures."""
         self.results.mkdir(parents=True)
+        if github_output := os.getenv("GITHUB_OUTPUT"):
+            with open(github_output, "a", encoding="utf-8") as output:
+                output.write(f"run_id={self.run_id}\n")
         handlers = {
             sig: signal.signal(sig, self._signal)
             for sig in (signal.SIGINT, signal.SIGTERM)
@@ -503,18 +506,10 @@ class ParallelRun:
                 self.report["errors"].append(str(error))
 
     def _cleanup(self, worker: Worker) -> None:
-        try:
-            self.report["errors"].extend(
-                cleanup_environment(
-                    worker.environment, self.results / worker.path.name / "cleanup"
-                )
-            )
-            images = self.report["workers"].get(worker.path.name, {}).get("images")
-            if images is None:
-                images = image_inventory(worker.path)
-            self.report["errors"].extend(remove_image_tags(images))
-        except Exception as error:
-            self.report["errors"].append(f"Cleanup {worker.path.name}: {error}")
+        images = self.report["workers"].get(worker.path.name, {}).get("images")
+        self.report["errors"].extend(
+            cleanup_worker(worker.path, worker.environment, self.results, images)
+        )
 
 
 def _name(feature: Feature) -> str:
