@@ -3,6 +3,7 @@ Utility functions.
 """
 
 import string
+import sys
 from functools import wraps
 from random import choice as random_choise
 from types import SimpleNamespace
@@ -11,8 +12,19 @@ from typing import Any, Callable, Mapping, MutableMapping
 from diagnostics import record_stage_failure
 
 from ch_tools.common import logging, utils
+from ch_tools.common.config import load_config
 
 from .typing import ContextT
+
+
+def configure_test_logging() -> None:
+    config = load_config()
+    logging.configure(config["loguru"], "test")
+    logging.add(
+        sys.stdout,
+        level="INFO",
+        format_="{time:YYYY-MM-DD HH:mm:ss,SSS} [{level:8}]:\t{message}",
+    )
 
 
 def merge(

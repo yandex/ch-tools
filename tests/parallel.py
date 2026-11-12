@@ -23,6 +23,7 @@ from diagnostics import (
     print_untrusted,
 )
 from feature_queue import Feature, FeatureQueue, load_features
+from modules.utils import configure_test_logging
 from parallel_runtime import (
     ENVIRONMENT_LABEL,
     cleanup_environment,
@@ -578,6 +579,7 @@ def _code(text: str) -> str:
 
 def cli_main() -> None:
     """Expose dry-run selection and a configurable number of local workers."""
+    configure_test_logging()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--jobs", type=int, default=int(os.getenv("INTEGRATION_JOBS", "3"))

@@ -3,9 +3,8 @@ Behave entry point.
 """
 
 import os
-import shutil
 import re
-import sys
+import shutil
 from typing import Optional
 
 import env_control
@@ -14,10 +13,9 @@ from diagnostics import record_step_failure
 from modules import templates
 from modules.logs import save_logs
 from modules.typing import ContextT
-from modules.utils import version_ge, version_lt
+from modules.utils import configure_test_logging, version_ge, version_lt
 
 from ch_tools.common import logging
-from ch_tools.common.config import load_config
 
 try:
     import ipdb as pdb
@@ -29,13 +27,7 @@ def before_all(context: ContextT) -> None:
     """
     Prepare environment for tests.
     """
-    config = load_config()
-    logging.configure(config["loguru"], "test")
-    logging.add(
-        sys.stdout,
-        level="INFO",
-        format_="{time:YYYY-MM-DD HH:mm:ss,SSS} [{level:8}]:\t{message}",
-    )
+    configure_test_logging()
     if not context.config.userdata.getbool("skip_setup"):
         env_control.create(context)
     else:

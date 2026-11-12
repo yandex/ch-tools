@@ -11,6 +11,7 @@ from typing import Any
 import configuration
 from modules import clickhouse, compose, docker, minio, templates
 from modules.typing import ContextT
+from modules.utils import configure_test_logging
 
 from ch_tools.common import logging
 
@@ -119,6 +120,7 @@ def cli_main() -> None:
     """
     CLI entry.
     """
+    configure_test_logging()
     commands = {
         "create": create,
         "start": start,
