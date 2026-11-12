@@ -114,7 +114,7 @@ make build-deb-package
 ```bash
 make test-integration-parallel
 make test-integration-parallel INTEGRATION_JOBS=2 BEHAVE_ARGS='-i "chadmin_replica|chadmin_zero_copy"'
-uv run python tests/parallel.py --dry-run
+make setup && uv run python tests/parallel.py --dry-run
 ```
 
 Both CI workflows use the runner's `INTEGRATION_JOBS`, defaulting to three slots.
