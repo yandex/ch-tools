@@ -144,6 +144,39 @@ Feature: chadmin object-storage commands
     Table schema for 'test.space_usage_from_object_storage' on replica 'clickhouse02' is different from local schema
     """
 
+    Given merged clickhouse-tools configuration on clickhouse01
+    """
+    clickhouse:
+      decommissioned_hosts: [clickhouse02]
+      settings:
+        log_comment: decommissioned_host_test
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin object-storage collect-info --to-time 0h --traverse-remote &&
+    chadmin object-storage clean --to-time 0h --dry-run
+    """
+    And we try to execute command on clickhouse01
+    """
+    chadmin object-storage space-usage
+    """
+    Then it fails with response contains
+    """
+    Cluster 'cluster' contains decommissioned hosts: clickhouse02
+    """
+    When we execute query on clickhouse02
+    """
+    SYSTEM FLUSH LOGS;
+    """
+    And we execute query on clickhouse02
+    """
+    SELECT count() FROM system.query_log WHERE log_comment = 'decommissioned_host_test';
+    """
+    Then we get response
+    """
+    0
+    """
+
   Scenario: Dry-run clean with guard period
     When we execute command on clickhouse01
     """
@@ -745,6 +778,15 @@ Feature: chadmin object-storage commands
 
   @require_version_23.3
   Scenario: Clean with temporarily unavailable replica succeeds after replica returns
+    # The initial availability probe must keep retrying while the replica starts.
+    # A request timeout does not delay retries when connections are refused.
+    Given merged clickhouse-tools configuration on clickhouse01
+    """
+    clickhouse:
+      retries:
+        max_attempts: 30
+        max_interval: 1
+    """
     When we execute command on clickhouse01
     """
     chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths

@@ -15,7 +15,7 @@ from click import Context
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
-from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
+from ch_tools.common.clickhouse.replicas import active_shard_hosts
 
 DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -92,7 +92,7 @@ def check_replicas_availability(
 
     Returns True if all replicas are available, False otherwise.
     """
-    replicas = ClickhouseInfo.get_replicas(ctx)
+    replicas = active_shard_hosts(ctx)
 
     for replica in replicas:
         try:
@@ -126,7 +126,7 @@ def execute_query_on_shard(
     """
     Execute query on all replicas in the shard.
     """
-    replicas = ClickhouseInfo.get_replicas(ctx)
+    replicas = active_shard_hosts(ctx)
 
     for replica in replicas:
         execute_query(
@@ -243,7 +243,7 @@ def get_table_function_for_scope(
             return f"clusterAllReplicas('{cluster_name}', {table})"
         return f"cluster('{cluster_name}', {table})"
     if scope == Scope.SHARD:
-        return get_remote_table_for_hosts(ctx, table, ClickhouseInfo.get_replicas(ctx))
+        return get_remote_table_for_hosts(ctx, table, active_shard_hosts(ctx))
 
     return table
 
@@ -301,7 +301,11 @@ def assert_equal_table_schema_on_cluster(
     local_schema = execute_query(ctx, get_local_schema, format_="JSONCompact")["data"][
         0
     ][1]
-    schemas = execute_query(ctx, get_cluster_schema, format_="JSONCompact")["data"]
+    schemas = execute_query(
+        ctx,
+        get_cluster_schema + " SETTINGS skip_unavailable_shards=0",
+        format_="JSONCompact",
+    )["data"]
 
     for row in schemas:
         replica = row[0]

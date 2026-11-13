@@ -55,6 +55,10 @@ from ch_tools.common.clickhouse.client.clickhouse_client import (
 from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
+from ch_tools.common.clickhouse.replicas import (
+    check_cluster_for_decommissioned_hosts,
+    shard_has_decommissioned_hosts,
+)
 
 # Batch size for inserts in a listing table
 # Set not very big value due to default ClickHouse 'http_max_field_value_size' settings value 128Kb
@@ -244,6 +248,7 @@ def get_object_storage_space_usage(
     if scope == Scope.SHARD:
         scope = Scope.HOST
     elif scope == Scope.CLUSTER:
+        check_cluster_for_decommissioned_hosts(ctx, cluster_name)
         assert_equal_table_schema_on_cluster(ctx, database, table, cluster_name)
 
     full_name = f"{database}.{table}"
@@ -252,7 +257,7 @@ def get_object_storage_space_usage(
     )
 
     parts_usage_query = Query(
-        f"SELECT toString(replica) replicas, state, size FROM {space_usage_table} ORDER BY replica, state"
+        f"SELECT toString(replica) replicas, state, size FROM {space_usage_table} ORDER BY replica, state SETTINGS skip_unavailable_shards=0"
     )
 
     query_result = execute_query(
@@ -263,7 +268,8 @@ def get_object_storage_space_usage(
 
     result: dict[str, dict[str, int]] = defaultdict(dict)
     for row in query_result:
-        result[row["replicas"]][row["state"]] = int(row["size"])
+        usage = result[row["replicas"]]
+        usage[row["state"]] = usage.get(row["state"], 0) + int(row["size"])
 
     result["total"] = defaultdict(int)
     for replica in result:
@@ -372,6 +378,8 @@ def _cleanup_old_service_tables_and_queries(ctx: Context) -> None:
     This helps prevent accumulation of temporary tables from previous runs.
     Some insert queries may be stuck and they should be killed here.
     """
+    if not check_replicas_availability(ctx):
+        raise RuntimeError("Not all active replicas are available")
     config = ctx.obj["config"]["object_storage"]["space_usage"]
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
 
@@ -853,7 +861,10 @@ def _collect_space_usage(
             settings=query_settings,
         )
 
-    execute_query(ctx, f"TRUNCATE TABLE {space_usage_table} SYNC")
+    settings = " SETTINGS alter_sync=1" if shard_has_decommissioned_hosts(ctx) else ""
+    execute_query(
+        ctx, f"TRUNCATE TABLE {space_usage_table} SYNC{settings}", format_=None
+    )
     execute_query(
         ctx, f"INSERT INTO {space_usage_table} SELECT * FROM {space_usage_table_new}"
     )
@@ -1146,25 +1157,19 @@ def _create_remote_blobs_table(
     drop_existing_table: bool = False,
 ) -> None:
     if drop_existing_table:
-        # Check all replicas are available before destructive DROP operation
-        # This prevents partial deletion when local replica succeeds but remote fails
-        if not check_replicas_availability(ctx, timeout=5):
-            raise RuntimeError(
-                "Not all replicas are available. Skipping DROP TABLE to prevent partial deletion. "
-                "Please ensure all replicas are up and retry the operation."
-            )
-
-        # Use retry for DROP to handle temporarily unavailable replicas
         delete_table_by_full_name(
             ctx,
             table_name,
             shard=True,
         )
 
+    keeper_name = table_name
+    if replicated and shard_has_decommissioned_hosts(ctx):
+        keeper_name += f"_{uuid.uuid4().hex}"
     engine = (
         "ReplicatedMergeTree"
         + ZOOKEEPER_ARGS.format(
-            replica_zk_prefix=replica_zk_prefix, table_name=table_name
+            replica_zk_prefix=replica_zk_prefix, table_name=keeper_name
         )
         if replicated
         else "MergeTree"
@@ -1241,10 +1246,13 @@ def _create_space_usage_table(
     if drop_existing_table:
         delete_table_by_full_name(ctx, space_usage_table_name, shard=True)
 
+    keeper_name = space_usage_table_name
+    if drop_existing_table and shard_has_decommissioned_hosts(ctx):
+        keeper_name += f"_{uuid.uuid4().hex}"
     engine = (
         "ReplicatedMergeTree"
         + ZOOKEEPER_ARGS.format(
-            replica_zk_prefix=replica_zk_prefix, table_name=space_usage_table_name
+            replica_zk_prefix=replica_zk_prefix, table_name=keeper_name
         )
         if has_zk()
         else "MergeTree"
@@ -1274,9 +1282,9 @@ def _get_fill_local_blobs_table_query(
     """
     Column 'size' in remote_data_paths is supported since 23.3.
     """
-    settings = ""
+    settings = "SETTINGS skip_unavailable_shards=0"
     if match_ch_version(ctx, "24.3"):
-        settings = "SETTINGS traverse_shadow_remote_data_paths=1"
+        settings += ", traverse_shadow_remote_data_paths=1"
 
     size = "size"
     if not match_ch_version(ctx, "23.3"):

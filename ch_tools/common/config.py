@@ -22,6 +22,8 @@ DEFAULT_CONFIG = {
     "clickhouse": {
         "version": None,
         "host": socket.getfqdn(),
+        # Used by object-storage clean, collect-info, deduplicate, and space-usage --scope cluster.
+        "decommissioned_hosts": [],
         "protocol": "https",
         "insecure": False,
         "port": 8443,
