@@ -15,7 +15,10 @@ from kazoo.exceptions import NoNodeError
 import ch_tools.chadmin.cli.data_store_group as data_store_group_module
 import ch_tools.chadmin.internal.system as system_module
 from ch_tools.chadmin.cli.data_store_group import data_store_group
-from ch_tools.chadmin.internal.object_storage import parts_quarantine
+from ch_tools.chadmin.internal.object_storage import (
+    part_deduplication,
+    parts_quarantine,
+)
 from ch_tools.chadmin.internal.object_storage.checked_partition_attach import (
     S3ObjectChecker,
 )
@@ -62,7 +65,9 @@ class FakeZooKeeper:
     def get(self, path: str) -> tuple[bytes, object]:
         if path not in self.children:
             raise NoNodeError
-        return self.values.get(path, b""), SimpleNamespace()
+        return self.values.get(path, b""), SimpleNamespace(
+            children_count=len(self.children[path]),
+        )
 
     def set(self, path: str, value: bytes) -> None:
         if path not in self.children:
@@ -132,13 +137,54 @@ def make_zookeeper(part_names: set[str]) -> FakeZooKeeper:
         children[parts_path] = set(part_names)
         for part_name in part_names:
             children[f"{parts_path}/{part_name}"] = set()
-    return FakeZooKeeper(children)
+    metadata_path = f"{TABLE_ZK_PATH}/metadata"
+    children[metadata_path] = set()
+    zk = FakeZooKeeper(children)
+    zk.values[metadata_path] = (
+        b"metadata format version: 1\ndate column: \ndata format version: 1\n"
+    )
+    return zk
+
+
+def add_deduplication_node(
+    zk: FakeZooKeeper, directory: str, name: str, part_name: str
+) -> str:
+    parent = f"{TABLE_ZK_PATH}/{directory}"
+    path = f"{parent}/{name}"
+    zk.children.setdefault(parent, set()).add(name)
+    zk.children[path] = set()
+    zk.values[path] = part_name.encode()
+    return path
+
+
+def test_deduplication_nodes_require_fully_contained_ranges() -> None:
+    part_name = "all_1_3_2_10"
+    zk = make_zookeeper(set())
+    selected = {
+        add_deduplication_node(zk, directory, f"all_token_{index}", value)
+        for index, (directory, value) in enumerate(
+            [
+                ("deduplication_hashes", part_name),
+                ("blocks", "all_1_1_0"),
+                ("async_blocks", "all_2_3_1_9"),
+            ]
+        )
+    }
+    for index, value in enumerate(
+        ["all_4_4_0", "all_0_1_1", "all_3_4_1", "other_1_1_0", "", "1"]
+    ):
+        add_deduplication_node(zk, "blocks", f"all_keep_{index}", value)
+    result = part_deduplication.collect_deduplication_nodes(
+        MagicMock(wraps=zk), TABLE_ZK_PATH, [part_name]
+    )
+    assert {node.path for node in result[part_name]} == selected
 
 
 @pytest.fixture(autouse=True)
 def silence_logging(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     logging_mock = MagicMock()
     monkeypatch.setattr(parts_quarantine, "logging", logging_mock)
+    monkeypatch.setattr(part_deduplication, "logging", logging_mock)
     monkeypatch.setattr(
         parts_quarantine, "ensure_clickhouse_server_stopped", MagicMock()
     )
@@ -157,7 +203,11 @@ def silence_logging(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
         lambda _ctx: {"shard": "01", "replica": "r1"},
     )
 
-    def delete_part_nodes(zk: FakeZooKeeper, nodes: list[str]) -> None:
+    def delete_part_nodes(
+        zk: FakeZooKeeper, nodes: list[str], dry_run: bool = False
+    ) -> None:
+        if dry_run:
+            return
         for node in nodes:
             try:
                 zk.delete(node)
@@ -165,6 +215,7 @@ def silence_logging(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
                 pass
 
     monkeypatch.setattr(parts_quarantine, "delete_nodes_batched", delete_part_nodes)
+    monkeypatch.setattr(parts_quarantine, "delete_recursive", delete_part_nodes)
     return logging_mock
 
 
@@ -432,6 +483,7 @@ def test_dry_run_saves_manifest_without_changes(
         "moved": 0,
         "already_detached": 0,
         "zookeeper_nodes": 2,
+        "deduplication_nodes": 0,
         "local_replicas": ["r1"],
         "replicas_to_mark_lost": ["r2"],
         "dry_run": True,
@@ -508,6 +560,7 @@ def test_moves_parts_and_deletes_part_nodes_from_every_replica(
         "moved": 2,
         "already_detached": 0,
         "zookeeper_nodes": 2,
+        "deduplication_nodes": 0,
         "local_replicas": ["r1"],
         "replicas_to_mark_lost": ["r2"],
         "dry_run": False,
@@ -1014,6 +1067,8 @@ def test_checked_detach_selects_only_unreadable_parts(
     if failure == "metadata":
         (bad / "columns.txt").write_text("invalid", encoding="utf-8")
     zk = make_zookeeper({good.name, bad.name})
+    good_node = add_deduplication_node(zk, "blocks", "all_good", good.name)
+    bad_node = add_deduplication_node(zk, "blocks", "all_bad", bad.name)
     monkeypatch.setattr(parts_quarantine, "zk_client", lambda _ctx: nullcontext(zk))
 
     def response(**kwargs: Any) -> dict[str, Any]:
@@ -1047,6 +1102,9 @@ def test_checked_detach_selects_only_unreadable_parts(
         not dry_run
     )
     assert [part.part_name for part in report.parts] == [bad.name]
+    assert good_node in zk.children
+    assert (bad_node in zk.children) == dry_run
+    assert report.deduplication_nodes == 1
     manifest = json.loads(parts_file.read_text(encoding="utf-8"))
     assert [part["part_name"] for part in manifest["parts"]] == [bad.name]
     message = "cannot parse" if failure == "metadata" else "prefix/bad"
