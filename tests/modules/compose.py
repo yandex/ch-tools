@@ -192,7 +192,6 @@ def _generate_service_config(
         "volumes": volumes + instance_config.get("volumes", []),
         # https://github.com/moby/moby/issues/12080
         "tmpfs": "/var/run",
-        "external_links": instance_config.get("external_links", []),
     }
 
     if "healthcheck" in instance_config:

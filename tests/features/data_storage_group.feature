@@ -259,6 +259,48 @@ Feature: chadmin data-store commands
       replicas_to_mark_lost: []
     """
 
+  Scenario: Offline detachment permits attaching the same S3 data again.
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS quarantine_dedup ON CLUSTER 'cluster' SYNC;
+    CREATE DATABASE quarantine_dedup ON CLUSTER 'cluster';
+    CREATE TABLE quarantine_dedup.parts UUID '20000000-0000-0000-0000-000000000004' ON CLUSTER 'cluster' (n UInt32)
+    ENGINE = ReplicatedMergeTree('/tables/quarantine_dedup', '{replica}')
+    PARTITION BY n ORDER BY n SETTINGS storage_policy = 'object_storage';
+    INSERT INTO quarantine_dedup.parts VALUES (0);
+    """
+    And we execute command on clickhouse01
+    """
+    set -e
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3
+    chadmin zookeeper create /tables/quarantine_dedup/blocks/0_test 0_0_0_0
+    """
+    And we stop clickhouse on clickhouse02
+    And we stop clickhouse on clickhouse01
+    And we sleep for 5 seconds
+    And we execute command on clickhouse01
+    """
+    set -e
+    chadmin data-store detach-object-storage-parts
+    ! chadmin zookeeper exists /tables/quarantine_dedup/blocks/0_test
+    chadmin zookeeper create /tables/quarantine_dedup/blocks/0_test 0_0_0_0
+    """
+    And we start clickhouse on clickhouse01
+    And we execute command on clickhouse01
+    """
+    set -e
+    chadmin partition attach --database quarantine_dedup --reason broken-on-start --check-s3-objects range --cleanup-deduplication
+    ! chadmin zookeeper exists /tables/quarantine_dedup/blocks/0_test
+    """
+    And we execute query on clickhouse01
+    """
+    SELECT count(), sum(n) FROM quarantine_dedup.parts;
+    """
+    Then we get response
+    """
+    1	0
+    """
+
   Scenario: Range mode detects an object whose HEAD succeeds but body cannot be read.
     When we execute queries on clickhouse01
     """

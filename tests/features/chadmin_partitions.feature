@@ -316,7 +316,7 @@ Feature: chadmin partitions commands.
     """
     When we execute command on clickhouse01
     """
-    chadmin partition attach -t checked_s3_attach --reason broken-on-start --check-s3-objects get
+    chadmin partition attach -t checked_s3_attach --reason broken-on-start --check-s3-objects get --cleanup-deduplication
     """
     Then we get response contains
     """
