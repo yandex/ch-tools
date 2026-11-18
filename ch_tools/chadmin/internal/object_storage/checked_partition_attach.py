@@ -37,7 +37,10 @@ from ch_tools.chadmin.internal.part import (
 )
 from ch_tools.chadmin.internal.partition import attach_partition
 from ch_tools.chadmin.internal.table import get_table
-from ch_tools.chadmin.internal.table_replica import get_table_replica
+from ch_tools.chadmin.internal.table_replica import (
+    get_table_replica,
+    list_table_replicas,
+)
 from ch_tools.chadmin.internal.zero_copy import (
     _get_zero_copy_zookeeper_path_for_disk_type,
     get_zero_copy_lock_unique_id,
@@ -770,17 +773,23 @@ def _attach_partition(
             renamed.append(plan)
 
         if cleanup_deduplication:
-            replica = get_table_replica(ctx, key.database, key.table)
-            by_part = collect_deduplication_nodes(
-                zk,
-                replica["zookeeper_path"],
-                [_zero_copy_part_name(check.part) for check in checks if check.passed],
-            )
-            delete_recursive(
-                zk,
-                [node.path for nodes in by_part.values() for node in nodes],
-                dry_run=dry_run,
-            )
+            for replica in list_table_replicas(
+                ctx, database_name=key.database, table_name=key.table
+            ):
+                by_part = collect_deduplication_nodes(
+                    zk,
+                    replica["zookeeper_path"],
+                    [
+                        _zero_copy_part_name(check.part)
+                        for check in checks
+                        if check.passed
+                    ],
+                )
+                delete_recursive(
+                    zk,
+                    [node.path for nodes in by_part.values() for node in nodes],
+                    dry_run=dry_run,
+                )
 
         attach_partition(
             ctx,

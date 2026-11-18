@@ -115,14 +115,14 @@ def collect_deduplication_nodes(
                 data, stat = zk.get(path)
             except NoNodeError:
                 continue  # Background cleanup may already have removed it.
-            part_name = data.decode("utf-8")
             try:
+                part_name = data.decode("utf-8")
                 info = PartRange.parse(part_name, format_version)
             except ValueError:
                 logging.warning(
                     "Retaining deduplication node {}: unrecognized part value {!r}",
                     path,
-                    part_name,
+                    data,
                 )
                 continue
             matches = [

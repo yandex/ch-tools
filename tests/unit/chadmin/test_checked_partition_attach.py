@@ -231,7 +231,9 @@ def test_deduplication_cleanup_failure_prevents_attach_and_restores_prefix(
     good.mkdir()
     check = checked.PartCheck(part_row(good, good.name))
     monkeypatch.setattr(
-        checked, "get_table_replica", lambda *_args: {"zookeeper_path": "/tables/table"}
+        checked,
+        "list_table_replicas",
+        lambda *_args, **_kwargs: [{"zookeeper_path": "/tables/table"}],
     )
     node = DeduplicationNode("/tables/table/blocks/all_token", "all_1_1_0")
     monkeypatch.setattr(

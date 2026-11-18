@@ -174,6 +174,8 @@ def test_deduplication_nodes_require_fully_contained_ranges() -> None:
         ["all_4_4_0", "all_0_1_1", "all_3_4_1", "other_1_1_0", "", "1"]
     ):
         add_deduplication_node(zk, "blocks", f"all_keep_{index}", value)
+    binary_node = add_deduplication_node(zk, "blocks", "all_binary", "")
+    zk.values[binary_node] = b"\xff"
     result = part_deduplication.collect_deduplication_nodes(
         MagicMock(wraps=zk), TABLE_ZK_PATH, [part_name]
     )
