@@ -23,6 +23,60 @@ Feature: ch-monitoring tool
     INSERT INTO test.test_unfreeze VALUES(5, 'hello');
     """
 
+  @client_password
+  Scenario Outline: Ping TCP and TLS with private client credentials
+    Given we have executed queries on clickhouse01
+    """
+    CREATE USER private_credentials IDENTIFIED WITH plaintext_password BY '<password>';
+    """
+    And merged clickhouse-tools configuration on clickhouse01
+    """
+    clickhouse:
+      monitoring_user: private_credentials
+      monitoring_password: "<password>"
+    """
+    When we execute command on clickhouse01
+    """
+    ch-monitoring ping --number 1 --critical 1
+    """
+    Then we get response
+    """
+    0;OK
+    """
+    Examples:
+      | password               |
+      |                        |
+      | test password <&>      |
+
+  @client_password @require_version_24.3
+  Scenario: Native client config password takes precedence over environment
+    Given we have executed queries on clickhouse01
+    """
+    CREATE USER private_credentials IDENTIFIED WITH plaintext_password BY 'from-client-config';
+    """
+    When we execute command on clickhouse01
+    """
+    cat > /etc/clickhouse-client/config.d/credentials.xml <<'XML'
+    <config><password>from-client-config</password><ch_tools_password>existing-field</ch_tools_password></config>
+    XML
+    mkdir -p /etc/clickhouse-client/conf.d /etc/clickhouse-client/config.d/directory.xml
+    echo '<config><password>wrong-directory-priority</password></config>' > /etc/clickhouse-client/conf.d/zz.xml
+    echo invalid > /etc/clickhouse-client/config.d/.ignored.xml
+    echo invalid > /etc/clickhouse-client/config.d/ignored.txt
+    CLICKHOUSE_PASSWORD=unused-environment-password python3 - <<'PYTHON'
+    from ch_tools.common.clickhouse.client.clickhouse_client import ClickhouseClient
+    from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
+    client = ClickhouseClient(host='clickhouse01', user='private_credentials', ports={ClickhousePort.TCP: 9000, ClickhousePort.TCP_SECURE: 9440}, timeout=5)
+    for port in (ClickhousePort.TCP, ClickhousePort.TCP_SECURE):
+        assert client.query('SELECT 42', port=port, log_query=False) == '42'
+    print('Credentials and TLS verified')
+    PYTHON
+    """
+    Then we get response
+    """
+    Credentials and TLS verified
+    """
+
   Scenario: Check Readonly replica
     When we execute command on clickhouse01
     """

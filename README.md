@@ -15,6 +15,14 @@
 
 All of these tools must be run on the same host as ClickHouse server is running.
 
+TCP/TLS credentials are passed to `clickhouse-client` through unique configuration
+properties backed by an anonymous file (`0600`). Arguments and environment contain
+only property references; stdin carries SQL. A private directory mirrors the
+original config and fragment names, leaving selection and merging to ClickHouse.
+The descriptor and directory are cleaned up after the client exits, including
+failures and interruption. Errors report the exit code without potentially
+sensitive stderr.
+
 
 ## Installation
 
