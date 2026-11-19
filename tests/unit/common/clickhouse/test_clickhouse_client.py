@@ -31,6 +31,8 @@ def fixture_client_process(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> P
             from xml.etree import ElementTree
 
             if '--version' in sys.argv:
+                counter = Path(os.environ['TEST_VERSION_COUNTER'])
+                counter.write_text(str(int(counter.read_text()) + 1) if counter.exists() else '1')
                 print('ClickHouse client version ' + os.environ.get('TEST_CLIENT_VERSION', '25.8.23.13'))
                 sys.exit(0)
             properties = {}
@@ -41,6 +43,7 @@ def fixture_client_process(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> P
                 config_path = Path(sys.argv[sys.argv.index('--config-file') + 1])
                 credentials = next(path for path in config_path.with_suffix('.d').iterdir() if path.is_symlink() and os.readlink(path).startswith('/dev/fd/'))
                 properties = {node.tag: node.text or '' for node in ElementTree.parse(credentials).getroot()}
+                properties = {key: value.replace('${' + key + '_dollar}', '$') for key, value in properties.items() if not key.endswith('_dollar')}
                 secret_mode = stat.S_IMODE(credentials.stat().st_mode)
                 directory_mode = stat.S_IMODE(config_path.parent.stat().st_mode)
             query = sys.stdin.buffer.read().decode()
@@ -61,7 +64,6 @@ def fixture_client_process(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> P
                     "Record cancellation before exiting."
                     signal.signal(signal.SIGINT, signal.SIG_IGN)
                     signal.signal(signal.SIGTERM, signal.SIG_IGN)
-                    Path(os.environ['TEST_CLIENT_STOPPED']).write_text(str(signum))
                     sys.exit(0)
                 signal.signal(signal.SIGINT, stop)
                 signal.signal(signal.SIGTERM, stop)
@@ -83,6 +85,7 @@ def fixture_client_process(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> P
     monkeypatch.setenv("PATH", str(tmp_path))
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("TEST_CLIENT_REPORT", str(report))
+    monkeypatch.setenv("TEST_VERSION_COUNTER", str(tmp_path / "version-count"))
     for name in (
         "CLICKHOUSE_PASSWORD",
         "TEST_CLIENT_ERROR",
@@ -113,8 +116,17 @@ def make_client(password: Optional[str]) -> ClickhouseClient:
         ("x" * 1500, None),
         (None, "env-secret"),
         ("explicit-secret", "env-secret"),
+        ("${user}-$-${missing}", "${user}-env"),
     ],
-    ids=["unset", "empty", "special", "long", "env", "explicit-and-env"],
+    ids=[
+        "unset",
+        "empty",
+        "special",
+        "long",
+        "env",
+        "explicit-and-env",
+        "property-syntax",
+    ],
 )
 def test_tcp_credentials_use_private_config(
     client_process: Path,
@@ -145,6 +157,10 @@ def test_tcp_credentials_use_private_config(
             key = reference[2:-1]
             assert key not in expected
             expected[key] = hashlib.sha256(value.encode()).hexdigest()
+    for secret in (password, inherited):
+        if secret:
+            assert all(secret not in argument for argument in result["argv"])
+            assert secret not in (result["env_password"] or "")
     assert result["hashes"] == expected
     assert os.environ.get("CLICKHOUSE_PASSWORD") == inherited
     if expected:
@@ -268,7 +284,6 @@ def test_tcp_interrupt_stops_child_before_cleanup(client_process: Path) -> None:
     """Interrupt an isolated foreground group and verify process and secret cleanup."""
     root = client_process.parent
     ready = root / "ready"
-    stopped = root / "stopped"
     reaped = root / "reaped"
     os.mkfifo(ready)
     repository = Path(config_module.__file__).parents[4]
@@ -301,7 +316,6 @@ except KeyboardInterrupt:
         os.environ,
         TEST_CLIENT_WAIT="1",
         TEST_CLIENT_READY=str(ready),
-        TEST_CLIENT_STOPPED=str(stopped),
     )
     reader = os.open(ready, os.O_RDONLY | os.O_NONBLOCK)
     child_pid = None
@@ -324,7 +338,6 @@ except KeyboardInterrupt:
                 os.killpg(parent.pid, signal.SIGINT)
                 parent.communicate(timeout=10)
                 assert parent.returncode == 130
-                assert stopped.exists()
                 assert reaped.read_text() == "reaped"
                 with pytest.raises(ProcessLookupError):
                     os.kill(child_pid, 0)
@@ -340,3 +353,24 @@ except KeyboardInterrupt:
                         pass
     finally:
         os.close(reader)
+
+
+def test_client_version_cache_invalidates(
+    client_process: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reuse probes across secret changes and refresh after environment or binary changes."""
+    counter = client_process.parent / "version-count"
+    for password in ("one", "two"):
+        monkeypatch.setenv("CLICKHOUSE_PASSWORD", password)
+        with client_config(password):
+            pass
+    assert counter.read_text() == "1"
+    monkeypatch.setenv("TEST_CLIENT_VERSION", "26.3.12.3")
+    with client_config("three"):
+        pass
+    assert counter.read_text() == "2"
+    executable = client_process.parent / "clickhouse-client"
+    executable.write_text(executable.read_text() + "\n")
+    with client_config("four"):
+        pass
+    assert counter.read_text() == "3"

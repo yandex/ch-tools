@@ -47,6 +47,7 @@ Feature: ch-monitoring tool
       | password               |
       |                        |
       | test password <&>      |
+      | ${user}                |
 
   @client_password @require_version_24.3
   Scenario: Native client config password takes precedence over environment

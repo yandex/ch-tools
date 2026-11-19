@@ -1,10 +1,12 @@
 """Keep client credentials in a private configuration instead of argv or env."""
 
+import hashlib
 import os
 import re
 import subprocess
 from contextlib import contextmanager
 from pathlib import Path
+from shutil import which
 from tempfile import TemporaryDirectory, TemporaryFile
 from typing import Dict, Iterator, List, Optional, Tuple
 from uuid import uuid4
@@ -13,23 +15,58 @@ from xml.sax.saxutils import escape
 
 from ch_tools.common.utils import version_ge
 
+_CLIENT_VERSIONS: Dict[tuple, str] = {}
+
+
+def _client_version(env: Dict[str, str]) -> str:
+    """Cache versions by executable metadata, cwd and a secret-free environment digest."""
+    executable = which("clickhouse-client", path=env.get("PATH"))
+    if executable is None:
+        raise FileNotFoundError("clickhouse-client executable not found")
+    info = os.stat(executable)
+    fingerprint = hashlib.sha256(
+        repr(
+            sorted(
+                (key, value)
+                for key, value in env.items()
+                if key != "CLICKHOUSE_PASSWORD"
+            )
+        ).encode()
+    ).digest()
+    key = (
+        str(Path(executable).resolve()),
+        info.st_ino,
+        info.st_size,
+        info.st_mtime_ns,
+        info.st_ctime_ns,
+        os.getcwd(),
+        fingerprint,
+    )
+    version = _CLIENT_VERSIONS.get(key)
+    if version is None:
+        result = subprocess.run(
+            [executable, "--version"],
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+        match = re.search(rb"\b(\d+\.\d+\.\d+(?:\.\d+)?)\b", result.stdout)
+        if match is None:
+            raise RuntimeError("Cannot determine clickhouse-client version")
+        if len(_CLIENT_VERSIONS) >= 8:
+            _CLIENT_VERSIONS.clear()
+        version = match[1].decode()
+        _CLIENT_VERSIONS[key] = version
+    return version
+
 
 def _config_path(env: Dict[str, str]) -> Optional[Path]:
     """Find the default config using the installed client's search order.
 
     YAML discovery appeared in 23.8; XDG paths were added in 25.12.
     """
-    result = subprocess.run(
-        ["clickhouse-client", "--version"],
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=True,
-    )
-    match = re.search(rb"\b(\d+\.\d+\.\d+(?:\.\d+)?)\b", result.stdout)
-    if match is None:
-        raise RuntimeError("Cannot determine clickhouse-client version")
-    version = match[1].decode()
+    version = _client_version(env)
     names = [Path("clickhouse-client")]
     home = env.get("HOME")
     if version_ge(version, "25.12"):
@@ -88,6 +125,9 @@ def _password_xml(key: str, password: str) -> str:
     ):
         raise ValueError("TCP client password contains unsupported characters")
     value = escape(password).replace("\r", "&#13;")
+    if "$" in password:
+        value = value.replace("$", "${" + key + "_dollar}")
+        return f"<{key}>{value}</{key}><{key}_dollar>$</{key}_dollar>"
     return f"<{key}>{value}</{key}>"
 
 
