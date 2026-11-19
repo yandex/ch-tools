@@ -65,6 +65,7 @@ def _config_path(env: Dict[str, str]) -> Optional[Path]:
     """Find the default config using the installed client's search order.
 
     YAML discovery appeared in 23.8; XDG paths were added in 25.12.
+    Native discovery skips stat errors, including inaccessible HOME after setuid.
     """
     version = _client_version(env)
     names = [Path("clickhouse-client")]
@@ -85,7 +86,7 @@ def _config_path(env: Dict[str, str]) -> Optional[Path]:
             path.absolute()
             for name in names
             for ext in extensions
-            if (path := name.with_suffix(ext)).exists()
+            if os.path.exists(path := name.with_suffix(ext))
         ),
         None,
     )

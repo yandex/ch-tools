@@ -255,6 +255,29 @@ def test_client_config_search_order(
         )
 
 
+@pytest.mark.parametrize("version", ["23.3.22.3", "25.8.23.13", "26.3.12.3"])
+def test_client_config_skips_inaccessible_home(
+    client_process: Path, monkeypatch: pytest.MonkeyPatch, version: str
+) -> None:
+    """Find the same fallback config after monitoring loses access to HOME."""
+    root = client_process.parent
+    (root / "clickhouse-client.xml").unlink()
+    monkeypatch.setenv("TEST_CLIENT_VERSION", version)
+    expected = config_module._config_path(dict(os.environ))
+    home = root / "restricted"
+    (home / ".clickhouse-client").mkdir(parents=True)
+    (home / ".clickhouse-client/config.xml").write_text("<config/>")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(home))
+    home.chmod(0)
+    try:
+        with pytest.raises(PermissionError):
+            (home / ".clickhouse-client/config.xml").stat()
+        assert config_module._config_path(dict(os.environ)) == expected
+    finally:
+        home.chmod(0o700)
+
+
 @pytest.mark.parametrize("password", ["\x00", "\ud800", "\n"])
 def test_tcp_rejects_unsafe_config_values(client_process: Path, password: str) -> None:
     """Reject XML-invalid values and the native prompt sentinel before spawning."""
