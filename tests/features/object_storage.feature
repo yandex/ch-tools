@@ -509,6 +509,82 @@ Feature: chadmin object-storage commands
       TotalSize: 10
     """
 
+  Scenario: Clean with fraction of orphaned size with fraction mode
+    Given merged clickhouse-tools configuration on clickhouse01,clickhouse02
+    """
+    object_storage:
+      clean:
+        verify: True
+        verify_size_error_rate_threshold_fraction: 0
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --max-size-to-delete-fraction 0.75 --fraction-mode OF_ORPHANED --prefix "data/cluster_id/shard_1"
+    """
+    Then we get response contains
+    """
+      Deleted: 0
+      DeletedSize: 0
+      Total: 0
+      TotalSize: 0
+    """
+    Given merged clickhouse-tools configuration on clickhouse01,clickhouse02
+    """
+    object_storage:
+      clean:
+        verify: False
+    """
+    When we put 20 objects in S3
+    """
+      bucket: cloud-storage-test
+      path: /data/cluster_id/shard_1/orphaned_object-{}
+      data: '13'
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --max-size-to-delete-fraction 0.75 --prefix "data/cluster_id/shard_1"
+    """
+    Then we get response contains
+    """
+      WouldDeleted: 20
+      WouldDeletedSize: 40
+      Total: 20
+      TotalSize: 40
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --max-size-to-delete-fraction 0.75 --fraction-mode OF_ORPHANED --prefix "data/cluster_id/shard_1"
+    """
+    Then we get response contains
+    """
+      WouldDeleted: 15
+      WouldDeletedSize: 30
+      Total: 20
+      TotalSize: 40
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --max-size-to-delete-fraction 0.75 --fraction-mode OF_ORPHANED --prefix "data/cluster_id/shard_1"
+    """
+    Then we get response contains
+    """
+      Deleted: 15
+      DeletedSize: 30
+      Total: 20
+      TotalSize: 40
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --prefix "data/cluster_id/shard_1"
+    """
+    Then we get response contains
+    """
+      WouldDeleted: 5
+      WouldDeletedSize: 10
+      Total: 5
+      TotalSize: 10
+    """
+
   @require_version_23.3
   Scenario: Sanity check clean many orphaned objects
     Given merged clickhouse-tools configuration on clickhouse01,clickhouse02
