@@ -8,8 +8,12 @@ import pytest
 from botocore.exceptions import ClientError
 
 from ch_tools.chadmin.internal.object_storage import broken_partitions_recovery
+from ch_tools.chadmin.internal.object_storage import checked_partition_attach as checked
 from ch_tools.chadmin.internal.object_storage.checked_partition_attach import (
     attach_checked_partitions,
+)
+from ch_tools.chadmin.internal.object_storage.part_deduplication import (
+    DeduplicationNode,
 )
 from ch_tools.chadmin.internal.object_storage.s3_object_checker import (
     ObjectCheckStatus,
@@ -218,6 +222,46 @@ def part_row(path: Path, name: str, reason: str = "broken-on-start") -> Dict[str
         "path": str(path),
         "reason": reason,
     }
+
+
+def test_deduplication_cleanup_failure_prevents_attach_and_restores_prefix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    good = tmp_path / "broken-on-start_all_1_1_0"
+    good.mkdir()
+    check = checked.PartCheck(part_row(good, good.name))
+    monkeypatch.setattr(
+        checked,
+        "list_table_replicas",
+        lambda *_args, **_kwargs: [{"zookeeper_path": "/tables/table"}],
+    )
+    node = DeduplicationNode("/tables/table/blocks/all_token", "all_1_1_0")
+    monkeypatch.setattr(
+        checked,
+        "collect_deduplication_nodes",
+        MagicMock(return_value={"all_1_1_0": [node]}),
+    )
+    monkeypatch.setattr(
+        checked,
+        "delete_nodes_batched",
+        MagicMock(side_effect=RuntimeError("cleanup failed")),
+    )
+    attach = MagicMock()
+    monkeypatch.setattr(checked, "attach_partition", attach)
+
+    with pytest.raises(RuntimeError, match="cleanup failed"):
+        checked._attach_partition(
+            MagicMock(),
+            check.key,
+            [check],
+            reason="broken-on-start",
+            dry_run=False,
+            keep_going=False,
+            zk=MagicMock(),
+            cleanup_deduplication=True,
+        )
+    attach.assert_not_called()
+    assert good.is_dir() and not (tmp_path / "all_1_1_0").exists()
 
 
 def test_reason_attach_moves_only_parts_that_pass_the_check(tmp_path: Path) -> None:

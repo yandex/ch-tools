@@ -8,7 +8,7 @@ import os
 import posixpath
 import re
 import socket
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set
 from uuid import UUID
@@ -21,6 +21,10 @@ from ch_tools.chadmin.internal.object_storage.checked_partition_attach import (
     _check_part,
     _make_s3_checker,
 )
+from ch_tools.chadmin.internal.object_storage.part_deduplication import (
+    DeduplicationNode,
+    collect_deduplication_nodes,
+)
 from ch_tools.chadmin.internal.system import ensure_clickhouse_server_stopped
 from ch_tools.chadmin.internal.table_metadata_parser import (
     UUID_PATTERN,
@@ -29,6 +33,7 @@ from ch_tools.chadmin.internal.table_metadata_parser import (
 from ch_tools.chadmin.internal.utils import replace_macros
 from ch_tools.chadmin.internal.zookeeper import (
     delete_nodes_batched,
+    delete_recursive,
     get_children,
     zk_client,
 )
@@ -81,6 +86,7 @@ class QuarantinedPart:
     table: Optional[OfflineTable] = None
     zookeeper_nodes: List[str] = field(default_factory=list)
     s3_error: str = ""
+    deduplication_nodes: List[DeduplicationNode] = field(default_factory=list)
 
     @property
     def table_id(self) -> str:
@@ -104,6 +110,7 @@ class QuarantineReport:
     dry_run: bool
     local_replicas: List[str] = field(default_factory=list)
     replicas_to_mark_lost: List[str] = field(default_factory=list)
+    deduplication_nodes: int = 0
 
     def summary(self) -> Dict[str, Any]:
         return {
@@ -111,6 +118,7 @@ class QuarantineReport:
             "moved": self.moved,
             "already_detached": self.already_detached,
             "zookeeper_nodes": self.zookeeper_nodes,
+            "deduplication_nodes": self.deduplication_nodes,
             "local_replicas": self.local_replicas,
             "replicas_to_mark_lost": self.replicas_to_mark_lost,
             "dry_run": self.dry_run,
@@ -128,6 +136,7 @@ class QuarantineReport:
                     "temporary": part.temporary,
                     "local_action": part.local_action,
                     "zookeeper_nodes": len(part.zookeeper_nodes),
+                    "deduplication_nodes": len(part.deduplication_nodes),
                     **({"s3_error": part.s3_error} if has_errors else {}),
                     "source": str(part.source_path),
                     "destination": str(part.detached_path),
@@ -823,6 +832,24 @@ def collect_zookeeper_part_nodes(
     return result
 
 
+def _collect_part_deduplication_nodes(
+    zk: KazooClient, parts: List[QuarantinedPart]
+) -> List[DeduplicationNode]:
+    by_root: Dict[str, List[QuarantinedPart]] = {}
+    for part in parts:
+        if part.table is not None and part.table.zookeeper_path and not part.temporary:
+            by_root.setdefault(part.table.zookeeper_path, []).append(part)
+    nodes: Dict[str, DeduplicationNode] = {}
+    for root, root_parts in by_root.items():
+        by_name = collect_deduplication_nodes(
+            zk, root, [part.part_name for part in root_parts]
+        )
+        for part in root_parts:
+            part.deduplication_nodes = by_name[part.part_name]
+            nodes.update((node.path, node) for node in part.deduplication_nodes)
+    return list(nodes.values())
+
+
 def move_parts_to_detached(parts: Iterable[QuarantinedPart]) -> int:
     moved = 0
     for part in parts:
@@ -863,6 +890,9 @@ def _manifest_payload(
                 "part_name": part.part_name,
                 "detached_path": str(part.detached_path),
                 "zookeeper_nodes": list(part.zookeeper_nodes),
+                "deduplication_nodes": [
+                    asdict(node) for node in part.deduplication_nodes
+                ],
             }
         )
     return payload
@@ -917,7 +947,7 @@ def quarantine_object_storage_parts(
     disk_name: str = "object_storage",
     check_s3_objects: Optional[str] = None,
 ) -> QuarantineReport:
-    """Move object-storage parts offline and remove their replica part znodes."""
+    """Move parts offline and remove their replica and deduplication znodes."""
     root = Path(root_path)
     metadata = Path(metadata_path)
     manifest_path = Path(parts_file) if parts_file else None
@@ -968,17 +998,23 @@ def quarantine_object_storage_parts(
         if zk is not None:
             ensure_nonlocal_zookeeper_replicas_inactive(zk, keeper_tables, keep_going)
             nodes = collect_zookeeper_part_nodes(zk, parts, keep_going)
+            deduplication_nodes = _collect_part_deduplication_nodes(zk, parts)
             lost_plan = plan_replicas_to_mark_lost(
                 zk, keeper_tables, mark_replicas_lost
             )
         else:
             nodes = []
+            deduplication_nodes = []
             lost_plan = ReplicaLostPlan([], [], [])
 
         logging.warning("Local replicas: {}", lost_plan.local_replicas)
         logging.warning("Replicas to mark lost: {}", lost_plan.replicas_to_mark_lost)
 
         if dry_run:
+            if zk is not None:
+                delete_recursive(
+                    zk, [node.path for node in deduplication_nodes], dry_run=True
+                )
             for part in parts:
                 if not part.already_detached:
                     logging.info(
@@ -992,6 +1028,7 @@ def quarantine_object_storage_parts(
                 dry_run=True,
                 local_replicas=lost_plan.local_replicas,
                 replicas_to_mark_lost=lost_plan.replicas_to_mark_lost,
+                deduplication_nodes=len(deduplication_nodes),
             )
             if manifest_path is not None:
                 _write_new_manifest(
@@ -1014,6 +1051,7 @@ def quarantine_object_storage_parts(
                         "Keeper replica set changed while local parts were being "
                         "moved; no Keeper nodes were modified"
                     )
+            delete_nodes_batched(zk, [node.path for node in deduplication_nodes])
             delete_zookeeper_part_nodes(zk, nodes)
             if mark_replicas_lost:
                 mark_zookeeper_replicas_lost(zk, lost_plan.nodes_to_mark_lost)
@@ -1026,6 +1064,7 @@ def quarantine_object_storage_parts(
             dry_run=False,
             local_replicas=lost_plan.local_replicas,
             replicas_to_mark_lost=lost_plan.replicas_to_mark_lost,
+            deduplication_nodes=len(deduplication_nodes),
         )
         if manifest_path is not None:
             _write_new_manifest(

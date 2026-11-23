@@ -146,7 +146,7 @@ def detach_object_storage_parts_command(
     mark_replicas_lost: bool,
     verbose: bool,
 ) -> None:
-    """Offline-detach object-storage parts and remove them from replica /parts."""
+    """Offline-detach parts and remove their replica and deduplication records."""
     data_path = get_clickhouse_config(ctx).data_path
     root_path = _object_storage_store_path(data_path, disk_name)
     report = quarantine_object_storage_parts(

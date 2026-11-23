@@ -245,6 +245,11 @@ def list_partitions_command(ctx: Context, **kwargs: Any) -> None:
         ),
     ),
     option(
+        "--cleanup-deduplication",
+        is_flag=True,
+        help="Before attach, remove deduplication records for parts that pass the S3 check.",
+    ),
+    option(
         "--cleanup-old-zero-copy-locks",
         is_flag=True,
         help=(
@@ -253,6 +258,7 @@ def list_partitions_command(ctx: Context, **kwargs: Any) -> None:
         ),
     ),
     constraint(If("cleanup_old_zero_copy_locks", then=require_all), ["reason"]),
+    constraint(If("cleanup_deduplication", then=require_all), ["check_s3_objects"]),
     constraint(
         If(IsSet("quarantine_failed_unprefixed"), then=require_all),
         ["check_s3_objects"],
@@ -281,6 +287,7 @@ def attach_partitions_command(
     check_s3_objects: Optional[str],
     quarantine_failed_unprefixed: Optional[str],
     cleanup_old_zero_copy_locks: bool,
+    cleanup_deduplication: bool,
     dry_run: bool,
     **kwargs: Any,
 ) -> None:
@@ -316,6 +323,7 @@ def attach_partitions_command(
             keep_going=keep_going,
             cleanup_old_zero_copy_locks=cleanup_old_zero_copy_locks,
             quarantine_failed_unprefixed=quarantine_failed_unprefixed,
+            cleanup_deduplication=cleanup_deduplication,
         )
         _print_attach_operations(report)
         _exit_if_s3_checks_failed(report)
