@@ -189,6 +189,7 @@ def test_checked_attach_prints_operations() -> None:
         keep_going=False,
         cleanup_old_zero_copy_locks=False,
         quarantine_failed_unprefixed=None,
+        cleanup_deduplication=False,
     )
     echo.assert_has_calls(
         [

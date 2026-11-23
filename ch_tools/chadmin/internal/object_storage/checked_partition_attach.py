@@ -20,6 +20,9 @@ from botocore.exceptions import (
 )
 from click import Context
 
+from ch_tools.chadmin.internal.object_storage.part_deduplication import (
+    collect_deduplication_nodes,
+)
 from ch_tools.chadmin.internal.object_storage.s3_object_checker import (
     FATAL_OBJECT_ERROR_CODES,
     S3ObjectChecker,
@@ -34,12 +37,16 @@ from ch_tools.chadmin.internal.part import (
 )
 from ch_tools.chadmin.internal.partition import attach_partition
 from ch_tools.chadmin.internal.table import get_table
-from ch_tools.chadmin.internal.table_replica import get_table_replica
+from ch_tools.chadmin.internal.table_replica import (
+    get_table_replica,
+    list_table_replicas,
+)
 from ch_tools.chadmin.internal.zero_copy import (
     _get_zero_copy_zookeeper_path_for_disk_type,
     get_zero_copy_lock_unique_id,
 )
 from ch_tools.chadmin.internal.zookeeper import (
+    delete_nodes_batched,
     delete_recursive,
     get_table_shared_id,
     zk_client,
@@ -136,10 +143,13 @@ def attach_checked_partitions(
     keep_going: bool,
     cleanup_old_zero_copy_locks: bool = False,
     quarantine_failed_unprefixed: Optional[str] = None,
+    cleanup_deduplication: bool = False,
 ) -> List[Dict[str, Any]]:
     """Check selected detached parts and attach only safe partition contents."""
     if cleanup_old_zero_copy_locks and not reason:
         raise ValueError("Old zero-copy locks can only be cleaned with --reason")
+    if cleanup_deduplication and check_method is None:
+        raise ValueError("--cleanup-deduplication requires --check-s3-objects")
     if check_method is not None and check_method not in S3_CHECK_METHODS:
         raise ValueError(f"Unsupported S3 check method: {check_method}")
     if (
@@ -186,7 +196,9 @@ def attach_checked_partitions(
             ctx, checks_by_partition, keep_going
         )
 
-    keeper = zk_client(ctx) if cleanup_plans else nullcontext(None)
+    keeper = (
+        zk_client(ctx) if cleanup_plans or cleanup_deduplication else nullcontext(None)
+    )
     with keeper as zk:
         _attach_ready_partitions(
             ctx,
@@ -196,6 +208,7 @@ def attach_checked_partitions(
             keep_going,
             cleanup_plans,
             zk,
+            cleanup_deduplication,
         )
 
     return [check.report() for check in checks]
@@ -364,6 +377,7 @@ def _attach_ready_partitions(
     keep_going: bool,
     cleanup_plans: Dict[PartitionKey, ZeroCopyCleanupPlan],
     zk: Any,
+    cleanup_deduplication: bool = False,
 ) -> None:
     for key in sorted(checks_by_partition):
         partition_checks = checks_by_partition[key]
@@ -389,6 +403,8 @@ def _attach_ready_partitions(
             reason=reason,
             dry_run=dry_run,
             keep_going=keep_going,
+            zk=zk,
+            cleanup_deduplication=cleanup_deduplication,
         )
         if not attached:
             continue
@@ -747,6 +763,8 @@ def _attach_partition(
     reason: str,
     dry_run: bool,
     keep_going: bool,
+    zk: Any = None,
+    cleanup_deduplication: bool = False,
 ) -> bool:
     renamed: List[PartRename] = []
     try:
@@ -754,6 +772,25 @@ def _attach_partition(
         for plan in sorted(plans, key=lambda plan: plan.kind != "quarantine"):
             _apply_part_rename(plan, dry_run)
             renamed.append(plan)
+
+        if cleanup_deduplication:
+            for replica in list_table_replicas(
+                ctx, database_name=key.database, table_name=key.table
+            ):
+                by_part = collect_deduplication_nodes(
+                    zk,
+                    replica["zookeeper_path"],
+                    [
+                        _zero_copy_part_name(check.part)
+                        for check in checks
+                        if check.passed
+                    ],
+                )
+                paths = [node.path for nodes in by_part.values() for node in nodes]
+                if dry_run:
+                    delete_recursive(zk, paths, dry_run=True)
+                else:
+                    delete_nodes_batched(zk, paths)
 
         attach_partition(
             ctx,
