@@ -112,6 +112,13 @@ class LocalState(str, Enum):
     DETACHED = "detached"
 
 
+class FractionMode(str, Enum):
+    """Size used as the base for the cleanup fraction limit."""
+
+    OF_LISTING = "OF_LISTING"
+    OF_ORPHANED = "OF_ORPHANED"
+
+
 def clean(
     ctx: Context,
     object_name_prefix: str,
@@ -125,6 +132,7 @@ def clean(
     max_size_to_delete_fraction: float = 1.0,
     ignore_missing_cloud_storage_backups: bool = False,
     stat_partitioning: StatisticsPeriod = StatisticsPeriod.ALL,
+    fraction_mode: FractionMode = FractionMode.OF_LISTING,
 ) -> ResultStat:
     """
     Clean orphaned S3 objects.
@@ -193,10 +201,15 @@ def clean(
                 dry_run,
             )
 
+        fraction_base_size = (
+            orphaned_objects_size
+            if fraction_mode == FractionMode.OF_ORPHANED
+            else listing_size_in_bucket
+        )
         result_stat = _cleanup_orphaned_objects(
             orphaned_objects_iterator,
             disk_conf,
-            listing_size_in_bucket,
+            fraction_base_size,
             max_size_to_delete_bytes,
             max_size_to_delete_fraction,
             stat_partitioning,
@@ -292,14 +305,14 @@ def get_object_storage_space_usage(
 
 
 def _calculate_size_limits(
-    listing_size_in_bucket: int,
+    fraction_base_size: int,
     max_size_to_delete_bytes: int,
     max_size_to_delete_fraction: float,
 ) -> int:
     """
     Calculates the maximum size of objects to delete.
     """
-    max_size_to_delete = int(listing_size_in_bucket * max_size_to_delete_fraction)
+    max_size_to_delete = int(fraction_base_size * max_size_to_delete_fraction)
     if max_size_to_delete_bytes:
         max_size_to_delete = min(max_size_to_delete, max_size_to_delete_bytes)
     return max_size_to_delete
@@ -332,7 +345,7 @@ def _process_objects_batch(
 def _cleanup_orphaned_objects(
     orphaned_objects_iterator: Callable,
     disk_conf: S3DiskConfiguration,
-    listing_size_in_bucket: int,
+    fraction_base_size: int,
     max_size_to_delete_bytes: int,
     max_size_to_delete_fraction: float,
     stat_partitioning: StatisticsPeriod,
@@ -347,7 +360,7 @@ def _cleanup_orphaned_objects(
     result_stat.update_total(orphaned_objects_count, orphaned_objects_size)
 
     max_size_to_delete = _calculate_size_limits(
-        listing_size_in_bucket, max_size_to_delete_bytes, max_size_to_delete_fraction
+        fraction_base_size, max_size_to_delete_bytes, max_size_to_delete_fraction
     )
 
     for objects in chunked(orphaned_objects_iterator(), KEYS_BATCH_SIZE):
@@ -1042,6 +1055,9 @@ def _sanity_check_before_cleanup(
         total_size_to_delete = 0
         for orphaned_object in orphaned_objects_iterator():
             total_size_to_delete += orphaned_object.size
+
+        if total_size_to_delete == 0:
+            return
 
         # Check if deletion size exceeds safety threshold
         if (

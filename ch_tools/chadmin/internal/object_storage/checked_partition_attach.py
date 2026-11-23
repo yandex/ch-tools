@@ -46,6 +46,7 @@ from ch_tools.chadmin.internal.zero_copy import (
     get_zero_copy_lock_unique_id,
 )
 from ch_tools.chadmin.internal.zookeeper import (
+    delete_nodes_batched,
     delete_recursive,
     get_table_shared_id,
     zk_client,
@@ -785,11 +786,11 @@ def _attach_partition(
                         if check.passed
                     ],
                 )
-                delete_recursive(
-                    zk,
-                    [node.path for nodes in by_part.values() for node in nodes],
-                    dry_run=dry_run,
-                )
+                paths = [node.path for nodes in by_part.values() for node in nodes]
+                if dry_run:
+                    delete_recursive(zk, paths, dry_run=True)
+                else:
+                    delete_nodes_batched(zk, paths)
 
         attach_partition(
             ctx,

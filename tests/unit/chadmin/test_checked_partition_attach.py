@@ -243,7 +243,7 @@ def test_deduplication_cleanup_failure_prevents_attach_and_restores_prefix(
     )
     monkeypatch.setattr(
         checked,
-        "delete_recursive",
+        "delete_nodes_batched",
         MagicMock(side_effect=RuntimeError("cleanup failed")),
     )
     attach = MagicMock()

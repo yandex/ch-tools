@@ -1051,7 +1051,7 @@ def quarantine_object_storage_parts(
                         "Keeper replica set changed while local parts were being "
                         "moved; no Keeper nodes were modified"
                     )
-            delete_recursive(zk, [node.path for node in deduplication_nodes])
+            delete_nodes_batched(zk, [node.path for node in deduplication_nodes])
             delete_zookeeper_part_nodes(zk, nodes)
             if mark_replicas_lost:
                 mark_zookeeper_replicas_lost(zk, lost_plan.nodes_to_mark_lost)

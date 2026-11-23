@@ -41,6 +41,7 @@ from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.common.commands.object_storage import (
     DEFAULT_GUARD_INTERVAL,
+    FractionMode,
     Scope,
     clean,
     collect_object_storage_info,
@@ -164,9 +165,19 @@ def object_storage_group(ctx: Context, disk_name: str) -> None:
     type=FloatRange(min=0.0, max=1.0),
     default=1.0,
     help=(
-        "Maximum fraction size of objects to delete."
-        "Must be in range [0.0; 1.0]"
+        "Maximum fraction of size to delete, relative to --fraction-mode. "
+        "Must be in range [0.0; 1.0]. "
         "Deletion will stop once this limit is reached."
+    ),
+)
+@option(
+    "--fraction-mode",
+    type=Choice([mode.value for mode in FractionMode]),
+    default=FractionMode.OF_LISTING.value,
+    show_default=True,
+    help=(
+        "Base size for --max-size-to-delete-fraction: all listed objects (OF_LISTING) "
+        "or orphaned objects eligible for cleanup (OF_ORPHANED)."
     ),
 )
 @option(
@@ -207,6 +218,7 @@ def clean_command(
     verify_paths_regex: Optional[str],
     max_size_to_delete_bytes: int,
     max_size_to_delete_fraction: float,
+    fraction_mode: str,
     ignore_missing_cloud_storage_backups: bool,
     stat_by_period: StatisticsPeriod,
     max_random_sleep: timedelta,
@@ -239,6 +251,7 @@ def clean_command(
             max_size_to_delete_fraction,
             ignore_missing_cloud_storage_backups,
             stat_by_period,
+            fraction_mode=FractionMode(fraction_mode),
         )
     finally:
         total_size = result_stat.total["total_size"]
