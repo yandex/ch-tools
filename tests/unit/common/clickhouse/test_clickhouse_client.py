@@ -271,8 +271,12 @@ def test_client_config_skips_inaccessible_home(
     monkeypatch.setenv("XDG_CONFIG_HOME", str(home))
     home.chmod(0)
     try:
-        with pytest.raises(PermissionError):
+        try:
             (home / ".clickhouse-client/config.xml").stat()
+        except PermissionError:
+            pass
+        else:
+            pytest.skip("Current process can traverse the restricted directory")
         assert config_module._config_path(dict(os.environ)) == expected
     finally:
         home.chmod(0o700)
