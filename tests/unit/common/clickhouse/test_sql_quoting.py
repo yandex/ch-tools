@@ -19,7 +19,7 @@ from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 def test_partition_arguments_keep_their_sql_roles() -> None:
     ctx = Mock(obj={"config": {"clickhouse": {"alter_table_timeout": 30}}})
     with patch("ch_tools.chadmin.internal.partition.execute_query") as execute:
-        detach_partition(ctx, "db.with.dot", "a\\`b", "it's\\7")
+        detach_partition(ctx, "db.with.dot", r"a\`b", r"it's\7")
     assert execute.call_args.args[1] == (
         r"ALTER TABLE `db.with.dot`.`a\\``b` DETACH PARTITION ID 'it\'s\\7'"
     )
@@ -28,7 +28,7 @@ def test_partition_arguments_keep_their_sql_roles() -> None:
 def test_metadata_patterns_quote_each_value() -> None:
     client = Mock(spec=ClickhouseClient)
     result = ClickhouseClient.render_query(
-        client, "name {{ format_str_match(names) }}", names="a'b, c\\d"
+        client, "name {{ format_str_match(names) }}", names=r"a'b, c\d"
     )
     assert result == r"name IN ('a\'b','c\\d')"
 
@@ -38,7 +38,7 @@ def test_metadata_patterns_quote_each_value() -> None:
 )
 def test_catalog_name_round_trip(tmp_path: Path) -> None:
     database = "db.with.dot"
-    name = "a space,percent%\\`'{}"
+    name = r"a space,percent%\`'{}"
     table = qualified_name(database, name)
     ctx = Mock(obj={"config": {"clickhouse": {"alter_table_timeout": 30}}})
     with patch("ch_tools.chadmin.internal.partition.execute_query") as execute:
@@ -81,7 +81,11 @@ def test_query_parameters_survive_template_rendering_on_both_transports() -> Non
     label = "{sample:String}"
     with patch("requests.post") as post:
         client.query(
-            query, port=ClickhousePort.HTTP, query_args={"label": label}, format_="TSV"
+            query,
+            port=ClickhousePort.HTTP,
+            query_args={"label": label},
+            format_="TSV",
+            log_query=False,
         )
     params = post.call_args.kwargs["params"]
     assert params["param_sample"] == r"ordinary\\value\twith\na quote'"
@@ -91,7 +95,11 @@ def test_query_parameters_survive_template_rendering_on_both_transports() -> Non
         process.returncode = 0
         process.communicate.return_value = (b"", b"")
         client.query(
-            query, port=ClickhousePort.TCP, query_args={"label": label}, format_="TSV"
+            query,
+            port=ClickhousePort.TCP,
+            query_args={"label": label},
+            format_="TSV",
+            log_query=False,
         )
     assert "--param_sample=" + params["param_sample"] in popen.call_args.args[0]
     assert process.communicate.call_args.kwargs["input"] == params["query"].encode()
