@@ -22,6 +22,8 @@ DEFAULT_CONFIG = {
     "clickhouse": {
         "version": None,
         "host": socket.getfqdn(),
+        # Used by object-storage clean, collect-info, deduplicate, and space-usage --scope cluster.
+        "decommissioned_hosts": [],
         "protocol": "https",
         "insecure": False,
         "port": 8443,
@@ -73,9 +75,14 @@ DEFAULT_CONFIG = {
             },
         },
         # see https://docs.aws.amazon.com/botocore/latest/reference/config.html for details
-        "retries": None,
+        "retries": {
+            "mode": "standard",
+            # Four retries in addition to the initial request.
+            "max_attempts": 4,
+        },
     },
     "zookeeper": {
+        "connect_timeout": 20,
         "randomize_hosts": True,
         "username": None,
         "password": None,

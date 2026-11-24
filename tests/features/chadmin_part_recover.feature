@@ -364,12 +364,14 @@ Feature: Recover data from broken detached object-storage parts
 
     When we execute command on clickhouse01
     """
-    chadmin --format yaml data-store detect-broken-partitions --restore-recoverable --detach
+    chadmin --format yaml data-store detect-broken-partitions --restore-recoverable --detach --max-broken-parts-percentage 100
     """
     Then we get response contains
     """
-      file: count.txt
-      status: restored
+        - name: count.txt
+          check: missing
+          recoverable: true
+          action: restored
     """
 
     When we execute command on clickhouse01

@@ -1,10 +1,12 @@
 import os
 import shutil
 import subprocess
+import sys
 from typing import Any, Dict, List, Optional
 
 import boto3
-from click import Context, group, option, pass_context
+from botocore.client import Config
+from click import Choice, Context, FloatRange, group, option, pass_context
 from cloup.constraints import AcceptAtMost, constraint
 
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
@@ -17,11 +19,23 @@ from ch_tools.chadmin.internal.clickhouse_disks import (
     remove_from_ch_disk,
 )
 from ch_tools.chadmin.internal.object_storage.broken_partitions_recovery import (
+    BrokenPart,
     detach_broken_partition,
+    ensure_actions_are_safe,
     find_broken_parts,
     group_broken_parts_by_partition,
-    make_partition_report,
+    make_partition_action_report,
+    make_partition_reports,
+    make_partition_table_row,
     restore_recoverable_broken_partitions,
+    select_actionable_broken_parts,
+)
+from ch_tools.chadmin.internal.object_storage.checked_partition_attach import (
+    S3_CHECK_METHODS,
+)
+from ch_tools.chadmin.internal.object_storage.parts_quarantine import (
+    DETACHED_PREFIX,
+    quarantine_object_storage_parts,
 )
 from ch_tools.chadmin.internal.system import get_version
 from ch_tools.chadmin.internal.utils import remove_from_disk
@@ -38,6 +52,122 @@ def data_store_group() -> None:
     Commands for manipulating data stored by ClickHouse.
     """
     pass
+
+
+def _object_storage_store_path(data_path: str, disk_name: str) -> str:
+    """Build a store path for an existing ClickHouse disk directory."""
+    disks_path = os.path.join(data_path, "disks")
+    try:
+        with os.scandir(disks_path) as entries:
+            disk_directories = {
+                entry.name: entry.path
+                for entry in entries
+                if entry.is_dir(follow_symlinks=False)
+            }
+    except OSError as error:
+        raise ValueError(
+            f"Cannot list ClickHouse disks directory {disks_path}: {error}"
+        ) from error
+
+    disk_path = disk_directories.get(disk_name)
+    if disk_path is None:
+        available = ", ".join(sorted(disk_directories)) or "none"
+        raise ValueError(
+            f"ClickHouse disk {disk_name!r} is not a directory under "
+            f"{disks_path}; available disks: {available}"
+        )
+    return os.path.join(disk_path, "store")
+
+
+@data_store_group.command("detach-object-storage-parts")
+@option(
+    "--check-s3-objects",
+    type=Choice(S3_CHECK_METHODS),
+    help=(
+        "Detach only parts with failed S3 checks. 'head' checks existence and "
+        "size; 'range' also reads the first byte; 'get' reads the whole object. "
+        "Previously quarantined parts finish Keeper cleanup without S3 checks."
+    ),
+)
+@option(
+    "--disk",
+    "disk_name",
+    default="object_storage",
+    show_default=True,
+    help="Name of the object-storage disk.",
+)
+@option(
+    "--detached-prefix",
+    default=DETACHED_PREFIX,
+    show_default=True,
+    help="Prefix added to part directory names under detached/.",
+)
+@option(
+    "--parts-file",
+    default=None,
+    help="Save the part list and Keeper paths to a new JSON file.",
+)
+@option(
+    "-n",
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Show the planned local moves and Keeper deletions without changing them.",
+)
+@option(
+    "-k",
+    "--keep-going",
+    is_flag=True,
+    default=False,
+    help=(
+        "Detach local parts even when metadata or Keeper paths are missing, "
+        "or detached destination names conflict."
+    ),
+)
+@option(
+    "--mark-replicas-lost/--no-mark-replicas-lost",
+    default=True,
+    help=(
+        "Mark every non-local replica as lost so it mimics this replica on its "
+        "next start. Use --no-mark-replicas-lost when the local replica name "
+        "cannot be determined safely."
+    ),
+)
+@option("-v", "--verbose", is_flag=True, help="Print every selected part.")
+@pass_context
+def detach_object_storage_parts_command(
+    ctx: Context,
+    disk_name: str,
+    check_s3_objects: Optional[str],
+    detached_prefix: str,
+    parts_file: Optional[str],
+    dry_run: bool,
+    keep_going: bool,
+    mark_replicas_lost: bool,
+    verbose: bool,
+) -> None:
+    """Offline-detach parts and remove their replica and deduplication records."""
+    data_path = get_clickhouse_config(ctx).data_path
+    root_path = _object_storage_store_path(data_path, disk_name)
+    report = quarantine_object_storage_parts(
+        ctx=ctx,
+        root_path=root_path,
+        metadata_path=os.path.join(data_path, "metadata"),
+        parts_file=parts_file,
+        dry_run=dry_run,
+        detached_prefix=detached_prefix,
+        keep_going=keep_going,
+        mark_replicas_lost=mark_replicas_lost,
+        disk_name=disk_name,
+        check_s3_objects=check_s3_objects,
+    )
+    if verbose:
+        print_response(ctx, [report.summary()], default_format="table")
+    print_response(
+        ctx,
+        report.details() if verbose else [report.summary()],
+        default_format="table",
+    )
 
 
 @data_store_group.command("clean-orphaned-tables")
@@ -284,7 +414,6 @@ def remove_orphaned_sql_object_full(
     ch_version: str,
     disks_config_path: str,
 ) -> None:
-
     path = data["path"]
 
     if not path.startswith(path_to_disk):
@@ -345,6 +474,26 @@ def collect_orphaned_sql_objects_recursive(
 
 @data_store_group.command("detect-broken-partitions")
 @option(
+    "--mode",
+    type=Choice(["head", "range", "full"]),
+    default="head",
+    show_default=True,
+    help=(
+        "S3 object check depth: 'head' checks object metadata; 'range' reads "
+        "the first byte; 'full' streams the complete object and checks its size."
+    ),
+)
+@option(
+    "--max-broken-parts-percentage",
+    type=FloatRange(0.0, 100.0),
+    default=50.0,
+    show_default=True,
+    help=(
+        "Abort requested actions when the percentage of broken parts among "
+        "checked active object-storage parts exceeds this value."
+    ),
+)
+@option(
     "--root-path",
     "root_path",
     default=S3_METADATA_STORE_PATH,
@@ -372,6 +521,8 @@ def collect_orphaned_sql_objects_recursive(
 @pass_context
 def detect_broken_partitions(
     ctx: Context,
+    mode: str,
+    max_broken_parts_percentage: float,
     root_path: str,
     reattach: bool,
     detach: bool,
@@ -384,49 +535,86 @@ def detect_broken_partitions(
         "object_storage",
         ctx.obj["config"]["object_storage"]["bucket_name_prefix"],
     )
+    retries = ctx.obj["config"]["object_storage"].get("retries")
+    boto_config_args: Dict[str, Any] = {"s3": {"addressing_style": "auto"}}
+    if retries is not None:
+        boto_config_args["retries"] = retries
     s3_client = boto3.client(
         "s3",
         endpoint_url=disk_conf.endpoint_url,
         aws_access_key_id=disk_conf.access_key_id,
         aws_secret_access_key=disk_conf.secret_access_key,
+        config=Config(**boto_config_args),
     )
 
+    broken_parts, parts_checked = find_broken_parts(
+        ctx, root_path, s3_client, disk_conf, mode=mode
+    )
+    action_reports: List[Dict[str, Any]] = []
+    actionable_parts = broken_parts
+    if restore_recoverable or detach or reattach:
+        try:
+            ensure_actions_are_safe(
+                broken_parts,
+                parts_checked,
+                max_broken_parts_percentage,
+            )
+        except RuntimeError:
+            _print_broken_partitions_report(ctx, broken_parts, action_reports)
+            sys.stdout.flush()
+            raise
+        actionable_parts = select_actionable_broken_parts(broken_parts)
+
     if restore_recoverable:
-        restore_report = restore_recoverable_broken_partitions(
+        action_reports = restore_recoverable_broken_partitions(
             ctx=ctx,
-            root_path=root_path,
             s3_client=s3_client,
             disk_conf=disk_conf,
+            broken_parts=actionable_parts,
             detach_unrecoverable=detach,
             reattach_unrecoverable=reattach,
         )
-        print_response(ctx, restore_report, default_format="table")
-        return
+    else:
+        broken_parts_by_partition = group_broken_parts_by_partition(actionable_parts)
+        for partition_key in sorted(broken_parts_by_partition):
+            partition_broken_parts = broken_parts_by_partition[partition_key]
+            part_info = partition_broken_parts[0].info
+            logging.debug(
+                "Found a broken object-storage partition: paths={} table={} partition={}",
+                [item.path for item in partition_broken_parts],
+                part_info.table_id,
+                part_info.partition_id,
+            )
+            if detach or reattach:
+                success = detach_broken_partition(ctx, part_info, reattach=reattach)
+                action_reports.append(
+                    make_partition_action_report(
+                        part_info,
+                        reattach=reattach,
+                        success=success,
+                    )
+                )
 
-    broken_parts = find_broken_parts(ctx, root_path, s3_client, disk_conf)
-    broken_parts_by_partition = group_broken_parts_by_partition(broken_parts)
-    repaired_partitions = []
-
-    for partition_key in sorted(broken_parts_by_partition):
-        partition_broken_parts = broken_parts_by_partition[partition_key]
-        broken_part = partition_broken_parts[0]
-        part_info = broken_part.info
-        repaired_partitions.append(make_partition_report(part_info))
-
-        logging.debug(
-            "Found the partition with missing blobs in object storage: paths={} table={} partition={}",
-            [item.path for item in partition_broken_parts],
-            part_info.table_id,
-            part_info.partition_id,
-        )
-        if detach:
-            detach_broken_partition(ctx, part_info, reattach=False)
-        elif reattach:
-            detach_broken_partition(ctx, part_info)
-
-    print_response(ctx, repaired_partitions, default_format="table")
+    _print_broken_partitions_report(ctx, broken_parts, action_reports)
 
     logging.debug(
-        "Found parts with missing s3 keys. Local paths of parts: {}",
+        "Found parts with object-storage check failures. Local paths: {}",
         [broken_part.path for broken_part in broken_parts],
     )
+
+
+def _print_broken_partitions_report(
+    ctx: Context,
+    broken_parts: List[BrokenPart],
+    action_reports: List[Dict[str, Any]],
+) -> None:
+    reports = make_partition_reports(broken_parts, action_reports)
+    if ctx.obj.get("format") in {"json", "yaml"}:
+        print_response(ctx, {"data": reports}, default_format="table")
+    else:
+        print_response(
+            ctx,
+            reports,
+            default_format="table",
+            table_formatter=make_partition_table_row,
+        )

@@ -202,6 +202,79 @@ def remove_s3_object_for_active_part_file(
     node: str,
     part_index: int,
 ) -> None:
+    part_path = get_active_part_path(context, database, table, node, part_index)
+
+    object_key = get_s3_object_keys_for_part_file(context, node, part_path, filename)[0]
+
+    s3_client = s3.S3Client(context)
+    s3_client.delete_data(object_key)
+    assert not s3_client.path_exists(object_key)
+
+
+@when(
+    "we replace s3 objects for active part file {filename} from table "
+    "{database}.{table} on {node:w} with content of size {size:d}"
+)
+def step_replace_s3_objects_for_active_part_file(
+    context: ContextT,
+    filename: str,
+    database: str,
+    table: str,
+    node: str,
+    size: int,
+) -> None:
+    part_path = get_active_part_path(context, database, table, node)
+    object_keys = get_s3_object_keys_for_part_file(context, node, part_path, filename)
+    s3_client = s3.S3Client(context)
+    for object_key in object_keys:
+        s3_client.upload_data(b"x" * size, object_key)
+        assert s3_client.path_exists(object_key)
+
+
+@when(
+    "we make s3 objects for active part file {filename} unreadable from table "
+    "{database}.{table} on {node:w}"
+)
+def step_make_s3_objects_for_active_part_file_unreadable(
+    context: ContextT,
+    filename: str,
+    database: str,
+    table: str,
+    node: str,
+) -> None:
+    part_path = get_active_part_path(context, database, table, node)
+    object_keys = get_s3_object_keys_for_part_file(context, node, part_path, filename)
+    bucket = context.conf["s3"]["bucket"]
+    minio_container = get_container(context, context.conf["s3"]["container"])
+    for object_key in object_keys:
+        object_path = os.path.join("/export", bucket, object_key.lstrip("/"))
+        # Keep xl.meta intact so HEAD succeeds, but move the payload so
+        # GetObject fails while reading the body.
+        move_result = minio_container.exec_run(
+            [
+                "sh",
+                "-c",
+                (
+                    'set -- "$1"/*/part.1; [ -f "$1" ] || exit 1; '
+                    'for path in "$@"; do mv "$path" "$path.unreadable" || exit 1; done'
+                ),
+                "sh",
+                object_path,
+            ]
+        )
+        assert move_result.exit_code == 0, (
+            f"Expected non-inline MinIO data for {object_key}: "
+            f"{move_result.output.decode(errors='replace')}"
+        )
+
+
+def get_active_part_path(
+    context: ContextT,
+    database: str,
+    table: str,
+    node: str,
+    part_index: int = 0,
+) -> str:
     part_path_query = (
         "SELECT path FROM system.parts "
         f"WHERE database='{database}' AND table='{table}' AND active "
@@ -213,16 +286,9 @@ def remove_s3_object_for_active_part_file(
     if not part_data:
         raise AssertionError(
             f"No active part {part_index} found for table {database}.{table} "
-            f"on node {node} "
-            f"when trying to remove S3 object for file {filename}"
+            f"on node {node}"
         )
-    part_path = part_data[0][0]
-
-    object_key = get_s3_object_keys_for_part_file(context, node, part_path, filename)[0]
-
-    s3_client = s3.S3Client(context)
-    s3_client.delete_data(object_key)
-    assert not s3_client.path_exists(object_key)
+    return part_data[0][0]
 
 
 def get_s3_object_keys_for_part_file(

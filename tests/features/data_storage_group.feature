@@ -89,6 +89,337 @@ Feature: chadmin data-store commands
       deleted: 'Yes'
     """
 
+  Scenario: Offline-detach object-storage parts while the second replica is unavailable.
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS quarantine_parts ON CLUSTER 'cluster' SYNC;
+    CREATE DATABASE quarantine_parts ON CLUSTER 'cluster';
+    CREATE TABLE quarantine_parts.parts UUID '20000000-0000-0000-0000-000000000001' ON CLUSTER 'cluster' (n UInt32)
+    ENGINE = ReplicatedMergeTree('/tables/quarantine_parts', '{replica}')
+    PARTITION BY n ORDER BY n SETTINGS storage_policy = 'object_storage';
+    INSERT INTO quarantine_parts.parts VALUES (0);
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3
+    """
+    And we execute query on clickhouse02
+    """
+    SELECT count() FROM quarantine_parts.parts
+    """
+    Then we get response
+    """
+    1
+    """
+    When we stop clickhouse on clickhouse02
+    And we stop clickhouse on clickhouse01
+    And we sleep for 5 seconds
+    And we execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detach-object-storage-parts --parts-file /tmp/quarantined-parts.json
+    """
+    Then we get response contains
+    """
+      moved: 1
+    """
+    And we get response contains
+    """
+      zookeeper_nodes: 2
+    """
+    And we get response contains
+    """
+      local_replicas:
+      - clickhouse01.ch_tools_test
+      replicas_to_mark_lost:
+      - clickhouse02.ch_tools_test
+    """
+    When we execute command on clickhouse01
+    """
+    test -d /var/lib/clickhouse/disks/object_storage/store/200/20000000-0000-0000-0000-000000000001/detached/broken-on-start_0_0_0_0
+    python3 -c "import json; manifest = json.load(open('/tmp/quarantined-parts.json')); assert manifest['dry_run'] is False; assert manifest['parts'][0]['part_name'] == '0_0_0_0'"
+    ! chadmin zookeeper exists /tables/quarantine_parts/replicas/clickhouse01.ch_tools_test/parts/0_0_0_0
+    ! chadmin zookeeper exists /tables/quarantine_parts/replicas/clickhouse02.ch_tools_test/parts/0_0_0_0
+    test "$(chadmin zookeeper get /tables/quarantine_parts/replicas/clickhouse01.ch_tools_test/is_lost)" = 0
+    test "$(chadmin zookeeper get /tables/quarantine_parts/replicas/clickhouse02.ch_tools_test/is_lost)" = 1
+    """
+    And we execute command on clickhouse02
+    """
+    supervisorctl status clickhouse-server | grep -q STOPPED
+    """
+    And we start clickhouse on clickhouse01
+    And we execute query on clickhouse01
+    """
+    SELECT count() FROM system.parts WHERE database = 'quarantine_parts' AND table = 'parts' AND active
+    """
+    Then we get response
+    """
+    0
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT count() FROM system.detached_parts WHERE database = 'quarantine_parts' AND table = 'parts'
+    """
+    Then we get response
+    """
+    1
+    """
+
+  Scenario: Refuse to detach object-storage parts while another replica is active.
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS quarantine_active ON CLUSTER 'cluster' SYNC;
+    CREATE DATABASE quarantine_active ON CLUSTER 'cluster';
+    CREATE TABLE quarantine_active.parts UUID '20000000-0000-0000-0000-000000000002' ON CLUSTER 'cluster' (n UInt32)
+    ENGINE = ReplicatedMergeTree('/tables/quarantine_active', '{replica}')
+    PARTITION BY n ORDER BY n SETTINGS storage_policy = 'object_storage';
+    INSERT INTO quarantine_active.parts VALUES (0);
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3
+    """
+    When we stop clickhouse on clickhouse01
+    And we sleep for 5 seconds
+    And we try to execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detach-object-storage-parts
+    """
+    Then it fails with response contains
+    """
+    Keeper replica is active for quarantine_active.parts
+    """
+    When we execute command on clickhouse01
+    """
+    table_dir=/var/lib/clickhouse/disks/object_storage/store/200/20000000-0000-0000-0000-000000000002
+    test -d "$table_dir/0_0_0_0"
+    test ! -e "$table_dir/detached/broken-on-start_0_0_0_0"
+    chadmin zookeeper exists /tables/quarantine_active/replicas/clickhouse01.ch_tools_test/parts/0_0_0_0
+    chadmin zookeeper exists /tables/quarantine_active/replicas/clickhouse02.ch_tools_test/parts/0_0_0_0
+    """
+
+  Scenario: Dry-run preserves an object-storage part and its replica metadata.
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS quarantine_dry_run ON CLUSTER 'cluster' SYNC;
+    CREATE DATABASE quarantine_dry_run ON CLUSTER 'cluster';
+    CREATE TABLE quarantine_dry_run.parts UUID '20000000-0000-0000-0000-000000000003' ON CLUSTER 'cluster' (n UInt32)
+    ENGINE = ReplicatedMergeTree('/tables/quarantine_dry_run', '{replica}')
+    PARTITION BY n ORDER BY n SETTINGS storage_policy = 'object_storage';
+    INSERT INTO quarantine_dry_run.parts VALUES (0);
+    """
+    And we execute command on clickhouse01
+    """
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3
+    """
+    When we stop clickhouse on clickhouse02
+    And we stop clickhouse on clickhouse01
+    And we sleep for 5 seconds
+    And we execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detach-object-storage-parts --dry-run --parts-file /tmp/quarantined-dry-run-parts.json
+    """
+    Then we get response contains
+    """
+      dry_run: true
+    """
+    And we get response contains
+    """
+      moved: 0
+    """
+    And we get response contains
+    """
+      zookeeper_nodes: 2
+    """
+    And we get response contains
+    """
+      local_replicas:
+      - clickhouse01.ch_tools_test
+      replicas_to_mark_lost:
+      - clickhouse02.ch_tools_test
+    """
+    When we execute command on clickhouse01
+    """
+    table_dir=/var/lib/clickhouse/disks/object_storage/store/200/20000000-0000-0000-0000-000000000003
+    test -d "$table_dir/0_0_0_0"
+    test ! -e "$table_dir/detached/broken-on-start_0_0_0_0"
+    python3 -c "import json; manifest = json.load(open('/tmp/quarantined-dry-run-parts.json')); assert manifest['dry_run'] is True; assert manifest['parts'][0]['part_name'] == '0_0_0_0'"
+    chadmin zookeeper exists /tables/quarantine_dry_run/replicas/clickhouse01.ch_tools_test/parts/0_0_0_0
+    chadmin zookeeper exists /tables/quarantine_dry_run/replicas/clickhouse02.ch_tools_test/parts/0_0_0_0
+    test "$(chadmin zookeeper get /tables/quarantine_dry_run/replicas/clickhouse01.ch_tools_test/is_lost)" = 0
+    test "$(chadmin zookeeper get /tables/quarantine_dry_run/replicas/clickhouse02.ch_tools_test/is_lost)" = 0
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detach-object-storage-parts --dry-run --no-mark-replicas-lost
+    """
+    Then we get response contains
+    """
+      local_replicas:
+      - clickhouse01.ch_tools_test
+      replicas_to_mark_lost: []
+    """
+
+  Scenario: Offline detachment permits attaching the same S3 data again.
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS quarantine_dedup ON CLUSTER 'cluster' SYNC;
+    CREATE DATABASE quarantine_dedup ON CLUSTER 'cluster';
+    CREATE TABLE quarantine_dedup.parts UUID '20000000-0000-0000-0000-000000000004' ON CLUSTER 'cluster' (n UInt32)
+    ENGINE = ReplicatedMergeTree('/tables/quarantine_dedup', '{replica}')
+    PARTITION BY n ORDER BY n SETTINGS storage_policy = 'object_storage';
+    INSERT INTO quarantine_dedup.parts VALUES (0);
+    """
+    And we execute command on clickhouse01
+    """
+    set -e
+    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3
+    chadmin zookeeper create /tables/quarantine_dedup/blocks/0_test 0_0_0_0
+    """
+    And we stop clickhouse on clickhouse02
+    And we stop clickhouse on clickhouse01
+    And we sleep for 5 seconds
+    And we execute command on clickhouse01
+    """
+    set -e
+    chadmin data-store detach-object-storage-parts
+    ! chadmin zookeeper exists /tables/quarantine_dedup/blocks/0_test
+    chadmin zookeeper create /tables/quarantine_dedup/blocks/0_test 0_0_0_0
+    """
+    And we start clickhouse on clickhouse01
+    And we execute command on clickhouse01
+    """
+    set -e
+    chadmin partition attach --database quarantine_dedup --reason broken-on-start --check-s3-objects range --cleanup-deduplication
+    ! chadmin zookeeper exists /tables/quarantine_dedup/blocks/0_test
+    """
+    And we execute query on clickhouse01
+    """
+    SELECT count(), sum(n) FROM quarantine_dedup.parts;
+    """
+    Then we get response
+    """
+    1	0
+    """
+
+  Scenario: Range mode detects an object whose HEAD succeeds but body cannot be read.
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS object_check_mode;
+    CREATE DATABASE object_check_mode;
+    CREATE TABLE object_check_mode.data (value String, p UInt32)
+    ENGINE=MergeTree() ORDER BY value PARTITION BY p
+    SETTINGS storage_policy='object_storage', min_bytes_for_wide_part=0;
+    INSERT INTO object_check_mode.data
+    SELECT randomPrintableASCII(128), 0 FROM numbers(10000);
+    """
+    And we make s3 objects for active part file value.bin unreadable from table object_check_mode.data on clickhouse01
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detect-broken-partitions
+    """
+    Then we get response
+    """
+    data: []
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detect-broken-partitions --mode range
+    """
+    Then we get response contains
+    """
+    - database: object_check_mode
+      table: data
+      partition_id: '0'
+    """
+    When we try to execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detect-broken-partitions --mode range --detach
+    """
+    Then it fails with response contains
+    """
+    S3 check circuit breaker: 1 of 1 checked part(s) are broken (100.00%), threshold is 50.00%; no actions were performed
+    """
+    And we get response contains
+    """
+    - database: object_check_mode
+      table: data
+      partition_id: '0'
+      check: unknown
+      action: none
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detect-broken-partitions --mode range --detach --max-broken-parts-percentage 100
+    """
+    Then we get response contains
+    """
+      check: unknown
+      action: none
+    """
+    And we get response contains
+    """
+        - name: value.bin
+          check: unknown
+          recoverable: false
+          action: none
+    """
+    When we execute query on clickhouse01
+    """
+    SELECT count() FROM system.parts
+    WHERE database = 'object_check_mode' AND table = 'data' AND active
+    """
+    Then we get response
+    """
+    1
+    """
+
+  Scenario: Full object check detects a size mismatch after a successful range read.
+    When we execute queries on clickhouse01
+    """
+    DROP DATABASE IF EXISTS object_check_mode;
+    CREATE DATABASE object_check_mode;
+    CREATE TABLE object_check_mode.data (value UInt32, p UInt32)
+    ENGINE=MergeTree() ORDER BY value PARTITION BY p
+    SETTINGS storage_policy='object_storage', min_bytes_for_wide_part=0;
+    INSERT INTO object_check_mode.data SELECT number, 0 FROM numbers(3);
+    """
+    And we replace s3 objects for active part file columns.txt from table object_check_mode.data on clickhouse01 with content of size 1
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detect-broken-partitions --mode range
+    """
+    Then we get response
+    """
+    data: []
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml data-store detect-broken-partitions --mode full
+    """
+    Then we get response contains
+    """
+    - database: object_check_mode
+      table: data
+      partition_id: '0'
+      check: corrupted
+    """
+    And we get response contains
+    """
+        - name: columns.txt
+          check: corrupted
+          recoverable: false
+          action: none
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format json data-store detect-broken-partitions --mode full > /tmp/broken-partitions.json
+    chadmin partition attach --dry-run --use-partition-list-from-json /tmp/broken-partitions.json
+    """
+    Then we get response contains
+    """
+    ALTER TABLE `object_check_mode`.`data` ATTACH PARTITION ID '0'
+    """
+
   Scenario Outline: Restore recoverable <filename> file for broken object storage part.
     When we execute queries on clickhouse01
     """
@@ -100,13 +431,15 @@ Feature: chadmin data-store commands
     And we remove s3 object for active part file <filename> from table restore_recoverable.file_restore on clickhouse01
     When we execute command on clickhouse01
     """
-    chadmin --format yaml data-store detect-broken-partitions --restore-recoverable
+    chadmin --format yaml data-store detect-broken-partitions --restore-recoverable --max-broken-parts-percentage 100
     """
     Then we get response contains
     """
-      file: <filename>
-      status: restored
-      detail: <detail>
+        - name: <filename>
+          check: missing
+          recoverable: true
+          action: restored
+          action_detail: <detail>
     """
     When we execute query on clickhouse01
     """
@@ -145,31 +478,39 @@ Feature: chadmin data-store commands
     And we remove s3 object for active part file default_compression_codec.txt from table restore_recoverable.file_restore on clickhouse01
     When we execute command on clickhouse01
     """
-    chadmin --format yaml data-store detect-broken-partitions --restore-recoverable
+    chadmin --format yaml data-store detect-broken-partitions --restore-recoverable --max-broken-parts-percentage 100
     """
     Then we get response contains
     """
-      file: checksums.txt
-      status: restored
-      detail: regenerated by ClickHouse ATTACH PARTITION
+        - name: checksums.txt
+          check: missing
+          recoverable: true
+          action: restored
+          action_detail: regenerated by ClickHouse ATTACH PARTITION
     """
     And we get response contains
     """
-      file: columns.txt
-      status: restored
-      detail: regenerated by ClickHouse ATTACH PARTITION
+        - name: columns.txt
+          check: missing
+          recoverable: true
+          action: restored
+          action_detail: regenerated by ClickHouse ATTACH PARTITION
     """
     And we get response contains
     """
-      file: count.txt
-      status: restored
-      detail: uploaded generated content with exact metadata size
+        - name: count.txt
+          check: missing
+          recoverable: true
+          action: restored
+          action_detail: uploaded generated content with exact metadata size
     """
     And we get response contains
     """
-      file: default_compression_codec.txt
-      status: restored
-      detail: uploaded generated content with exact metadata size
+        - name: default_compression_codec.txt
+          check: missing
+          recoverable: true
+          action: restored
+          action_detail: uploaded generated content with exact metadata size
     """
     When we execute query on clickhouse01
     """
@@ -194,24 +535,27 @@ Feature: chadmin data-store commands
     And we remove s3 object for active part 1 file columns.txt from table restore_recoverable.multi_part on clickhouse01
     When we execute command on clickhouse01
     """
-    chadmin --format yaml data-store detect-broken-partitions --restore-recoverable <partition_action>
+    chadmin --format yaml data-store detect-broken-partitions --restore-recoverable <partition_action> --max-broken-parts-percentage 100
     """
     Then we get response contains
     """
-      file: checksums.txt
-      status: restored
-      detail: regenerated by ClickHouse ATTACH PARTITION
+        - name: checksums.txt
+          check: missing
+          recoverable: true
+          action: restored
+          action_detail: regenerated by ClickHouse ATTACH PARTITION
     """
     And we get response contains
     """
-      file: columns.txt
-      status: unrecoverable
-      detail: columns.txt can be restored only for Wide parts
+        - name: columns.txt
+          check: missing
+          recoverable: false
+          action: unrecoverable
+          action_detail: columns.txt can be restored only for Wide parts
     """
     And we get response contains
     """
-      file: '*'
-      status: <partition_status>
+      action: <partition_status>
     """
     When we execute query on clickhouse01
     """
@@ -271,20 +615,25 @@ Feature: chadmin data-store commands
     """
     Then we get response contains
     """
-    - table: '`test_db`.`table1`'
-      partition: '1'
-    - table: '`test_db`.`table1`'
-      partition: '2'
-    - table: '`test_db`.`table2`'
-      partition: '1'
-    - table: '`test_db`.`table2`'
-      partition: '2'
-    - table: '`test_db`.`table2`'
-      partition: '3'
+    - database: test_db
+      table: table1
+      partition_id: '1'
+    - database: test_db
+      table: table1
+      partition_id: '2'
+    - database: test_db
+      table: table2
+      partition_id: '1'
+    - database: test_db
+      table: table2
+      partition_id: '2'
+    - database: test_db
+      table: table2
+      partition_id: '3'
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml data-store detect-broken-partitions --reattach
+    chadmin --format yaml data-store detect-broken-partitions --reattach --max-broken-parts-percentage 100
     """
     When we execute queries on clickhouse01
     """
@@ -338,20 +687,25 @@ Feature: chadmin data-store commands
     """
     Then we get response contains
     """
-    - table: '`test_db`.`table1`'
-      partition: '1'
-    - table: '`test_db`.`table1`'
-      partition: '2'
-    - table: '`test_db`.`table2`'
-      partition: '1'
-    - table: '`test_db`.`table2`'
-      partition: '2'
-    - table: '`test_db`.`table2`'
-      partition: '3'
+    - database: test_db
+      table: table1
+      partition_id: '1'
+    - database: test_db
+      table: table1
+      partition_id: '2'
+    - database: test_db
+      table: table2
+      partition_id: '1'
+    - database: test_db
+      table: table2
+      partition_id: '2'
+    - database: test_db
+      table: table2
+      partition_id: '3'
     """
     When we execute command on clickhouse01
     """
-    chadmin --format yaml data-store detect-broken-partitions --detach
+    chadmin --format yaml data-store detect-broken-partitions --detach --max-broken-parts-percentage 100
     """
     When we execute queries on clickhouse01
     """

@@ -57,7 +57,10 @@ def startup_containers(context: ContextT) -> None:
     """
     Start up docker containers.
     """
-    _call_compose(context.conf, "up -d")
+    action = "up -d"
+    if "with_missing_replica" in getattr(context, "tags", ()):
+        action = f"--file fixtures/missing_replica/compose.yml {action}"
+    _call_compose(context.conf, action)
 
 
 @utils.env_stage("stop", fail=False)
@@ -189,8 +192,10 @@ def _generate_service_config(
         "volumes": volumes + instance_config.get("volumes", []),
         # https://github.com/moby/moby/issues/12080
         "tmpfs": "/var/run",
-        "external_links": instance_config.get("external_links", []),
     }
+
+    if external_links := instance_config.get("external_links"):
+        service["external_links"] = external_links
 
     if "healthcheck" in instance_config:
         service["healthcheck"] = instance_config["healthcheck"]

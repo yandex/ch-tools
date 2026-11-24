@@ -237,3 +237,33 @@ Feature: chadmin commands.
       part: '2_3_3_0'
       result: true
     """
+
+  @require_version_26.2
+  Scenario Outline: Engine filters work on the first cold listing
+    Given we have executed queries on clickhouse01
+    """
+    CREATE DATABASE lazy_listing ENGINE = Atomic SETTINGS lazy_load_tables = 1;
+    CREATE TABLE lazy_listing.mt (id UInt64) ENGINE = MergeTree ORDER BY id;
+    CREATE TABLE lazy_listing.log (id UInt64) ENGINE = Log;
+    DETACH DATABASE lazy_listing;
+    ATTACH DATABASE lazy_listing;
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml table list --database lazy_listing <filter>
+    """
+    Then it completes successfully
+    And we get response contains
+    """
+    name: <included>
+    """
+    And we get response contains
+    """
+    engine: <engine>
+    """
+    And we get response not contains <excluded>
+
+    Examples:
+      | filter                       | included | engine    | excluded  |
+      | --engine %MergeTree%         | mt       | MergeTree | Log       |
+      | --exclude-engine %MergeTree% | log      | Log       | MergeTree |

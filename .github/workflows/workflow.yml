@@ -16,9 +16,11 @@ env:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.SELF_HOSTED_RUNNERS != 'false' && fromJSON('["self-hosted", "yc-ci"]') || 'ubuntu-latest' }}
     steps:
     - uses: actions/checkout@v7
+      with:
+        persist-credentials: false
     - uses: astral-sh/setup-uv@v7
     - name: "lint: isort"
       run: make isort
@@ -35,7 +37,8 @@ jobs:
 
   tests:
     needs: lint
-    runs-on: ubuntu-latest
+    # With the repository variable SELF_HOSTED_RUNNERS = false, every job runs on GitHub-hosted runners.
+    runs-on: ${{ matrix.runner == 'yc' && vars.SELF_HOSTED_RUNNERS != 'false' && fromJSON('["self-hosted", "yc-ci"]') || 'ubuntu-latest' }}
     env:
       CLICKHOUSE_VERSION: ${{ matrix.clickhouse }}
     strategy:
@@ -44,49 +47,74 @@ jobs:
         include:
         - python: "3.10"
           clickhouse: "23.3.22.3"
+          runner: yc
         - python: "3.10"
           clickhouse: "23.8.16.40"
+          runner: yc
         - python: "3.10"
           clickhouse: "24.3.18.7"
+          runner: yc
         - python: "3.10"
           clickhouse: "24.8.14.39"
+          runner: yc
         - python: "3.10"
           clickhouse: "25.3.12.8"
+          runner: yc
         - python: "3.10"
           clickhouse: "25.8.23.13"
+          runner: yc
         - python: "3.10"
           clickhouse: "26.3.12.3"
+          runner: yc
         - python: "3.10"
           clickhouse: "latest"
+          runner: yc
         - python: "3.11"
           clickhouse: "latest"
+          runner: github
         - python: "3.12"
           clickhouse: "latest"
+          runner: github
         - python: "3.13"
           clickhouse: "latest"
+          runner: github
         - python: "3.14"
           clickhouse: "latest"
+          runner: github
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python }}
 
       - run: make test-unit
-      - run: make test-integration
+      - name: make test-integration
+        # The log of the job gets a line per scenario, the full output goes to the artifact.
+        run: |
+          mkdir -p tests/staging
+          make test-integration BEHAVE_ARGS="--no-color --format tests.modules.ci_report:CIReport --outfile /dev/fd/3 --format pretty" \
+            3>&1 > tests/staging/integration.log 2>&1 || {
+            # Lines of the log must not run workflow commands.
+            token=$(cat /proc/sys/kernel/random/uuid)
+            echo "::group::The end of the full log"
+            echo "::stop-commands::$token"
+            tail -n 100 tests/staging/integration.log
+            echo "::$token::"
+            echo "::endgroup::"
+            exit 1
+          }
 
       - uses: actions/upload-artifact@v7
-        if: ${{ failure() }}
+        if: ${{ always() }}
         with:
-          name: integration-test-logs-py${{ matrix.python }}-clickhouse-${{ matrix.clickhouse }}
-          path: tests/staging/logs/
+          name: integration-test-logs-py${{ matrix.python }}-clickhouse-${{ matrix.clickhouse }}-attempt-${{ github.run_attempt }}
+          path: |
+            tests/staging/integration.log
+            tests/staging/logs/
+            tests/reports/
           if-no-files-found: ignore
-
-      - name: publish test report
-        uses: mikepenz/action-junit-report@v6
-        if: always()
-        with:
-          report_paths: 'tests/reports/*.xml'
 
 
   release:

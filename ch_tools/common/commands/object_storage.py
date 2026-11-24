@@ -56,6 +56,10 @@ from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 from ch_tools.common.clickhouse.client.sql import TableRef, quote_string
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
+from ch_tools.common.clickhouse.replicas import (
+    check_cluster_for_decommissioned_hosts,
+    shard_has_decommissioned_hosts,
+)
 
 # Batch size for inserts in a listing table
 # Set not very big value due to default ClickHouse 'http_max_field_value_size' settings value 128Kb
@@ -109,6 +113,13 @@ class LocalState(str, Enum):
     DETACHED = "detached"
 
 
+class FractionMode(str, Enum):
+    """Size used as the base for the cleanup fraction limit."""
+
+    OF_LISTING = "OF_LISTING"
+    OF_ORPHANED = "OF_ORPHANED"
+
+
 def clean(
     ctx: Context,
     object_name_prefix: str,
@@ -122,6 +133,7 @@ def clean(
     max_size_to_delete_fraction: float = 1.0,
     ignore_missing_cloud_storage_backups: bool = False,
     stat_partitioning: StatisticsPeriod = StatisticsPeriod.ALL,
+    fraction_mode: FractionMode = FractionMode.OF_LISTING,
 ) -> ResultStat:
     """
     Clean orphaned S3 objects.
@@ -190,10 +202,15 @@ def clean(
                 dry_run,
             )
 
+        fraction_base_size = (
+            orphaned_objects_size
+            if fraction_mode == FractionMode.OF_ORPHANED
+            else listing_size_in_bucket
+        )
         result_stat = _cleanup_orphaned_objects(
             orphaned_objects_iterator,
             disk_conf,
-            listing_size_in_bucket,
+            fraction_base_size,
             max_size_to_delete_bytes,
             max_size_to_delete_fraction,
             stat_partitioning,
@@ -245,6 +262,7 @@ def get_object_storage_space_usage(
     if scope == Scope.SHARD:
         scope = Scope.HOST
     elif scope == Scope.CLUSTER:
+        check_cluster_for_decommissioned_hosts(ctx, cluster_name)
         assert_equal_table_schema_on_cluster(ctx, database, table, cluster_name)
 
     full_name = TableRef(database, table).sql
@@ -253,7 +271,7 @@ def get_object_storage_space_usage(
     )
 
     parts_usage_query = Query(
-        f"SELECT toString(replica) replicas, state, size FROM {space_usage_table} ORDER BY replica, state"
+        f"SELECT toString(replica) replicas, state, size FROM {space_usage_table} ORDER BY replica, state SETTINGS skip_unavailable_shards=0"
     )
 
     query_result = execute_query(
@@ -264,7 +282,8 @@ def get_object_storage_space_usage(
 
     result: dict[str, dict[str, int]] = defaultdict(dict)
     for row in query_result:
-        result[row["replicas"]][row["state"]] = int(row["size"])
+        usage = result[row["replicas"]]
+        usage[row["state"]] = usage.get(row["state"], 0) + int(row["size"])
 
     result["total"] = defaultdict(int)
     for replica in result:
@@ -287,14 +306,14 @@ def get_object_storage_space_usage(
 
 
 def _calculate_size_limits(
-    listing_size_in_bucket: int,
+    fraction_base_size: int,
     max_size_to_delete_bytes: int,
     max_size_to_delete_fraction: float,
 ) -> int:
     """
     Calculates the maximum size of objects to delete.
     """
-    max_size_to_delete = int(listing_size_in_bucket * max_size_to_delete_fraction)
+    max_size_to_delete = int(fraction_base_size * max_size_to_delete_fraction)
     if max_size_to_delete_bytes:
         max_size_to_delete = min(max_size_to_delete, max_size_to_delete_bytes)
     return max_size_to_delete
@@ -327,7 +346,7 @@ def _process_objects_batch(
 def _cleanup_orphaned_objects(
     orphaned_objects_iterator: Callable,
     disk_conf: S3DiskConfiguration,
-    listing_size_in_bucket: int,
+    fraction_base_size: int,
     max_size_to_delete_bytes: int,
     max_size_to_delete_fraction: float,
     stat_partitioning: StatisticsPeriod,
@@ -342,7 +361,7 @@ def _cleanup_orphaned_objects(
     result_stat.update_total(orphaned_objects_count, orphaned_objects_size)
 
     max_size_to_delete = _calculate_size_limits(
-        listing_size_in_bucket, max_size_to_delete_bytes, max_size_to_delete_fraction
+        fraction_base_size, max_size_to_delete_bytes, max_size_to_delete_fraction
     )
 
     for objects in chunked(orphaned_objects_iterator(), KEYS_BATCH_SIZE):
@@ -373,6 +392,8 @@ def _cleanup_old_service_tables_and_queries(ctx: Context) -> None:
     This helps prevent accumulation of temporary tables from previous runs.
     Some insert queries may be stuck and they should be killed here.
     """
+    if not check_replicas_availability(ctx):
+        raise RuntimeError("Not all active replicas are available")
     config = ctx.obj["config"]["object_storage"]["space_usage"]
     disk_conf: S3DiskConfiguration = ctx.obj["disk_configuration"]
 
@@ -859,7 +880,10 @@ def _collect_space_usage(
             settings=query_settings,
         )
 
-    execute_query(ctx, f"TRUNCATE TABLE {space_usage_table.sql} SYNC")
+    settings = " SETTINGS alter_sync=1" if shard_has_decommissioned_hosts(ctx) else ""
+    execute_query(
+        ctx, f"TRUNCATE TABLE {space_usage_table.sql} SYNC{settings}", format_=None
+    )
     execute_query(
         ctx,
         f"INSERT INTO {space_usage_table.sql} SELECT * FROM {space_usage_table_new.sql}",
@@ -1039,6 +1063,9 @@ def _sanity_check_before_cleanup(
         for orphaned_object in orphaned_objects_iterator():
             total_size_to_delete += orphaned_object.size
 
+        if total_size_to_delete == 0:
+            return
+
         # Check if deletion size exceeds safety threshold
         if (
             total_size_to_delete
@@ -1153,15 +1180,6 @@ def _create_remote_blobs_table(
     drop_existing_table: bool = False,
 ) -> None:
     if drop_existing_table:
-        # Check all replicas are available before destructive DROP operation
-        # This prevents partial deletion when local replica succeeds but remote fails
-        if not check_replicas_availability(ctx, timeout=5):
-            raise RuntimeError(
-                "Not all replicas are available. Skipping DROP TABLE to prevent partial deletion. "
-                "Please ensure all replicas are up and retry the operation."
-            )
-
-        # Use retry for DROP to handle temporarily unavailable replicas
         delete_table(
             ctx,
             table_name.database,
@@ -1169,9 +1187,12 @@ def _create_remote_blobs_table(
             shard=True,
         )
 
+    keeper_name = table_name.display
+    if replicated and shard_has_decommissioned_hosts(ctx):
+        keeper_name += f"_{uuid.uuid4().hex}"
     engine = (
         "ReplicatedMergeTree"
-        + f"({quote_string(replica_zk_prefix + '/{shard}/' + table_name.display)}, '{{replica}}')"
+        + f"({quote_string(replica_zk_prefix + '/{shard}/' + keeper_name)}, '{{replica}}')"
         if replicated
         else "MergeTree"
     )
@@ -1252,9 +1273,12 @@ def _create_space_usage_table(
             shard=True,
         )
 
+    keeper_name = space_usage_table_name.display
+    if drop_existing_table and shard_has_decommissioned_hosts(ctx):
+        keeper_name += f"_{uuid.uuid4().hex}"
     engine = (
         "ReplicatedMergeTree"
-        + f"({quote_string(replica_zk_prefix + '/{shard}/' + space_usage_table_name.display)}, '{{replica}}')"
+        + f"({quote_string(replica_zk_prefix + '/{shard}/' + keeper_name)}, '{{replica}}')"
         if has_zk()
         else "MergeTree"
     )
@@ -1280,9 +1304,9 @@ def _get_fill_local_blobs_table_query(
     """
     Column 'size' in remote_data_paths is supported since 23.3.
     """
-    settings = ""
+    settings = "SETTINGS skip_unavailable_shards=0"
     if match_ch_version(ctx, "24.3"):
-        settings = "SETTINGS traverse_shadow_remote_data_paths=1"
+        settings += ", traverse_shadow_remote_data_paths=1"
 
     size = "size"
     if not match_ch_version(ctx, "23.3"):

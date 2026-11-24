@@ -5,10 +5,34 @@ import pytest
 from ch_tools.chadmin.cli.database_metadata import remove_uuid_from_metadata
 from ch_tools.chadmin.internal.table_metadata_parser import (
     MergeTreeFamilyEngines,
+    MetadataParseError,
+    TableMetadata,
     parse_table_metadata,
 )
 
 PATH_TO_TESTS = "tests/unit/common/clickhouse/"
+
+
+def test_effective_replica_parameters_use_server_defaults() -> None:
+    metadata = TableMetadata(
+        "a99cbcd7-af44-43fe-bb67-591133b8e6c7",
+        MergeTreeFamilyEngines.REPLICATED_MERGE_TREE,
+    )
+
+    assert metadata.effective_replica_path("/tables/{uuid}") == "/tables/{uuid}"
+    assert metadata.effective_replica_name("{replica}") == "{replica}"
+
+
+def test_effective_replica_parameters_require_configured_defaults() -> None:
+    metadata = TableMetadata(
+        "a99cbcd7-af44-43fe-bb67-591133b8e6c7",
+        MergeTreeFamilyEngines.REPLICATED_MERGE_TREE,
+    )
+
+    with pytest.raises(MetadataParseError, match="default_replica_path"):
+        metadata.effective_replica_path(None)
+    with pytest.raises(MetadataParseError, match="default_replica_name"):
+        metadata.effective_replica_name(None)
 
 
 @pytest.mark.parametrize(

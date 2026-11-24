@@ -144,6 +144,39 @@ Feature: chadmin object-storage commands
     Table schema for 'test.space_usage_from_object_storage' on replica 'clickhouse02' is different from local schema
     """
 
+    Given merged clickhouse-tools configuration on clickhouse01
+    """
+    clickhouse:
+      decommissioned_hosts: [clickhouse02]
+      settings:
+        log_comment: decommissioned_host_test
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin object-storage collect-info --to-time 0h --traverse-remote &&
+    chadmin object-storage clean --to-time 0h --dry-run
+    """
+    And we try to execute command on clickhouse01
+    """
+    chadmin object-storage space-usage
+    """
+    Then it fails with response contains
+    """
+    Cluster 'cluster' contains decommissioned hosts: clickhouse02
+    """
+    When we execute query on clickhouse02
+    """
+    SYSTEM FLUSH LOGS;
+    """
+    And we execute query on clickhouse02
+    """
+    SELECT count() FROM system.query_log WHERE log_comment = 'decommissioned_host_test';
+    """
+    Then we get response
+    """
+    0
+    """
+
   Scenario: Dry-run clean with guard period
     When we execute command on clickhouse01
     """
@@ -476,6 +509,82 @@ Feature: chadmin object-storage commands
       TotalSize: 10
     """
 
+  Scenario: Clean with fraction of orphaned size with fraction mode
+    Given merged clickhouse-tools configuration on clickhouse01,clickhouse02
+    """
+    object_storage:
+      clean:
+        verify: True
+        verify_size_error_rate_threshold_fraction: 0
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --max-size-to-delete-fraction 0.75 --fraction-mode OF_ORPHANED --prefix "data/cluster_id/shard_1"
+    """
+    Then we get response contains
+    """
+      Deleted: 0
+      DeletedSize: 0
+      Total: 0
+      TotalSize: 0
+    """
+    Given merged clickhouse-tools configuration on clickhouse01,clickhouse02
+    """
+    object_storage:
+      clean:
+        verify: False
+    """
+    When we put 20 objects in S3
+    """
+      bucket: cloud-storage-test
+      path: /data/cluster_id/shard_1/orphaned_object-{}
+      data: '13'
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --max-size-to-delete-fraction 0.75 --prefix "data/cluster_id/shard_1"
+    """
+    Then we get response contains
+    """
+      WouldDeleted: 20
+      WouldDeletedSize: 40
+      Total: 20
+      TotalSize: 40
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --max-size-to-delete-fraction 0.75 --fraction-mode OF_ORPHANED --prefix "data/cluster_id/shard_1"
+    """
+    Then we get response contains
+    """
+      WouldDeleted: 15
+      WouldDeletedSize: 30
+      Total: 20
+      TotalSize: 40
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --to-time 0h --max-size-to-delete-fraction 0.75 --fraction-mode OF_ORPHANED --prefix "data/cluster_id/shard_1"
+    """
+    Then we get response contains
+    """
+      Deleted: 15
+      DeletedSize: 30
+      Total: 20
+      TotalSize: 40
+    """
+    When we execute command on clickhouse01
+    """
+    chadmin --format yaml object-storage clean --dry-run --to-time 0h --prefix "data/cluster_id/shard_1"
+    """
+    Then we get response contains
+    """
+      WouldDeleted: 5
+      WouldDeletedSize: 10
+      Total: 5
+      TotalSize: 10
+    """
+
   @require_version_23.3
   Scenario: Sanity check clean many orphaned objects
     Given merged clickhouse-tools configuration on clickhouse01,clickhouse02
@@ -745,6 +854,15 @@ Feature: chadmin object-storage commands
 
   @require_version_23.3
   Scenario: Clean with temporarily unavailable replica succeeds after replica returns
+    # The initial availability probe must keep retrying while the replica starts.
+    # A request timeout does not delay retries when connections are refused.
+    Given merged clickhouse-tools configuration on clickhouse01
+    """
+    clickhouse:
+      retries:
+        max_attempts: 30
+        max_interval: 1
+    """
     When we execute command on clickhouse01
     """
     chadmin --format yaml object-storage clean --dry-run --to-time 0h --keep-paths

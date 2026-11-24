@@ -1,0 +1,7 @@
+services:
+  clickhouse01:
+    volumes:
+      - ../fixtures/missing_replica/cluster.xml:/etc/clickhouse-server/config.d/missing_replica.xml:ro
+  clickhouse02:
+    volumes:
+      - ../fixtures/missing_replica/cluster.xml:/etc/clickhouse-server/config.d/missing_replica.xml:ro

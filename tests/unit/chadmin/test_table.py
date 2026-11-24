@@ -1,8 +1,15 @@
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 
 from ch_tools.chadmin.internal import table
+from ch_tools.chadmin.internal.table_metadata_manager import TableMetadataManager
+from ch_tools.chadmin.internal.table_metadata_parser import (
+    MergeTreeFamilyEngines,
+    MetadataParseError,
+    TableMetadata,
+)
 
 
 @pytest.mark.parametrize(
@@ -87,3 +94,61 @@ def test_remove_table_data_uses_clickhouse_disks_for_existing_path(
         disk_config_path="/tmp/disks.xml",
         ch_version="25.3.12.8",
     )
+
+
+def test_delete_detached_table_resolves_defaults_before_removing_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    metadata = TableMetadata(
+        "12345678-1234-1234-1234-123456789012",
+        MergeTreeFamilyEngines.REPLICATED_MERGE_TREE,
+    )
+    remove_data = MagicMock()
+    monkeypatch.setattr(table, "check_table_dettached", MagicMock())
+    monkeypatch.setattr(table.os.path, "exists", MagicMock(return_value=True))
+    monkeypatch.setattr(
+        table.TableMetadataParser, "parse", MagicMock(return_value=metadata)
+    )
+    monkeypatch.setattr(
+        table,
+        "get_clickhouse_config",
+        lambda _ctx: SimpleNamespace(
+            default_replica_path=None,
+            default_replica_name=None,
+        ),
+    )
+    monkeypatch.setattr(table, "_get_disks_data", remove_data)
+
+    with pytest.raises(MetadataParseError, match="default_replica_path"):
+        table.delete_detached_table(MagicMock(), "database", "table")
+
+    remove_data.assert_not_called()
+
+
+def test_uuid_validation_uses_default_replica_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx = MagicMock()
+    metadata = TableMetadata(
+        "12345678-1234-1234-1234-123456789012",
+        MergeTreeFamilyEngines.REPLICATED_MERGE_TREE,
+    )
+    shared_id = MagicMock(return_value=metadata.table_uuid)
+    monkeypatch.setattr(
+        "ch_tools.chadmin.internal.table_metadata_manager.TableMetadataParser.parse",
+        MagicMock(return_value=metadata),
+    )
+    monkeypatch.setattr(
+        "ch_tools.chadmin.internal.table_metadata_manager.get_clickhouse_config",
+        lambda _ctx: SimpleNamespace(default_replica_path="/tables/default"),
+    )
+    monkeypatch.setattr(
+        "ch_tools.chadmin.internal.table_metadata_manager.get_table_shared_id",
+        shared_id,
+    )
+
+    TableMetadataManager._verify_possible_change_uuid(
+        ctx, "/metadata/table.sql", metadata.table_uuid
+    )
+
+    shared_id.assert_called_once_with(ctx, "/tables/default")

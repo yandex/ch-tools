@@ -133,8 +133,14 @@ def test_remote_password_uses_request_body_and_stdin() -> None:
         assert "private" not in str(http_error.value)
         assert "500" in str(http_error.value)
 
-    with patch("subprocess.Popen") as popen:
-        process = popen.return_value
+    with (
+        patch(
+            "ch_tools.common.clickhouse.client.client_config._config_path",
+            return_value=None,
+        ),
+        patch("subprocess.Popen") as popen,
+    ):
+        process = popen.return_value.__enter__.return_value
         process.returncode = 0
         process.communicate.return_value = (b"", b"")
         client.query(
@@ -145,7 +151,8 @@ def test_remote_password_uses_request_body_and_stdin() -> None:
             log_query=False,
         )
         assert process.communicate.call_args.kwargs["input"] == expected.encode()
-        assert popen.call_args.kwargs["env"]["CLICKHOUSE_PASSWORD"] == password
+        assert password not in popen.call_args.kwargs["env"].values()
+        assert popen.call_args.kwargs["pass_fds"]
         assert all("private" not in arg for arg in popen.call_args.args[0])
 
         process.returncode = 1

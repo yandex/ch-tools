@@ -42,7 +42,7 @@ from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import get_table_shared_id
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import format_bytes, print_response
-from ch_tools.common.clickhouse.config import get_cluster_name
+from ch_tools.common.clickhouse.config import get_clickhouse_config, get_cluster_name
 
 FIELD_FORMATTERS = {
     "disk_size": format_bytes,
@@ -927,9 +927,9 @@ def change_uuid_command(
                     f"Table {table_name} is not replicated. Failed get uuid from table_shared_id node."
                 )
 
-            assert metadata.replica_path is not None
-
-            replica_path = metadata.replica_path
+            replica_path = metadata.effective_replica_path(
+                get_clickhouse_config(ctx).default_replica_path
+            )
 
             logging.debug(
                 "Table {} is being changed table_shared_id {} by path {}",

@@ -18,6 +18,7 @@ from ch_tools.chadmin.internal.table_metadata_parser import (
 )
 from ch_tools.chadmin.internal.zookeeper import get_table_shared_id
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.config import get_clickhouse_config
 
 if TYPE_CHECKING:
     from click import Context
@@ -41,20 +42,22 @@ class TableMetadataManager:
         if not metadata.table_engine.is_table_engine_replicated():
             return
 
-        assert metadata.replica_path is not None
+        replica_path = metadata.effective_replica_path(
+            get_clickhouse_config(ctx).default_replica_path
+        )
 
         logging.debug(
             "Table metadata={} with Replicated table engine, replica_name={}, replica_path={}",
             table_local_metadata_path,
             metadata.replica_name,
-            metadata.replica_path,
+            replica_path,
         )
-        if "{uuid}" in metadata.replica_path:
+        if "{uuid}" in replica_path:
             raise ClickException(
-                f"Changing uuid for ReplicatedMergeTree that contains macros uuid in replica path was not allowed. replica_path={metadata.replica_path}"
+                f"Changing uuid for ReplicatedMergeTree that contains macros uuid in replica path was not allowed. replica_path={replica_path}"
             )
 
-        table_shared_id = get_table_shared_id(ctx, metadata.replica_path)
+        table_shared_id = get_table_shared_id(ctx, replica_path)
 
         logging.debug(
             "Check that dst_uuid {} is equal with table_shared_id {} node.",
@@ -198,7 +201,6 @@ class TableMetadataManager:
             logging.info("{}.{} is not a table, skip checking.", database, table)
 
         if attached and not is_view_engine:
-
             # we could not just detach view - problem with cleanupDetachedTables
             detach_table(
                 ctx, database_name=database, table_name=table, permanently=False

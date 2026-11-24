@@ -48,8 +48,20 @@ class S3DiskConfiguration(ObjectStorageDiskConfiguration):
     def from_config(
         config: "ClickhouseStorageConfiguration", name: str, bucket_name_prefix: str
     ) -> "S3DiskConfiguration":
+        # In case cache disks wraps another disk
+        seen = set()
+        disk_name = name
+        while True:
+            if disk_name in seen:
+                raise RuntimeError(f"Cycle in cache disk configuration: '{disk_name}'.")
+            seen.add(disk_name)
+            disk_config = config.get_disk_config(disk_name)
+            if disk_config.get("type") != "cache":
+                break
+            disk_name = disk_config["disk"]
+
         disk = ObjectStorageDiskConfiguration._get_disk_config(
-            config, name, S3DiskConfiguration.OBJECT_STORAGE_TYPE
+            config, disk_name, S3DiskConfiguration.OBJECT_STORAGE_TYPE
         )
 
         access_key_id = disk["access_key_id"]

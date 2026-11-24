@@ -1,5 +1,4 @@
 import json
-import os
 import subprocess
 from datetime import timedelta
 from typing import Any, Dict, Optional, Tuple, Union
@@ -20,6 +19,7 @@ from ch_tools.common.utils import version_ge
 
 from ..config import get_clickhouse_config
 from ..config.clickhouse import ClickhousePort
+from .client_config import client_config
 from .error import ClickhouseError
 from .retry import _log_retry_attempt, is_transient_error
 from .utils import _format_str_imatch, _format_str_match
@@ -147,7 +147,10 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
         host: str,
         port: ClickhousePort,
     ) -> Any:
-        # Private method, we are sure that port is tcps or tcp and presents in config
+        """Run the client with credentials in private configuration properties."""
+        if not query:
+            raise RuntimeError(1, "Can't send empty query in tcp(s) port")
+
         cmd = [
             "clickhouse-client",
             "--host",
@@ -159,25 +162,32 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
             cmd.extend(("--user", self.user))
         if port == ClickhousePort.TCP_SECURE:
             cmd.append("--secure")
-        if not query:
-            raise RuntimeError(1, "Can't send empty query in tcp(s) port")
+        with client_config(self.password) as (config_args, env, pass_fds):
+            cmd.extend(config_args)
+            with subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                env=env,
+                pass_fds=pass_fds,
+            ) as proc:
+                try:
+                    stdout, _stderr = proc.communicate(
+                        input=query.execution_sql.encode()
+                    )
+                except BaseException:
+                    while True:
+                        try:
+                            proc.kill()
+                            proc.wait()
+                            break
+                        except KeyboardInterrupt:
+                            continue
+                    raise
 
-        env = None
-        if self.password is not None:
-            env = {**os.environ, "CLICKHOUSE_PASSWORD": self.password}
-
-        # pylint: disable=consider-using-with
-        proc = subprocess.Popen(
-            cmd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE  # type: ignore[arg-type]
-        )
-        stdout, stderr = proc.communicate(input=query.execution_sql.encode())
-
-        if proc.returncode:
-            if query.contains_secrets:
-                raise RuntimeError(
-                    f"clickhouse-client exited with status {proc.returncode}: {query}"
-                )
-            raise RuntimeError(f'"{cmd}" failed with: {stderr.decode()}')
+            if proc.returncode:
+                raise RuntimeError(f'"{cmd}" failed with exit code {proc.returncode}')
 
         response = stdout.decode().strip()
 

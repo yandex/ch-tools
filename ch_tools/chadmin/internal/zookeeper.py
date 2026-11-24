@@ -17,14 +17,18 @@ from typing import Any, Callable, Dict, Generator, Iterable, List, Optional, Set
 from click import Context
 from kazoo.client import KazooClient
 from kazoo.exceptions import NodeExistsError, NoNodeError, NotEmptyError
+from kazoo.handlers.threading import KazooTimeoutError
 from kazoo.protocol.states import ZnodeStat
 from kazoo.retry import KazooRetry
+from tenacity import RetryCallState, retry, retry_if_exception_type, stop_after_attempt
 
 from ch_tools.chadmin.internal.utils import replace_macros
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
 from ch_tools.common.clickhouse.config.clickhouse import ClickhouseConfig
 from ch_tools.common.utils import escape_for_file_name, unescape_for_file_name
+
+ZOOKEEPER_CONNECT_TIMEOUT_MULTIPLIER = 2
 
 LARGE_RECURSIVE_DELETE_LOG_INTERVAL = 100_000
 RECURSIVE_DELETE_TRANSACTION_MAX_OPS = 1_000
@@ -770,6 +774,51 @@ def delete_recursive(
         )
 
 
+def delete_nodes_batched(zk: KazooClient, paths: Iterable[str]) -> None:
+    """Delete independent node roots in bounded ZooKeeper transactions.
+
+    The common case (leaf nodes) needs one multi request per batch. Nodes from
+    legacy layouts that still have children fall back to recursive deletion.
+    Missing nodes are accepted to make concurrent, repeated cleanup idempotent.
+    """
+    paths = remove_subpaths(list(dict.fromkeys(paths)))
+    counts = _DeleteCounts()
+    nonempty_paths: List[str] = []
+    start = 0
+
+    while start < len(paths):
+        batch: List[str] = []
+        estimated_bytes = 0
+        while start < len(paths) and len(batch) < RECURSIVE_DELETE_TRANSACTION_MAX_OPS:
+            path = paths[start]
+            path_size = _path_delete_size(path)
+            if (
+                batch
+                and estimated_bytes + path_size > RECURSIVE_DELETE_TRANSACTION_MAX_BYTES
+            ):
+                break
+            batch.append(path)
+            estimated_bytes += path_size
+            start += 1
+            if estimated_bytes > RECURSIVE_DELETE_TRANSACTION_MAX_BYTES:
+                break
+
+        nonempty_indices = _delete_candidates(zk, batch, counts)
+        nonempty_paths.extend(batch[index] for index in nonempty_indices)
+
+    if nonempty_paths:
+        delete_recursive(zk, nonempty_paths)
+
+    logging.info(
+        "Batched ZooKeeper deletion completed: roots={}, deleted={}, "
+        "already_absent={}, recursive={}",
+        len(paths),
+        counts.deleted,
+        counts.already_absent,
+        len(nonempty_paths),
+    )
+
+
 def escape_for_zookeeper(s: str) -> str:
     """
     Escape string for ZooKeeper node names using ClickHouse's escapeForFileName logic.
@@ -805,6 +854,38 @@ def get_table_shared_id(ctx: Context, zk_path: str) -> str:
         return ""
 
 
+def _increase_connect_timeout(retry_state: RetryCallState) -> None:
+    if retry_state.attempt_number == 1:
+        return
+    timeout = retry_state.kwargs["timeout"]
+    retry_state.kwargs["timeout"] = timeout * ZOOKEEPER_CONNECT_TIMEOUT_MULTIPLIER
+    logging.warning(
+        "ZooKeeper connection timed out after {} seconds; "
+        "retry {}/2 with a {} second timeout",
+        timeout,
+        retry_state.attempt_number - 1,
+        timeout * ZOOKEEPER_CONNECT_TIMEOUT_MULTIPLIER,
+    )
+
+
+@retry(
+    retry=retry_if_exception_type(KazooTimeoutError),
+    stop=stop_after_attempt(3),
+    before=_increase_connect_timeout,
+    reraise=True,
+)
+def _connect_zk_client(ctx: Context, *, timeout: float) -> KazooClient:
+    """Connect with two retries, doubling the timeout for each retry."""
+    zk = _get_zk_client(ctx)
+    try:
+        zk.start(timeout=timeout)
+    except Exception:
+        zk.stop()
+        zk.close()
+        raise
+    return zk
+
+
 @contextmanager
 def zk_client(ctx: Context) -> Generator[KazooClient, None, None]:
     """
@@ -812,20 +893,22 @@ def zk_client(ctx: Context) -> Generator[KazooClient, None, None]:
 
     Uses an existing client from the context if present,
     otherwise creates, starts, and injects a new one for the context.
-    Cleans up (stops and removes) the client on exit if it was created here.
+    Retries connection timeouts twice, doubling the timeout for each retry.
+    Cleans up (stops, closes, and removes) the client on exit if created here.
     """
 
     if "zk_client" in ctx.obj:
         yield ctx.obj["zk_client"]
     else:
-        zk = _get_zk_client(ctx)
-        zk.start()
+        timeout = ctx.obj["config"].get("zookeeper", {}).get("connect_timeout", 20)
+        zk = _connect_zk_client(ctx, timeout=timeout)
         try:
             ctx.obj["zk_client"] = zk
             yield zk
         finally:
             del ctx.obj["zk_client"]
             zk.stop()
+            zk.close()
 
 
 def _get_zk_client(ctx: Context) -> KazooClient:
