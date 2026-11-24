@@ -17,6 +17,7 @@ from ch_tools.chadmin.internal.schema_formatters import (
 from ch_tools.chadmin.internal.table import table_exists
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.client.sql import qualified_name
 
 
 def parse_source(source: str) -> Tuple[str, Dict[str, str]]:
@@ -69,7 +70,7 @@ def get_schema_from_clickhouse(ctx: Context, database: str, table: str) -> str:
     if not table_exists(ctx, database, table):
         raise ClickException(f"Table `{database}`.`{table}` not found in ClickHouse")
 
-    query = f"SHOW CREATE TABLE `{database}`.`{table}`"
+    query = f"SHOW CREATE TABLE {qualified_name(database, table)}"
     result = execute_query(ctx, query, format_="TSVRaw")
 
     if isinstance(result, str):

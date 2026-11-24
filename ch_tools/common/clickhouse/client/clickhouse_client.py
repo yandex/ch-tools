@@ -11,6 +11,11 @@ from typing_extensions import Self
 
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.query import Query
+from ch_tools.common.clickhouse.client.sql import (
+    encode_query_parameter,
+    quote_identifier,
+    quote_string,
+)
 from ch_tools.common.utils import version_ge
 
 from ..config import get_clickhouse_config
@@ -101,6 +106,10 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
                         **self._settings,
                         "query": query.for_execute(),
                         **per_query_settings,  # overwrites previous settings
+                        **{
+                            f"param_{name}": encode_query_parameter(value)
+                            for name, value in query.parameters.items()
+                        },
                     },
                     headers=headers,
                     json=post_data,
@@ -156,6 +165,10 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
 
         if not query:
             raise RuntimeError(1, "Can't send empty query in tcp(s) port")
+
+        for name, value in query.parameters.items():
+            cmd.append(f"--param_{name}={encode_query_parameter(value)}")
+            masked_cmd.append(f"--param_{name}=*****")
 
         # pylint: disable=consider-using-with
         proc = subprocess.Popen(
@@ -244,7 +257,11 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
                 query = Query(query)
 
             if query_args:
-                query.value = self.render_query(query.value, **query_args)
+                query = Query(
+                    self.render_query(query.value, **query_args),
+                    query.sensitive_args,
+                    parameters=query.parameters,
+                )
 
             if format_:
                 query += f" FORMAT {format_}"
@@ -325,6 +342,9 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
 
     def render_query(self, query: str, **kwargs: Any) -> str:
         env = Environment()
+        env.filters.update(
+            identifier=quote_identifier, literal=lambda value: quote_string(str(value))
+        )
 
         env.globals["version_ge"] = lambda version: version_ge(
             self.get_clickhouse_version(), version

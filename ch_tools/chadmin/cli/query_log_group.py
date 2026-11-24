@@ -188,38 +188,38 @@ def get_statistics_command(
         FROM system.query_log
         WHERE type != 1
         {% if min_date -%}
-          AND event_date >= toDate('{{ min_date }}')
+          AND event_date >= toDate({{ min_date|literal }})
         {% elif min_time -%}
-          AND event_date >= toDate('{{ min_time }}')
+          AND event_date >= toDate({{ min_time|literal }})
         {% endif -%}
         {% if max_date -%}
-          AND event_date <= toDate('{{ max_date }}')
+          AND event_date <= toDate({{ max_date|literal }})
         {% elif max_time -%}
-          AND event_date <= toDate('{{ max_time }}')
+          AND event_date <= toDate({{ max_time|literal }})
         {% endif -%}
         {% if not min_date and not max_date and not min_time and not max_time -%}
           AND event_date = today()
         {% endif -%}
         {% if min_time -%}
-          AND event_time >= toDateTime('{{ min_time }}')
+          AND event_time >= toDateTime({{ min_time|literal }})
         {% endif -%}
         {% if max_time -%}
-          AND query_start_time <= toDateTime('{{ max_time }}')
+          AND query_start_time <= toDateTime({{ max_time|literal }})
         {% endif -%}
         {% if user -%}
-          AND user = '{{ user }}'
+          AND user = {{ user|literal }}
         {% endif -%}
         {% if exclude_user -%}
-          AND user != '{{ exclude_user }}'
+          AND user != {{ exclude_user|literal }}
         {% endif -%}
         {% if query_pattern -%}
-          AND lower(query) LIKE lower('{{ query_pattern }}')
+          AND lower(query) LIKE lower({{ query_pattern|literal }})
         {% endif -%}
         {% if failed -%}
           AND exception != ''
         {% endif -%}
         {% if error -%}
-          AND lower(exception) LIKE lower('{{ error }}')
+          AND lower(exception) LIKE lower({{ error|literal }})
         {% endif -%}
     """
     logging.info(
@@ -257,13 +257,13 @@ def get_query_settings_command(ctx: Context, query_id: str, on_cluster: bool) ->
              Settings.Names "name",
              Settings.Values "value"
         {% if cluster -%}
-        FROM clusterAllReplicas({{ cluster }}, system.query_log)
+        FROM clusterAllReplicas({{ cluster|literal }}, system.query_log)
         {% else -%}
         FROM system.query_log
         {% endif -%}
         ARRAY JOIN Settings
         WHERE type != 1
-          AND query_id = '{{ query_id }}'
+          AND query_id = {{ query_id|literal }}
         """
     logging.info(execute_query(ctx, query_str, query_id=query_id, cluster=cluster))
 
@@ -285,13 +285,13 @@ def get_query_metrics_command(ctx: Context, query_id: str, on_cluster: bool) -> 
              ProfileEvents.Names "name",
              ProfileEvents.Values "value"
         {% if cluster -%}
-        FROM clusterAllReplicas({{ cluster }}, system.query_log)
+        FROM clusterAllReplicas({{ cluster|literal }}, system.query_log)
         {% else -%}
         FROM system.query_log
         {% endif -%}
         ARRAY JOIN ProfileEvents
         WHERE type != 1
-          AND query_id = '{{ query_id }}'
+          AND query_id = {{ query_id|literal }}
         ORDER BY name
         """
     logging.info(execute_query(ctx, query_str, query_id=query_id, cluster=cluster))
@@ -349,44 +349,44 @@ def get_queries(
              stack_trace
              {%- endif %}
         {% if cluster -%}
-        FROM clusterAllReplicas({{ cluster }}, system.query_log)
+        FROM clusterAllReplicas({{ cluster|literal }}, system.query_log)
         {% else -%}
         FROM system.query_log
         {% endif -%}
         WHERE type != 1
         {% if min_date -%}
-          AND event_date >= toDate('{{ min_date }}')
+          AND event_date >= toDate({{ min_date|literal }})
         {% elif min_time -%}
-          AND event_date >= toDate('{{ min_time }}')
+          AND event_date >= toDate({{ min_time|literal }})
         {% endif -%}
         {% if max_date -%}
-          AND event_date <= toDate('{{ max_date }}')
+          AND event_date <= toDate({{ max_date|literal }})
         {% elif max_time -%}
-          AND event_date <= toDate('{{ max_time }}')
+          AND event_date <= toDate({{ max_time|literal }})
         {% endif -%}
         {% if min_time -%}
-          AND event_time >= toDateTime('{{ min_time }}')
+          AND event_time >= toDateTime({{ min_time|literal }})
         {% endif -%}
         {% if max_time -%}
-          AND query_start_time <= toDateTime('{{ max_time }}')
+          AND query_start_time <= toDateTime({{ max_time|literal }})
         {% endif -%}
         {% if client -%}
-          AND client = '{{ client }}'
+          AND client = {{ client|literal }}
         {% endif -%}
         {% if user -%}
-          AND user = '{{ user }}'
+          AND user = {{ user|literal }}
         {% endif -%}
         {% if exclude_user -%}
-          AND user != '{{ exclude_user }}'
+          AND user != {{ exclude_user|literal }}
         {% endif -%}
         {% if query_id -%}
-          AND query_id = '{{ query_id }}'
+          AND query_id = {{ query_id|literal }}
         {% endif -%}
         {% if query_pattern -%}
-          AND lower(query) LIKE lower('{{ query_pattern }}')
+          AND lower(query) LIKE lower({{ query_pattern|literal }})
         {% endif -%}
         {% if exclude_query_pattern -%}
-          AND lower(query) NOT LIKE lower('{{ exclude_query_pattern }}')
+          AND lower(query) NOT LIKE lower({{ exclude_query_pattern|literal }})
         {% endif -%}
         {% if failed is true -%}
           AND exception != ''
@@ -399,10 +399,10 @@ def get_queries(
           AND is_initial_query = 0
         {% endif -%}
         {% if error_pattern -%}
-          AND lower(exception) LIKE lower('{{ error_pattern }}')
+          AND lower(exception) LIKE lower({{ error_pattern|literal }})
         {% endif -%}
         {% if exclude_error_pattern -%}
-          AND lower(exception) NOT LIKE lower('{{ exclude_error_pattern }}')
+          AND lower(exception) NOT LIKE lower({{ exclude_error_pattern|literal }})
         {% endif -%}
         {% if not query_id -%}
         ORDER BY {{ order_by }} DESC
@@ -447,13 +447,13 @@ def get_query_settings(
              Settings.Names "name",
              Settings.Values "value"
         {% if cluster -%}
-        FROM clusterAllReplicas({{ cluster }}, system.query_log)
+        FROM clusterAllReplicas({{ cluster|literal }}, system.query_log)
         {% else -%}
         FROM system.query_log
         {% endif -%}
         ARRAY JOIN Settings
         WHERE type != 1
-          AND query_id = '{{ query_id }}'
+          AND query_id = {{ query_id|literal }}
         """
     return execute_query(ctx, query_str, query_id=query_id, cluster=cluster)
 
@@ -469,13 +469,13 @@ def get_query_metrics(
              ProfileEvents.Names "name",
              ProfileEvents.Values "value"
         {% if cluster -%}
-        FROM clusterAllReplicas({{ cluster }}, system.query_log)
+        FROM clusterAllReplicas({{ cluster|literal }}, system.query_log)
         {% else -%}
         FROM system.query_log
         {% endif -%}
         ARRAY JOIN ProfileEvents
         WHERE type != 1
-          AND query_id = '{{ query_id }}'
+          AND query_id = {{ query_id|literal }}
         ORDER BY name
         """
     return execute_query(ctx, query_str, query_id=query_id, cluster=cluster)

@@ -38,8 +38,6 @@ from ch_tools.chadmin.internal.object_storage.part_recovery_source import (
     TableRef,
     inspect_file_recoverability,
     parse_qualified_table,
-    quote_identifier,
-    quote_string,
     resolve_recovery_source,
     restore_missing_empty_objects,
 )
@@ -48,6 +46,7 @@ from ch_tools.chadmin.internal.system import get_version
 from ch_tools.chadmin.internal.table import check_table, delete_table, table_exists
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.client.sql import quote_identifier, quote_string
 from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.common.utils import escape_for_file_name, version_ge
@@ -756,6 +755,7 @@ def _get_only_active_part(ctx: Context, table: TableRef) -> str:
         row
         for row in list_parts(
             ctx,
+            exact_table=True,
             database=table.database,
             table=table.table,
             active=True,

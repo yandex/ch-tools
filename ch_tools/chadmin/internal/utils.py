@@ -14,6 +14,7 @@ from click import Context
 
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
+from ch_tools.common.clickhouse.client.sql import quote_string
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
@@ -160,7 +161,7 @@ def get_remote_table_for_hosts(ctx: Context, table: str, replicas: list[str]) ->
         raise RuntimeError("For using remote() table function tcp port must be defined")
 
     replicas_str = ",".join(replicas)
-    return f"{remote_clause}('{replicas_str}', {table}, '{user_name}', '{{user_password}}')"
+    return f"{remote_clause}({quote_string(replicas_str)}, {table}, {quote_string(user_name)}, {{user_password:String}})"
 
 
 def format_query(query: str) -> str:
@@ -240,8 +241,8 @@ def get_table_function_for_scope(
     if scope == Scope.CLUSTER:
         assert cluster_name
         if all_replicas:
-            return f"clusterAllReplicas('{cluster_name}', {table})"
-        return f"cluster('{cluster_name}', {table})"
+            return f"clusterAllReplicas({quote_string(cluster_name)}, {table})"
+        return f"cluster({quote_string(cluster_name)}, {table})"
     if scope == Scope.SHARD:
         return get_remote_table_for_hosts(ctx, table, ClickhouseInfo.get_replicas(ctx))
 
@@ -259,8 +260,8 @@ def assert_equal_table_schema_on_cluster(
                                 hostName() AS host,
                                 create_table_query
                             FROM {tables_table}
-                            WHERE database = '{database}'
-                            AND name = '{table}'"""
+                            WHERE database = {database}
+                            AND name = {table}"""
 
     # Join is needed in case table doesn't exist on some replicas
     get_cluster_schema_query = """
@@ -270,7 +271,7 @@ def assert_equal_table_schema_on_cluster(
                         FROM
                         (
                             SELECT hostName() AS host
-                            FROM clusterAllReplicas('{cluster}', system.one)
+                            FROM clusterAllReplicas({cluster}, system.one)
                         ) AS replicas
                         LEFT JOIN
                         (
@@ -280,8 +281,8 @@ def assert_equal_table_schema_on_cluster(
 
     get_local_schema = get_local_schema_query.format(
         tables_table="system.tables",
-        database=database,
-        table=table,
+        database=quote_string(database),
+        table=quote_string(table),
     )
     get_cluster_schema = get_cluster_schema_query.format(
         get_local_schema_query=get_local_schema_query.format(
@@ -292,10 +293,10 @@ def assert_equal_table_schema_on_cluster(
                 cluster_name=cluster,
                 all_replicas=True,
             ),
-            database=database,
-            table=table,
+            database=quote_string(database),
+            table=quote_string(table),
         ),
-        cluster=cluster,
+        cluster=quote_string(cluster),
     )
 
     local_schema = execute_query(ctx, get_local_schema, format_="JSONCompact")["data"][

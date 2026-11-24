@@ -11,6 +11,7 @@ from click import Context
 
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
+from ch_tools.common.clickhouse.client.sql import quote_identifier
 
 
 def list_databases(
@@ -101,7 +102,7 @@ def list_databases(
 def is_database_exists(ctx: Context, database_name: str) -> bool:
     """Check if database exists in ClickHouse."""
     query = """
-        SELECT 1 FROM system.databases WHERE database='{{ database_name }}'
+        SELECT 1 FROM system.databases WHERE database={{ database_name|literal }}
     """
     rows = execute_query(
         ctx, query, database_name=database_name, format_=OutputFormat.JSON
@@ -111,11 +112,11 @@ def is_database_exists(ctx: Context, database_name: str) -> bool:
 
 def detach_database(ctx: Context, database: str) -> None:
     """Detach database from ClickHouse."""
-    query = f"DETACH DATABASE `{database}`"
+    query = f"DETACH DATABASE {quote_identifier(database)}"
     execute_query(ctx, query, echo=True, format_=None)
 
 
 def attach_database(ctx: Context, database: str) -> None:
     """Attach database to ClickHouse."""
-    query = f"ATTACH DATABASE `{database}`"
+    query = f"ATTACH DATABASE {quote_identifier(database)}"
     execute_query(ctx, query, echo=True, format_=None)

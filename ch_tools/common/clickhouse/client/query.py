@@ -8,7 +8,10 @@ class Query:
         self,
         value: str,
         sensitive_args: Optional[Dict[str, str]] = None,
+        *,
+        parameters: Optional[Dict[str, str]] = None,
     ):
+        self.parameters = parameters or {}
         self.value = value
         self.sensitive_args = sensitive_args or {}
 
@@ -39,4 +42,6 @@ class Query:
         return hash(repr(self))
 
     def __add__(self, other: str) -> "Query":
-        return Query(self.value + other, self.sensitive_args)
+        return Query(
+            self.value + other, self.sensitive_args, parameters=self.parameters
+        )

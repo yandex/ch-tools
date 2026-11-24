@@ -120,9 +120,9 @@ def delete_databases_command(
         exclude_database_pattern=exclude_database_pattern,
     ):
         query = """
-            DROP DATABASE `{{ database }}`
+            DROP DATABASE {{ database|identifier }}
             {% if cluster %}
-            ON CLUSTER '{{ cluster }}'
+            ON CLUSTER {{ cluster|literal }}
             {% endif %}
             """
         execute_query(

@@ -17,6 +17,7 @@ from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import get_table_shared_id
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.retry import retry
+from ch_tools.common.clickhouse.client.sql import quote_string
 from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.common.process_pool import WorkerTask
@@ -69,6 +70,7 @@ def generate_zero_copy_lock_tasks(
 
     part_info = list_parts(
         ctx,
+        exact_table=True,
         database=table["database"],
         table=table["name"],
         disk_name=disk,
@@ -170,9 +172,7 @@ def _get_zero_copy_zookeeper_path_for_disk_type(
         return os.path.join(zero_copy_path, disk_dir)
 
     if table_uuid:
-        get_settings_query = (
-            f"SELECT engine_full FROM system.tables WHERE uuid = '{table_uuid}'"
-        )
+        get_settings_query = f"SELECT engine_full FROM system.tables WHERE uuid = {quote_string(table_uuid)}"
         settings = execute_query(ctx, get_settings_query, format_="JSONCompact")["data"]
         if settings:
             match = re.search(

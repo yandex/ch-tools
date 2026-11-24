@@ -33,6 +33,7 @@ from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.client.error import ClickhouseError
+from ch_tools.common.clickhouse.client.sql import qualified_name, quote_identifier
 from ch_tools.common.commands.replication_lag import estimate_replication_lag
 from ch_tools.common.result import Result
 from ch_tools.common.utils import execute
@@ -169,7 +170,7 @@ def wait_replication_sync_command(
         # Sync replicated databases
         if sync_databases:
             for database in list_databases(ctx, engine_pattern="Replicated"):
-                query = f"SYSTEM SYNC DATABASE REPLICA `{database['database']}`"
+                query = f"SYSTEM SYNC DATABASE REPLICA {quote_identifier(database['database'])}"
                 sync_replica_with_retries(
                     ctx,
                     query,
@@ -181,7 +182,7 @@ def wait_replication_sync_command(
 
         # Sync table replicas
         for replica in list_table_replicas(ctx):
-            full_name = f"`{replica['database']}`.`{replica['table']}`"
+            full_name = qualified_name(replica["database"], replica["table"])
             query = f"SYSTEM SYNC REPLICA {full_name}"
             if lightweight:
                 query = f"{query} LIGHTWEIGHT"

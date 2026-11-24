@@ -5,6 +5,7 @@ from click import ClickException, Context
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.client.sql import qualified_name
 
 
 def get_process(ctx: Context, query_id: str) -> Dict[str, Any]:
@@ -59,22 +60,22 @@ def list_processes(
         Settings
         {% endif %}
         {% if cluster %}
-        FROM clusterAllReplicas({{ cluster }}, system.processes)
+        FROM clusterAllReplicas({{ cluster|literal }}, system.processes)
         {% else %}
         FROM system.processes
         {% endif %}
         WHERE 1
         {% if user %}
-          AND user = '{{ user }}'
+          AND user = {{ user|literal }}
         {% endif %}
         {% if exclude_user %}
-          AND user != '{{ exclude_user }}'
+          AND user != {{ exclude_user|literal }}
         {% endif %}
         {% if query_id %}
-          AND query_id = '{{ query_id }}'
+          AND query_id = {{ query_id|literal }}
         {% endif %}
         {% if query_pattern %}
-          AND lower(query) LIKE lower('{{ query_pattern }}')
+          AND lower(query) LIKE lower({{ query_pattern|literal }})
         {% endif %}
         {% if not query_id %}
         ORDER BY {{ order_by }} DESC
@@ -113,19 +114,19 @@ def kill_process(
         KILL QUERY
         WHERE 1
         {% if user %}
-          AND user = '{{ user }}'
+          AND user = {{ user|literal }}
         {% endif %}
         {% if exclude_user %}
-          AND user != '{{ exclude_user }}'
+          AND user != {{ exclude_user|literal }}
         {% endif %}
         {% if query_id %}
-          AND query_id = '{{ query_id }}'
+          AND query_id = {{ query_id|literal }}
         {% endif %}
         {% if query_template %}
-          AND query ILIKE '{{ query_template }}'
+          AND query ILIKE {{ query_template|literal }}
         {% endif %}
         {% if query_kind %}
-          AND query_kind = '{{ query_kind }}'
+          AND query_kind = {{ query_kind|literal }}
         {% endif %}
         """
     logging.info(
@@ -181,7 +182,7 @@ def list_merges(
             memory_usage,
             thread_id
         {% if cluster %}
-        FROM clusterAllReplicas({{ cluster }}, system.merges)
+        FROM clusterAllReplicas({{ cluster|literal }}, system.merges)
         {% else %}
         FROM system.merges
         {% endif %}
@@ -236,7 +237,7 @@ def list_moves(
             part_size,
             thread_id
         {% if cluster %}
-        FROM clusterAllReplicas({{ cluster }}, system.moves)
+        FROM clusterAllReplicas({{ cluster|literal }}, system.moves)
         {% else %}
         FROM system.moves
         {% endif %}
@@ -295,7 +296,7 @@ def list_replicated_fetches(
             to_detached,
             thread_id
         {% if cluster %}
-        FROM clusterAllReplicas({{ cluster }}, system.replicated_fetches)
+        FROM clusterAllReplicas({{ cluster|literal }}, system.replicated_fetches)
         {% else %}
         FROM system.replicated_fetches
         {% endif %}
@@ -330,7 +331,7 @@ def stop_merges(
     """
     Stop merges for the specified table.
     """
-    query = f"SYSTEM STOP MERGES `{database}`.`{table}`"
+    query = f"SYSTEM STOP MERGES {qualified_name(database, table)}"
     execute_query(ctx, query, timeout=300, format_=None, echo=True, dry_run=dry_run)
 
 
@@ -343,5 +344,5 @@ def start_merges(
     """
     Start merges for the specified table.
     """
-    query = f"SYSTEM START MERGES `{database}`.`{table}`"
+    query = f"SYSTEM START MERGES {qualified_name(database, table)}"
     execute_query(ctx, query, timeout=300, format_=None, echo=True, dry_run=dry_run)

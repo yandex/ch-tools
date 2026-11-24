@@ -27,6 +27,11 @@ from ch_tools.chadmin.internal.utils import (
 from ch_tools.chadmin.internal.zookeeper_clean import clean_zk_metadata_for_hosts
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
+from ch_tools.common.clickhouse.client.sql import (
+    qualified_name,
+    quote_identifier,
+    quote_string,
+)
 
 DISK_LOCAL_KEY = "local"
 DISK_OBJECT_STORAGE_KEY = "object_storage"
@@ -105,7 +110,7 @@ def list_tables(
         {% endif -%}
             WHERE true
         {% if database_name -%}
-            AND t.database = '{{ database_name }}'
+            AND t.database = {{ database_name|literal }}
         {% endif -%}
         {% if database_pattern -%}
             AND t.database {{ format_str_match(database_pattern) }}
@@ -117,7 +122,7 @@ def list_tables(
             AND t.database NOT {{ format_str_match(exclude_database_pattern) }}
         {% endif -%}
         {% if table_name -%}
-            AND t.name = '{{ table_name }}'
+            AND t.name = {{ table_name|literal }}
         {% endif -%}
         {% if table_pattern -%}
             AND t.name {{ format_str_match(table_pattern) }}
@@ -203,8 +208,8 @@ def list_table_columns(
             data_uncompressed_bytes "uncompressed_size",
             marks_bytes
         FROM system.columns
-        WHERE database = '{{ database_name }}'
-          AND table = '{{ table_name }}'
+        WHERE database = {{ database_name|literal }}
+          AND table = {{ table_name|literal }}
         """
     return execute_query(
         ctx,
@@ -233,9 +238,9 @@ def detach_table(
     logging.info("Detaching table `{}`.`{}`", database_name, table_name)
     timeout = ctx.obj["config"]["clickhouse"]["detach_table_timeout"]
     query = """
-        DETACH TABLE `{{ database_name }}`.`{{ table_name }}`
+        DETACH TABLE {{ database_name|identifier }}.{{ table_name|identifier }}
         {%- if cluster %}
-        ON CLUSTER '{{ cluster }}'
+        ON CLUSTER {{ cluster|literal }}
         {%- endif %}
         {%- if permanently %}
         NO DELAY
@@ -269,9 +274,9 @@ def attach_table(
     logging.info("Attaching table `{}`.`{}`", database_name, table_name)
     timeout = ctx.obj["config"]["clickhouse"]["attach_table_timeout"]
     query = """
-        ATTACH TABLE `{{ database_name }}`.`{{ table_name }}`
+        ATTACH TABLE {{ database_name|identifier }}.{{ table_name|identifier }}
         {%- if cluster %}
-        ON CLUSTER '{{ cluster }}'
+        ON CLUSTER {{ cluster|literal }}
         {%- endif %}
         """
     execute_query(
@@ -307,9 +312,9 @@ def delete_table(
     logging.info("Deleting table `{}`.`{}`", database_name, table_name)
     timeout = ctx.obj["config"]["clickhouse"]["drop_table_timeout"]
     query = """
-        DROP TABLE IF EXISTS `{{ database_name }}`.`{{ table_name }}`
+        DROP TABLE IF EXISTS {{ database_name|identifier }}.{{ table_name|identifier }}
         {%- if cluster %}
-        ON CLUSTER '{{ cluster }}'
+        ON CLUSTER {{ cluster|literal }}
         {%- endif %}
         {%- if sync_mode %}
         NO DELAY
@@ -344,8 +349,8 @@ def check_table_dettached(ctx: Context, database_name: str, table_name: str) -> 
         SELECT
             1
         FROM system.tables
-        WHERE database = '{{ database_name }}'
-          AND table = '{{ table_name }}'
+        WHERE database = {{ database_name|literal }}
+          AND table = {{ table_name|literal }}
     """
 
     response = execute_query(
@@ -527,7 +532,7 @@ def materialize_ttl(
     Materialize TTL for the specified table.
     """
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
-    query = f"ALTER TABLE `{database_name}`.`{table_name}` MATERIALIZE TTL"
+    query = f"ALTER TABLE {qualified_name(database_name, table_name)} MATERIALIZE TTL"
     execute_query(ctx, query, timeout=timeout, echo=echo, dry_run=dry_run, format_=None)
 
 
@@ -544,7 +549,7 @@ def check_table(
     Check table for the specified table.
     """
     timeout = ctx.obj["config"]["clickhouse"]["timeout"]
-    query = f"CHECK TABLE `{database_name}`.`{table_name}`"
+    query = f"CHECK TABLE {qualified_name(database_name, table_name)}"
 
     if partition and part:
         raise ValueError("The partition and the part are specified for check command.")
@@ -568,7 +573,7 @@ def check_table(
 
 def get_info_from_system_tables(ctx: Context, database: str, table: str) -> dict:
     query = f"""
-        SELECT uuid, metadata_path, engine FROM system.tables WHERE database='{database}' AND table='{table}'
+        SELECT uuid, metadata_path, engine FROM system.tables WHERE database={quote_string(database)} AND table={quote_string(table)}
     """
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)["data"]
 
@@ -577,7 +582,7 @@ def get_info_from_system_tables(ctx: Context, database: str, table: str) -> dict
 
 def get_tables_names_from_system_tables(ctx: Context, database: str) -> list:
     query = f"""
-        SELECT name FROM system.tables WHERE database='{database}'
+        SELECT name FROM system.tables WHERE database={quote_string(database)}
         AND engine not in ['View', 'MaterializedView']
     """
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)["data"]
@@ -586,7 +591,7 @@ def get_tables_names_from_system_tables(ctx: Context, database: str) -> list:
 
 def get_table_uuids_from_cluster(ctx: Context, database: str, table: str) -> list:
     query = f"""
-        SELECT uuid FROM clusterAllReplicas('{{cluster}}', system.tables) WHERE database='{database}' AND table='{table}'
+        SELECT uuid FROM clusterAllReplicas('{{cluster}}', system.tables) WHERE database={quote_string(database)} AND table={quote_string(table)}
     """
     rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)["data"]
     return list(set(row["uuid"] for row in rows))
@@ -606,7 +611,7 @@ def get_table_schema_from_cluster(
                 hostName() as host,
                 create_table_query
             FROM clusterAllReplicas('{{cluster}}', system.tables)
-            WHERE database='{database}' AND table='{table}'
+            WHERE database={quote_string(database)} AND table={quote_string(table)}
         """
         rows = execute_query(ctx, query, echo=True, format_=OutputFormat.JSON)["data"]
         # Create a dict mapping host to schema
@@ -676,8 +681,8 @@ def check_schema_equality_in_cluster(
 def has_data_on_disk(ctx: Context, table: TableInfo, disk: str) -> bool:
     query = """
         SELECT count() count FROM system.parts
-        WHERE database = '{{ database }}' AND table = '{{ table }}'
-            AND disk_name = '{{ disk }}' AND active = 1
+        WHERE database = {{ database|literal }} AND table = {{ table|literal }}
+            AND disk_name = {{ disk|literal }} AND active = 1
         """
     parts_count = execute_query(
         ctx,
@@ -695,13 +700,13 @@ def set_table_setting(
     ctx: Context,
     table: TableInfo,
     setting: str,
-    value: Optional[Any] = None,
+    value: Optional[int] = None,
     dry_run: bool = False,
 ) -> None:
     setting_clause = (
-        f"MODIFY SETTING {setting}={value}"
+        f"MODIFY SETTING {quote_identifier(setting)}={value}"
         if value is not None
-        else f"RESET SETTING {setting}"
+        else f"RESET SETTING {quote_identifier(setting)}"
     )
-    query = f"ALTER TABLE {table['database']}.{table['name']} {setting_clause}"
+    query = f"ALTER TABLE {qualified_name(table['database'], table['name'])} {setting_clause}"
     execute_query_on_shard(ctx, query, dry_run=dry_run)

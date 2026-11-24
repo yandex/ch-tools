@@ -17,23 +17,8 @@ from ch_tools.chadmin.internal.part import get_disks, list_detached_parts
 from ch_tools.chadmin.internal.table import list_tables
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.client.sql import TableRef, quote_string
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
-
-
-@dataclass(frozen=True)
-class TableRef:
-    """Qualified ClickHouse table reference."""
-
-    database: str
-    table: str
-
-    @property
-    def sql(self) -> str:
-        return f"{quote_identifier(self.database)}.{quote_identifier(self.table)}"
-
-    @property
-    def display(self) -> str:
-        return f"{self.database}.{self.table}"
 
 
 @dataclass(frozen=True)
@@ -70,16 +55,6 @@ class RecoverySource:
     path: Path
     relative_path: str
     part_name: str
-
-
-def quote_identifier(value: str) -> str:
-    """Quote a ClickHouse identifier."""
-    return f"`{value.replace('`', '``')}`"
-
-
-def quote_string(value: str) -> str:
-    """Quote a ClickHouse string literal."""
-    return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
 def parse_qualified_table(value: str) -> TableRef:
@@ -173,6 +148,8 @@ def _find_detached_part(
         row
         for row in list_detached_parts(
             ctx,
+            exact_table=True,
+            exact_part=True,
             database=table.database,
             table=table.table,
             part_name=part_name,

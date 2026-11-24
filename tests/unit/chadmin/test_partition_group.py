@@ -5,12 +5,14 @@ from ch_tools.chadmin.cli.partition_group import get_partitions
 from ch_tools.common.clickhouse.client.clickhouse_client import ClickhouseClient
 
 
-def render_partitions_query(ch_version: str = "24.8.1.1", **kwargs: Any) -> str:
+def render_partitions_query(
+    ch_version: str = "24.8.1.1", database: str = "", table: str = "", **kwargs: Any
+) -> str:
     """
     Render the query that get_partitions would have executed.
     """
     with patch("ch_tools.chadmin.cli.partition_group.execute_query") as execute_query:
-        get_partitions(MagicMock(), None, None, **kwargs)
+        get_partitions(MagicMock(), database, table, **kwargs)
 
     _, query = execute_query.call_args.args
     client = MagicMock()
@@ -55,3 +57,13 @@ def test_detached_partitions_are_not_filtered_by_size_on_old_clickhouse() -> Non
     )
 
     assert "bytes_on_disk" not in query
+
+
+def test_catalog_lookup_preserves_cli_pattern_behavior() -> None:
+    names = dict(database="db_name", table="a,b%")
+    query = render_partitions_query(**names, exact_table=True)
+    assert "WHERE database = 'db_name'" in query
+    assert "AND table = 'a,b%'" in query
+    query = render_partitions_query(**names)
+    assert "WHERE database LIKE 'db_name'" in query
+    assert "AND table IN ('a','b%')" in query
