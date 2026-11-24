@@ -194,6 +194,9 @@ def _generate_service_config(
         "tmpfs": "/var/run",
     }
 
+    if external_links := instance_config.get("external_links"):
+        service["external_links"] = external_links
+
     if "healthcheck" in instance_config:
         service["healthcheck"] = instance_config["healthcheck"]
 

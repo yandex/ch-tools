@@ -15,6 +15,7 @@ from ch_tools.common.utils import version_ge
 
 from ..config import get_clickhouse_config
 from ..config.clickhouse import ClickhousePort
+from .client_config import client_config
 from .error import ClickhouseError
 from .retry import _log_retry_attempt, is_transient_error
 from .utils import _format_str_imatch, _format_str_match
@@ -137,7 +138,10 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
         host: str,
         port: ClickhousePort,
     ) -> Any:
-        # Private method, we are sure that port is tcps or tcp and presents in config
+        """Run the client with credentials in private configuration properties."""
+        if not query:
+            raise RuntimeError(1, "Can't send empty query in tcp(s) port")
+
         cmd = [
             "clickhouse-client",
             "--host",
@@ -149,22 +153,32 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
             cmd.extend(("--user", self.user))
         if port == ClickhousePort.TCP_SECURE:
             cmd.append("--secure")
-        masked_cmd = cmd.copy()
-        if self.password is not None:
-            cmd.extend(("--password", self.password))
-            masked_cmd.extend(("--password", "*****"))
+        with client_config(self.password) as (config_args, env, pass_fds):
+            cmd.extend(config_args)
+            with subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                env=env,
+                pass_fds=pass_fds,
+            ) as proc:
+                try:
+                    stdout, _stderr = proc.communicate(
+                        input=query.for_execute().encode()
+                    )
+                except BaseException:
+                    while True:
+                        try:
+                            proc.kill()
+                            proc.wait()
+                            break
+                        except KeyboardInterrupt:
+                            continue
+                    raise
 
-        if not query:
-            raise RuntimeError(1, "Can't send empty query in tcp(s) port")
-
-        # pylint: disable=consider-using-with
-        proc = subprocess.Popen(
-            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE  # type: ignore[arg-type]
-        )
-        stdout, stderr = proc.communicate(input=query.for_execute().encode())
-
-        if proc.returncode:
-            raise RuntimeError(f'"{masked_cmd}" failed with: {stderr.decode()}')
+            if proc.returncode:
+                raise RuntimeError(f'"{cmd}" failed with exit code {proc.returncode}')
 
         response = stdout.decode().strip()
 
