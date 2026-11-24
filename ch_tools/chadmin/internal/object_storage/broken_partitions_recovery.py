@@ -899,17 +899,8 @@ def _aggregate_action(actions: List[Dict[str, Any]]) -> str:
     if not actions:
         return "none"
     statuses = [action["status"] for action in actions]
-    partition_statuses = [
-        status
-        for status in statuses
-        if status
-        in {
-            "detached",
-            "detach_failed",
-            "reattached",
-            "reattach_failed",
-        }
-    ]
+    partition_actions = {"detached", "detach_failed", "reattached", "reattach_failed"}
+    partition_statuses = [status for status in statuses if status in partition_actions]
     if partition_statuses:
         return partition_statuses[-1]
     if all(status == "restored" for status in statuses):
