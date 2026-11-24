@@ -616,14 +616,25 @@ Feature: chadmin zero-copy related zookeeper commands.
     """
     chadmin zookeeper cleanup-zero-copy-locks --table-uuid 50000000-1111-0000-0000-000000000001
     """
-    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is empty
+    When we try to execute command on clickhouse01
+    """
+    chadmin zookeeper exists /clickhouse/zero_copy/zero_copy_s3/50000000-1111-0000-0000-000000000001
+    """
+    Then it fails with response contains
+    """
+    False
+    """
     When we execute command on clickhouse02
     """
     chadmin zookeeper create-zero-copy-locks --disk object_storage -t table_diff_uuid --database test --replicas clickhouse02.ch_tools_test
     """
-    Then the list of children on clickhouse01 for zk node /clickhouse/zero_copy/zero_copy_s3 is equal to
+    When we try to execute command on clickhouse01
     """
-    /clickhouse/zero_copy/zero_copy_s3/50000000-1111-0000-0000-000000000001
+    chadmin zookeeper exists /clickhouse/zero_copy/zero_copy_s3/50000000-2222-0000-0000-000000000002
+    """
+    Then it fails with response contains
+    """
+    False
     """
     When we execute command on clickhouse02
     """
