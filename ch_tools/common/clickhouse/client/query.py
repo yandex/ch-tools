@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 
 class Query:
@@ -8,39 +8,43 @@ class Query:
 
     def __init__(
         self,
-        value: str,
+        value: str | Callable[[bool], str],
         sensitive_args: Optional[Dict[str, str]] = None,
-        *,
-        execution_sql: Optional[str] = None,
     ):
-        self._execution_sql = execution_sql
-        self.value = value
+        self._value = value
         self.sensitive_args = sensitive_args or {}
 
+    @property
+    def value(self) -> str:
+        return self._value(True) if callable(self._value) else self._value
+
+    @property
+    def display_sql(self) -> str:
+        return self._render(True)
+
+    @property
+    def execution_sql(self) -> str:
+        return self._render(False)
+
     def for_execute(self) -> str:
-        return (
-            self._execution_sql
-            if self._execution_sql is not None
-            else self._render(False)
-        )
+        return self.execution_sql
 
     @property
     def contains_secrets(self) -> bool:
-        return bool(self.sensitive_args) or self._execution_sql is not None
+        return bool(self.sensitive_args) or callable(self._value)
 
-    def _render(self, mask_sensitive: bool = True) -> str:
+    def _render(self, mask_sensitive: bool) -> str:
+        text = self._value(mask_sensitive) if callable(self._value) else self._value
         if not self.sensitive_args:
-            return self.value
-        sensitive_args = (
-            self._sensitive_args_mask() if mask_sensitive else self.sensitive_args
-        )
-        return self.value.format(**sensitive_args)
+            return text
+        args = self._sensitive_args_mask() if mask_sensitive else self.sensitive_args
+        return text.format(**args)
 
     def _sensitive_args_mask(self) -> Dict[str, str]:
         return {key: self.mask for key in self.sensitive_args}
 
     def __str__(self) -> str:
-        return self._render(True)
+        return self.display_sql
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(value='{str(self)}', sensitive_args={self._sensitive_args_mask()})"
@@ -52,10 +56,6 @@ class Query:
         return hash(repr(self))
 
     def __add__(self, other: str) -> "Query":
-        return Query(
-            self.value + other,
-            self.sensitive_args,
-            execution_sql=(
-                self._execution_sql + other if self._execution_sql is not None else None
-            ),
-        )
+        if callable(self._value):
+            return Query(lambda masked: self._render(masked) + other)
+        return Query(self._value + other, self.sensitive_args)

@@ -100,7 +100,7 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
         verify = self.cert_path if port == ClickhousePort.HTTPS else None
         try:
             if query:
-                body = query.for_execute().encode("utf-8")
+                body = query.execution_sql.encode("utf-8")
                 if post_data is not None:
                     body += b"\n" + json.dumps(post_data, allow_nan=False).encode(
                         "utf-8"
@@ -170,7 +170,7 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
         proc = subprocess.Popen(
             cmd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE  # type: ignore[arg-type]
         )
-        stdout, stderr = proc.communicate(input=query.for_execute().encode())
+        stdout, stderr = proc.communicate(input=query.execution_sql.encode())
 
         if proc.returncode:
             if query.contains_secrets:
@@ -337,25 +337,22 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
         return self.query_json_data(**kwargs)[0]
 
     def _render_statement(self, query: Query, args: Dict[str, Any]) -> Query:
-        # Render secret-bearing fragments as values in the original template.
-        # A brace in a password or an object name must survive as data.
-        display_sql = self.render_query(query.value, **args)
         if not any(
             isinstance(arg, Query) and arg.contains_secrets for arg in args.values()
         ):
-            return Query(display_sql, query.sensitive_args)
+            return Query(self.render_query(query.value, **args), query.sensitive_args)
 
-        execution_args = {
-            key: arg.for_execute() if isinstance(arg, Query) else arg
-            for key, arg in args.items()
-        }
-        execution = Query(
-            self.render_query(query.value, **execution_args), query.sensitive_args
-        )
-        return Query(
-            str(Query(display_sql, query.sensitive_args)),
-            execution_sql=execution.for_execute(),
-        )
+        source = query.value
+
+        def render(masked: bool) -> str:
+            # Insert each fragment as data so braces in names and credentials survive.
+            bindings = args.copy()
+            for key, arg in args.items():
+                if isinstance(arg, Query):
+                    bindings[key] = arg.display_sql if masked else arg.execution_sql
+            return self.render_query(source, **bindings)
+
+        return Query(render, query.sensitive_args)
 
     def render_query(self, query: str, **kwargs: Any) -> str:
         env = Environment()

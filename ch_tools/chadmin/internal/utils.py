@@ -163,9 +163,9 @@ def get_remote_table_for_hosts(ctx: Context, table: str, replicas: list[str]) ->
 
     replicas_str = ",".join(replicas)
     prefix = f"{remote_clause}({quote_string(replicas_str)}, {table}, {quote_string(user_name)}, "
+    password = ch_client.password or ""
     return Query(
-        prefix + "'*****')",
-        execution_sql=prefix + quote_string(ch_client.password or "") + ")",
+        lambda masked: prefix + quote_string(Query.mask if masked else password) + ")"
     )
 
 
