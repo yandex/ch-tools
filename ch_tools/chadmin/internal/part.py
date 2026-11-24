@@ -9,8 +9,6 @@ from ch_tools.chadmin.internal.clickhouse_disks import remove_from_ch_disk
 from ch_tools.chadmin.internal.system import get_version
 from ch_tools.chadmin.internal.utils import execute_query, get_remote_table_for_hosts
 from ch_tools.common import logging
-from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
-from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.client.sql import qualified_name, quote_string
 
 
@@ -50,15 +48,13 @@ def list_parts(
         None: "database, table, name",
     }[order_by]
 
-    parts_table = "system.parts"
-    parameters = {}
-    if remote_replica:
-        parts_table = get_remote_table_for_hosts(ctx, parts_table, [remote_replica])
-        ch_client = clickhouse_client(ctx)
-        parameters = {"user_password": ch_client.password or ""}
+    parts_table = (
+        get_remote_table_for_hosts(ctx, "system.parts", [remote_replica])
+        if remote_replica
+        else "system.parts"
+    )
 
-    query = Query(
-        """
+    query = """
         SELECT
             database,
             table,
@@ -139,9 +135,7 @@ def list_parts(
         {% if limit -%}
         LIMIT {{ limit }}
         {% endif -%}
-        """,
-        parameters=parameters,
-    )
+        """
     return execute_query(
         ctx,
         query,

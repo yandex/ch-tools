@@ -141,7 +141,7 @@ def restart_table_replica(
     timeout = ctx.obj["config"]["clickhouse"]["restart_replica_timeout"]
     query = f"SYSTEM RESTART REPLICA {qualified_name(database_name, table_name)}"
     if cluster:
-        query += f" ON CLUSTER '{cluster}'"
+        query += f" ON CLUSTER {quote_string(cluster)}"
     execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
 
 
@@ -159,7 +159,7 @@ def restore_table_replica(
     timeout = ctx.obj["config"]["clickhouse"]["restore_replica_timeout"]
     query = f"SYSTEM RESTORE REPLICA {qualified_name(database_name, table_name)}"
     if cluster:
-        query += f" ON CLUSTER '{cluster}'"
+        query += f" ON CLUSTER {quote_string(cluster)}"
     execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
 
 

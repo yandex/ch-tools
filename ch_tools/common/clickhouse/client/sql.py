@@ -17,17 +17,6 @@ def qualified_name(database: str, table: str) -> str:
     return f"{quote_identifier(database)}.{quote_identifier(table)}"
 
 
-def encode_query_parameter(value: str) -> str:
-    """ClickHouse reads string query parameters in Escaped format."""
-    return (
-        value.replace("\\", "\\\\")
-        .replace("\t", "\\t")
-        .replace("\n", "\\n")
-        .replace("\r", "\\r")
-        .replace("\0", "\\0")
-    )
-
-
 @dataclass(frozen=True)
 class TableRef:
     """Qualified ClickHouse table reference."""

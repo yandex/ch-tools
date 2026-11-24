@@ -2,6 +2,8 @@ from typing import Any, Dict, Optional
 
 
 class Query:
+    """SQL for display and execution. Equality and hashing use the masked representation."""
+
     mask = "*****"
 
     def __init__(
@@ -9,14 +11,22 @@ class Query:
         value: str,
         sensitive_args: Optional[Dict[str, str]] = None,
         *,
-        parameters: Optional[Dict[str, str]] = None,
+        execution_sql: Optional[str] = None,
     ):
-        self.parameters = parameters or {}
+        self._execution_sql = execution_sql
         self.value = value
         self.sensitive_args = sensitive_args or {}
 
     def for_execute(self) -> str:
-        return self._render(False)
+        return (
+            self._execution_sql
+            if self._execution_sql is not None
+            else self._render(False)
+        )
+
+    @property
+    def contains_secrets(self) -> bool:
+        return bool(self.sensitive_args) or self._execution_sql is not None
 
     def _render(self, mask_sensitive: bool = True) -> str:
         if not self.sensitive_args:
@@ -43,5 +53,9 @@ class Query:
 
     def __add__(self, other: str) -> "Query":
         return Query(
-            self.value + other, self.sensitive_args, parameters=self.parameters
+            self.value + other,
+            self.sensitive_args,
+            execution_sql=(
+                self._execution_sql + other if self._execution_sql is not None else None
+            ),
         )

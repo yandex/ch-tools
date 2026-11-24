@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 from datetime import timedelta
 from typing import Any, Dict, Optional, Tuple, Union
@@ -12,7 +13,6 @@ from typing_extensions import Self
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.client.sql import (
-    encode_query_parameter,
     quote_identifier,
     quote_string,
 )
@@ -100,19 +100,16 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
         verify = self.cert_path if port == ClickhousePort.HTTPS else None
         try:
             if query:
+                body = query.for_execute().encode("utf-8")
+                if post_data is not None:
+                    body += b"\n" + json.dumps(post_data, allow_nan=False).encode(
+                        "utf-8"
+                    )
                 response = requests.post(
                     url,
-                    params={
-                        **self._settings,
-                        "query": query.for_execute(),
-                        **per_query_settings,  # overwrites previous settings
-                        **{
-                            f"param_{name}": encode_query_parameter(value)
-                            for name, value in query.parameters.items()
-                        },
-                    },
+                    params={**self._settings, **per_query_settings},
                     headers=headers,
-                    json=post_data,
+                    data=body,
                     timeout=timeout,
                     stream=stream,
                     verify=verify,
@@ -137,7 +134,11 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
 
             return response.text.strip()
         except requests.exceptions.HTTPError as e:
-            raise ClickhouseError(str(query), e.response) from None
+            raise ClickhouseError(
+                str(query),
+                e.response,
+                hide_response=bool(query and query.contains_secrets),
+            ) from None
 
     def _execute_tcp(
         self,
@@ -158,26 +159,25 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
             cmd.extend(("--user", self.user))
         if port == ClickhousePort.TCP_SECURE:
             cmd.append("--secure")
-        masked_cmd = cmd.copy()
-        if self.password is not None:
-            cmd.extend(("--password", self.password))
-            masked_cmd.extend(("--password", "*****"))
-
         if not query:
             raise RuntimeError(1, "Can't send empty query in tcp(s) port")
 
-        for name, value in query.parameters.items():
-            cmd.append(f"--param_{name}={encode_query_parameter(value)}")
-            masked_cmd.append(f"--param_{name}=*****")
+        env = None
+        if self.password is not None:
+            env = {**os.environ, "CLICKHOUSE_PASSWORD": self.password}
 
         # pylint: disable=consider-using-with
         proc = subprocess.Popen(
-            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE  # type: ignore[arg-type]
+            cmd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE  # type: ignore[arg-type]
         )
         stdout, stderr = proc.communicate(input=query.for_execute().encode())
 
         if proc.returncode:
-            raise RuntimeError(f'"{masked_cmd}" failed with: {stderr.decode()}')
+            if query.contains_secrets:
+                raise RuntimeError(
+                    f"clickhouse-client exited with status {proc.returncode}: {query}"
+                )
+            raise RuntimeError(f'"{cmd}" failed with: {stderr.decode()}')
 
         response = stdout.decode().strip()
 
@@ -257,11 +257,7 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
                 query = Query(query)
 
             if query_args:
-                query = Query(
-                    self.render_query(query.value, **query_args),
-                    query.sensitive_args,
-                    parameters=query.parameters,
-                )
+                query = self._render_statement(query, query_args)
 
             if format_:
                 query += f" FORMAT {format_}"
@@ -339,6 +335,27 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
 
     def query_json_data_first_row(self, **kwargs: Any) -> Any:
         return self.query_json_data(**kwargs)[0]
+
+    def _render_statement(self, query: Query, args: Dict[str, Any]) -> Query:
+        # Render secret-bearing fragments as values in the original template.
+        # A brace in a password or an object name must survive as data.
+        display_sql = self.render_query(query.value, **args)
+        if not any(
+            isinstance(arg, Query) and arg.contains_secrets for arg in args.values()
+        ):
+            return Query(display_sql, query.sensitive_args)
+
+        execution_args = {
+            key: arg.for_execute() if isinstance(arg, Query) else arg
+            for key, arg in args.items()
+        }
+        execution = Query(
+            self.render_query(query.value, **execution_args), query.sensitive_args
+        )
+        return Query(
+            str(Query(display_sql, query.sensitive_args)),
+            execution_sql=execution.for_execute(),
+        )
 
     def render_query(self, query: str, **kwargs: Any) -> str:
         env = Environment()

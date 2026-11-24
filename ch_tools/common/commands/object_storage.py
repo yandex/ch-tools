@@ -521,15 +521,16 @@ def _local_blobs_table(
                 ctx, REMOTE_DATA_PATHS_TABLE, Scope.SHARD, cluster_name=None
             )
 
-            local_blobs_query = _get_fill_local_blobs_table_query(
-                ctx, local_blobs_table, remote_data_paths_table, disk_conf.name
-            )
+            local_blobs_query = _get_fill_local_blobs_table_query(ctx)
 
             timeout = config["antijoin_timeout"]
             query_settings = {"receive_timeout": timeout, "max_execution_time": 0}
             execute_query(
                 ctx,
                 local_blobs_query,
+                remote_data_paths_table=remote_data_paths_table,
+                local_table=local_blobs_table.sql,
+                disk_name=disk_conf.name,
                 timeout=timeout,
                 settings=query_settings,
             )
@@ -1275,10 +1276,7 @@ def _create_space_usage_table(
 
 def _get_fill_local_blobs_table_query(
     ctx: Context,
-    local_blobs_table: TableRef,
-    remote_data_paths_table: str,
-    disk_name: str,
-) -> Query:
+) -> str:
     """
     Column 'size' in remote_data_paths is supported since 23.3.
     """
@@ -1290,10 +1288,8 @@ def _get_fill_local_blobs_table_query(
     if not match_ch_version(ctx, "23.3"):
         size = "0"
 
-    user_password = clickhouse_client(ctx).password or ""
-
-    query = f"""
-        INSERT INTO {local_blobs_table.sql}
+    return f"""
+        INSERT INTO {{{{ local_table }}}}
             SELECT
                 hostName(),
                 remote_path,
@@ -1304,12 +1300,10 @@ def _get_fill_local_blobs_table_query(
                 ) AS status,
                 {size} AS obj_size,
                 1 AS ref_count
-                FROM {remote_data_paths_table}
-                WHERE disk_name = {quote_string(disk_name)}
+                FROM {{{{ remote_data_paths_table }}}}
+                WHERE disk_name = {{{{ disk_name|literal }}}}
                 {settings}
     """
-
-    return Query(query, parameters={"user_password": user_password})
 
 
 def _get_fill_space_usage_query(

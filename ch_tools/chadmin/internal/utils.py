@@ -14,6 +14,7 @@ from click import Context
 
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
+from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.client.sql import quote_string
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
@@ -145,7 +146,7 @@ def execute_query_on_shard(
         )
 
 
-def get_remote_table_for_hosts(ctx: Context, table: str, replicas: list[str]) -> str:
+def get_remote_table_for_hosts(ctx: Context, table: str, replicas: list[str]) -> Query:
     """
     Get remote/remoteSecure function for a table with given remote replicas.
     """
@@ -161,7 +162,11 @@ def get_remote_table_for_hosts(ctx: Context, table: str, replicas: list[str]) ->
         raise RuntimeError("For using remote() table function tcp port must be defined")
 
     replicas_str = ",".join(replicas)
-    return f"{remote_clause}({quote_string(replicas_str)}, {table}, {quote_string(user_name)}, {{user_password:String}})"
+    prefix = f"{remote_clause}({quote_string(replicas_str)}, {table}, {quote_string(user_name)}, "
+    return Query(
+        prefix + "'*****')",
+        execution_sql=prefix + quote_string(ch_client.password or "") + ")",
+    )
 
 
 def format_query(query: str) -> str:
@@ -234,7 +239,7 @@ def get_table_function_for_scope(
     scope: Scope,
     cluster_name: Optional[str] = None,
     all_replicas: bool = False,
-) -> str:
+) -> str | Query:
     """
     Get correct table function for given scope.
     """

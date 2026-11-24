@@ -1,13 +1,20 @@
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Callable
 from unittest.mock import Mock, patch
 
 import pytest
+import requests
 
 from ch_tools.chadmin.internal.partition import detach_partition
+from ch_tools.chadmin.internal.table_replica import (
+    restart_table_replica,
+    restore_table_replica,
+)
+from ch_tools.chadmin.internal.utils import get_remote_table_for_hosts
 from ch_tools.common.clickhouse.client.clickhouse_client import ClickhouseClient
-from ch_tools.common.clickhouse.client.query import Query
+from ch_tools.common.clickhouse.client.error import ClickhouseError
 from ch_tools.common.clickhouse.client.sql import (
     qualified_name,
     quote_identifier,
@@ -68,39 +75,82 @@ def test_catalog_name_round_trip(tmp_path: Path) -> None:
     assert result.stdout.splitlines() == ["8", "1"]
 
 
-def test_query_parameters_survive_template_rendering_on_both_transports() -> None:
+@pytest.mark.parametrize("operation", [restart_table_replica, restore_table_replica])
+def test_replica_cluster_literal(operation: Callable) -> None:
+    ctx = Mock(
+        obj={
+            "config": {
+                "clickhouse": {
+                    "restart_replica_timeout": 1,
+                    "restore_replica_timeout": 1,
+                }
+            }
+        }
+    )
+    with patch("ch_tools.chadmin.internal.table_replica.execute_query") as execute:
+        operation(ctx, "db", "table", cluster=r"team's\cluster")
+    assert execute.call_args.args[1].endswith(r" ON CLUSTER 'team\'s\\cluster'")
+
+
+def test_remote_password_uses_request_body_and_stdin() -> None:
+    password = r"private'\{{ name }}"
     client = ClickhouseClient(
         host="localhost",
+        user="operator",
+        password=password,
         timeout=1,
         ports={ClickhousePort.HTTP: 8123, ClickhousePort.TCP: 9000},
     )
-    value = "ordinary\\value\twith\na quote'"
-    query = Query(
-        "SELECT {sample:String}, {{ label|literal }}", parameters={"sample": value}
-    )
-    label = "{sample:String}"
+    with patch(
+        "ch_tools.chadmin.internal.utils.clickhouse_client", return_value=client
+    ):
+        remote = get_remote_table_for_hosts(Mock(), "system.parts", ["replica"])
+    sql = "SELECT * FROM {{ remote }} WHERE name = {{ name|literal }}"
+    args = {"remote": remote, "name": "{password}"}
+    expected = f"SELECT * FROM remote('replica', system.parts, 'operator', {quote_string(password)}) WHERE name = '{{password}}' FORMAT TSV"
     with patch("requests.post") as post:
         client.query(
-            query,
+            sql,
             port=ClickhousePort.HTTP,
-            query_args={"label": label},
+            query_args=args,
             format_="TSV",
             log_query=False,
         )
-    params = post.call_args.kwargs["params"]
-    assert params["param_sample"] == r"ordinary\\value\twith\na quote'"
-    assert params["query"] == "SELECT {sample:String}, '{sample:String}' FORMAT TSV"
+        request = post.call_args
+        assert request.kwargs["data"] == expected.encode()
+        assert request.kwargs["headers"]["X-ClickHouse-Key"] == password
+        assert request.kwargs["params"] == {}
+        assert request.args == ("http://localhost:8123",)
+
+        response = requests.Response()
+        response.status_code = 500
+        response._content = expected.encode()
+        post.return_value = response
+        with pytest.raises(ClickhouseError) as http_error:
+            client.query(
+                sql, port=ClickhousePort.HTTP, query_args=args, log_query=False
+            )
+        assert "private" not in str(http_error.value)
+        assert "500" in str(http_error.value)
+
     with patch("subprocess.Popen") as popen:
         process = popen.return_value
         process.returncode = 0
         process.communicate.return_value = (b"", b"")
         client.query(
-            query,
+            sql,
             port=ClickhousePort.TCP,
-            query_args={"label": label},
+            query_args=args,
             format_="TSV",
             log_query=False,
         )
-    assert "--param_sample=" + params["param_sample"] in popen.call_args.args[0]
-    assert process.communicate.call_args.kwargs["input"] == params["query"].encode()
-    assert value not in repr(query)
+        assert process.communicate.call_args.kwargs["input"] == expected.encode()
+        assert popen.call_args.kwargs["env"]["CLICKHOUSE_PASSWORD"] == password
+        assert all("private" not in arg for arg in popen.call_args.args[0])
+
+        process.returncode = 1
+        process.communicate.return_value = (b"", expected.encode())
+        with pytest.raises(RuntimeError) as tcp_error:
+            client.query(sql, port=ClickhousePort.TCP, query_args=args, log_query=False)
+        assert "private" not in str(tcp_error.value)
+    assert "private" not in repr(remote)
