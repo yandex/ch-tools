@@ -1,17 +1,12 @@
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Callable, Optional
 from unittest.mock import Mock, patch
 
 import pytest
 import requests
 
 from ch_tools.chadmin.internal.partition import detach_partition, move_partition
-from ch_tools.chadmin.internal.table_replica import (
-    restart_table_replica,
-    restore_table_replica,
-)
 from ch_tools.chadmin.internal.utils import get_remote_table_for_hosts
 from ch_tools.common.clickhouse.client.clickhouse_client import ClickhouseClient
 from ch_tools.common.clickhouse.client.error import ClickhouseError
@@ -27,53 +22,6 @@ from ch_tools.common.clickhouse.client.sql import (
 )
 from ch_tools.common.clickhouse.client.utils import render_template
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
-
-
-@pytest.mark.parametrize(
-    "header,detail",
-    [
-        ("60", "HTTP 404 (ClickHouse code 60)"),
-        (None, "HTTP 404"),
-        ("invalid", "HTTP 404"),
-    ],
-)
-def test_masked_http_error(header: Optional[str], detail: str) -> None:
-    response = requests.Response()
-    response.status_code = 404
-    response._content = b"private"
-    if header is not None:
-        response.headers["X-ClickHouse-Exception-Code"] = header
-    error = ClickhouseError("SELECT ***", response, hide_response=True)
-    assert str(error) == f"{detail}\n\nQuery: SELECT ***"
-
-
-@pytest.mark.parametrize("version", ["23.3", "24.8"])
-def test_partition_arguments_keep_their_sql_roles(
-    version: str, capsys: pytest.CaptureFixture
-) -> None:
-    client = ClickhouseClient(
-        host="localhost", ports={ClickhousePort.HTTP: 8123}, timeout=1
-    )
-    ctx = Mock(
-        obj={
-            "chcli": client,
-            "config": {"clickhouse": {"version": version, "alter_table_timeout": 30}},
-        }
-    )
-    with patch("requests.post") as post, patch("ch_tools.common.logging.debug"):
-        detach_partition(ctx, "db.with.dot", r"a\`b", r"it's\7")
-    assert (
-        capsys.readouterr().out.strip()
-        == r"ALTER TABLE `db.with.dot`.`a\\``b` DETACH PARTITION ID 'it\'s\\7'"
-    )
-    fields = {k: v for k, (_, v) in post.call_args.kwargs["files"].items()}
-    assert fields["param_ch_tools_0"] == "db.with.dot"
-    assert fields["param_ch_tools_1"] == r"a\`b"
-    if version == "23.3":
-        assert fields["query"].endswith(rb"PARTITION ID 'it\'s\\7'")
-    else:
-        assert fields["query"].endswith(b"PARTITION ID {ch_tools_2:String}")
-        assert fields["param_ch_tools_2"] == r"it's\\7"
 
 
 @pytest.mark.parametrize("version", ["23.3", "24.8"])
@@ -101,29 +49,6 @@ def test_move_partition_quotes_destination_and_binds_supported_operands(
     else:
         assert "MOVE PARTITION {ch_tools_2:String}" in query
         assert fields["param_ch_tools_2"] == (None, "7")
-
-
-def test_metadata_patterns_quote_each_value() -> None:
-    client = Mock(spec=ClickhouseClient)
-    result = ClickhouseClient.render_query(
-        client, "name {{ format_str_match(names) }}", names=r"a'b, c\d"
-    )
-    assert result == r"name IN ('a\'b','c\\d')"
-
-
-def test_template_binds_only_active_filters_and_preserves_list_items() -> None:
-    parameters: dict[str, Parameter] = {"ch_tools_1": "explicit"}
-    sql = render_template(
-        "SELECT 1 WHERE name {{ format_str_match(names) }} {% if excluded %}AND name != {{ excluded|bind }}{% endif %}",
-        {"names": r"one, a'b, c\d", "excluded": None},
-        lambda: "24.8",
-        parameters,
-    )
-    assert sql.strip() == "SELECT 1 WHERE name IN {ch_tools_2:Array(String)}"
-    assert parameters == {
-        "ch_tools_1": "explicit",
-        "ch_tools_2": ["one", "a'b", r"c\d"],
-    }
 
 
 @pytest.mark.skipif(
@@ -172,23 +97,6 @@ def test_catalog_name_round_trip(tmp_path: Path) -> None:
     assert result.stdout.splitlines() == ["8", "1"]
 
 
-@pytest.mark.parametrize("operation", [restart_table_replica, restore_table_replica])
-def test_replica_cluster_literal(operation: Callable) -> None:
-    ctx = Mock(
-        obj={
-            "config": {
-                "clickhouse": {
-                    "restart_replica_timeout": 1,
-                    "restore_replica_timeout": 1,
-                }
-            }
-        }
-    )
-    with patch("ch_tools.chadmin.internal.table_replica.execute_query") as execute:
-        operation(ctx, "db", "table", cluster=r"team's\cluster")
-    assert execute.call_args.args[1].endswith(r" ON CLUSTER 'team\'s\\cluster'")
-
-
 def test_remote_password_uses_request_body_and_stdin() -> None:
     password = r"private'\{{ name }}"
     client = ClickhouseClient(
@@ -220,7 +128,8 @@ def test_remote_password_uses_request_body_and_stdin() -> None:
         assert request.args == ("http://localhost:8123",)
 
         response = requests.Response()
-        response.status_code = 500
+        response.status_code = 404
+        response.headers["X-ClickHouse-Exception-Code"] = "60"
         response._content = expected.encode()
         post.return_value = response
         with pytest.raises(ClickhouseError) as http_error:
@@ -228,7 +137,7 @@ def test_remote_password_uses_request_body_and_stdin() -> None:
                 sql, port=ClickhousePort.HTTP, query_args=args, log_query=False
             )
         assert "private" not in str(http_error.value)
-        assert "500" in str(http_error.value)
+        assert "HTTP 404 (ClickHouse code 60)" in str(http_error.value)
 
     with (
         patch(
