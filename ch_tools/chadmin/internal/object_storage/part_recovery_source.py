@@ -17,7 +17,7 @@ from ch_tools.chadmin.internal.part import get_disks, list_detached_parts
 from ch_tools.chadmin.internal.table import list_tables
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
-from ch_tools.common.clickhouse.client.sql import TableRef, quote_string
+from ch_tools.common.clickhouse.client.sql import TableRef
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 
 
@@ -172,12 +172,12 @@ def _infer_table_from_path(
     normalized = str(path).rstrip("/") + "/"
     rows = execute_query(
         ctx,
-        f"""
+        """
         SELECT database, table
         FROM system.detached_parts
-        WHERE path = {quote_string(normalized)}
-           OR path = {quote_string(str(path))}
+        WHERE path IN {paths:Array(String)}
         """,
+        parameters={"paths": [normalized, str(path)]},
         format_="JSON",
     )["data"]
     refs = {TableRef(row["database"], row["table"]) for row in rows}
@@ -215,13 +215,14 @@ def _find_disk_for_path(ctx: Context, path: Path) -> DiskInfo:
 def _validate_policy_disk(ctx: Context, policy: str, disk: str) -> None:
     rows = execute_query(
         ctx,
-        f"""
+        """
         SELECT 1
         FROM system.storage_policies
-        WHERE policy_name = {quote_string(policy)}
-          AND has(disks, {quote_string(disk)})
+        WHERE policy_name = {policy:String}
+          AND has(disks, {disk:String})
         LIMIT 1
         """,
+        parameters={"policy": policy, "disk": disk},
         format_="JSONCompact",
     )["data"]
     if not rows:

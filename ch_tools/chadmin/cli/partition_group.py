@@ -1292,16 +1292,16 @@ def get_partitions(
             GROUP BY database, table, partition_id
             HAVING partition_id IS NOT NULL
             {% if disk_name -%}
-              AND has(groupUniqArray(disk), {{ disk_name|literal }})
+              AND has(groupUniqArray(disk), {{ disk_name|bind }})
             {% endif -%}
             {% if partition_id -%}
               AND partition_id {{ format_str_match(partition_id) }}
             {% endif -%}
             {% if min_partition_id -%}
-              AND partition_id >= {{ min_partition_id|literal }}
+              AND partition_id >= {{ min_partition_id|bind }}
             {% endif -%}
             {% if max_partition_id -%}
-              AND partition_id <= {{ max_partition_id|literal }}
+              AND partition_id <= {{ max_partition_id|bind }}
             {% endif -%}
             {% if min_size and version_ge('23.1') -%}
               AND sum(bytes_on_disk) >= {{ min_size }}
@@ -1357,17 +1357,17 @@ def get_partitions(
               AND partition_id {{ format_str_match(partition_id) }}
             {% endif -%}
             {% if min_partition_id -%}
-              AND partition_id >= {{ min_partition_id|literal }}
+              AND partition_id >= {{ min_partition_id|bind }}
             {% endif -%}
             {% if max_partition_id -%}
-              AND partition_id <= {{ max_partition_id|literal }}
+              AND partition_id <= {{ max_partition_id|bind }}
             {% endif -%}
             {% if disk_name -%}
               AND (database, table, partition_id) IN (
                   SELECT database, table, partition_id
                   FROM system.parts
                   GROUP BY database, table, partition_id
-                  HAVING has(groupUniqArray(disk_name), {{ disk_name|literal }})
+                  HAVING has(groupUniqArray(disk_name), {{ disk_name|bind }})
               )
             {% endif -%}
             {% if merging -%}
@@ -1413,22 +1413,22 @@ def get_partitions(
             GROUP BY database, table, partition_id, partition
             HAVING 1
             {% if disk_name -%}
-               AND has(groupUniqArray(disk_name), {{ disk_name|literal }})
+               AND has(groupUniqArray(disk_name), {{ disk_name|bind }})
             {% endif -%}
             {% if partition_id -%}
                AND partition_id {{ format_str_match(partition_id) }}
             {% endif -%}
             {% if min_partition_id -%}
-               AND partition_id >= {{ min_partition_id|literal }}
+               AND partition_id >= {{ min_partition_id|bind }}
             {% endif -%}
             {% if max_partition_id -%}
-               AND partition_id <= {{ max_partition_id|literal }}
+               AND partition_id <= {{ max_partition_id|bind }}
             {% endif -%}
             {% if min_date -%}
-               AND max_date >= {{ min_date|literal }}
+               AND max_date >= {{ min_date|bind }}
             {% endif -%}
             {% if max_date -%}
-               AND min_date <= {{ max_date|literal }}
+               AND min_date <= {{ max_date|bind }}
             {% endif -%}
             {% if min_size -%}
                AND sum(bytes_on_disk) >= {{ min_size }}

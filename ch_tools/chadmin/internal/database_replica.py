@@ -25,8 +25,9 @@ from ch_tools.chadmin.internal.zookeeper import (
     zk_client,
 )
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.client.parameters import Identifier
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
-from ch_tools.common.clickhouse.client.sql import quote_identifier, quote_string
+from ch_tools.common.clickhouse.client.sql import quote_string
 from ch_tools.common.clickhouse.config import get_clickhouse_config, get_macros
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 
@@ -305,8 +306,14 @@ def supports_system_restore_database_replica(ctx: Context) -> bool:
 
 
 def system_restore_database_replica(ctx: Context, database_name: str) -> None:
-    query = f"SYSTEM RESTORE DATABASE REPLICA {quote_identifier(database_name)}"
-    execute_query(ctx, query, echo=True, format_=None)
+    query = "SYSTEM RESTORE DATABASE REPLICA {db:Identifier}"
+    execute_query(
+        ctx,
+        query,
+        parameters={"db": Identifier(database_name)},
+        echo=True,
+        format_=None,
+    )
     logging.info(
         f"Successfully restored replica for {database_name} using SYSTEM RESTORE DATABASE REPLICA"
     )
@@ -643,10 +650,13 @@ class ZookeeperDatabaseManager:
         Subsequent replicas will read metadata from ZooKeeper during recovery.
         """
         query = """
-            SELECT name, create_table_query, metadata_path FROM system.tables WHERE database={{ database_name|literal }}
+            SELECT name, create_table_query, metadata_path FROM system.tables WHERE database={database_name:String}
         """
         rows = execute_query(
-            self.ctx, query, database_name=database_name, format_=OutputFormat.JSON
+            self.ctx,
+            query,
+            parameters={"database_name": database_name},
+            format_=OutputFormat.JSON,
         )
 
         for table in rows["data"]:
@@ -676,10 +686,13 @@ class ZookeeperDatabaseManager:
         Example: "host%2Dname:9000:550e8400-e29b-41d4-a716-446655440000"
         """
         query = """
-            SELECT uuid FROM system.databases WHERE database={{ database_name|literal }}
+            SELECT uuid FROM system.databases WHERE database={database_name:String}
         """
         rows = execute_query(
-            self.ctx, query, database_name=database_name, format_=OutputFormat.JSON
+            self.ctx,
+            query,
+            parameters={"database_name": database_name},
+            format_=OutputFormat.JSON,
         )
         database_uuid = rows["data"][0]["uuid"]
 

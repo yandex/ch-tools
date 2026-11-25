@@ -10,8 +10,8 @@ from typing import Any, Optional, Union
 from click import Context
 
 from ch_tools.chadmin.internal.utils import execute_query
+from ch_tools.common.clickhouse.client.parameters import Identifier
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
-from ch_tools.common.clickhouse.client.sql import quote_identifier
 
 
 def list_databases(
@@ -102,21 +102,28 @@ def list_databases(
 def is_database_exists(ctx: Context, database_name: str) -> bool:
     """Check if database exists in ClickHouse."""
     query = """
-        SELECT 1 FROM system.databases WHERE database={{ database_name|literal }}
+        SELECT 1 FROM system.databases WHERE database={database_name:String}
     """
     rows = execute_query(
-        ctx, query, database_name=database_name, format_=OutputFormat.JSON
+        ctx,
+        query,
+        parameters={"database_name": database_name},
+        format_=OutputFormat.JSON,
     )
     return len(rows["data"]) == 1
 
 
 def detach_database(ctx: Context, database: str) -> None:
     """Detach database from ClickHouse."""
-    query = f"DETACH DATABASE {quote_identifier(database)}"
-    execute_query(ctx, query, echo=True, format_=None)
+    query = "DETACH DATABASE {db:Identifier}"
+    execute_query(
+        ctx, query, parameters={"db": Identifier(database)}, echo=True, format_=None
+    )
 
 
 def attach_database(ctx: Context, database: str) -> None:
     """Attach database to ClickHouse."""
-    query = f"ATTACH DATABASE {quote_identifier(database)}"
-    execute_query(ctx, query, echo=True, format_=None)
+    query = "ATTACH DATABASE {db:Identifier}"
+    execute_query(
+        ctx, query, parameters={"db": Identifier(database)}, echo=True, format_=None
+    )

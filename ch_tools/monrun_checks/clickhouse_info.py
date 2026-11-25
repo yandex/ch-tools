@@ -4,7 +4,6 @@ from typing import Any, List
 from click import Context
 
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
-from ch_tools.common.clickhouse.client.sql import quote_string
 
 
 class ClickhouseInfo:
@@ -14,15 +13,20 @@ class ClickhouseInfo:
         """
         Get hostnames of replicas.
         """
-        cluster = quote_string(cls.get_cluster(ctx))
-        query = f"""
+        cluster = cls.get_cluster(ctx)
+        query = """
             SELECT host_name
             FROM system.clusters
-            WHERE cluster = {cluster}
+            WHERE cluster = {cluster:String}
             AND shard_num = (SELECT shard_num FROM system.clusters
-                            WHERE host_name = hostName() AND cluster = {cluster})
+                            WHERE host_name = hostName() AND cluster = {cluster:String})
             """
-        return [row[0] for row in clickhouse_client(ctx).query_json_data(query=query)]
+        return [
+            row[0]
+            for row in clickhouse_client(ctx).query_json_data(
+                query=query, parameters={"cluster": cluster}
+            )
+        ]
 
     @classmethod
     @functools.lru_cache(maxsize=1)

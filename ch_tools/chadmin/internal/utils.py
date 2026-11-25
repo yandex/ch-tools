@@ -14,6 +14,7 @@ from click import Context
 
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
+from ch_tools.common.clickhouse.client.parameters import Parameters
 from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.client.sql import quote_string
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
@@ -61,6 +62,7 @@ def execute_query(
     settings: Optional[Any] = None,
     replica: Optional[str] = None,
     log_query: bool = True,
+    parameters: Optional[Parameters] = None,
     **kwargs: Any,
 ) -> Any:
     """
@@ -74,6 +76,7 @@ def execute_query(
     return ch_client.query(
         query=query,
         query_args=kwargs,
+        parameters=parameters,
         timeout=timeout,
         format_=format_,
         echo=echo,
@@ -265,8 +268,8 @@ def assert_equal_table_schema_on_cluster(
                                 hostName() AS host,
                                 create_table_query
                             FROM {tables_table}
-                            WHERE database = {database}
-                            AND name = {table}"""
+                            WHERE database = {{db:String}}
+                            AND name = {{tbl:String}}"""
 
     # Join is needed in case table doesn't exist on some replicas
     get_cluster_schema_query = """
@@ -276,7 +279,7 @@ def assert_equal_table_schema_on_cluster(
                         FROM
                         (
                             SELECT hostName() AS host
-                            FROM clusterAllReplicas({cluster}, system.one)
+                            FROM clusterAllReplicas({{cluster:String}}, system.one)
                         ) AS replicas
                         LEFT JOIN
                         (
@@ -286,8 +289,6 @@ def assert_equal_table_schema_on_cluster(
 
     get_local_schema = get_local_schema_query.format(
         tables_table="system.tables",
-        database=quote_string(database),
-        table=quote_string(table),
     )
     get_cluster_schema = get_cluster_schema_query.format(
         get_local_schema_query=get_local_schema_query.format(
@@ -298,18 +299,19 @@ def assert_equal_table_schema_on_cluster(
                 cluster_name=cluster,
                 all_replicas=True,
             ),
-            database=quote_string(database),
-            table=quote_string(table),
         ),
-        cluster=quote_string(cluster),
     )
 
-    local_schema = execute_query(ctx, get_local_schema, format_="JSONCompact")["data"][
-        0
-    ][1]
+    local_schema = execute_query(
+        ctx,
+        get_local_schema,
+        parameters={"db": database, "tbl": table},
+        format_="JSONCompact",
+    )["data"][0][1]
     schemas = execute_query(
         ctx,
         get_cluster_schema + " SETTINGS skip_unavailable_shards=0",
+        parameters={"cluster": cluster, "db": database, "tbl": table},
         format_="JSONCompact",
     )["data"]
 

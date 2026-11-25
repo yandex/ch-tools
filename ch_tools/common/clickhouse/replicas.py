@@ -5,7 +5,6 @@ from functools import lru_cache
 from click import Context
 
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
-from ch_tools.common.clickhouse.client.sql import quote_string
 from ch_tools.monrun_checks.clickhouse_info import ClickhouseInfo
 
 
@@ -42,7 +41,8 @@ def check_cluster_for_decommissioned_hosts(ctx: Context, cluster: str) -> None:
         macros = client.query_json_data("SELECT macro, substitution FROM system.macros")
         cluster = cluster.format_map(dict(macros))
     rows = client.query_json_data(
-        f"SELECT DISTINCT host_name FROM system.clusters WHERE cluster = {quote_string(cluster)}"
+        "SELECT DISTINCT host_name FROM system.clusters WHERE cluster = {cluster:String}",
+        parameters={"cluster": cluster},
     )
     if not rows:
         raise RuntimeError(f"No replicas found for cluster '{cluster}'")

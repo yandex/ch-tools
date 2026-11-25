@@ -7,6 +7,7 @@ from click import Context
 
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.client.parameters import Identifier
 from ch_tools.common.clickhouse.client.sql import (
     qualified_name,
     quote_identifier,
@@ -144,7 +145,8 @@ def _run(
     logging.info("Creating '{}' database", target_database)
     execute_query(
         ctx,
-        f"CREATE DATABASE IF NOT EXISTS {quote_identifier(target_database)}",
+        "CREATE DATABASE IF NOT EXISTS {db:Identifier}",
+        parameters={"db": Identifier(target_database)},
         format_=None,
         dry_run=dry_run,
     )

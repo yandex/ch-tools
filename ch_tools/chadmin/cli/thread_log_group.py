@@ -74,18 +74,18 @@ def get_threads(
              ProfileEvents
         {% endif %}
         FROM system.query_thread_log
-        WHERE query_id = {{ query_id|literal }}
+        WHERE query_id = {{ query_id|bind }}
         {% if min_date %}
-          AND event_date >= toDate({{ min_date|literal }})
+          AND event_date >= toDate({{ min_date|bind }})
         {% endif %}
         {% if max_date %}
-          AND event_date <= toDate({{ max_date|literal }})
+          AND event_date <= toDate({{ max_date|bind }})
         {% endif %}
         {% if min_time %}
-          AND event_date >= toDate({{ min_time|literal }}) AND event_time >= toDateTime({{ min_time|literal }})
+          AND event_date >= toDate({{ min_time|bind }}) AND event_time >= toDateTime({{ min_time|bind }})
         {% endif %}
         {% if max_time %}
-          AND event_date <= toDate({{ max_time|literal }}) AND event_time <= toDateTime({{ max_time|literal }})
+          AND event_date <= toDate({{ max_time|bind }}) AND event_time <= toDateTime({{ max_time|bind }})
         {% endif %}
         {% if not min_date and not max_date and not min_time and not max_time %}
           AND event_date = today()
@@ -133,18 +133,18 @@ def get_thread_metrics_command(
              ProfileEvents.Values "value"
         FROM system.query_thread_log
         ARRAY JOIN ProfileEvents
-        WHERE query_id = {{ query_id|literal }}
+        WHERE query_id = {{ query_id|bind }}
         {% if min_date %}
-          AND event_date >= toDate({{ min_date|literal }})
+          AND event_date >= toDate({{ min_date|bind }})
         {% endif %}
         {% if max_date %}
-          AND event_date <= toDate({{ max_date|literal }})
+          AND event_date <= toDate({{ max_date|bind }})
         {% endif %}
         {% if min_time %}
-          AND event_date >= toDate({{ min_time|literal }}) AND event_time >= toDateTime({{ min_time|literal }})
+          AND event_date >= toDate({{ min_time|bind }}) AND event_time >= toDateTime({{ min_time|bind }})
         {% endif %}
         {% if max_time %}
-          AND event_date <= toDate({{ max_time|literal }}) AND event_time <= toDateTime({{ max_time|literal }})
+          AND event_date <= toDate({{ max_time|bind }}) AND event_time <= toDateTime({{ max_time|bind }})
         {% endif %}
         {% if not min_date and not max_date and not min_time and not max_time %}
           AND event_date = today()

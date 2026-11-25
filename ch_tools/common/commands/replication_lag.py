@@ -4,7 +4,6 @@ from click import Context
 from tabulate import tabulate
 
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
-from ch_tools.common.clickhouse.client.sql import quote_string
 from ch_tools.common.result import Result
 
 
@@ -199,16 +198,19 @@ def count_errors(ch_client: Any, tables: Any, exceptions_limit: int) -> Any:
             argMax(new_part_name, IF(is_currently_executing, dateDiff('second', last_attempt_time, now()), 0)) as max_execution_part,
             countIf(type = 'MERGE_PARTS' and num_tries >= 1000) as retried_merges
         FROM system.replication_queue
-        WHERE (database, table) IN ({tables})
+        WHERE (database, table) IN (SELECT arrayJoin(arrayZip({{databases:Array(String)}}, {{tables:Array(String)}})))
         GROUP BY database,table
         """.format(
-        tables=",".join(
-            f"({quote_string(t['database'])}, {quote_string(t['table'])})"
-            for t in tables
-        ),
         limit=limit,
     )
-    return ch_client.query_json_data(query=query, compact=False)
+    return ch_client.query_json_data(
+        query=query,
+        compact=False,
+        parameters={
+            "databases": [t["database"] for t in tables],
+            "tables": [t["table"] for t in tables],
+        },
+    )
 
 
 def is_userfault_exception(exception: str) -> bool:

@@ -3,7 +3,7 @@ from typing import Any, Optional
 from click import Context
 
 from ch_tools.chadmin.internal.utils import execute_query
-from ch_tools.common.clickhouse.client.sql import qualified_name, quote_identifier
+from ch_tools.common.clickhouse.client.parameters import Identifier, table_parameters
 
 
 def list_dictionaries(
@@ -22,10 +22,10 @@ def list_dictionaries(
         FROM system.dictionaries
         WHERE 1
         {% if name %}
-          AND name = {{ name|literal }}
+          AND name = {{ name|bind }}
         {% endif %}
         {% if status %}
-          AND status = {{ status|literal }}
+          AND status = {{ status|bind }}
         {% endif %}
         """
     return execute_query(ctx, query, name=name, status=status, format_="JSON")["data"]
@@ -38,9 +38,11 @@ def reload_dictionary(
     Reload external dictionary.
     """
     if database:
-        full_name = qualified_name(database, name)
+        full_name = "{db:Identifier}.{tbl:Identifier}"
+        params = table_parameters(database, name)
     else:
-        full_name = quote_identifier(name)
+        full_name = "{tbl:Identifier}"
+        params = {"tbl": Identifier(name)}
 
     query = f"""SYSTEM RELOAD DICTIONARY {full_name}"""
-    execute_query(ctx, query, format_=None)
+    execute_query(ctx, query, parameters=params, format_=None)

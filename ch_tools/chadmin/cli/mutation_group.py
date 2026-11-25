@@ -29,7 +29,7 @@ def get_mutation(ctx: Context, mutation: Any, last: Any) -> None:
         SELECT *
         FROM system.mutations
         {% if mutation %}
-        WHERE mutation_id = {{ mutation|literal }}
+        WHERE mutation_id = {{ mutation|bind }}
         {% else %}
         ORDER BY mutation_id DESC
         LIMIT 1
@@ -82,7 +82,7 @@ def list_mutations(
             latest_fail_time,
             latest_fail_reason
         {% if cluster %}
-        FROM clusterAllReplicas({{ cluster|literal }}, system.mutations)
+        FROM clusterAllReplicas({{ cluster|bind }}, system.mutations)
         {% else %}
         FROM system.mutations
         {% endif %}
@@ -93,7 +93,7 @@ def list_mutations(
           AND NOT is_done
         {% endif %}
         {% if command_pattern %}
-          AND command ILIKE {{ command_pattern|literal }}
+          AND command ILIKE {{ command_pattern|bind }}
         {% endif %}
         {% if limit -%}
         LIMIT {{ limit }}
@@ -133,7 +133,7 @@ def kill_mutation(ctx: Context, command_pattern: Any, on_cluster: bool) -> None:
         {%- endif %}
         WHERE NOT is_done
         {% if command_pattern %}
-          AND command ILIKE {{ command_pattern|literal }}
+          AND command ILIKE {{ command_pattern|bind }}
         {% endif %}
         """
     response = execute_query(

@@ -52,6 +52,7 @@ from ch_tools.common.clickhouse.client.clickhouse_client import (
     ClickhouseClient,
     clickhouse_client,
 )
+from ch_tools.common.clickhouse.client.parameters import table_ref_parameters
 from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 from ch_tools.common.clickhouse.client.sql import TableRef, quote_string
@@ -185,7 +186,8 @@ def clean(
         )
         listing_size_in_bucket = int(
             ch_client.query_json_data_first_row(
-                query=f"SELECT sum(obj_size) FROM {remote_blobs_table.sql}",
+                query="SELECT sum(obj_size) FROM {db:Identifier}.{tbl:Identifier}",
+                parameters=table_ref_parameters(remote_blobs_table),
                 compact=True,
             )[0]
         )
@@ -551,7 +553,7 @@ def _local_blobs_table(
                 ctx,
                 local_blobs_query,
                 remote_data_paths_table=remote_data_paths_table,
-                local_table=local_blobs_table.sql,
+                parameters=table_ref_parameters(local_blobs_table),
                 disk_name=disk_conf.name,
                 timeout=timeout,
                 settings=query_settings,
@@ -816,10 +818,10 @@ def _collect_orphaned_blobs(
     config = ctx.obj["config"]["object_storage"]["space_usage"]
 
     antijoin_query = Query(
-        f"""
-        INSERT INTO {orphaned_blobs_table.sql}
-            SELECT last_modified, obj_path, obj_size FROM {remote_blobs_table.sql} AS object_storage
-            LEFT ANTI JOIN {local_blobs_table.sql} AS object_table
+        """
+        INSERT INTO {dst_db:Identifier}.{dst_tbl:Identifier}
+            SELECT last_modified, obj_path, obj_size FROM {remote_db:Identifier}.{remote_tbl:Identifier} AS object_storage
+            LEFT ANTI JOIN {local_db:Identifier}.{local_tbl:Identifier} AS object_table
             ON object_table.obj_path = object_storage.obj_path
         """,
     )
@@ -830,6 +832,11 @@ def _collect_orphaned_blobs(
     execute_query(
         ctx,
         antijoin_query,
+        parameters={
+            **table_ref_parameters(orphaned_blobs_table, "dst_"),
+            **table_ref_parameters(remote_blobs_table, "remote_"),
+            **table_ref_parameters(local_blobs_table, "local_"),
+        },
         timeout=timeout,
         settings=query_settings,
     )
@@ -866,9 +873,7 @@ def _collect_space_usage(
         drop_existing_table=False,
     )
 
-    space_usage_queries = _get_fill_space_usage_query(
-        ctx, local_blobs_table, orphaned_blobs_table, space_usage_table_new
-    )
+    space_usage_queries = _get_fill_space_usage_query(ctx)
 
     # TODO: should probably use different setting for timeout
     timeout = config["antijoin_timeout"]
@@ -877,17 +882,29 @@ def _collect_space_usage(
         execute_query(
             ctx,
             query,
+            parameters={
+                **table_ref_parameters(local_blobs_table, "local_"),
+                **table_ref_parameters(orphaned_blobs_table, "orphaned_"),
+                **table_ref_parameters(space_usage_table_new, "dst_"),
+            },
             timeout=timeout,
             settings=query_settings,
         )
 
     settings = " SETTINGS alter_sync=1" if shard_has_decommissioned_hosts(ctx) else ""
     execute_query(
-        ctx, f"TRUNCATE TABLE {space_usage_table.sql} SYNC{settings}", format_=None
+        ctx,
+        f"TRUNCATE TABLE {{db:Identifier}}.{{tbl:Identifier}} SYNC{settings}",
+        parameters=table_ref_parameters(space_usage_table),
+        format_=None,
     )
     execute_query(
         ctx,
-        f"INSERT INTO {space_usage_table.sql} SELECT * FROM {space_usage_table_new.sql}",
+        "INSERT INTO {db:Identifier}.{tbl:Identifier} SELECT * FROM {src_db:Identifier}.{src_tbl:Identifier}",
+        parameters={
+            **table_ref_parameters(space_usage_table),
+            **table_ref_parameters(space_usage_table_new, "src_"),
+        },
     )
     delete_table(
         ctx, space_usage_table_new.database, space_usage_table_new.table, shard=True
@@ -903,13 +920,13 @@ def _object_list_generator(
     timeout: Optional[int] = None,
 ) -> Callable:
     query = """
-        SELECT * FROM {{ table_name }}
+        SELECT * FROM {db:Identifier}.{tbl:Identifier}
         WHERE 1
         {%- if from_time_cond %}
-            AND last_modified >= toDateTime({{ from_time_cond|literal }})
+            AND last_modified >= toDateTime({{ from_time_cond|bind }})
         {%- endif %}
         {%- if to_time_cond %}
-            AND last_modified <= toDateTime({{ to_time_cond|literal }})
+            AND last_modified <= toDateTime({{ to_time_cond|bind }})
         {%- endif %}
         ORDER BY last_modified
         """
@@ -922,7 +939,7 @@ def _object_list_generator(
             timeout=timeout,
             settings=query_settings,
             stream=True,
-            table_name=table_name.sql,
+            parameters=table_ref_parameters(table_name),
             from_time_cond=from_time_cond,
             to_time_cond=to_time_cond,
         ) as resp:
@@ -941,13 +958,13 @@ def _orphaned_objects_stat(
     timeout: Optional[int] = None,
 ) -> Tuple[int, int]:
     query = """
-        SELECT count(*) AS count, sum(obj_size) AS size FROM {{ table_name }}
+        SELECT count(*) AS count, sum(obj_size) AS size FROM {db:Identifier}.{tbl:Identifier}
         WHERE 1
         {%- if from_time_cond %}
-            AND last_modified >= toDateTime({{ from_time_cond|literal }})
+            AND last_modified >= toDateTime({{ from_time_cond|bind }})
         {%- endif %}
         {%- if to_time_cond %}
-            AND last_modified <= toDateTime({{ to_time_cond|literal }})
+            AND last_modified <= toDateTime({{ to_time_cond|bind }})
         {%- endif %}
         """
 
@@ -957,7 +974,7 @@ def _orphaned_objects_stat(
         format_=OutputFormat.JSON,
         timeout=timeout,
         settings=query_settings,
-        table_name=table_name.sql,
+        parameters=table_ref_parameters(table_name),
         from_time_cond=from_time_cond,
         to_time_cond=to_time_cond,
     )["data"][0]
@@ -1019,9 +1036,8 @@ def _sanity_check_before_cleanup(
         """
         orphaned_objects_count = int(
             ch_client.query_json_data_first_row(
-                query=Query(
-                    f"SELECT count() FROM {orphaned_blobs_table.sql}",
-                ),
+                query="SELECT count() FROM {db:Identifier}.{tbl:Identifier}",
+                parameters=table_ref_parameters(orphaned_blobs_table),
                 compact=True,
             )[0]
         )
@@ -1032,9 +1048,8 @@ def _sanity_check_before_cleanup(
 
         # Get a sample path from database for initial validation
         sample_path = ch_client.query_json_data_first_row(
-            query=Query(
-                f"SELECT obj_path FROM {orphaned_blobs_table.sql} LIMIT 1",
-            ),
+            query="SELECT obj_path FROM {db:Identifier}.{tbl:Identifier} LIMIT 1",
+            parameters=table_ref_parameters(orphaned_blobs_table),
             compact=True,
         )[0]
 
@@ -1201,12 +1216,13 @@ def _create_remote_blobs_table(
     execute_query_on_shard(
         ctx,
         f"""
-        CREATE TABLE IF NOT EXISTS {table_name.sql}
+        CREATE TABLE IF NOT EXISTS {{db:Identifier}}.{{tbl:Identifier}}
             ({REMOTE_BLOBS_COLUMNS})
             ENGINE {engine}
             ORDER BY (last_modified, obj_path)
             SETTINGS storage_policy = {quote_string(storage_policy)}
         """,
+        parameters=table_ref_parameters(table_name),
         format_=None,
     )
 
@@ -1223,7 +1239,7 @@ def _create_local_blobs_table(
     execute_query(
         ctx,
         f"""
-            CREATE TABLE IF NOT EXISTS {table_name.sql}
+            CREATE TABLE IF NOT EXISTS {{db:Identifier}}.{{tbl:Identifier}}
                 (replica String,
                 obj_path String,
                 state Enum('{LocalState.ACTIVE}', '{LocalState.SHADOW}', '{LocalState.DETACHED}'),
@@ -1233,6 +1249,7 @@ def _create_local_blobs_table(
                 ORDER BY (replica, obj_path, state)
                 SETTINGS storage_policy = {quote_string(storage_policy)}
         """,
+        parameters=table_ref_parameters(table_name),
         format_=None,
     )
 
@@ -1249,12 +1266,13 @@ def _create_orphaned_blobs_table(
     execute_query(
         ctx,
         f"""
-            CREATE TABLE IF NOT EXISTS {table_name.sql}
+            CREATE TABLE IF NOT EXISTS {{db:Identifier}}.{{tbl:Identifier}}
                 (last_modified DateTime, obj_path String, obj_size UInt64)
                 ENGINE MergeTree
                 ORDER BY obj_path
                 SETTINGS storage_policy = {quote_string(storage_policy)}
         """,
+        parameters=table_ref_parameters(table_name),
         format_=None,
     )
 
@@ -1287,7 +1305,7 @@ def _create_space_usage_table(
     execute_query_on_shard(
         ctx,
         f"""
-            CREATE TABLE IF NOT EXISTS {space_usage_table_name.sql}
+            CREATE TABLE IF NOT EXISTS {{db:Identifier}}.{{tbl:Identifier}}
                 (replica Array(String),
                 state Enum('{State.ACTIVE}', '{State.UNIQUE_FROZEN}', '{State.UNIQUE_DETACHED}', '{State.ORPHANED}'),
                 size UInt64)
@@ -1295,6 +1313,7 @@ def _create_space_usage_table(
                 ORDER BY (replica, state)
                 SETTINGS storage_policy = {quote_string(storage_policy)}
         """,
+        parameters=table_ref_parameters(space_usage_table_name),
         format_=None,
     )
 
@@ -1314,7 +1333,7 @@ def _get_fill_local_blobs_table_query(
         size = "0"
 
     return f"""
-        INSERT INTO {{{{ local_table }}}}
+        INSERT INTO {{db:Identifier}}.{{tbl:Identifier}}
             SELECT
                 hostName(),
                 remote_path,
@@ -1326,16 +1345,13 @@ def _get_fill_local_blobs_table_query(
                 {size} AS obj_size,
                 1 AS ref_count
                 FROM {{{{ remote_data_paths_table }}}}
-                WHERE disk_name = {{{{ disk_name|literal }}}}
+                WHERE disk_name = {{{{ disk_name|bind }}}}
                 {settings}
     """
 
 
 def _get_fill_space_usage_query(
     ctx: Context,
-    local_blobs_table: TableRef,
-    orphaned_blobs_table: TableRef,
-    space_usage_table_new: TableRef,
 ) -> list[Query]:
     """
     CTE with INSERT supported since 25.3.
@@ -1351,7 +1367,7 @@ def _get_fill_space_usage_query(
                     state,
                     sum(obj_size) as sum_size,
                     sum(ref_count) as ref_count
-                FROM {local_blobs_table.sql}
+                FROM {{local_db:Identifier}}.{{local_tbl:Identifier}}
                 GROUP BY obj_path, state
             ),
             active AS (
@@ -1384,19 +1400,19 @@ def _get_fill_space_usage_query(
                 )
                 GROUP BY replica
             )
-            INSERT INTO {space_usage_table_new.sql} (replica, state, size)
+            INSERT INTO {{dst_db:Identifier}}.{{dst_tbl:Identifier}} (replica, state, size)
                 SELECT replica, '{State.ACTIVE}', size FROM active
                 UNION ALL
                 SELECT replica, '{State.UNIQUE_FROZEN}', size FROM unique_frozen
                 UNION ALL
                 SELECT replica, '{State.UNIQUE_DETACHED}', size FROM unique_detached
                 UNION ALL
-                SELECT ['{UNKNOWN_REPLICAS_NAME}'], '{State.ORPHANED}', toFloat64(sum(obj_size)) FROM {orphaned_blobs_table.sql}
+                SELECT ['{UNKNOWN_REPLICAS_NAME}'], '{State.ORPHANED}', toFloat64(sum(obj_size)) FROM {{orphaned_db:Identifier}}.{{orphaned_tbl:Identifier}}
         """
         ]
     else:
         query_active = f"""
-            INSERT INTO {space_usage_table_new.sql}
+            INSERT INTO {{dst_db:Identifier}}.{{dst_tbl:Identifier}}
                 SELECT
                     replica,
                     '{State.ACTIVE}',
@@ -1408,14 +1424,14 @@ def _get_fill_space_usage_query(
                         state,
                         sum(obj_size) as sum_size,
                         sum(ref_count) as ref_count
-                    FROM {local_blobs_table.sql}
+                    FROM {{local_db:Identifier}}.{{local_tbl:Identifier}}
                     WHERE state = '{LocalState.ACTIVE}'
                     GROUP BY obj_path, state
                 )
                 GROUP BY replica
         """
         query_frozen = f"""
-            INSERT INTO {space_usage_table_new.sql}
+            INSERT INTO {{dst_db:Identifier}}.{{dst_tbl:Identifier}}
                 SELECT
                     replica,
                     '{State.UNIQUE_FROZEN}',
@@ -1427,17 +1443,17 @@ def _get_fill_space_usage_query(
                         state,
                         sum(obj_size) as sum_size,
                         sum(ref_count) as ref_count
-                    FROM {local_blobs_table.sql}
+                    FROM {{local_db:Identifier}}.{{local_tbl:Identifier}}
                     WHERE state = '{LocalState.SHADOW}'
                     AND obj_path NOT IN (
-                        SELECT obj_path FROM {local_blobs_table.sql} WHERE state = '{LocalState.ACTIVE}'
+                        SELECT obj_path FROM {{local_db:Identifier}}.{{local_tbl:Identifier}} WHERE state = '{LocalState.ACTIVE}'
                     )
                     GROUP BY obj_path, state
                 )
                 GROUP BY replica
         """
         query_detached = f"""
-            INSERT INTO {space_usage_table_new.sql}
+            INSERT INTO {{dst_db:Identifier}}.{{dst_tbl:Identifier}}
                 SELECT
                     replica,
                     '{State.UNIQUE_DETACHED}',
@@ -1449,18 +1465,18 @@ def _get_fill_space_usage_query(
                         state,
                         sum(obj_size) as sum_size,
                         sum(ref_count) as ref_count
-                    FROM {local_blobs_table.sql}
+                    FROM {{local_db:Identifier}}.{{local_tbl:Identifier}}
                     WHERE state = '{LocalState.DETACHED}'
                     AND obj_path NOT IN (
-                        SELECT obj_path FROM {local_blobs_table.sql} WHERE state IN ('{LocalState.ACTIVE}', '{LocalState.SHADOW}')
+                        SELECT obj_path FROM {{local_db:Identifier}}.{{local_tbl:Identifier}} WHERE state IN ('{LocalState.ACTIVE}', '{LocalState.SHADOW}')
                     )
                     GROUP BY obj_path, state
                 )
                 GROUP BY replica
         """
         query_orphaned = f"""
-            INSERT INTO {space_usage_table_new.sql}
-                SELECT ['{UNKNOWN_REPLICAS_NAME}'], '{State.ORPHANED}', toFloat64(sum(obj_size)) FROM {orphaned_blobs_table.sql}
+            INSERT INTO {{dst_db:Identifier}}.{{dst_tbl:Identifier}}
+                SELECT ['{UNKNOWN_REPLICAS_NAME}'], '{State.ORPHANED}', toFloat64(sum(obj_size)) FROM {{orphaned_db:Identifier}}.{{orphaned_tbl:Identifier}}
         """
 
         queries = [query_active, query_frozen, query_detached, query_orphaned]

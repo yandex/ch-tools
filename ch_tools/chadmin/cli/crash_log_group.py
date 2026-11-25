@@ -37,7 +37,7 @@ def list_crashes_command(ctx: Context, on_cluster: bool) -> None:
             '\n' || arrayStringConcat(trace_full, '\n') AS trace,
             version
         {% if cluster %}
-        FROM clusterAllReplicas({{ cluster|literal }}, system.crash_log)
+        FROM clusterAllReplicas({{ cluster|bind }}, system.crash_log)
         {% else %}
         FROM system.crash_log
         {% endif %}

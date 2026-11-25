@@ -9,7 +9,7 @@ from ch_tools.chadmin.internal.zookeeper import delete_zk_node
 from ch_tools.common import logging
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.client import OutputFormat
-from ch_tools.common.clickhouse.client.sql import qualified_name
+from ch_tools.common.clickhouse.client.parameters import table_parameters
 from ch_tools.common.clickhouse.config import get_cluster_name
 
 
@@ -163,7 +163,8 @@ def delete_command(ctx: Context, **kwargs: Any) -> None:
         logging.info("Detaching table `{}`.`{}`", database, table)
         execute_query(
             ctx,
-            f"""DETACH TABLE {qualified_name(database, table)}""",
+            "DETACH TABLE {db:Identifier}.{tbl:Identifier}",
+            parameters=table_parameters(database, table),
             timeout=300,
             echo=True,
             format_=None,
@@ -177,7 +178,8 @@ def delete_command(ctx: Context, **kwargs: Any) -> None:
         logging.info("Attaching table `{}`.`{}`", database, table)
         execute_query(
             ctx,
-            f"""ATTACH TABLE {qualified_name(database, table)}""",
+            "ATTACH TABLE {db:Identifier}.{tbl:Identifier}",
+            parameters=table_parameters(database, table),
             timeout=300,
             echo=True,
             format_=None,
@@ -227,7 +229,7 @@ def get_replication_queue_tasks(
         last_exception "exception",
         concat('time: ', toString(last_postpone_time), ', number: ', toString(num_postponed), ', reason: ', postpone_reason) "postpone"
     {% if cluster %}
-    FROM clusterAllReplicas({{ cluster|literal }}, system.replication_queue)
+    FROM clusterAllReplicas({{ cluster|bind }}, system.replication_queue)
     {% else %}
     FROM system.replication_queue
     {% endif %}
