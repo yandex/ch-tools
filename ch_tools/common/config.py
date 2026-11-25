@@ -101,6 +101,10 @@ DEFAULT_CONFIG = {
     },
     # Configuration of chadmin tool commands and options.
     "chadmin": {
+        "detached-parts-cleanup": {
+            "automatically_detached_data_parts_retention_time": 2592000,
+            "manually_detached_data_parts_retention_time": 0,
+        },
         "database": {
             "lock": {
                 "root_path": "/chadmin/db_lock",  # ZooKeeper path for database locks

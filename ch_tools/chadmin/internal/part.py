@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from click import Context
 
 from ch_tools.chadmin.internal.clickhouse_disks import remove_from_ch_disk
-from ch_tools.chadmin.internal.system import get_version
+from ch_tools.chadmin.internal.system import get_version, match_ch_version
 from ch_tools.chadmin.internal.utils import execute_query, get_remote_table_for_hosts
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
@@ -181,10 +181,17 @@ def list_detached_parts(
     limit: Optional[int] = None,
     use_part_list_from_json: Optional[str] = None,
     use_part_list_required_columns_list: Optional[List[str]] = None,
+    empty_reason_min_age: Optional[int] = None,
+    non_empty_reason_min_age: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """
     List detached data parts.
     """
+    if empty_reason_min_age is not None or non_empty_reason_min_age is not None:
+        if not match_ch_version(ctx, "23.9"):
+            raise RuntimeError(
+                "Detached part age filtering requires ClickHouse 23.9 or above"
+            )
     if use_part_list_from_json:
         return read_and_validate_parts_from_json(
             use_part_list_from_json, use_part_list_required_columns_list
@@ -241,6 +248,23 @@ def list_detached_parts(
         {% if reason is not none -%}
           AND reason {{ format_str_match(reason) }}
         {% endif -%}
+        {% if empty_reason_min_age is not none or non_empty_reason_min_age is not none -%}
+          AND (
+            0
+            {% if non_empty_reason_min_age -%}
+            OR (
+              reason != ''
+              AND modification_time < now() - INTERVAL {{ non_empty_reason_min_age }} SECOND
+            )
+            {% endif -%}
+            {% if empty_reason_min_age -%}
+            OR (
+              reason = ''
+              AND modification_time < now() - INTERVAL {{ empty_reason_min_age }} SECOND
+            )
+            {% endif -%}
+          )
+        {% endif -%}
         ORDER BY database, table, name
         {% if limit -%}
         LIMIT {{ limit }}
@@ -261,6 +285,8 @@ def list_detached_parts(
         min_level=min_level,
         max_level=max_level,
         reason=reason,
+        empty_reason_min_age=empty_reason_min_age,
+        non_empty_reason_min_age=non_empty_reason_min_age,
         limit=limit,
         format_="JSON",
     )["data"]
@@ -372,6 +398,22 @@ def drop_detached_part(
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
     query = f"ALTER TABLE `{database}`.`{table}` DROP DETACHED PART '{part_name}'"
     execute_query(ctx, query, timeout=timeout, format_=None, echo=True, dry_run=dry_run)
+
+
+def delete_detached_part(
+    ctx: Context,
+    part: Dict[str, Any],
+    disks: Dict[str, Dict[str, str]],
+    dry_run: bool = False,
+) -> None:
+    if part_has_suffix(part["name"]):
+        drop_detached_part_from_disk(
+            ctx, disks[part["disk_name"]], part["path"], dry_run=dry_run
+        )
+    else:
+        drop_detached_part(
+            ctx, part["database"], part["table"], part["name"], dry_run=dry_run
+        )
 
 
 def drop_detached_part_from_disk(
