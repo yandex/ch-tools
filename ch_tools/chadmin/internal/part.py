@@ -6,7 +6,8 @@ from typing import Any, Dict, List, Optional
 from click import Context
 
 from ch_tools.chadmin.internal.clickhouse_disks import remove_from_ch_disk
-from ch_tools.chadmin.internal.system import get_version, match_ch_version
+from ch_tools.chadmin.internal.partition import part_value_template
+from ch_tools.chadmin.internal.system import get_version
 from ch_tools.chadmin.internal.utils import execute_query, get_remote_table_for_hosts
 from ch_tools.common import logging
 
@@ -284,12 +285,6 @@ def get_disks(ctx: Context) -> Dict[str, Dict[str, str]]:
     return {disk["name"]: disk for disk in disks}
 
 
-def _part_name_template(ctx: Context, dry_run: bool) -> str:
-    if dry_run or not match_ch_version(ctx, "24.8"):
-        return "{{ part_name|literal }}"
-    return "{{ part_name|bind }}"
-
-
 def attach_part(
     ctx: Context,
     database: str,
@@ -305,14 +300,14 @@ def attach_part(
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
     query = (
         "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} ATTACH PART "
-        + _part_name_template(ctx, dry_run)
+        + part_value_template(ctx, dry_run)
     )
     execute_query(
         ctx,
         query,
         db=database,
         tbl=table,
-        part_name=part_name,
+        part=part_name,
         timeout=timeout,
         format_=None,
         echo=echo,
@@ -333,14 +328,14 @@ def detach_part(
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
     query = (
         "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} DETACH PART "
-        + _part_name_template(ctx, dry_run)
+        + part_value_template(ctx, dry_run)
     )
     execute_query(
         ctx,
         query,
         db=database,
         tbl=table,
-        part_name=part_name,
+        part=part_name,
         timeout=timeout,
         format_=None,
         echo=True,
@@ -368,7 +363,7 @@ def move_part(
 
     query = (
         "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} MOVE PART "
-        + _part_name_template(ctx, dry_run)
+        + part_value_template(ctx, dry_run)
         + " TO DISK {{ disk|literal }}"
     )
     execute_query(
@@ -376,7 +371,7 @@ def move_part(
         query,
         db=database,
         tbl=table,
-        part_name=part_name,
+        part=part_name,
         disk=new_disk_name,
         settings=settings,
         timeout=timeout,
@@ -399,14 +394,14 @@ def drop_part(
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
     query = (
         "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} DROP PART "
-        + _part_name_template(ctx, dry_run)
+        + part_value_template(ctx, dry_run)
     )
     execute_query(
         ctx,
         query,
         db=database,
         tbl=table,
-        part_name=part_name,
+        part=part_name,
         timeout=timeout,
         format_=None,
         echo=True,
@@ -427,14 +422,14 @@ def drop_detached_part(
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
     query = (
         "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} DROP DETACHED PART "
-        + _part_name_template(ctx, dry_run)
+        + part_value_template(ctx, dry_run)
     )
     execute_query(
         ctx,
         query,
         db=database,
         tbl=table,
-        part_name=part_name,
+        part=part_name,
         timeout=timeout,
         format_=None,
         echo=True,

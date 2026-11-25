@@ -2,11 +2,6 @@ from click import Context
 
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.utils import execute_query
-from ch_tools.common.clickhouse.client.parameters import (
-    Identifier,
-    Parameter,
-    table_parameters,
-)
 
 
 def attach_partition(
@@ -85,21 +80,25 @@ def move_partition(
     """
     Move the specified table partition between tables.
     """
-    parameters: dict[str, Parameter] = {
-        **table_parameters(src_database, src_table),
-        "dst_db": Identifier(dst_database),
-        "dst_tbl": Identifier(dst_table),
-    }
-    part_expr = "tuple()"
-    if partition != part_expr:
-        parameters["part"] = partition
-        part_expr = "{part:String}"
+    part = "tuple()" if partition == "tuple()" else part_value_template(ctx, dry_run)
     query = (
-        "ALTER TABLE {db:Identifier}.{tbl:Identifier} MOVE PARTITION "
-        + part_expr
-        + " TO TABLE {dst_db:Identifier}.{dst_tbl:Identifier}"
+        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} MOVE PARTITION "
+        + part
+        + " TO TABLE {{ dst_db|identifier }}.{{ dst_tbl|identifier }}"
     )
-    _execute_query(ctx, query, parameters, dry_run)
+    execute_query(
+        ctx,
+        query,
+        db=src_database,
+        tbl=src_table,
+        dst_db=dst_database,
+        dst_tbl=dst_table,
+        part=partition,
+        timeout=ctx.obj["config"]["clickhouse"]["alter_table_timeout"],
+        format_=None,
+        echo=True,
+        dry_run=dry_run,
+    )
 
 
 def materialize_ttl_in_partition(
@@ -126,19 +125,13 @@ def _execute_partition_id(
     partition_id: str,
     dry_run: bool,
 ) -> None:
-    # Older ClickHouse parsers accept only a quoted literal after PARTITION ID.
-    suffix = (
-        "{{ id|bind }}"
-        if not dry_run and match_ch_version(ctx, "24.8")
-        else "{{ id|literal }}"
-    )
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
     execute_query(
         ctx,
-        prefix + suffix,
+        prefix + part_value_template(ctx, dry_run),
         db=database,
         tbl=table,
-        id=partition_id,
+        part=partition_id,
         timeout=timeout,
         format_=None,
         echo=True,
@@ -146,16 +139,8 @@ def _execute_partition_id(
     )
 
 
-def _execute_query(
-    ctx: Context, query: str, parameters: dict[str, Parameter], dry_run: bool
-) -> None:
-    timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
-    execute_query(
-        ctx,
-        query,
-        parameters=parameters,
-        timeout=timeout,
-        format_=None,
-        echo=True,
-        dry_run=dry_run,
-    )
+def part_value_template(ctx: Context, dry_run: bool) -> str:
+    """23.3 requires a literal for part names, partition IDs and MOVE PARTITION values."""
+    if not dry_run and match_ch_version(ctx, "24.8"):
+        return "{{ part|bind }}"
+    return "{{ part|literal }}"

@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 import pytest
 import requests
 
-from ch_tools.chadmin.internal.partition import detach_partition
+from ch_tools.chadmin.internal.partition import detach_partition, move_partition
 from ch_tools.chadmin.internal.table_replica import (
     restart_table_replica,
     restore_table_replica,
@@ -74,6 +74,33 @@ def test_partition_arguments_keep_their_sql_roles(
     else:
         assert fields["query"].endswith(b"PARTITION ID {ch_tools_2:String}")
         assert fields["param_ch_tools_2"] == r"it's\\7"
+
+
+@pytest.mark.parametrize("version", ["23.3", "24.8"])
+def test_move_partition_quotes_destination_and_binds_supported_operands(
+    version: str,
+) -> None:
+    client = ClickhouseClient(
+        host="localhost", ports={ClickhousePort.HTTP: 8123}, timeout=1
+    )
+    ctx = Mock(
+        obj={
+            "chcli": client,
+            "config": {"clickhouse": {"version": version, "alter_table_timeout": 30}},
+        }
+    )
+    with patch("requests.post") as post, patch("ch_tools.common.logging.debug"):
+        move_partition(ctx, "src", "source", "7", "dst", "table.with.dot")
+    fields = post.call_args.kwargs["files"]
+    query = fields["query"][1].decode()
+    assert query.endswith(" TO TABLE `dst`.`table.with.dot`")
+    assert fields["param_ch_tools_0"] == (None, "src")
+    assert fields["param_ch_tools_1"] == (None, "source")
+    if version == "23.3":
+        assert "MOVE PARTITION '7'" in query
+    else:
+        assert "MOVE PARTITION {ch_tools_2:String}" in query
+        assert fields["param_ch_tools_2"] == (None, "7")
 
 
 def test_metadata_patterns_quote_each_value() -> None:
