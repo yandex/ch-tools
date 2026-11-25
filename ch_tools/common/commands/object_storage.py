@@ -52,7 +52,6 @@ from ch_tools.common.clickhouse.client.clickhouse_client import (
     ClickhouseClient,
     clickhouse_client,
 )
-from ch_tools.common.clickhouse.client.error import ClickhouseError
 from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 from ch_tools.common.clickhouse.client.sql import TableRef, quote_string
@@ -414,16 +413,13 @@ def _cleanup_old_service_tables_and_queries(ctx: Context) -> None:
             base_name = f"{table_prefix}{disk_conf.name}"
             table_pattern = f"{base_name}_%"
 
-            try:
-                kill_process(
-                    ctx,
-                    query_template=f"INSERT INTO%{table_pattern}",
-                    query_kind="Insert",
-                    user=clickhouse_client(ctx).user,
-                )
-            except ClickhouseError as exc:
-                if exc.exception_code != 785:  # NOTHING_TO_KILL
-                    raise
+            kill_process(
+                ctx,
+                query_template=f"INSERT INTO%{table_pattern}",
+                query_kind="Insert",
+                user=clickhouse_client(ctx).user,
+                ignore_no_match=True,
+            )
 
             tables = list_tables(
                 ctx, database_name=database, table_pattern=table_pattern

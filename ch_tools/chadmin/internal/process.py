@@ -106,6 +106,8 @@ def kill_process(
     exclude_user: Optional[str] = None,
     query_template: Optional[str] = None,
     query_kind: Optional[str] = None,
+    *,
+    ignore_no_match: bool = False,
 ) -> None:
     """
     Perform "KILL QUERY".
@@ -128,6 +130,9 @@ def kill_process(
         {% if query_kind %}
           AND query_kind = {{ query_kind|literal }}
         {% endif %}
+        {% if ignore_no_match and version_ge('26.11') %}
+        SETTINGS kill_throw_if_noop = 0
+        {% endif %}
         """
     logging.info(
         execute_query(
@@ -137,6 +142,7 @@ def kill_process(
             user=user,
             exclude_user=exclude_user,
             query_template=query_template,
+            ignore_no_match=ignore_no_match,
             query_kind=query_kind if match_ch_version(ctx, "23.3") else None,
         )
     )
