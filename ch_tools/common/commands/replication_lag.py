@@ -4,6 +4,7 @@ from click import Context
 from tabulate import tabulate
 
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
+from ch_tools.common.clickhouse.client.sql import quote_string
 from ch_tools.common.result import Result
 
 
@@ -202,7 +203,8 @@ def count_errors(ch_client: Any, tables: Any, exceptions_limit: int) -> Any:
         GROUP BY database,table
         """.format(
         tables=",".join(
-            "('{0}', '{1}')".format(t["database"], t["table"]) for t in tables
+            f"({quote_string(t['database'])}, {quote_string(t['table'])})"
+            for t in tables
         ),
         limit=limit,
     )

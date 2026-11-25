@@ -574,7 +574,7 @@ def check_table(
     if partition:
         query += f" PARTITION {partition}"
     elif part:
-        query += f" PART '{part}'"
+        query += f" PART {quote_string(part)}"
 
     rows = execute_query(
         ctx,
