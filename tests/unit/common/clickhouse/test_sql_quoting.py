@@ -1,7 +1,7 @@
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 from unittest.mock import Mock, patch
 
 import pytest
@@ -21,6 +21,24 @@ from ch_tools.common.clickhouse.client.sql import (
     quote_string,
 )
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
+
+
+@pytest.mark.parametrize(
+    "header,detail",
+    [
+        ("60", "HTTP 404 (ClickHouse code 60)"),
+        (None, "HTTP 404"),
+        ("invalid", "HTTP 404"),
+    ],
+)
+def test_masked_http_error(header: Optional[str], detail: str) -> None:
+    response = requests.Response()
+    response.status_code = 404
+    response._content = b"private"
+    if header is not None:
+        response.headers["X-ClickHouse-Exception-Code"] = header
+    error = ClickhouseError("SELECT ***", response, hide_response=True)
+    assert str(error) == f"{detail}\n\nQuery: SELECT ***"
 
 
 def test_partition_arguments_keep_their_sql_roles() -> None:

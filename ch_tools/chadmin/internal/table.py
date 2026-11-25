@@ -460,12 +460,12 @@ def _remove_table_data_from_disk(
 def delete_detached_table(ctx: Context, database_name: str, table_name: str) -> None:
     logging.info("Call delete_detached_table: {}.{}", database_name, table_name)
 
+    check_table_dettached(ctx, database_name, table_name)
+
     escaped_database_name = database_name.encode("unicode_escape").decode("utf-8")
     escaped_table_name = table_name.encode("unicode_escape").decode("utf-8")
 
     logging.info("Escaped params: {}.{}", escaped_database_name, escaped_table_name)
-
-    check_table_dettached(ctx, escaped_database_name, escaped_table_name)
 
     local_metadata_table_path = (
         CLICKHOUSE_METADATA_PATH

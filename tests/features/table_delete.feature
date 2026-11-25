@@ -188,6 +188,20 @@ Feature: chadmin delete detached table commands
     """
     Then S3 contains 0 objects
 
+  Scenario: Refuse to delete an attached table with a backslash in its name
+    Given we have executed queries on clickhouse01
+    """
+    CREATE TABLE test_drop_db.`archive\\daily` (n Int32) ENGINE = Memory;
+    """
+    When we try to execute command on clickhouse01
+    """
+    chadmin table delete --detached test_drop_db 'archive\daily'
+    """
+    Then it fails with response contains
+    """
+    is attached
+    """
+
   @require_version_23.3
   Scenario: Drop detached table from local disk
     Given we have executed queries on clickhouse01
