@@ -46,6 +46,7 @@ def detached_parts_cleanup_command(
         ctx,
         empty_reason_min_age=manually_detached_data_parts_retention_time,
         non_empty_reason_min_age=automatically_detached_data_parts_retention_time,
+        include_size=False,
     )
     eligible_parts = []
     skipped = 0

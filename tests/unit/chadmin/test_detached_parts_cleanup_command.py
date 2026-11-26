@@ -67,6 +67,7 @@ def test_cleanup_uses_sql_drop_for_all_names(
     assert selection.kwargs == {
         "empty_reason_min_age": 3600,
         "non_empty_reason_min_age": 7200,
+        "include_size": False,
     }
     operations["drop_detached_part"].assert_called_once_with(
         selection.args[0],

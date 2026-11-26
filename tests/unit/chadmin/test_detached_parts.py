@@ -31,6 +31,31 @@ def test_no_age_filter_preserves_existing_calls(version: str) -> None:
     assert "OVER" not in query
 
 
+@pytest.mark.parametrize("ages", [{}, {"non_empty_reason_min_age": 7200}])
+def test_size_is_included_by_default(ages: dict) -> None:
+    query = render_query(**ages)
+    assert query == render_query(include_size=True, **ages)
+    assert query.count("bytes_on_disk") == (2 if ages else 1)
+
+
+@pytest.mark.parametrize("ages", [{}, {"non_empty_reason_min_age": 7200}])
+def test_size_can_be_omitted_from_every_select(ages: dict) -> None:
+    query = render_query(include_size=False, **ages)
+    assert "bytes_on_disk" not in query
+    assert "path" in query
+    assert query.count("FROM system.detached_parts") == 1
+    if ages:
+        assert "disks_count" in query
+        assert "modification_time < now() - INTERVAL 7200 SECOND" in query
+
+
+@pytest.mark.parametrize("include_size", [False, True])
+def test_size_flag_preserves_older_clickhouse_columns(include_size: bool) -> None:
+    query = render_query("22.8.1.1", include_size=include_size)
+    assert "bytes_on_disk" not in query
+    assert "path" not in query
+
+
 @pytest.mark.parametrize("empty,non_empty", [(0, 0), (0, None), (None, 0)])
 def test_disabled_categories_select_no_parts(empty: Any, non_empty: Any) -> None:
     query = render_query(empty_reason_min_age=empty, non_empty_reason_min_age=non_empty)

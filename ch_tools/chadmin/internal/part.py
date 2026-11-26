@@ -183,12 +183,14 @@ def list_detached_parts(
     use_part_list_required_columns_list: Optional[List[str]] = None,
     empty_reason_min_age: Optional[int] = None,
     non_empty_reason_min_age: Optional[int] = None,
+    include_size: bool = True,
 ) -> List[Dict[str, Any]]:
     """
     List detached data parts.
 
     Age-filtered results include disks_count across all copies of each part,
     including copies excluded by the selection filters.
+    Set include_size=False to omit the costly bytes_on_disk column from the query.
     """
     filter_by_age = (
         empty_reason_min_age is not None or non_empty_reason_min_age is not None
@@ -212,7 +214,9 @@ def list_detached_parts(
             disk "disk_name",
         {% if version_ge('23.1') -%}
             path,
+            {% if include_size -%}
             bytes_on_disk,
+            {% endif -%}
         {% endif -%}
             reason
         {% if filter_by_age -%}
@@ -228,7 +232,9 @@ def list_detached_parts(
                 name,
                 disk,
                 path,
+            {% if include_size -%}
                 bytes_on_disk,
+            {% endif -%}
                 reason,
                 modification_time,
                 level,
@@ -318,6 +324,7 @@ def list_detached_parts(
         filter_by_age=filter_by_age,
         empty_reason_min_age=empty_reason_min_age,
         non_empty_reason_min_age=non_empty_reason_min_age,
+        include_size=include_size,
         limit=limit,
         format_="JSON",
     )["data"]
