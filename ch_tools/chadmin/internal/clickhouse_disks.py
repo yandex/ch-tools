@@ -7,7 +7,6 @@ import xmltodict
 
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.config import ClickhouseConfig
-from ch_tools.common.utils import version_ge
 
 CLICKHOUSE_DISKS_TIMEOUT = 15 * 60
 CLICKHOUSE_PATH = "/var/lib/clickhouse"
@@ -121,15 +120,11 @@ class ClickHouseDiskClient:
         path: str,
         recursive: bool = False,
         *,
-        ch_version: Optional[str] = None,
         dry_run: bool = False,
         check: bool = True,
     ) -> Tuple[int, bytes]:
-        if ch_version is not None and not version_ge(ch_version, "24.7"):
-            command_args = ["remove", path]
-        else:
-            suffix = " --recursive" if recursive else ""
-            command_args = ["--query", f"remove {_quote_path(path)}{suffix}"]
+        suffix = " --recursive" if recursive else ""
+        command_args = ["--query", f"remove {_quote_path(path)}{suffix}"]
 
         proc = self._execute(command_args, check=check, dry_run=dry_run)
         logging.info(
@@ -160,7 +155,6 @@ def make_ch_disks_config(disk: str) -> str:
 def remove_from_ch_disk(
     disk: str,
     path: str,
-    ch_version: str,
     disk_config_path: Optional[str] = None,
     dry_run: bool = False,
 ) -> Tuple[int, bytes]:
@@ -173,7 +167,6 @@ def remove_from_ch_disk(
     return client.remove(
         path,
         recursive=True,
-        ch_version=ch_version,
         dry_run=dry_run,
         check=False,
     )

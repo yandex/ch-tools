@@ -36,7 +36,6 @@ Feature: chadmin object-storage commands
     """
     Then S3 contains greater than 0 objects
 
-  @require_version_23.3
   Scenario: Collect info
     When we execute query on clickhouse01
     """
@@ -65,7 +64,6 @@ Feature: chadmin object-storage commands
       orphaned: '?(1)'?
     """
 
-  @require_version_24.3
   Scenario Outline: Collect info with frozen parts for all replicas
     When we execute queries on clickhouse01
     """
@@ -125,7 +123,6 @@ Feature: chadmin object-storage commands
   | clickhouse01_detached              |
   | \n  unique_detached: '?(1)'?       |
 
-  @require_version_23.3
   Scenario: Detect different space usage table schema
     When we execute command on clickhouse01
     """
@@ -585,7 +582,6 @@ Feature: chadmin object-storage commands
       TotalSize: 10
     """
 
-  @require_version_23.3
   Scenario: Sanity check clean many orphaned objects
     Given merged clickhouse-tools configuration on clickhouse01,clickhouse02
     """
@@ -619,7 +615,6 @@ Feature: chadmin object-storage commands
     Size validation failed
     """
 
-  @require_version_24.3
   Scenario: Download of missing backups prevents data from removal
     When we execute command on clickhouse01
     """
@@ -683,7 +678,6 @@ Feature: chadmin object-storage commands
     """
     """
 
-  @require_version_24.3
   Scenario: All missing backups are downloaded
     When we execute command on clickhouse01
     """
@@ -734,7 +728,6 @@ Feature: chadmin object-storage commands
     Downloading cloud storage metadata from missing backup 'test1'
     """
 
-  @require_version_24.3
   Scenario: Backup deleted before metadata download is skipped
     When we execute command on clickhouse01
     """
@@ -782,7 +775,6 @@ Feature: chadmin object-storage commands
       TotalSize: 0
     """
 
-  @require_version_23.3
   Scenario: Clean with use-saved-list option
     When we execute query on clickhouse01
     """
@@ -822,7 +814,6 @@ Feature: chadmin object-storage commands
       TotalSize: 1
     """
 
-  @require_version_23.3
   Scenario: Clean with permanently unavailable replica preserves saved remote listing table locally
     When we execute command on clickhouse01
     """
@@ -852,7 +843,6 @@ Feature: chadmin object-storage commands
     1
     """
 
-  @require_version_23.3
   Scenario: Clean with temporarily unavailable replica succeeds after replica returns
     # The initial availability probe must keep retrying while the replica starts.
     # A request timeout does not delay retries when connections are refused.
@@ -893,7 +883,6 @@ Feature: chadmin object-storage commands
     1
     """
 
-  @require_version_23.3
   Scenario: Clean with stat partitioning
     When we execute query on clickhouse01
     """
@@ -931,7 +920,6 @@ Feature: chadmin object-storage commands
       TotalSize: 0
     """
 
-  @require_version_23.3
   Scenario: Clean with use-saved-list option recreates table with outdated schema
     When we execute query on clickhouse01
     """
@@ -965,7 +953,6 @@ Feature: chadmin object-storage commands
     `obj_size` UInt64
     """
 
-  @require_version_23.3
   Scenario Outline: Service tables cleanup - old tables are removed with retention_days = 0
     Given merged clickhouse-tools configuration on clickhouse01,clickhouse02
     """
@@ -1016,7 +1003,6 @@ Feature: chadmin object-storage commands
       | chadmin object-storage collect-info --to-time 0h --traverse-remote |
       | chadmin object-storage clean --to-time 0h --dry-run                |
 
-  @require_version_23.3
   Scenario: Service tables cleanup - retention period works correctly
     Given merged clickhouse-tools configuration on clickhouse01,clickhouse02
     """
@@ -1071,7 +1057,6 @@ Feature: chadmin object-storage commands
     1
     """
 
-  @require_version_23.3
   Scenario: Service tables cleanup - only unique tables are removed
     Given merged clickhouse-tools configuration on clickhouse01,clickhouse02
     """

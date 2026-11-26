@@ -49,7 +49,7 @@ Feature: ch-monitoring tool
       | test password <&>      |
       | ${user}                |
 
-  @client_password @require_version_24.3
+  @client_password
   Scenario: Native client config password takes precedence over environment
     Given we have executed queries on clickhouse01
     """

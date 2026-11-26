@@ -46,15 +46,6 @@ jobs:
       matrix:
         include:
         - python: "3.10"
-          clickhouse: "23.3.22.3"
-          runner: yc
-        - python: "3.10"
-          clickhouse: "23.8.16.40"
-          runner: yc
-        - python: "3.10"
-          clickhouse: "24.3.18.7"
-          runner: yc
-        - python: "3.10"
           clickhouse: "24.8.14.39"
           runner: yc
         - python: "3.10"

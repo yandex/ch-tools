@@ -335,7 +335,6 @@ Feature: chadmin zookeeper commands.
     /tables/table_02/replicas/clickhouse01.ch_tools_test
     """
 
-  @require_version_23.1
   Scenario: Remove single host from Replicated database.
     When we execute queries on clickhouse01
     """
@@ -348,7 +347,6 @@ Feature: chadmin zookeeper commands.
     /clickhouse/databases/test/replicas/shard1|clickhouse02.ch_tools_test
     """
 
-  @require_version_23.1
   Scenario: Remove all host from Replicated database.
     When we execute queries on clickhouse01
     """
@@ -358,7 +356,6 @@ Feature: chadmin zookeeper commands.
     And we do hosts cleanup on clickhouse01 with fqdn clickhouse01.ch_tools_test,clickhouse02.ch_tools_test and zk root /
     Then the list of children on clickhouse01 for zk node /clickhouse/databases/ is empty
 
-  @require_version_23.1
   Scenario: Remove single host from table.
     Given merged clickhouse-tools configuration on clickhouse01
     """

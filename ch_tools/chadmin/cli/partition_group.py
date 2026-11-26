@@ -1302,10 +1302,10 @@ def get_partitions(
             {% if max_partition_id -%}
               AND partition_id <= '{{ max_partition_id }}'
             {% endif -%}
-            {% if min_size and version_ge('23.1') -%}
+            {% if min_size -%}
               AND sum(bytes_on_disk) >= {{ min_size }}
             {% endif -%}
-            {% if max_size and version_ge('23.1') -%}
+            {% if max_size -%}
               AND sum(bytes_on_disk) <= {{ max_size }}
             {% endif -%}
             {% if min_part_count -%}

@@ -16,7 +16,6 @@ from ch_tools.chadmin.internal.schema_comparison import (
     compare_schemas_simple,
     generate_schema_diff,
 )
-from ch_tools.chadmin.internal.system import get_version
 from ch_tools.chadmin.internal.table_info import TableInfo
 from ch_tools.chadmin.internal.table_metadata_parser import TableMetadataParser
 from ch_tools.chadmin.internal.utils import (
@@ -413,7 +412,7 @@ def _is_should_use_ch_disk_remover(table_data_path: str, disk_type: str) -> bool
 
 
 def _remove_table_data_from_disk(
-    table_uuid: str, disk_name: str, disk_type: str, ch_version: str
+    table_uuid: str, disk_name: str, disk_type: str
 ) -> None:
     logging.info(
         "_remove_table_data_from_disk: UUID={}, disk={}",
@@ -444,7 +443,6 @@ def _remove_table_data_from_disk(
         disk=disk_name,
         path=table_data_path,
         disk_config_path=disk_config_path,
-        ch_version=ch_version,
     )
     if code:
         raise RuntimeError(
@@ -496,7 +494,6 @@ def delete_detached_table(ctx: Context, database_name: str, table_name: str) -> 
             table_uuid=table_metadata.table_uuid,
             disk_name=disk_name,
             disk_type=disk_type,
-            ch_version=get_version(ctx),
         )
 
     if table_metadata.table_engine.is_table_engine_replicated():

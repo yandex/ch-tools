@@ -219,7 +219,6 @@ Feature: chadmin partitions commands.
     0
     """
 
-  @require_version_23.1
   Scenario: Drop detached parts.
     When we execute command on clickhouse01
     """
@@ -285,7 +284,6 @@ Feature: chadmin partitions commands.
     5
     """
 
-  @require_version_23.3
   Scenario: Attach a quarantined S3 partition after reading every object.
     When we execute queries on clickhouse01
     """
@@ -331,7 +329,6 @@ Feature: chadmin partitions commands.
     20
     """
 
-  @require_version_23.3
   Scenario: Leave a quarantined S3 part prefixed when an object is missing.
     When we execute queries on clickhouse01
     """
@@ -363,7 +360,6 @@ Feature: chadmin partitions commands.
     0\t1
     """
 
-  @require_version_23.3
   Scenario: Quarantine a failed unprefixed S3 part and attach its partition.
     When we execute queries on clickhouse01
     """
@@ -402,7 +398,6 @@ Feature: chadmin partitions commands.
     1\t1\t0
     """
 
-  @require_version_23.3
   Scenario: Remove old zero-copy locks after attaching a quarantined partition.
     When we execute queries on clickhouse01
     """

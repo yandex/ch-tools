@@ -8,7 +8,6 @@ Feature: chadmin database restore-replica command
     And a working clickhouse on clickhouse02
 
 
-  @require_version_24.8
   Scenario Outline: Restore database replica
     When we execute query on clickhouse01
     """
@@ -118,7 +117,6 @@ Feature: chadmin database restore-replica command
     | '/clickhouse/repl_db'                                        |
     | '/awesome_clickhouse/repl_db'                                |
 
-  @require_version_24.8
   Scenario: Restore empty database
     When we execute query on clickhouse01
     """
@@ -186,7 +184,6 @@ Feature: chadmin database restore-replica command
     (43)
     """
 
-  @require_version_24.8
   Scenario: Failed restore replica Atomic database
     When we execute query on clickhouse01
     """
@@ -201,7 +198,6 @@ Feature: chadmin database restore-replica command
     Database repl_db is not Replicated, stop restore
     """
 
-  @require_version_24.8
   Scenario: Restore database with special characters in table names
     When we execute query on clickhouse01
     """

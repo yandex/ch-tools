@@ -27,7 +27,6 @@ from tenacity import (
 from ch_tools.chadmin.cli.chadmin_group import Chadmin
 from ch_tools.chadmin.internal.clickhouse_disks import S3_METADATA_STORE_PATH
 from ch_tools.chadmin.internal.database import list_databases
-from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.table_replica import list_table_replicas
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
@@ -152,16 +151,6 @@ def wait_replication_sync_command(
     sync_databases: bool,
 ) -> None:
     """Wait for ClickHouse server to sync replication with other replicas."""
-    # Lightweight sync is added in 23.4
-    try:
-        if lightweight and not match_ch_version(ctx, "23.4"):
-            logging.warning(
-                "Lightweight sync requires version 23.4, will do full sync instead."
-            )
-            lightweight = False
-    except Exception as e:
-        raise ConnectionError(f"Connection error while getting CH version: {e}")
-
     start_time = time.time()
     deadline = start_time + total_timeout.total_seconds()
 

@@ -55,7 +55,6 @@ def test_remove_table_data_skips_disk_without_table_path(
         "12345678-1234-1234-1234-123456789012",
         "object_storage",
         table.DISK_OBJECT_STORAGE_KEY,
-        "25.3.12.8",
     )
 
     should_remove.assert_called_once_with(
@@ -84,7 +83,6 @@ def test_remove_table_data_uses_clickhouse_disks_for_existing_path(
         "12345678-1234-1234-1234-123456789012",
         "default",
         table.DISK_LOCAL_KEY,
-        "25.3.12.8",
     )
 
     make_config.assert_called_once_with("default")
@@ -92,7 +90,6 @@ def test_remove_table_data_uses_clickhouse_disks_for_existing_path(
         disk="default",
         path="store/123/12345678-1234-1234-1234-123456789012",
         disk_config_path="/tmp/disks.xml",
-        ch_version="25.3.12.8",
     )
 
 

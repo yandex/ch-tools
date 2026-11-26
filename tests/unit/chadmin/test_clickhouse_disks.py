@@ -101,7 +101,7 @@ def test_clickhouse_disks_copy_and_recursive_remove_use_query_interface(
 
 @patch("ch_tools.chadmin.internal.clickhouse_disks.logging")
 @patch("ch_tools.chadmin.internal.clickhouse_disks.subprocess.run")
-def test_clickhouse_disks_remove_supports_legacy_interface(
+def test_clickhouse_disks_remove_returns_failure_when_check_is_disabled(
     run: MagicMock,
     _logging: MagicMock,
 ) -> None:
@@ -109,9 +109,8 @@ def test_clickhouse_disks_remove_supports_legacy_interface(
     client = ClickHouseDiskClient("s3", run_as_clickhouse=False)
 
     result = client.remove(
-        "legacy/path",
+        "test/path",
         recursive=True,
-        ch_version="24.6",
         check=False,
     )
 
@@ -120,8 +119,8 @@ def test_clickhouse_disks_remove_supports_legacy_interface(
         "clickhouse-disks",
         "--disk",
         "s3",
-        "remove",
-        "legacy/path",
+        "--query",
+        "remove 'test/path' --recursive",
     ]
 
 

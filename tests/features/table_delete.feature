@@ -188,7 +188,6 @@ Feature: chadmin delete detached table commands
     """
     Then S3 contains 0 objects
 
-  @require_version_23.3
   Scenario: Drop detached table from local disk
     Given we have executed queries on clickhouse01
     """
@@ -229,7 +228,6 @@ Feature: chadmin delete detached table commands
     total 0
     """
 
-  @require_version_23.3
   Scenario: Drop only one detached table from two detached tables
     Given we have executed queries on clickhouse01
     """
@@ -285,7 +283,6 @@ Feature: chadmin delete detached table commands
     test_table_local_expected
     """
 
-  @require_version_23.3
   Scenario: Drop permanently detached table
     Given we have executed queries on clickhouse01
     """
@@ -326,7 +323,6 @@ Feature: chadmin delete detached table commands
     total 0
     """
 
-  @require_version_23.3 
   @require_version_less_than_26.2
   Scenario: Drop detached table from object_storage
     Given we have executed queries on clickhouse01
@@ -372,7 +368,6 @@ Feature: chadmin delete detached table commands
     """
     Then S3 contains 0 objects
 
-  @require_version_23.3
   Scenario: Drop replicated table from single host
     Given we have executed queries on clickhouse01
     """
@@ -413,7 +408,6 @@ Feature: chadmin delete detached table commands
     """
     """
 
-  @require_version_23.3
   Scenario: Drop replicated table from some hosts
     Given we have executed queries on clickhouse02
     """
