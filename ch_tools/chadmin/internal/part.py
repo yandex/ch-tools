@@ -186,8 +186,14 @@ def list_detached_parts(
 ) -> List[Dict[str, Any]]:
     """
     List detached data parts.
+
+    Age-filtered results include disks_count across all copies of each part,
+    including copies excluded by the selection filters.
     """
-    if empty_reason_min_age is not None or non_empty_reason_min_age is not None:
+    filter_by_age = (
+        empty_reason_min_age is not None or non_empty_reason_min_age is not None
+    )
+    if filter_by_age:
         if not match_ch_version(ctx, "23.9"):
             raise RuntimeError(
                 "Detached part age filtering requires ClickHouse 23.9 or above"
@@ -209,7 +215,31 @@ def list_detached_parts(
             bytes_on_disk,
         {% endif -%}
             reason
-        FROM system.detached_parts
+        {% if filter_by_age -%}
+            , disks_count
+        {% endif -%}
+        FROM
+        {% if filter_by_age -%}
+        (
+            SELECT
+                database,
+                table,
+                partition_id,
+                name,
+                disk,
+                path,
+                bytes_on_disk,
+                reason,
+                modification_time,
+                level,
+                uniqExact(disk) OVER (
+                    PARTITION BY database, table, name
+                ) AS disks_count
+            FROM system.detached_parts
+        )
+        {% else -%}
+            system.detached_parts
+        {% endif -%}
         {% if database -%}
         WHERE database {{ format_str_match(database) }}
         {% else -%}
@@ -248,7 +278,7 @@ def list_detached_parts(
         {% if reason is not none -%}
           AND reason {{ format_str_match(reason) }}
         {% endif -%}
-        {% if empty_reason_min_age is not none or non_empty_reason_min_age is not none -%}
+        {% if filter_by_age -%}
           AND (
             0
             {% if non_empty_reason_min_age -%}
@@ -285,6 +315,7 @@ def list_detached_parts(
         min_level=min_level,
         max_level=max_level,
         reason=reason,
+        filter_by_age=filter_by_age,
         empty_reason_min_age=empty_reason_min_age,
         non_empty_reason_min_age=non_empty_reason_min_age,
         limit=limit,

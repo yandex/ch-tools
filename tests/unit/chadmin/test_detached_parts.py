@@ -27,13 +27,15 @@ def test_no_age_filter_preserves_existing_calls(version: str) -> None:
     query = render_query(version)
     assert "AND (" not in query
     assert "modification_time" not in query
+    assert "disks_count" not in query
+    assert "OVER" not in query
 
 
 @pytest.mark.parametrize("empty,non_empty", [(0, 0), (0, None), (None, 0)])
 def test_disabled_categories_select_no_parts(empty: Any, non_empty: Any) -> None:
     query = render_query(empty_reason_min_age=empty, non_empty_reason_min_age=non_empty)
     assert "AND ( 0 )" in query
-    assert "modification_time" not in query
+    assert "modification_time <" not in query
 
 
 def test_both_categories_have_independent_age_thresholds() -> None:
@@ -68,6 +70,31 @@ def test_age_filter_combines_with_existing_filters_before_limit() -> None:
     assert "AND table LIKE 'test'" in query
     assert "AND reason LIKE 'broken'" in query
     assert query.index("modification_time") < query.index("LIMIT 10")
+
+
+def test_disk_count_includes_copies_excluded_by_selection_filters() -> None:
+    query = render_query(
+        non_empty_reason_min_age=7200,
+        disk_name="cold",
+        reason="broken",
+        level=1,
+        limit=10,
+    )
+    assert query.count("FROM system.detached_parts") == 1
+    assert (
+        "uniqExact(disk) OVER ( PARTITION BY database, table, name ) AS disks_count"
+        in query
+    )
+    # The window sees fresh copies and copies on other disks before any
+    # selection filter or LIMIT can hide them.
+    inner, outer = query.split("FROM system.detached_parts", maxsplit=1)
+    assert "WHERE" not in inner
+    assert "WHERE" in outer
+    assert "AND disk LIKE 'cold'" in outer
+    assert "AND reason LIKE 'broken'" in outer
+    assert "AND level = 1" in outer
+    assert "modification_time < now() - INTERVAL 7200 SECOND" in outer
+    assert "LIMIT 10" in outer
 
 
 @pytest.mark.parametrize(

@@ -10,28 +10,7 @@ from ch_tools.chadmin.internal.part import (
     part_has_suffix,
 )
 from ch_tools.chadmin.internal.system import get_version
-from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
-
-
-def _part_key(part: dict[str, Any]) -> tuple[str, str, str]:
-    return part["database"], part["table"], part["name"]
-
-
-def _ambiguous_part_names(ctx: Context) -> set[tuple[str, str, str]]:
-    # Include fresh parts: DROP DETACHED PART chooses a disk by name, so an
-    # expired copy must not cause a fresh copy on another disk to be removed.
-    parts = execute_query(
-        ctx,
-        """
-        SELECT database, table, name
-        FROM system.detached_parts
-        GROUP BY database, table, name
-        HAVING uniqExact(disk) > 1
-        """,
-        format_="JSON",
-    )["data"]
-    return {_part_key(part) for part in parts}
 
 
 def _delete_part(
@@ -100,13 +79,12 @@ def detached_parts_cleanup_command(
         empty_reason_min_age=manually_detached_data_parts_retention_time,
         non_empty_reason_min_age=automatically_detached_data_parts_retention_time,
     )
-    ambiguous_names = _ambiguous_part_names(ctx) if parts else set()
     eligible_parts = []
     skipped = 0
     for part in parts:
         if part["name"].startswith(("attaching_", "deleting_")):
             logging.warning("Skip service detached part: {}", part)
-        elif _part_key(part) in ambiguous_names:
+        elif part["disks_count"] > 1:
             logging.warning("Skip detached part present on multiple disks: {}", part)
         else:
             eligible_parts.append(part)

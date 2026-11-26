@@ -14,7 +14,6 @@ def operations(monkeypatch: pytest.MonkeyPatch) -> dict:
     prefix = "ch_tools.chadmin.cli.detached_parts_cleanup_command."
     mocks = {
         "list_detached_parts": MagicMock(return_value=[]),
-        "execute_query": MagicMock(return_value={"data": []}),
         "get_disks": MagicMock(
             return_value={"local": {"name": "local", "path": "/data/"}}
         ),
@@ -49,6 +48,7 @@ def make_part(name: str = "1_1_1_0", **kwargs: Any) -> dict:
         "name": name,
         "disk_name": "local",
         "path": f"/data/detached/{name}",
+        "disks_count": 1,
         **kwargs,
     }
 
@@ -63,6 +63,7 @@ def test_cleanup_uses_configured_ages_and_existing_deletion_backend(
     result = invoke(dry_run)
     assert result.exit_code == 0, result.exception
     selection = operations["list_detached_parts"].call_args
+    operations["list_detached_parts"].assert_called_once()
     assert selection.kwargs == {
         "empty_reason_min_age": 3600,
         "non_empty_reason_min_age": 7200,
@@ -81,7 +82,6 @@ def test_cleanup_uses_configured_ages_and_existing_deletion_backend(
 
 def test_empty_selection_does_not_read_disks_or_delete(operations: dict) -> None:
     assert invoke().exit_code == 0
-    operations["execute_query"].assert_not_called()
     operations["get_disks"].assert_not_called()
     operations["drop_detached_part"].assert_not_called()
     operations["remove_from_ch_disk"].assert_not_called()
@@ -90,7 +90,6 @@ def test_empty_selection_does_not_read_disks_or_delete(operations: dict) -> None
 def test_disabled_cleanup_does_not_query_clickhouse(operations: dict) -> None:
     assert invoke(automatic=0, manual=0).exit_code == 0
     operations["list_detached_parts"].assert_not_called()
-    operations["execute_query"].assert_not_called()
 
 
 def test_deletion_error_does_not_block_remaining_parts(operations: dict) -> None:
@@ -120,33 +119,29 @@ def test_service_parts_are_skipped(operations: dict, name: str) -> None:
 
 
 def test_fresh_copy_on_another_disk_prevents_deletion(operations: dict) -> None:
-    # Only the old copy is selected by age; the second query must also see
-    # the fresh copy on the other disk, which has the same SQL identity.
-    old_copy = make_part(disk_name="cold", path="/cold/detached/1_1_1_0")
+    # The single query only returns the old copy, but disks_count also
+    # includes the fresh copy on the other disk.
+    old_copy = make_part(disk_name="cold", path="/cold/detached/1_1_1_0", disks_count=2)
     operations["list_detached_parts"].return_value = [old_copy]
-    operations["execute_query"].return_value = {
-        "data": [{"database": "db", "table": "test", "name": old_copy["name"]}]
-    }
     assert invoke().exit_code == 0
     operations["drop_detached_part"].assert_not_called()
     operations["remove_from_ch_disk"].assert_not_called()
     operations["get_disks"].assert_not_called()
     operations["logging.warning"].assert_called_once()
-    query = " ".join(operations["execute_query"].call_args.args[1].split())
-    assert "FROM system.detached_parts GROUP BY database, table, name" in query
-    assert "HAVING uniqExact(disk) > 1" in query
-    assert "WHERE" not in query
+    operations["list_detached_parts"].assert_called_once()
 
 
 @pytest.mark.parametrize("other", [{"database": "other_db"}, {"table": "other_table"}])
 def test_ambiguity_is_scoped_to_database_and_table(
     operations: dict, other: dict
 ) -> None:
-    part = make_part()
-    operations["list_detached_parts"].return_value = [part]
-    operations["execute_query"].return_value = {"data": [make_part(**other)]}
+    operations["list_detached_parts"].return_value = [
+        make_part(),
+        make_part(**other, disks_count=2),
+    ]
     assert invoke().exit_code == 0
     operations["drop_detached_part"].assert_called_once()
+    operations["logging.warning"].assert_called_once()
 
 
 def test_disk_failure_is_reported_and_remaining_parts_are_processed(
@@ -171,10 +166,9 @@ def test_disk_path_outside_its_disk_is_not_removed(operations: dict) -> None:
     operations["remove_from_ch_disk"].assert_not_called()
 
 
-@pytest.mark.parametrize("query", ["list_detached_parts", "execute_query"])
-def test_failed_inventory_prevents_all_deletions(operations: dict, query: str) -> None:
+def test_failed_inventory_prevents_all_deletions(operations: dict) -> None:
     operations["list_detached_parts"].return_value = [make_part()]
-    operations[query].side_effect = RuntimeError("inventory failed")
+    operations["list_detached_parts"].side_effect = RuntimeError("inventory failed")
     assert invoke().exit_code != 0
     operations["drop_detached_part"].assert_not_called()
     operations["remove_from_ch_disk"].assert_not_called()
