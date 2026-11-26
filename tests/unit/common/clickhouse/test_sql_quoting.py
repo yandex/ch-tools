@@ -31,7 +31,7 @@ def test_move_partition_quotes_destination_and_binds_supported_operands() -> Non
     ctx = Mock(
         obj={
             "chcli": client,
-            "config": {"clickhouse": {"alter_table_timeout": 30}},
+            "config": {"clickhouse": {"version": "24.8", "alter_table_timeout": 30}},
         }
     )
     with patch("requests.post") as post, patch("ch_tools.common.logging.debug"):
@@ -52,7 +52,9 @@ def test_catalog_name_round_trip(tmp_path: Path) -> None:
     database = "db.with.dot"
     name = r"a space,percent%\`'{}"
     table = qualified_name(database, name)
-    ctx = Mock(obj={"config": {"clickhouse": {"alter_table_timeout": 30}}})
+    ctx = Mock(
+        obj={"config": {"clickhouse": {"version": "24.8", "alter_table_timeout": 30}}}
+    )
     with patch("ch_tools.chadmin.internal.partition.execute_query") as execute:
         detach_partition(ctx, database, name, "7")
     params: dict[str, Parameter] = {}
