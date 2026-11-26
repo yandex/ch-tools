@@ -2,11 +2,14 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+import requests
 from click.testing import CliRunner
 
 from ch_tools.chadmin.cli.detached_parts_cleanup_command import (
     detached_parts_cleanup_command,
 )
+from ch_tools.chadmin.internal.part import drop_detached_part
+from ch_tools.common.clickhouse.client.clickhouse_client import ClickhouseClient
 
 
 @pytest.fixture
@@ -75,7 +78,12 @@ def test_cleanup_uses_configured_ages_and_existing_deletion_backend(
         operations["drop_detached_part"].assert_not_called()
     else:
         operations["drop_detached_part"].assert_called_once_with(
-            selection.args[0], "db", "test", "1_1_1_0", dry_run=dry_run
+            selection.args[0],
+            "db",
+            "test",
+            "1_1_1_0",
+            dry_run=dry_run,
+            retry_max_attempts=1,
         )
         operations["remove_from_ch_disk"].assert_not_called()
 
@@ -103,6 +111,62 @@ def test_deletion_error_does_not_block_remaining_parts(operations: dict) -> None
     assert operations["drop_detached_part"].call_count == 2
     operations["logging.error"].assert_called_once()
     assert operations["logging.error"].call_args.args[1] == parts[0]
+    operations["logging.info"].assert_called_with(
+        "Detached parts cleanup{}: processed={}, skipped={}, failed={}", "", 1, 0, 1
+    )
+
+
+def test_lost_drop_response_does_not_delete_replacement_part(
+    operations: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parts = [make_part(), make_part("2_2_2_0")]
+    operations["list_detached_parts"].return_value = parts
+    monkeypatch.setattr(
+        "ch_tools.chadmin.cli.detached_parts_cleanup_command.drop_detached_part",
+        drop_detached_part,
+    )
+    client = ClickhouseClient(
+        host="localhost",
+        ports={},
+        timeout=1,
+        retry_max_attempts=3,
+        retry_max_interval=0,
+    )
+    monkeypatch.setattr(
+        "ch_tools.common.clickhouse.client.clickhouse_client._log_retry_attempt",
+        MagicMock(),
+    )
+    server_state = {"replacement_exists": False}
+
+    def execute(query: str, **kwargs: Any) -> None:
+        assert "retry_max_attempts" not in kwargs["query_args"]
+        if "'1_1_1_0'" in query:
+            if server_state["replacement_exists"]:
+                server_state["replacement_exists"] = False
+                return
+            # The first DROP succeeded, but its response was lost. Another
+            # actor immediately detaches a fresh part under the same name.
+            server_state["replacement_exists"] = True
+            raise requests.exceptions.ReadTimeout("DROP response lost")
+
+    execute_mock = MagicMock(side_effect=execute)
+    monkeypatch.setattr(client, "_execute_query_impl", execute_mock)
+    result = CliRunner().invoke(
+        detached_parts_cleanup_command,
+        [],
+        obj={
+            "config": {"clickhouse": {"alter_table_timeout": 10}},
+            "chcli": client,
+        },
+        default_map={
+            "automatically_detached_data_parts_retention_time": 7200,
+            "manually_detached_data_parts_retention_time": 3600,
+        },
+    )
+    assert result.exit_code == 1
+    assert server_state["replacement_exists"]
+    assert execute_mock.call_count == 2
+    assert "'2_2_2_0'" in execute_mock.call_args.kwargs["query"]
     operations["logging.info"].assert_called_with(
         "Detached parts cleanup{}: processed={}, skipped={}, failed={}", "", 1, 0, 1
     )

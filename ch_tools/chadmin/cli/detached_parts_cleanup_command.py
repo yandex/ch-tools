@@ -20,8 +20,15 @@ def _delete_part(
     dry_run: bool,
 ) -> None:
     if not part_has_suffix(part["name"]):
+        # A lost response may hide a successful DROP. Retrying by name could
+        # remove a new part detached under the same name in the meantime.
         drop_detached_part(
-            ctx, part["database"], part["table"], part["name"], dry_run=dry_run
+            ctx,
+            part["database"],
+            part["table"],
+            part["name"],
+            dry_run=dry_run,
+            retry_max_attempts=1,
         )
         return
 

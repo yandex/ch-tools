@@ -422,13 +422,23 @@ def drop_detached_part(
     table: str,
     part_name: str,
     dry_run: bool = False,
+    *,
+    retry_max_attempts: Optional[int] = None,
 ) -> None:
     """
     Drop the specified detached data part.
     """
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
     query = f"ALTER TABLE `{database}`.`{table}` DROP DETACHED PART '{part_name}'"
-    execute_query(ctx, query, timeout=timeout, format_=None, echo=True, dry_run=dry_run)
+    execute_query(
+        ctx,
+        query,
+        timeout=timeout,
+        format_=None,
+        echo=True,
+        dry_run=dry_run,
+        retry_max_attempts=retry_max_attempts,
+    )
 
 
 def delete_detached_part(
