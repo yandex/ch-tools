@@ -201,6 +201,7 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
         host: Optional[str] = None,
         port: Optional[ClickhousePort] = None,
         log_query: bool = True,
+        retry_max_attempts: Optional[int] = None,
     ) -> Any:
         """
         Execute query.
@@ -209,13 +210,22 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
         :meth:`ping`); in that case an HTTP GET to the server root is issued.
 
         Retries transient errors using exponential back-off.
+        ``retry_max_attempts`` overrides the configured number of attempts for
+        this query only; 1 disables retries.
         """
+        max_attempts = (
+            self._retry_max_attempts
+            if retry_max_attempts is None
+            else retry_max_attempts
+        )
+        if max_attempts < 1:
+            raise ValueError("retry_max_attempts must be at least 1")
         retrying = tenacity.Retrying(
             retry=tenacity.retry_if_exception(is_transient_error),
             wait=tenacity.wait_random_exponential(
                 multiplier=0.5, max=self._retry_max_interval
             ),
-            stop=tenacity.stop_after_attempt(self._retry_max_attempts),
+            stop=tenacity.stop_after_attempt(max_attempts),
             before_sleep=_log_retry_attempt,
             reraise=True,
         )

@@ -59,6 +59,7 @@ def execute_query(
     settings: Optional[Any] = None,
     replica: Optional[str] = None,
     log_query: bool = True,
+    retry_max_attempts: Optional[int] = None,
     **kwargs: Any,
 ) -> Any:
     """
@@ -80,6 +81,7 @@ def execute_query(
         settings=settings,
         host=replica,
         log_query=log_query,
+        retry_max_attempts=retry_max_attempts,
     )
 
 

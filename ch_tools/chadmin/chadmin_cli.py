@@ -24,6 +24,9 @@ from ch_tools.chadmin.cli.config_command import config_command
 from ch_tools.chadmin.cli.crash_log_group import crash_log_group
 from ch_tools.chadmin.cli.data_store_group import data_store_group
 from ch_tools.chadmin.cli.database_group import database_group
+from ch_tools.chadmin.cli.detached_parts_cleanup_command import (
+    detached_parts_cleanup_command,
+)
 from ch_tools.chadmin.cli.diagnostics_command import diagnostics_command
 from ch_tools.chadmin.cli.dictionary_group import dictionary_group
 from ch_tools.chadmin.cli.disk_group import disks_group
@@ -115,6 +118,7 @@ def cli(
 
 commands: List[Any] = [
     config_command,
+    detached_parts_cleanup_command,
     diagnostics_command,
     data_store_group,
     list_async_metrics_command,
