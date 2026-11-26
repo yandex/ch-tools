@@ -5,6 +5,7 @@ from click import ClickException, Context
 from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.client.parameters import table_parameters
 
 
 def get_process(ctx: Context, query_id: str) -> Dict[str, Any]:
@@ -59,22 +60,22 @@ def list_processes(
         Settings
         {% endif %}
         {% if cluster %}
-        FROM clusterAllReplicas({{ cluster }}, system.processes)
+        FROM clusterAllReplicas({{ cluster|bind }}, system.processes)
         {% else %}
         FROM system.processes
         {% endif %}
         WHERE 1
         {% if user %}
-          AND user = '{{ user }}'
+          AND user = {{ user|bind }}
         {% endif %}
         {% if exclude_user %}
-          AND user != '{{ exclude_user }}'
+          AND user != {{ exclude_user|bind }}
         {% endif %}
         {% if query_id %}
-          AND query_id = '{{ query_id }}'
+          AND query_id = {{ query_id|bind }}
         {% endif %}
         {% if query_pattern %}
-          AND lower(query) LIKE lower('{{ query_pattern }}')
+          AND lower(query) LIKE lower({{ query_pattern|bind }})
         {% endif %}
         {% if not query_id %}
         ORDER BY {{ order_by }} DESC
@@ -105,6 +106,8 @@ def kill_process(
     exclude_user: Optional[str] = None,
     query_template: Optional[str] = None,
     query_kind: Optional[str] = None,
+    *,
+    ignore_no_match: bool = False,
 ) -> None:
     """
     Perform "KILL QUERY".
@@ -113,19 +116,22 @@ def kill_process(
         KILL QUERY
         WHERE 1
         {% if user %}
-          AND user = '{{ user }}'
+          AND user = {{ user|bind }}
         {% endif %}
         {% if exclude_user %}
-          AND user != '{{ exclude_user }}'
+          AND user != {{ exclude_user|bind }}
         {% endif %}
         {% if query_id %}
-          AND query_id = '{{ query_id }}'
+          AND query_id = {{ query_id|bind }}
         {% endif %}
         {% if query_template %}
-          AND query ILIKE '{{ query_template }}'
+          AND query ILIKE {{ query_template|bind }}
         {% endif %}
         {% if query_kind %}
-          AND query_kind = '{{ query_kind }}'
+          AND query_kind = {{ query_kind|bind }}
+        {% endif %}
+        {% if ignore_no_match and version_ge('26.11') %}
+        SETTINGS kill_throw_if_noop = 0
         {% endif %}
         """
     logging.info(
@@ -136,6 +142,7 @@ def kill_process(
             user=user,
             exclude_user=exclude_user,
             query_template=query_template,
+            ignore_no_match=ignore_no_match,
             query_kind=query_kind if match_ch_version(ctx, "23.3") else None,
         )
     )
@@ -181,7 +188,7 @@ def list_merges(
             memory_usage,
             thread_id
         {% if cluster %}
-        FROM clusterAllReplicas({{ cluster }}, system.merges)
+        FROM clusterAllReplicas({{ cluster|bind }}, system.merges)
         {% else %}
         FROM system.merges
         {% endif %}
@@ -236,7 +243,7 @@ def list_moves(
             part_size,
             thread_id
         {% if cluster %}
-        FROM clusterAllReplicas({{ cluster }}, system.moves)
+        FROM clusterAllReplicas({{ cluster|bind }}, system.moves)
         {% else %}
         FROM system.moves
         {% endif %}
@@ -295,7 +302,7 @@ def list_replicated_fetches(
             to_detached,
             thread_id
         {% if cluster %}
-        FROM clusterAllReplicas({{ cluster }}, system.replicated_fetches)
+        FROM clusterAllReplicas({{ cluster|bind }}, system.replicated_fetches)
         {% else %}
         FROM system.replicated_fetches
         {% endif %}
@@ -330,8 +337,16 @@ def stop_merges(
     """
     Stop merges for the specified table.
     """
-    query = f"SYSTEM STOP MERGES `{database}`.`{table}`"
-    execute_query(ctx, query, timeout=300, format_=None, echo=True, dry_run=dry_run)
+    query = "SYSTEM STOP MERGES {db:Identifier}.{tbl:Identifier}"
+    execute_query(
+        ctx,
+        query,
+        parameters=table_parameters(database, table),
+        timeout=300,
+        format_=None,
+        echo=True,
+        dry_run=dry_run,
+    )
 
 
 def start_merges(
@@ -343,5 +358,13 @@ def start_merges(
     """
     Start merges for the specified table.
     """
-    query = f"SYSTEM START MERGES `{database}`.`{table}`"
-    execute_query(ctx, query, timeout=300, format_=None, echo=True, dry_run=dry_run)
+    query = "SYSTEM START MERGES {db:Identifier}.{tbl:Identifier}"
+    execute_query(
+        ctx,
+        query,
+        parameters=table_parameters(database, table),
+        timeout=300,
+        format_=None,
+        echo=True,
+        dry_run=dry_run,
+    )

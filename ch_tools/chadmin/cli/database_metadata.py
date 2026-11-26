@@ -9,6 +9,7 @@ from ch_tools.chadmin.internal.table_metadata_parser import (
     UUID_TOKEN,
     parse_uuid,
 )
+from ch_tools.common.clickhouse.client.sql import quote_string
 
 PATTERN_UUID_FROM_METADATA = r"(ATTACH\s+\w+\s+(?:\w+\s+)*UUID\s+')([^']+)('.*)"
 
@@ -53,7 +54,19 @@ class DatabaseMetadata:
         with open(file_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
         if self.database_engine == DatabaseEngine.REPLICATED:
-            engine_line = f"ENGINE = Replicated('{self.zookeeper_path}', '{self.shard}', '{self.replica_name}')"
+            if (
+                self.zookeeper_path is None
+                or self.shard is None
+                or self.replica_name is None
+            ):
+                raise ValueError(
+                    "Replicated database metadata requires a path, shard and replica"
+                )
+            args = ", ".join(
+                quote_string(v)
+                for v in (self.zookeeper_path, self.shard, self.replica_name)
+            )
+            engine_line = f"ENGINE = Replicated({args})"
         else:
             engine_line = "ENGINE = Atomic"
 
@@ -135,8 +148,11 @@ def _parse_engine(line: str) -> DatabaseEngine:
 
 
 def _parse_database_replica_params(line: str) -> Tuple[str, str, str]:
-    pattern = r"'([^']*)'"
-    matches = re.findall(pattern, line)
+    pattern = r"'((?:\\.|''|[^'\\])*)'"
+    matches = [
+        re.sub(r"\\(['\\])|''", lambda match: match[1] or "'", value)
+        for value in re.findall(pattern, line)
+    ]
 
     if len(matches) != 3:
         raise ValueError(f"Failed parse metadata for replicated engine: {len(matches)}")

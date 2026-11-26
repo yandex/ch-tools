@@ -1230,6 +1230,7 @@ def get_partitions(
     database: Optional[str],
     table: Optional[str],
     *,
+    exact_table: bool = False,
     partition_id: Optional[str] = None,
     min_partition_id: Optional[str] = None,
     max_partition_id: Optional[str] = None,
@@ -1275,7 +1276,7 @@ def get_partitions(
                 count() "parts"
             FROM system.detached_parts
             {% if database -%}
-              WHERE database {{ format_str_match(database) }}
+              WHERE database {{ format_str_match(database, exact_table) }}
             {% else -%}
               WHERE database NOT IN ('information_schema', 'INFORMATION_SCHEMA')
             {% endif -%}
@@ -1283,7 +1284,7 @@ def get_partitions(
               AND database NOT {{ format_str_match(exclude_database_pattern) }}
             {% endif -%}
             {% if table -%}
-              AND table {{ format_str_match(table) }}
+              AND table {{ format_str_match(table, exact_table) }}
             {% endif -%}
             {% if reason is not none -%}
               AND reason {{ format_str_match(reason) }}
@@ -1291,16 +1292,16 @@ def get_partitions(
             GROUP BY database, table, partition_id
             HAVING partition_id IS NOT NULL
             {% if disk_name -%}
-              AND has(groupUniqArray(disk), '{{ disk_name }}')
+              AND has(groupUniqArray(disk), {{ disk_name|bind }})
             {% endif -%}
             {% if partition_id -%}
               AND partition_id {{ format_str_match(partition_id) }}
             {% endif -%}
             {% if min_partition_id -%}
-              AND partition_id >= '{{ min_partition_id }}'
+              AND partition_id >= {{ min_partition_id|bind }}
             {% endif -%}
             {% if max_partition_id -%}
-              AND partition_id <= '{{ max_partition_id }}'
+              AND partition_id <= {{ max_partition_id|bind }}
             {% endif -%}
             {% if min_size and version_ge('23.1') -%}
               AND sum(bytes_on_disk) >= {{ min_size }}
@@ -1333,10 +1334,10 @@ def get_partitions(
                 FROM system.replication_queue
                 WHERE 1
                 {% if database -%}
-                  AND database {{ format_str_match(database) }}
+                  AND database {{ format_str_match(database, exact_table) }}
                 {% endif -%}
                 {% if table -%}
-                  AND table {{ format_str_match(table) }}
+                  AND table {{ format_str_match(table, exact_table) }}
                 {% endif -%}
                 {% if min_replication_task_postpone_count is not none -%}
                   AND num_postponed >= {{ min_replication_task_postpone_count }}
@@ -1356,17 +1357,17 @@ def get_partitions(
               AND partition_id {{ format_str_match(partition_id) }}
             {% endif -%}
             {% if min_partition_id -%}
-              AND partition_id >= '{{ min_partition_id }}'
+              AND partition_id >= {{ min_partition_id|bind }}
             {% endif -%}
             {% if max_partition_id -%}
-              AND partition_id <= '{{ max_partition_id }}'
+              AND partition_id <= {{ max_partition_id|bind }}
             {% endif -%}
             {% if disk_name -%}
               AND (database, table, partition_id) IN (
                   SELECT database, table, partition_id
                   FROM system.parts
                   GROUP BY database, table, partition_id
-                  HAVING has(groupUniqArray(disk_name), '{{ disk_name }}')
+                  HAVING has(groupUniqArray(disk_name), {{ disk_name|bind }})
               )
             {% endif -%}
             {% if merging -%}
@@ -1396,7 +1397,7 @@ def get_partitions(
                 formatReadableSize(sum(bytes_on_disk)) "bytes"
             FROM system.parts
             {% if database -%}
-            WHERE database {{ format_str_match(database) }}
+            WHERE database {{ format_str_match(database, exact_table) }}
             {% else -%}
             WHERE database NOT IN ('information_schema', 'INFORMATION_SCHEMA')
             {% endif -%}
@@ -1407,27 +1408,27 @@ def get_partitions(
               AND active
             {% endif -%}
             {% if table -%}
-              AND table {{ format_str_match(table) }}
+              AND table {{ format_str_match(table, exact_table) }}
             {% endif -%}
             GROUP BY database, table, partition_id, partition
             HAVING 1
             {% if disk_name -%}
-               AND has(groupUniqArray(disk_name), '{{ disk_name }}')
+               AND has(groupUniqArray(disk_name), {{ disk_name|bind }})
             {% endif -%}
             {% if partition_id -%}
                AND partition_id {{ format_str_match(partition_id) }}
             {% endif -%}
             {% if min_partition_id -%}
-               AND partition_id >= '{{ min_partition_id }}'
+               AND partition_id >= {{ min_partition_id|bind }}
             {% endif -%}
             {% if max_partition_id -%}
-               AND partition_id <= '{{ max_partition_id }}'
+               AND partition_id <= {{ max_partition_id|bind }}
             {% endif -%}
             {% if min_date -%}
-               AND max_date >= '{{ min_date }}'
+               AND max_date >= {{ min_date|bind }}
             {% endif -%}
             {% if max_date -%}
-               AND min_date <= '{{ max_date }}'
+               AND min_date <= {{ max_date|bind }}
             {% endif -%}
             {% if min_size -%}
                AND sum(bytes_on_disk) >= {{ min_size }}
@@ -1455,6 +1456,7 @@ def get_partitions(
     return execute_query(
         ctx,
         query,
+        exact_table=exact_table,
         database=database,
         exclude_database_pattern=exclude_database_pattern,
         table=table,

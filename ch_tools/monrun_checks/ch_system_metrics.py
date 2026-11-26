@@ -42,7 +42,7 @@ def _get_metric(ctx: click.Context, name: str) -> dict:
     """
     Select and return metric from system.metrics.
     """
-    query = "SELECT * from system.metrics WHERE lower(metric) = '{{ name }}'"
+    query = "SELECT * from system.metrics WHERE lower(metric) = {name:String}"
     return clickhouse_client(ctx).query_json_data_first_row(
-        query=query, query_args={"name": name.lower()}
+        query=query, parameters={"name": name.lower()}
     )

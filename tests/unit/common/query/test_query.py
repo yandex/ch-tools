@@ -52,3 +52,18 @@ def test_add() -> None:
         str(added_query)
         == "SELECT * FROM users WHERE name = {name} AND password = ***** LIMIT 10"
     )
+
+
+def test_query_renders_only_the_requested_view() -> None:
+    views = []
+
+    def render(masked: bool) -> str:
+        views.append(masked)
+        return "masked" if masked else "actual"
+
+    query = Query(render) + " FORMAT TSV"
+    assert views == []
+    assert query.display_sql == "masked FORMAT TSV"
+    assert views == [True]
+    assert query.execution_sql == "actual FORMAT TSV"
+    assert views == [True, False]

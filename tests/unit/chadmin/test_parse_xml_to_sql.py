@@ -54,12 +54,12 @@ def create_xml_file(test_data_dir: Path) -> Callable[[str, str], str]:
             """,
             [
                 """
-CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict1
+CREATE DICTIONARY IF NOT EXISTS `_dictionaries`.`test_dict1`
 (
-    id UInt64,
-    name String DEFAULT ''
+    `id` UInt64,
+    `name` String DEFAULT ''
 )
-PRIMARY KEY id
+PRIMARY KEY `id`
 SOURCE(CLICKHOUSE(DB 'db' TABLE 'tab'))
 LAYOUT(FLAT())
 LIFETIME(MIN 0 MAX 100)
@@ -103,12 +103,12 @@ LIFETIME(MIN 0 MAX 100)
             """,
             [
                 """
-CREATE DICTIONARY IF NOT EXISTS _dictionaries.dictionary1
+CREATE DICTIONARY IF NOT EXISTS `_dictionaries`.`dictionary1`
 (
-    id UInt64,
-    value UInt64 DEFAULT 0
+    `id` UInt64,
+    `value` UInt64 DEFAULT 0
 )
-PRIMARY KEY id
+PRIMARY KEY `id`
 SOURCE(CLICKHOUSE(HOST 'name.db.yandex.net' PORT 8123 USER 'default' PASSWORD '' DB 'default' TABLE 'test_dict'))
 LAYOUT(FLAT())
 LIFETIME(50)
@@ -142,12 +142,12 @@ LIFETIME(50)
             """,
             [
                 """
-CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict1
+CREATE DICTIONARY IF NOT EXISTS `_dictionaries`.`test_dict1`
 (
-    id UInt64,
-    name String DEFAULT ''
+    `id` UInt64,
+    `name` String DEFAULT ''
 )
-PRIMARY KEY id
+PRIMARY KEY `id`
 SOURCE(CLICKHOUSE(DB 'db' TABLE 'tab'))
 LAYOUT(FLAT())
 LIFETIME(MIN 0 MAX 100)
@@ -180,12 +180,12 @@ LIFETIME(MIN 0 MAX 100)
 </dictionaries>""",
             [
                 """
-CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict2
+CREATE DICTIONARY IF NOT EXISTS `_dictionaries`.`test_dict2`
 (
-    id UInt64,
-    name String DEFAULT 'Mama'
+    `id` UInt64,
+    `name` String DEFAULT 'Mama'
 )
-PRIMARY KEY id
+PRIMARY KEY `id`
 SOURCE(CLICKHOUSE(DB 'db' TABLE 'tab'))
 LAYOUT(FLAT())
 LIFETIME(100)
@@ -219,12 +219,12 @@ LIFETIME(100)
             """,
             [
                 """
-CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict4
+CREATE DICTIONARY IF NOT EXISTS `_dictionaries`.`test_dict4`
 (
-    id UInt64,
-    name String DEFAULT ''
+    `id` UInt64,
+    `name` String DEFAULT ''
 )
-PRIMARY KEY id
+PRIMARY KEY `id`
 SOURCE(CLICKHOUSE(DB 'db' TABLE 'tab'))
 LAYOUT(FLAT())
 LIFETIME(MIN 0 MAX 100)
@@ -267,13 +267,13 @@ LIFETIME(MIN 0 MAX 100)
             """,
             [
                 """
-CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict5
+CREATE DICTIONARY IF NOT EXISTS `_dictionaries`.`test_dict5`
 (
-    id1 UInt64,
-    id2 String,
-    value Int32 DEFAULT 0
+    `id1` UInt64,
+    `id2` String,
+    `value` Int32 DEFAULT 0
 )
-PRIMARY KEY id1, id2
+PRIMARY KEY `id1`, `id2`
 SOURCE(CLICKHOUSE(DB 'db' TABLE 'tab'))
 LAYOUT(HASHED())
 LIFETIME(MIN 0 MAX 100)
@@ -316,14 +316,14 @@ LIFETIME(MIN 0 MAX 100)
 </dictionaries>""",
             [
                 """
-CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict6
+CREATE DICTIONARY IF NOT EXISTS `_dictionaries`.`test_dict6`
 (
-    date Date DEFAULT '1970-01-01',
-    id UInt64,
-    score Float64 DEFAULT 0,
-    tags Array DEFAULT []
+    `date` Date DEFAULT '1970-01-01',
+    `id` UInt64,
+    `score` Float64 DEFAULT 0,
+    `tags` Array DEFAULT []
 )
-PRIMARY KEY id
+PRIMARY KEY `id`
 SOURCE(CLICKHOUSE(DB 'db' TABLE 'tab'))
 LAYOUT(FLAT())
 LIFETIME(MIN 0 MAX 100)
@@ -373,18 +373,18 @@ LIFETIME(MIN 0 MAX 100)
             """,
             [
                 """
-CREATE DICTIONARY IF NOT EXISTS _dictionaries.test_dict
+CREATE DICTIONARY IF NOT EXISTS `_dictionaries`.`test_dict`
 (
-    advertiser_id UInt64,
-    amount Float64 DEFAULT 0,
-    discount_end_date Date,
-    discount_start_date Date
+    `advertiser_id` UInt64,
+    `amount` Float64 DEFAULT 0,
+    `discount_end_date` Date,
+    `discount_start_date` Date
 )
-PRIMARY KEY advertiser_id
+PRIMARY KEY `advertiser_id`
 SOURCE(CLICKHOUSE(TABLE 'discounts'))
 LAYOUT(RANGE_HASHED(RANGE_LOOKUP_STRATEGY 'min'))
 LIFETIME(MIN 1 MAX 1000)
-RANGE(MIN discount_start_date MAX discount_end_date)
+RANGE(MIN `discount_start_date` MAX `discount_end_date`)
               """
             ],
             id="range-hashed",

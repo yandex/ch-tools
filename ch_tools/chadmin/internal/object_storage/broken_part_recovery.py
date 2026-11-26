@@ -38,8 +38,6 @@ from ch_tools.chadmin.internal.object_storage.part_recovery_source import (
     TableRef,
     inspect_file_recoverability,
     parse_qualified_table,
-    quote_identifier,
-    quote_string,
     resolve_recovery_source,
     restore_missing_empty_objects,
 )
@@ -48,6 +46,11 @@ from ch_tools.chadmin.internal.system import get_version
 from ch_tools.chadmin.internal.table import check_table, delete_table, table_exists
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.client.parameters import (
+    Identifier,
+    table_ref_parameters,
+)
+from ch_tools.common.clickhouse.client.sql import quote_identifier, quote_string
 from ch_tools.common.clickhouse.config import get_clickhouse_config
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.common.utils import escape_for_file_name, version_ge
@@ -432,15 +435,15 @@ def _analyze_wide_with_substreams(
 def _hash_stream_names(ctx: Context, streams: List[str]) -> List[str]:
     if not streams:
         return []
-    values = ", ".join(quote_string(stream) for stream in streams)
     rows = execute_query(
         ctx,
-        f"""
+        """
         SELECT arrayMap(
             x -> lower(hex(reverse(CAST(sipHash128(x), 'FixedString(16)')))),
-            [{values}]
+            {streams:Array(String)}
         )
         """,
+        parameters={"streams": streams},
         format_="JSONCompact",
     )["data"]
     return list(rows[0][0])
@@ -595,7 +598,8 @@ def _staged_recovery_part(
         physical_rows = int(
             execute_query(
                 ctx,
-                f"SELECT count() FROM {stage.sql}{mask_settings}",
+                f"SELECT count() FROM {{db:Identifier}}.{{tbl:Identifier}}{mask_settings}",
+                parameters=table_ref_parameters(stage),
                 format_=None,
             )
         )
@@ -658,7 +662,7 @@ def _create_recovery_table(
     execute_query(
         ctx,
         f"""
-        CREATE TABLE {table.sql}
+        CREATE TABLE {{db:Identifier}}.{{tbl:Identifier}}
         (
             {definitions}
         )
@@ -666,6 +670,7 @@ def _create_recovery_table(
         ORDER BY tuple()
         {policy}
         """,
+        parameters=table_ref_parameters(table),
         format_=None,
     )
 
@@ -729,12 +734,13 @@ def _prepare_staging_part(
 def _get_table_path_on_disk(ctx: Context, table: TableRef, disk: DiskInfo) -> Path:
     rows = execute_query(
         ctx,
-        f"""
+        """
         SELECT data_paths
         FROM system.tables
-        WHERE database = {quote_string(table.database)}
-          AND name = {quote_string(table.table)}
+        WHERE database = {db:String}
+          AND name = {tbl:String}
         """,
+        parameters={"db": table.database, "tbl": table.table},
         format_="JSONCompact",
     )["data"]
     if len(rows) != 1:
@@ -756,6 +762,7 @@ def _get_only_active_part(ctx: Context, table: TableRef) -> str:
         row
         for row in list_parts(
             ctx,
+            exact_table=True,
             database=table.database,
             table=table.table,
             active=True,
@@ -777,8 +784,8 @@ def _materialize_recovery_target(
     try:
         execute_query(
             ctx,
-            f"CREATE DATABASE IF NOT EXISTS "
-            f"{quote_identifier(plan.target.database)}",
+            "CREATE DATABASE IF NOT EXISTS {db:Identifier}",
+            parameters={"db": Identifier(plan.target.database)},
             format_=None,
         )
         target_columns = list(plan.analysis.recovered_user_columns)
@@ -802,7 +809,8 @@ def _materialize_recovery_target(
         target_rows = int(
             execute_query(
                 ctx,
-                f"SELECT count() FROM {plan.target.sql}",
+                "SELECT count() FROM {db:Identifier}.{tbl:Identifier}",
+                parameters=table_ref_parameters(plan.target),
                 format_=None,
             )
         )
@@ -847,11 +855,15 @@ def _insert_recovered_data(
     execute_query(
         ctx,
         f"""
-        INSERT INTO {target.sql} ({", ".join(target_names)})
+        INSERT INTO {{dst_db:Identifier}}.{{dst_tbl:Identifier}} ({", ".join(target_names)})
         SELECT {", ".join(select_names)}
-        FROM {stage.sql}
+        FROM {{db:Identifier}}.{{tbl:Identifier}}
         {mask_settings}
         """,
+        parameters={
+            **table_ref_parameters(target, "dst_"),
+            **table_ref_parameters(stage),
+        },
         format_=None,
     )
 

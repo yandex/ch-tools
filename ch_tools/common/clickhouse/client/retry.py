@@ -1,5 +1,5 @@
 from http import HTTPStatus
-from typing import Any, Optional, Tuple, Type, Union
+from typing import Any, Tuple, Type, Union
 
 import requests
 import tenacity
@@ -18,22 +18,6 @@ RETRYABLE_HTTP_STATUS_CODES = {
     HTTPStatus.SERVICE_UNAVAILABLE,
     HTTPStatus.GATEWAY_TIMEOUT,
 }
-
-
-def _get_clickhouse_error_code(exc: ClickhouseError) -> Optional[int]:
-    """
-    Extract ClickHouse exception code from the response.
-
-    ClickHouse sets the X-ClickHouse-Exception-Code header in HTTP 500
-    responses when the error occurs before streaming starts.
-    """
-    if exc.response is None:
-        return None
-    header_value = exc.response.headers.get("X-ClickHouse-Exception-Code", "")
-    try:
-        return int(header_value)
-    except (TypeError, ValueError):
-        return None
 
 
 def is_transient_error(exc: BaseException) -> bool:
@@ -59,7 +43,7 @@ def is_transient_error(exc: BaseException) -> bool:
             return False
         if exc.response.status_code in RETRYABLE_HTTP_STATUS_CODES:
             return True
-        return _get_clickhouse_error_code(exc) in RETRYABLE_CLICKHOUSE_ERROR_CODES
+        return exc.exception_code in RETRYABLE_CLICKHOUSE_ERROR_CODES
 
     return False
 

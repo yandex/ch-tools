@@ -14,14 +14,19 @@ class ClickhouseInfo:
         Get hostnames of replicas.
         """
         cluster = cls.get_cluster(ctx)
-        query = f"""
+        query = """
             SELECT host_name
             FROM system.clusters
-            WHERE cluster = '{cluster}'
+            WHERE cluster = {cluster:String}
             AND shard_num = (SELECT shard_num FROM system.clusters
-                            WHERE host_name = hostName() AND cluster = '{cluster}')
+                            WHERE host_name = hostName() AND cluster = {cluster:String})
             """
-        return [row[0] for row in clickhouse_client(ctx).query_json_data(query=query)]
+        return [
+            row[0]
+            for row in clickhouse_client(ctx).query_json_data(
+                query=query, parameters={"cluster": cluster}
+            )
+        ]
 
     @classmethod
     @functools.lru_cache(maxsize=1)

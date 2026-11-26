@@ -9,14 +9,15 @@ from ch_tools.chadmin.internal.clickhouse_disks import remove_from_ch_disk
 from ch_tools.chadmin.internal.system import get_version
 from ch_tools.chadmin.internal.utils import execute_query, get_remote_table_for_hosts
 from ch_tools.common import logging
-from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
-from ch_tools.common.clickhouse.client.query import Query
 
 
 def list_parts(
     ctx: Context,
     *,
     database: Optional[str] = None,
+    exact_table: bool = False,
+    exact_disk: bool = False,
+    exact_part: bool = False,
     exclude_database_pattern: Optional[str] = None,
     table: Optional[str] = None,
     partition_id: Optional[str] = None,
@@ -47,15 +48,13 @@ def list_parts(
         None: "database, table, name",
     }[order_by]
 
-    parts_table = "system.parts"
-    sensitive_args = {}
-    if remote_replica:
-        parts_table = get_remote_table_for_hosts(ctx, parts_table, [remote_replica])
-        ch_client = clickhouse_client(ctx)
-        sensitive_args = {"user_password": ch_client.password or ""}
+    parts_table = (
+        get_remote_table_for_hosts(ctx, "system.parts", [remote_replica])
+        if remote_replica
+        else "system.parts"
+    )
 
-    query = Query(
-        """
+    query = """
         SELECT
             database,
             table,
@@ -89,7 +88,7 @@ def list_parts(
             projections
         FROM {{ parts_table }}
         {% if database -%}
-        WHERE database {{ format_str_match(database) }}
+        WHERE database {{ format_str_match(database, exact_table) }}
         {% else -%}
         WHERE database NOT IN ('information_schema', 'INFORMATION_SCHEMA')
         {% endif -%}
@@ -97,22 +96,22 @@ def list_parts(
           AND database NOT {{ format_str_match(exclude_database_pattern) }}
         {% endif -%}
         {% if partition_id -%}
-          AND partition_id {{ format_str_match(partition_id) }}
+          AND partition_id {{ format_str_match(partition_id, exact_part) }}
         {% endif -%}
         {% if min_partition_id -%}
-          AND partition_id >= '{{ min_partition_id }}'
+          AND partition_id >= {{ min_partition_id|bind }}
         {% endif -%}
         {% if max_partition_id -%}
-          AND partition_id <= '{{ max_partition_id }}'
+          AND partition_id <= {{ max_partition_id|bind }}
         {% endif -%}
         {% if part_name -%}
-          AND name {{ format_str_match(part_name) }}
+          AND name {{ format_str_match(part_name, exact_part) }}
         {% endif -%}
         {% if table -%}
-          AND table {{ format_str_match(table) }}
+          AND table {{ format_str_match(table, exact_table) }}
         {% endif -%}
         {% if disk_name -%}
-          AND disk_name {{ format_str_match(disk_name) }}
+          AND disk_name {{ format_str_match(disk_name, exact_disk) }}
         {% endif -%}
         {% if level is not none -%}
           AND level = {{ level }}
@@ -136,13 +135,14 @@ def list_parts(
         {% if limit -%}
         LIMIT {{ limit }}
         {% endif -%}
-        """,
-        sensitive_args=sensitive_args,
-    )
+        """
     return execute_query(
         ctx,
         query,
         database=database,
+        exact_table=exact_table,
+        exact_disk=exact_disk,
+        exact_part=exact_part,
         exclude_database_pattern=exclude_database_pattern,
         table=table,
         parts_table=parts_table,
@@ -167,6 +167,8 @@ def list_detached_parts(
     ctx: Context,
     *,
     database: Optional[str] = None,
+    exact_table: bool = False,
+    exact_part: bool = False,
     exclude_database_pattern: Optional[str] = None,
     table: Optional[str] = None,
     partition_id: Optional[str] = None,
@@ -204,7 +206,7 @@ def list_detached_parts(
             reason
         FROM system.detached_parts
         {% if database -%}
-        WHERE database {{ format_str_match(database) }}
+        WHERE database {{ format_str_match(database, exact_table) }}
         {% else -%}
         WHERE database NOT IN ('information_schema', 'INFORMATION_SCHEMA')
         {% endif -%}
@@ -212,19 +214,19 @@ def list_detached_parts(
           AND database NOT {{ format_str_match(exclude_database_pattern) }}
         {% endif -%}
         {% if partition_id -%}
-          AND partition_id {{ format_str_match(partition_id) }}
+          AND partition_id {{ format_str_match(partition_id, exact_part) }}
         {% endif -%}
         {% if min_partition_id -%}
-          AND partition_id >= '{{ min_partition_id }}'
+          AND partition_id >= {{ min_partition_id|bind }}
         {% endif -%}
         {% if max_partition_id -%}
-          AND partition_id <= '{{ max_partition_id }}'
+          AND partition_id <= {{ max_partition_id|bind }}
         {% endif -%}
         {% if part_name -%}
-          AND name {{ format_str_match(part_name) }}
+          AND name {{ format_str_match(part_name, exact_part) }}
         {% endif -%}
         {% if table -%}
-          AND table {{ format_str_match(table) }}
+          AND table {{ format_str_match(table, exact_table) }}
         {% endif -%}
         {% if disk_name -%}
           AND disk {{ format_str_match(disk_name) }}
@@ -250,6 +252,8 @@ def list_detached_parts(
         ctx,
         query,
         database=database,
+        exact_table=exact_table,
+        exact_part=exact_part,
         exclude_database_pattern=exclude_database_pattern,
         table=table,
         partition_id=partition_id,
@@ -295,8 +299,18 @@ def attach_part(
     Attach the specified data part.
     """
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
-    query = f"ALTER TABLE `{database}`.`{table}` ATTACH PART '{part_name}'"
-    execute_query(ctx, query, timeout=timeout, format_=None, echo=echo, dry_run=dry_run)
+    query = "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} ATTACH PART {{ part|literal }}"
+    execute_query(
+        ctx,
+        query,
+        db=database,
+        tbl=table,
+        part=part_name,
+        timeout=timeout,
+        format_=None,
+        echo=echo,
+        dry_run=dry_run,
+    )
 
 
 def detach_part(
@@ -310,8 +324,18 @@ def detach_part(
     Detach the specified data part.
     """
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
-    query = f"ALTER TABLE `{database}`.`{table}` DETACH PART '{part_name}'"
-    execute_query(ctx, query, timeout=timeout, format_=None, echo=True, dry_run=dry_run)
+    query = "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} DETACH PART {{ part|literal }}"
+    execute_query(
+        ctx,
+        query,
+        db=database,
+        tbl=table,
+        part=part_name,
+        timeout=timeout,
+        format_=None,
+        echo=True,
+        dry_run=dry_run,
+    )
 
 
 def move_part(
@@ -332,10 +356,17 @@ def move_part(
     if sync_mode is False:
         settings["alter_move_to_space_execute_async"] = 1
 
-    query = f"ALTER TABLE `{database}`.`{table}` MOVE PART '{part_name}' TO DISK '{new_disk_name}'"
+    query = (
+        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} MOVE PART {{ part|literal }}"
+        " TO DISK {{ disk|literal }}"
+    )
     execute_query(
         ctx,
         query,
+        db=database,
+        tbl=table,
+        part=part_name,
+        disk=new_disk_name,
         settings=settings,
         timeout=timeout,
         format_=None,
@@ -355,8 +386,18 @@ def drop_part(
     Drop the specified data part.
     """
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
-    query = f"ALTER TABLE `{database}`.`{table}` DROP PART '{part_name}'"
-    execute_query(ctx, query, timeout=timeout, format_=None, echo=True, dry_run=dry_run)
+    query = "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} DROP PART {{ part|literal }}"
+    execute_query(
+        ctx,
+        query,
+        db=database,
+        tbl=table,
+        part=part_name,
+        timeout=timeout,
+        format_=None,
+        echo=True,
+        dry_run=dry_run,
+    )
 
 
 def drop_detached_part(
@@ -370,8 +411,18 @@ def drop_detached_part(
     Drop the specified detached data part.
     """
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
-    query = f"ALTER TABLE `{database}`.`{table}` DROP DETACHED PART '{part_name}'"
-    execute_query(ctx, query, timeout=timeout, format_=None, echo=True, dry_run=dry_run)
+    query = "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} DROP DETACHED PART {{ part|literal }}"
+    execute_query(
+        ctx,
+        query,
+        db=database,
+        tbl=table,
+        part=part_name,
+        timeout=timeout,
+        format_=None,
+        echo=True,
+        dry_run=dry_run,
+    )
 
 
 def drop_detached_part_from_disk(
@@ -471,7 +522,7 @@ def list_part_log(
              peak_memory_usage,
              exception
         {% if cluster %}
-        FROM clusterAllReplicas({{ cluster }}, system.part_log)
+        FROM clusterAllReplicas({{ cluster|bind }}, system.part_log)
         {% else %}
         FROM system.part_log
         {% endif %}
@@ -493,23 +544,23 @@ def list_part_log(
           AND part_name {{ format_str_match(part) }}
         {% endif %}
         {% if min_date %}
-          AND event_date >= toDate('{{ min_date }}')
+          AND event_date >= toDate({{ min_date|bind }})
         {% elif min_time %}
-          AND event_date >= toDate('{{ min_time }}')
+          AND event_date >= toDate({{ min_time|bind }})
         {% endif %}
         {% if max_date %}
-          AND event_date <= toDate('{{ max_date }}')
+          AND event_date <= toDate({{ max_date|bind }})
         {% elif max_time %}
-          AND event_date <= toDate('{{ max_time }}')
+          AND event_date <= toDate({{ max_time|bind }})
         {% endif %}
         {% if not min_date and not max_date and not min_time and not max_time %}
           AND event_date = today()
         {% endif %}
         {% if min_time %}
-          AND event_time - INTERVAL duration_ms/1000 second >= toDateTime('{{ min_time }}')
+          AND event_time - INTERVAL duration_ms/1000 second >= toDateTime({{ min_time|bind }})
         {% endif %}
         {% if max_time %}
-          AND event_time <= toDateTime('{{ max_time }}')
+          AND event_time <= toDateTime({{ max_time|bind }})
         {% endif %}
         {% if event_type %}
           AND event_type::text {{ format_str_match(event_type) }}

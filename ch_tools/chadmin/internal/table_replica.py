@@ -8,6 +8,8 @@ from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.chadmin.internal.zookeeper import check_zk_node
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.error import ClickhouseError
+from ch_tools.common.clickhouse.client.parameters import table_parameters
+from ch_tools.common.clickhouse.client.sql import quote_string
 
 RESTORE_STATE_FILE_PATH = "/tmp/restore_replica_parts.json"
 
@@ -82,7 +84,7 @@ def list_table_replicas(
         FROM system.replicas
         WHERE true
         {% if database_name -%}
-            AND database = '{{ database_name }}'
+            AND database = {{ database_name|bind }}
         {% endif -%}
         {% if database_pattern -%}
             AND database {{ format_str_match(database_pattern) }}
@@ -91,7 +93,7 @@ def list_table_replicas(
             AND database NOT {{ format_str_match(exclude_database_pattern) }}
         {% endif -%}
         {% if table_name -%}
-            AND table = '{{ table_name }}'
+            AND table = {{ table_name|bind }}
         {% endif -%}
         {% if table_pattern -%}
             AND table {{ format_str_match(table_pattern) }}
@@ -100,7 +102,7 @@ def list_table_replicas(
             AND table NOT {{ format_str_match(exclude_table_pattern) }}
         {% endif -%}
         {% if zookeeper_path -%}
-            AND zookeeper_path = '{{ zookeeper_path }}'
+            AND zookeeper_path = {{ zookeeper_path|bind }}
         {% endif -%}
         {% if is_readonly -%}
            AND is_readonly
@@ -138,10 +140,18 @@ def restart_table_replica(
     Perform "SYSTEM RESTART REPLICA" for the specified replicated table.
     """
     timeout = ctx.obj["config"]["clickhouse"]["restart_replica_timeout"]
-    query = f"SYSTEM RESTART REPLICA `{database_name}`.`{table_name}`"
+    query = "SYSTEM RESTART REPLICA {db:Identifier}.{tbl:Identifier}"
     if cluster:
-        query += f" ON CLUSTER '{cluster}'"
-    execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
+        query += f" ON CLUSTER {quote_string(cluster)}"
+    execute_query(
+        ctx,
+        query,
+        parameters=table_parameters(database_name, table_name),
+        timeout=timeout,
+        echo=True,
+        dry_run=dry_run,
+        format_=None,
+    )
 
 
 def restore_table_replica(
@@ -156,10 +166,18 @@ def restore_table_replica(
     Perform "SYSTEM RESTORE REPLICA" for the specified replicated table.
     """
     timeout = ctx.obj["config"]["clickhouse"]["restore_replica_timeout"]
-    query = f"SYSTEM RESTORE REPLICA `{database_name}`.`{table_name}`"
+    query = "SYSTEM RESTORE REPLICA {db:Identifier}.{tbl:Identifier}"
     if cluster:
-        query += f" ON CLUSTER '{cluster}'"
-    execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
+        query += f" ON CLUSTER {quote_string(cluster)}"
+    execute_query(
+        ctx,
+        query,
+        parameters=table_parameters(database_name, table_name),
+        timeout=timeout,
+        echo=True,
+        dry_run=dry_run,
+        format_=None,
+    )
 
 
 def system_table_drop_replica_by_zk_path(
@@ -172,7 +190,7 @@ def system_table_drop_replica_by_zk_path(
     Perform "SYSTEM DROP REPLICA <replica> ZKPATH <table_zk_paht>" query.
     """
     timeout = ctx.obj["config"]["clickhouse"]["drop_replica_timeout"]
-    query = f"SYSTEM DROP REPLICA '{replica}' FROM ZKPATH '{table_zk_path}'"
+    query = f"SYSTEM DROP REPLICA {quote_string(replica)} FROM ZKPATH {quote_string(table_zk_path)}"
 
     execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
 
@@ -188,8 +206,16 @@ def system_table_drop_replica(
     Perform "SYSTEM DROP REPLICA <replica> FROM TABLE <database.table>" query.
     """
     timeout = ctx.obj["config"]["clickhouse"]["drop_replica_timeout"]
-    query = f"SYSTEM DROP REPLICA '{replica}' FROM TABLE `{database}`.`{table}`"
-    execute_query(ctx, query, timeout=timeout, echo=True, dry_run=dry_run, format_=None)
+    query = f"SYSTEM DROP REPLICA {quote_string(replica)} FROM TABLE {{db:Identifier}}.{{tbl:Identifier}}"
+    execute_query(
+        ctx,
+        query,
+        parameters=table_parameters(database, table),
+        timeout=timeout,
+        echo=True,
+        dry_run=dry_run,
+        format_=None,
+    )
 
 
 def list_active_parts(
@@ -200,12 +226,11 @@ def list_active_parts(
     """
     List active parts of a table.
     """
-    query = "SELECT database, table, name FROM system.parts WHERE database = '{{database_name}}' AND table = '{{table_name}}' AND active = 1"
+    query = "SELECT database, table, name FROM system.parts WHERE database = {database_name:String} AND table = {table_name:String} AND active = 1"
     return execute_query(
         ctx,
         query,
-        database_name=database_name,
-        table_name=table_name,
+        parameters={"database_name": database_name, "table_name": table_name},
         format_="JSON",
     )["data"]
 

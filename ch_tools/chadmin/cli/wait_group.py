@@ -33,6 +33,11 @@ from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
 from ch_tools.common.cli.parameters import TimeSpanParamType
 from ch_tools.common.clickhouse.client.error import ClickhouseError
+from ch_tools.common.clickhouse.client.parameters import (
+    Identifier,
+    Parameters,
+    table_parameters,
+)
 from ch_tools.common.commands.replication_lag import estimate_replication_lag
 from ch_tools.common.result import Result
 from ch_tools.common.utils import execute
@@ -169,7 +174,7 @@ def wait_replication_sync_command(
         # Sync replicated databases
         if sync_databases:
             for database in list_databases(ctx, engine_pattern="Replicated"):
-                query = f"SYSTEM SYNC DATABASE REPLICA `{database['database']}`"
+                query = "SYSTEM SYNC DATABASE REPLICA {db:Identifier}"
                 sync_replica_with_retries(
                     ctx,
                     query,
@@ -177,12 +182,12 @@ def wait_replication_sync_command(
                     deadline,
                     sync_query_max_retries,
                     sync_query_max_backoff,
+                    parameters={"db": Identifier(database["database"])},
                 )
 
         # Sync table replicas
         for replica in list_table_replicas(ctx):
-            full_name = f"`{replica['database']}`.`{replica['table']}`"
-            query = f"SYSTEM SYNC REPLICA {full_name}"
+            query = "SYSTEM SYNC REPLICA {db:Identifier}.{tbl:Identifier}"
             if lightweight:
                 query = f"{query} LIGHTWEIGHT"
             sync_replica_with_retries(
@@ -192,6 +197,7 @@ def wait_replication_sync_command(
                 deadline,
                 sync_query_max_retries,
                 sync_query_max_backoff,
+                parameters=table_parameters(replica["database"], replica["table"]),
             )
 
     except requests.exceptions.ReadTimeout:
@@ -537,6 +543,8 @@ def sync_replica_with_retries(
     deadline: float,
     max_retries: int,
     max_backoff: int,
+    *,
+    parameters: Parameters,
 ) -> None:
     """
     Sync table or database replica with retries up to deadline.
@@ -570,6 +578,7 @@ def sync_replica_with_retries(
         ctx,
         query,
         format_=None,
+        parameters=parameters,
         timeout=int(replica_timeout.total_seconds()),
         settings=settings,
     )

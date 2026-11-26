@@ -99,9 +99,9 @@ Feature: chadmin data-store commands
     PARTITION BY n ORDER BY n SETTINGS storage_policy = 'object_storage';
     INSERT INTO quarantine_parts.parts VALUES (0);
     """
-    And we execute command on clickhouse01
+    And we execute queries on clickhouse02
     """
-    chadmin wait replication-sync --total-timeout 10 --replica-timeout 3
+    SYSTEM SYNC REPLICA quarantine_parts.parts;
     """
     And we execute query on clickhouse02
     """

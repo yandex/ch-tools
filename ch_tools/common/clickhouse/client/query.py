@@ -1,33 +1,59 @@
-from typing import Any, Dict, Optional
+import re
+from typing import Any, Callable, Dict, Optional
 
 
 class Query:
+    """SQL for display and execution. Equality and hashing use the masked representation."""
+
     mask = "*****"
 
     def __init__(
         self,
-        value: str,
+        value: str | Callable[[bool], str],
         sensitive_args: Optional[Dict[str, str]] = None,
     ):
-        self.value = value
+        self._value = value
         self.sensitive_args = sensitive_args or {}
 
-    def for_execute(self) -> str:
+    @property
+    def value(self) -> str:
+        return self._value(True) if callable(self._value) else self._value
+
+    @property
+    def display_sql(self) -> str:
+        return self._render(True)
+
+    @property
+    def execution_sql(self) -> str:
         return self._render(False)
 
-    def _render(self, mask_sensitive: bool = True) -> str:
+    def for_execute(self) -> str:
+        return self.execution_sql
+
+    @property
+    def contains_secrets(self) -> bool:
+        return bool(self.sensitive_args) or callable(self._value)
+
+    def _render(self, mask_sensitive: bool) -> str:
+        text = self._value(mask_sensitive) if callable(self._value) else self._value
         if not self.sensitive_args:
-            return self.value
-        sensitive_args = (
-            self._sensitive_args_mask() if mask_sensitive else self.sensitive_args
-        )
-        return self.value.format(**sensitive_args)
+            return text
+        args = self._sensitive_args_mask() if mask_sensitive else self.sensitive_args
+
+        # Existing templates double literal braces. Leave native {name:Type} fields intact.
+        def substitute(match: re.Match) -> str:
+            token = match[0]
+            if token in ("{{", "}}"):
+                return token[0]
+            return args.get(token[1:-1], token)
+
+        return re.sub(r"{{|}}|[{][A-Za-z_]\w*[}]", substitute, text)
 
     def _sensitive_args_mask(self) -> Dict[str, str]:
         return {key: self.mask for key in self.sensitive_args}
 
     def __str__(self) -> str:
-        return self._render(True)
+        return self.display_sql
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(value='{str(self)}', sensitive_args={self._sensitive_args_mask()})"
@@ -39,4 +65,6 @@ class Query:
         return hash(repr(self))
 
     def __add__(self, other: str) -> "Query":
-        return Query(self.value + other, self.sensitive_args)
+        if callable(self._value):
+            return Query(lambda masked: self._render(masked) + other)
+        return Query(self._value + other, self.sensitive_args)

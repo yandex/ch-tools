@@ -6,19 +6,21 @@ from typing import Any, Dict, Optional, Tuple, Union
 import requests
 import tenacity
 from click import Context
-from jinja2 import Environment
 from typing_extensions import Self
 
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.query import Query
-from ch_tools.common.utils import version_ge
+from ch_tools.common.clickhouse.client.sql import (
+    quote_string,
+)
 
 from ..config import get_clickhouse_config
 from ..config.clickhouse import ClickhousePort
 from .client_config import client_config
 from .error import ClickhouseError
+from .parameters import Parameter, Parameters, encode_parameters
 from .retry import _log_retry_attempt, is_transient_error
-from .utils import _format_str_imatch, _format_str_match
+from .utils import render_template
 
 PORTS_PRIORITY = [
     ClickhousePort.HTTPS,
@@ -85,6 +87,7 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
         per_query_settings: Dict[str, Any],
         host: str,
         port: ClickhousePort,
+        parameters: Dict[str, str],
     ) -> Any:
         schema = "https" if port == ClickhousePort.HTTPS else "http"
         url = f"{schema}://{host}:{self.ports[port]}"
@@ -96,15 +99,28 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
         verify = self.cert_path if port == ClickhousePort.HTTPS else None
         try:
             if query:
+                body = query.execution_sql.encode("utf-8")
+                if post_data is not None:
+                    body += b"\n" + json.dumps(post_data, allow_nan=False).encode(
+                        "utf-8"
+                    )
+                # Form fields keep bound values and the query itself in the POST body.
+                payload: Dict[str, Any] = {"data": body}
+                url_params = {**self._settings, **per_query_settings}
+                # In multipart requests ClickHouse reserves these suffixes for external tables.
+                if parameters and any(
+                    key.endswith(("_format", "_types", "_structure"))
+                    for key in url_params
+                ):
+                    url_params.update({f"param_{k}": v for k, v in parameters.items()})
+                elif parameters:
+                    fields = {f"param_{k}": (None, v) for k, v in parameters.items()}
+                    payload = {"files": {"query": (None, body), **fields}}
                 response = requests.post(
                     url,
-                    params={
-                        **self._settings,
-                        "query": query.for_execute(),
-                        **per_query_settings,  # overwrites previous settings
-                    },
+                    params=url_params,
                     headers=headers,
-                    json=post_data,
+                    **payload,
                     timeout=timeout,
                     stream=stream,
                     verify=verify,
@@ -129,7 +145,11 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
 
             return response.text.strip()
         except requests.exceptions.HTTPError as e:
-            raise ClickhouseError(str(query), e.response) from None
+            raise ClickhouseError(
+                str(query),
+                e.response,
+                hide_response=bool(query and query.contains_secrets),
+            ) from None
 
     def _execute_tcp(
         self,
@@ -137,6 +157,7 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
         format_: Optional[str],
         host: str,
         port: ClickhousePort,
+        parameters: Dict[str, str],
     ) -> Any:
         """Run the client with credentials in private configuration properties."""
         if not query:
@@ -155,8 +176,11 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
             cmd.append("--secure")
         with client_config(self.password) as (config_args, env, pass_fds):
             cmd.extend(config_args)
+            parameter_args = [
+                f"--param_{key}={value}" for key, value in parameters.items()
+            ]
             with subprocess.Popen(
-                cmd,
+                [*cmd, *parameter_args],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
@@ -165,7 +189,7 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
             ) as proc:
                 try:
                     stdout, _stderr = proc.communicate(
-                        input=query.for_execute().encode()
+                        input=query.execution_sql.encode()
                     )
                 except BaseException:
                     while True:
@@ -201,12 +225,20 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
         host: Optional[str] = None,
         port: Optional[ClickhousePort] = None,
         log_query: bool = True,
+        *,
+        parameters: Optional[Parameters] = None,
     ) -> Any:
         """
         Execute query.
 
         ``query`` may be ``None`` to perform a connectivity check (used by
         :meth:`ping`); in that case an HTTP GET to the server root is issued.
+
+        ``parameters`` binds named ClickHouse placeholders independently of the
+        Jinja ``query_args``. Pass a string for String, Identifier(name) for
+        Identifier, and a list of strings for Array(String). The TCP client
+        receives parameters as arguments. HTTP uses URL parameters when a setting
+        conflicts with multipart field names. Keep credentials in the private query.
 
         Retries transient errors using exponential back-off.
         """
@@ -233,6 +265,7 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
             host=host,
             port=port,
             log_query=log_query,
+            parameters=parameters,
         )
 
     def _execute_query_impl(
@@ -249,22 +282,31 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
         host: Optional[str] = None,
         port: Optional[ClickhousePort] = None,
         log_query: bool = True,
+        *,
+        parameters: Optional[Parameters] = None,
     ) -> Any:
         """
         Internal query execution logic (without retry).
         """
+        bound = dict(parameters or {})
         if query is not None:
             if isinstance(query, str):
                 query = Query(query)
 
-            if query_args:
-                query.value = self.render_query(query.value, **query_args)
-
-            if format_:
-                query += f" FORMAT {format_}"
-
             if echo:
-                print(str(query), "\n")
+                display = (
+                    self._render_statement(query, query_args, None)
+                    if query_args
+                    else query
+                )
+                for key, value in encode_parameters(bound).items():
+                    print(f"SET param_{key} = {quote_string(value)};")
+                print(str(display) + (f" FORMAT {format_}" if format_ else ""), "\n")
+            if not dry_run:
+                if query_args:
+                    query = self._render_statement(query, query_args, bound)
+                if format_:
+                    query += f" FORMAT {format_}"
 
         if dry_run:
             return None
@@ -272,6 +314,7 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
         if timeout is None:
             timeout = self._timeout
 
+        encoded = encode_parameters(bound)
         per_query_settings = settings or {}
 
         if port is None:
@@ -296,8 +339,9 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
                 per_query_settings,
                 host,
                 port,
+                encoded,
             )
-        return self._execute_tcp(query, format_, host, port)
+        return self._execute_tcp(query, format_, host, port, encoded)
 
     def query_json_data(
         self: Self,
@@ -312,6 +356,8 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
         settings: Optional[dict] = None,
         host: Optional[str] = None,
         port: Optional[ClickhousePort] = None,
+        *,
+        parameters: Optional[Parameters] = None,
     ) -> Any:
         """
         Execute ClickHouse query formatted as JSON and return data.
@@ -332,22 +378,43 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
             settings=settings,
             host=host,
             port=port,
+            parameters=parameters,
         )["data"]
 
     def query_json_data_first_row(self, **kwargs: Any) -> Any:
         return self.query_json_data(**kwargs)[0]
 
+    def _render_statement(
+        self, query: Query, args: Dict[str, Any], bound: Optional[dict[str, Parameter]]
+    ) -> Query:
+        if not any(
+            isinstance(arg, Query) and arg.contains_secrets for arg in args.values()
+        ):
+            return Query(
+                render_template(
+                    query.value,
+                    args,
+                    self.get_clickhouse_version,
+                    None if query.contains_secrets else bound,
+                ),
+                query.sensitive_args,
+            )
+
+        source = query.value
+
+        def render(masked: bool) -> str:
+            # Insert each fragment as data so braces in names and credentials survive.
+            bindings = args.copy()
+            for key, arg in args.items():
+                if isinstance(arg, Query):
+                    bindings[key] = arg.display_sql if masked else arg.execution_sql
+            return self.render_query(source, **bindings)
+
+        return Query(render, query.sensitive_args)
+
     def render_query(self, query: str, **kwargs: Any) -> str:
-        env = Environment()
-
-        env.globals["version_ge"] = lambda version: version_ge(
-            self.get_clickhouse_version(), version
-        )
-        env.globals["format_str_match"] = _format_str_match
-        env.globals["format_str_imatch"] = _format_str_imatch
-
-        template = env.from_string(query)
-        return template.render(kwargs)
+        """Render standalone SQL for callers that consume or display the text."""
+        return render_template(query, kwargs, self.get_clickhouse_version)
 
     def check_port(self, port: ClickhousePort) -> bool:
         return port in self.ports

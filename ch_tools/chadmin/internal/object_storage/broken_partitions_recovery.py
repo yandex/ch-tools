@@ -557,6 +557,8 @@ def restore_files_via_attach(
         part["name"]
         for part in list_parts(
             ctx,
+            exact_table=True,
+            exact_part=True,
             database=partition_info.database,
             table=partition_info.table,
             partition_id=partition_info.partition_id,
@@ -897,17 +899,8 @@ def _aggregate_action(actions: List[Dict[str, Any]]) -> str:
     if not actions:
         return "none"
     statuses = [action["status"] for action in actions]
-    partition_statuses = [
-        status
-        for status in statuses
-        if status
-        in {
-            "detached",
-            "detach_failed",
-            "reattached",
-            "reattach_failed",
-        }
-    ]
+    partition_actions = {"detached", "detach_failed", "reattached", "reattach_failed"}
+    partition_statuses = [status for status in statuses if status in partition_actions]
     if partition_statuses:
         return partition_statuses[-1]
     if all(status == "restored" for status in statuses):
@@ -953,6 +946,8 @@ def get_active_parts_by_path(ctx: Context) -> Dict[str, BrokenPartInfo]:
 def get_detached_part_path(ctx: Context, part_info: BrokenPartInfo) -> Optional[Path]:
     detached_parts = list_detached_parts(
         ctx,
+        exact_table=True,
+        exact_part=True,
         database=part_info.database,
         table=part_info.table,
         part_name=part_info.name,

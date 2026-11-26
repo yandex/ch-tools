@@ -81,12 +81,12 @@ def collect_flamegraph(
         {% endif %}
         FROM system.trace_log
         WHERE
-            trace_type='{{ trace_type }}'
+            trace_type={{ trace_type|bind }}
         {% if query_id -%}
-            AND query_id='{{ query_id }}'
+            AND query_id={{ query_id|bind }}
         {% endif %}
         {% if time_interval -%}
-            AND event_time>='{{ time_interval[0] }}' AND event_time <= '{{ time_interval[1] }}'
+            AND event_time>={{ time_interval[0]|bind }} AND event_time <= {{ time_interval[1]|bind }}
         {% endif %}
         SETTINGS allow_introspection_functions=1
         """

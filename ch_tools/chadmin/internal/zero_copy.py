@@ -69,6 +69,8 @@ def generate_zero_copy_lock_tasks(
 
     part_info = list_parts(
         ctx,
+        exact_table=True,
+        exact_disk=True,
         database=table["database"],
         table=table["name"],
         disk_name=disk,
@@ -175,9 +177,14 @@ def _get_zero_copy_zookeeper_path_for_disk_type(
 
     if table_uuid:
         get_settings_query = (
-            f"SELECT engine_full FROM system.tables WHERE uuid = '{table_uuid}'"
+            "SELECT engine_full FROM system.tables WHERE uuid = {uuid:String}"
         )
-        settings = execute_query(ctx, get_settings_query, format_="JSONCompact")["data"]
+        settings = execute_query(
+            ctx,
+            get_settings_query,
+            parameters={"uuid": table_uuid},
+            format_="JSONCompact",
+        )["data"]
         if settings:
             match = re.search(
                 r"remote_fs_zero_copy_zookeeper_path\s*=\s*'([^']+)'", settings[0][0]

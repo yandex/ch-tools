@@ -22,6 +22,7 @@ from ch_tools.chadmin.internal.zookeeper import (
     zk_client,
 )
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.client.parameters import table_parameters
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
 
@@ -110,6 +111,7 @@ def _get_deduplication_tasks(
                 ctx,
                 table_info["database"],
                 table_info["name"],
+                exact_table=True,
                 partition_id=partition_id,
                 min_partition_id=min_partition_id_actual,
                 max_partition_id=max_partition_id,
@@ -151,7 +153,8 @@ def _get_deduplication_tasks(
             )
             execute_query_on_shard(
                 ctx,
-                f"SYSTEM SYNC REPLICA {table_info['database']}.{table_info['name']}",
+                "SYSTEM SYNC REPLICA {db:Identifier}.{tbl:Identifier}",
+                parameters=table_parameters(table_info["database"], table_info["name"]),
                 format_=None,
                 dry_run=dry_run,
             )

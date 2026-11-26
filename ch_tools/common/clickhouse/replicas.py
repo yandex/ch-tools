@@ -40,9 +40,9 @@ def check_cluster_for_decommissioned_hosts(ctx: Context, cluster: str) -> None:
     if "{" in cluster:
         macros = client.query_json_data("SELECT macro, substitution FROM system.macros")
         cluster = cluster.format_map(dict(macros))
-    name = cluster.replace("\\", "\\\\").replace("'", "\\'")
     rows = client.query_json_data(
-        f"SELECT DISTINCT host_name FROM system.clusters WHERE cluster = '{name}'"
+        "SELECT DISTINCT host_name FROM system.clusters WHERE cluster = {cluster:String}",
+        parameters={"cluster": cluster},
     )
     if not rows:
         raise RuntimeError(f"No replicas found for cluster '{cluster}'")

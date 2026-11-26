@@ -9,8 +9,14 @@ def attach_partition(
     """
     Attach the specified table partition.
     """
-    query = f"ALTER TABLE `{database}`.`{table}` ATTACH PARTITION ID '{partition_id}'"
-    _execute_query(ctx, query, dry_run)
+    _execute_partition_id(
+        ctx,
+        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} ATTACH PARTITION ID ",
+        database,
+        table,
+        partition_id,
+        dry_run,
+    )
 
 
 def detach_partition(
@@ -19,8 +25,14 @@ def detach_partition(
     """
     Detach the specified table partition.
     """
-    query = f"ALTER TABLE `{database}`.`{table}` DETACH PARTITION ID '{partition_id}'"
-    _execute_query(ctx, query, dry_run)
+    _execute_partition_id(
+        ctx,
+        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} DETACH PARTITION ID ",
+        database,
+        table,
+        partition_id,
+        dry_run,
+    )
 
 
 def drop_partition(
@@ -29,8 +41,14 @@ def drop_partition(
     """
     Drop the specified table partition.
     """
-    query = f"ALTER TABLE `{database}`.`{table}` DROP PARTITION ID '{partition_id}'"
-    _execute_query(ctx, query, dry_run)
+    _execute_partition_id(
+        ctx,
+        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} DROP PARTITION ID ",
+        database,
+        table,
+        partition_id,
+        dry_run,
+    )
 
 
 def optimize_partition(
@@ -39,8 +57,14 @@ def optimize_partition(
     """
     Optimize the specified table partition.
     """
-    query = f"OPTIMIZE TABLE `{database}`.`{table}` PARTITION ID '{partition_id}'"
-    _execute_query(ctx, query, dry_run)
+    _execute_partition_id(
+        ctx,
+        "OPTIMIZE TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} PARTITION ID ",
+        database,
+        table,
+        partition_id,
+        dry_run,
+    )
 
 
 def move_partition(
@@ -55,9 +79,25 @@ def move_partition(
     """
     Move the specified table partition between tables.
     """
-    partition_expr = f"'{partition}'" if partition != "tuple()" else partition
-    query = f"ALTER TABLE `{src_database}`.`{src_table}` MOVE PARTITION {partition_expr} TO TABLE `{dst_database}`.`{dst_table}`"
-    _execute_query(ctx, query, dry_run)
+    part = "tuple()" if partition == "tuple()" else "{{ part|literal }}"
+    query = (
+        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} MOVE PARTITION "
+        + part
+        + " TO TABLE {{ dst_db|identifier }}.{{ dst_tbl|identifier }}"
+    )
+    execute_query(
+        ctx,
+        query,
+        db=src_database,
+        tbl=src_table,
+        dst_db=dst_database,
+        dst_tbl=dst_table,
+        part=partition,
+        timeout=ctx.obj["config"]["clickhouse"]["alter_table_timeout"],
+        format_=None,
+        echo=True,
+        dry_run=dry_run,
+    )
 
 
 def materialize_ttl_in_partition(
@@ -66,10 +106,33 @@ def materialize_ttl_in_partition(
     """
     Materialize TTL for the specified table partition.
     """
-    query = f"ALTER TABLE `{database}`.`{table}` MATERIALIZE TTL IN PARTITION ID '{partition_id}'"
-    _execute_query(ctx, query, dry_run)
+    _execute_partition_id(
+        ctx,
+        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} MATERIALIZE TTL IN PARTITION ID ",
+        database,
+        table,
+        partition_id,
+        dry_run,
+    )
 
 
-def _execute_query(ctx: Context, query: str, dry_run: bool) -> None:
+def _execute_partition_id(
+    ctx: Context,
+    prefix: str,
+    database: str,
+    table: str,
+    partition_id: str,
+    dry_run: bool,
+) -> None:
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
-    execute_query(ctx, query, timeout=timeout, format_=None, echo=True, dry_run=dry_run)
+    execute_query(
+        ctx,
+        prefix + "{{ part|literal }}",
+        db=database,
+        tbl=table,
+        part=partition_id,
+        timeout=timeout,
+        format_=None,
+        echo=True,
+        dry_run=dry_run,
+    )

@@ -7,6 +7,12 @@ from click import Context
 
 from ch_tools.chadmin.internal.utils import execute_query
 from ch_tools.common import logging
+from ch_tools.common.clickhouse.client.parameters import Identifier
+from ch_tools.common.clickhouse.client.sql import (
+    qualified_name,
+    quote_identifier,
+    quote_string,
+)
 from ch_tools.common.clickhouse.config.path import CLICKHOUSE_SERVER_CONFIG_PATH
 from ch_tools.common.clickhouse.config.utils import load_config, load_config_file
 from ch_tools.common.process_pool import WorkerTask, execute_tasks_in_parallel
@@ -139,7 +145,8 @@ def _run(
     logging.info("Creating '{}' database", target_database)
     execute_query(
         ctx,
-        f"CREATE DATABASE IF NOT EXISTS {target_database}",
+        "CREATE DATABASE IF NOT EXISTS {db:Identifier}",
+        parameters={"db": Identifier(target_database)},
         format_=None,
         dry_run=dry_run,
     )
@@ -309,7 +316,7 @@ def _format_param_value(value: str) -> str:
         float(value)
         return value
     except ValueError:
-        return f"'{value}'"
+        return quote_string(value)
 
 
 def _build_xml_dictionary_block(
@@ -408,8 +415,8 @@ def _build_structure_and_primary_key(
         name = attr_id.get("name")
         if not name:
             raise RuntimeError("<id> must contain <name>")
-        primary_key = f"PRIMARY KEY {name}"
-        attribute_list.append(f"{name} UInt64")
+        primary_key = f"PRIMARY KEY {quote_identifier(name)}"
+        attribute_list.append(f"{quote_identifier(name)} UInt64")
     else:
         key_attrs = key.get("attribute", [])
         if isinstance(key_attrs, dict):
@@ -422,7 +429,7 @@ def _build_structure_and_primary_key(
         for attr in key_attrs:
             attr_str = _build_attribute_definition(attr, False)
             attribute_list.append(attr_str)
-            key_names.append(attr.get("name"))
+            key_names.append(quote_identifier(attr["name"]))
 
         if sort_attributes:
             key_names.sort()
@@ -461,11 +468,11 @@ def _build_range_block(attrs: dict[str, Any]) -> Optional[str]:
     if isinstance(range_min, dict):
         range_min_name = range_min.get("name")
         if isinstance(range_min_name, str):
-            range_bounds.append(f"MIN {range_min_name}")
+            range_bounds.append(f"MIN {quote_identifier(range_min_name)}")
     if isinstance(range_max, dict):
         range_max_name = range_max.get("name")
         if isinstance(range_max_name, str):
-            range_bounds.append(f"MAX {range_max_name}")
+            range_bounds.append(f"MAX {quote_identifier(range_max_name)}")
 
     if not range_bounds:
         return None
@@ -480,7 +487,7 @@ def _normalize_null_default_value(attr_type: str, null_value: str) -> str:
             raise RuntimeError(f"Type '{attr_type}' doesn't support a default value")
         return result
     if attr_type in ("String", "FixedString"):
-        return f"'{null_value}'"
+        return quote_string(null_value)
     return null_value
 
 
@@ -493,7 +500,7 @@ def _build_attribute_definition(
     if not name or not attr_type:
         raise RuntimeError("Each <attribute> must have both <name> and <type>")
 
-    parts = [name, attr_type]
+    parts = [quote_identifier(name), attr_type]
 
     if require_null_value and "null_value" not in attr:
         raise RuntimeError("<null_value> is required for dictionary attributes")
@@ -530,7 +537,7 @@ def _build_create_dictionary_statement(
     comment: str = "",
 ) -> str:
     statement_parts = [
-        f"CREATE DICTIONARY IF NOT EXISTS {target_database}.{name}",
+        f"CREATE DICTIONARY IF NOT EXISTS {qualified_name(target_database, name)}",
         f"(\n{structure}\n)",
         primary_key,
         source,
