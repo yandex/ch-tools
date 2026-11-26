@@ -1,6 +1,5 @@
 from click import Context
 
-from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.utils import execute_query
 
 
@@ -12,7 +11,7 @@ def attach_partition(
     """
     _execute_partition_id(
         ctx,
-        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} ATTACH PARTITION ID ",
+        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} ATTACH PARTITION ID {{ part|bind }}",
         database,
         table,
         partition_id,
@@ -28,7 +27,7 @@ def detach_partition(
     """
     _execute_partition_id(
         ctx,
-        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} DETACH PARTITION ID ",
+        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} DETACH PARTITION ID {{ part|bind }}",
         database,
         table,
         partition_id,
@@ -44,7 +43,7 @@ def drop_partition(
     """
     _execute_partition_id(
         ctx,
-        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} DROP PARTITION ID ",
+        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} DROP PARTITION ID {{ part|bind }}",
         database,
         table,
         partition_id,
@@ -60,7 +59,7 @@ def optimize_partition(
     """
     _execute_partition_id(
         ctx,
-        "OPTIMIZE TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} PARTITION ID ",
+        "OPTIMIZE TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} PARTITION ID {{ part|bind }}",
         database,
         table,
         partition_id,
@@ -80,7 +79,7 @@ def move_partition(
     """
     Move the specified table partition between tables.
     """
-    part = "tuple()" if partition == "tuple()" else part_value_template(ctx, dry_run)
+    part = "tuple()" if partition == "tuple()" else "{{ part|bind }}"
     query = (
         "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} MOVE PARTITION "
         + part
@@ -109,7 +108,7 @@ def materialize_ttl_in_partition(
     """
     _execute_partition_id(
         ctx,
-        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} MATERIALIZE TTL IN PARTITION ID ",
+        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} MATERIALIZE TTL IN PARTITION ID {{ part|bind }}",
         database,
         table,
         partition_id,
@@ -119,7 +118,7 @@ def materialize_ttl_in_partition(
 
 def _execute_partition_id(
     ctx: Context,
-    prefix: str,
+    query: str,
     database: str,
     table: str,
     partition_id: str,
@@ -128,7 +127,7 @@ def _execute_partition_id(
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
     execute_query(
         ctx,
-        prefix + part_value_template(ctx, dry_run),
+        query,
         db=database,
         tbl=table,
         part=partition_id,
@@ -137,10 +136,3 @@ def _execute_partition_id(
         echo=True,
         dry_run=dry_run,
     )
-
-
-def part_value_template(ctx: Context, dry_run: bool) -> str:
-    """23.3 requires a literal for part names, partition IDs and MOVE PARTITION values."""
-    if not dry_run and match_ch_version(ctx, "24.8"):
-        return "{{ part|bind }}"
-    return "{{ part|literal }}"

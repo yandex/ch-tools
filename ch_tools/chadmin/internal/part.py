@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional
 from click import Context
 
 from ch_tools.chadmin.internal.clickhouse_disks import remove_from_ch_disk
-from ch_tools.chadmin.internal.partition import part_value_template
 from ch_tools.chadmin.internal.system import get_version
 from ch_tools.chadmin.internal.utils import execute_query, get_remote_table_for_hosts
 from ch_tools.common import logging
@@ -298,10 +297,7 @@ def attach_part(
     Attach the specified data part.
     """
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
-    query = (
-        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} ATTACH PART "
-        + part_value_template(ctx, dry_run)
-    )
+    query = "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} ATTACH PART {{ part|bind }}"
     execute_query(
         ctx,
         query,
@@ -326,10 +322,7 @@ def detach_part(
     Detach the specified data part.
     """
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
-    query = (
-        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} DETACH PART "
-        + part_value_template(ctx, dry_run)
-    )
+    query = "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} DETACH PART {{ part|bind }}"
     execute_query(
         ctx,
         query,
@@ -362,9 +355,8 @@ def move_part(
         settings["alter_move_to_space_execute_async"] = 1
 
     query = (
-        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} MOVE PART "
-        + part_value_template(ctx, dry_run)
-        + " TO DISK {{ disk|literal }}"
+        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} MOVE PART {{ part|bind }}"
+        " TO DISK {{ disk|literal }}"
     )
     execute_query(
         ctx,
@@ -392,10 +384,7 @@ def drop_part(
     Drop the specified data part.
     """
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
-    query = (
-        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} DROP PART "
-        + part_value_template(ctx, dry_run)
-    )
+    query = "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} DROP PART {{ part|bind }}"
     execute_query(
         ctx,
         query,
@@ -420,10 +409,7 @@ def drop_detached_part(
     Drop the specified detached data part.
     """
     timeout = ctx.obj["config"]["clickhouse"]["alter_table_timeout"]
-    query = (
-        "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} DROP DETACHED PART "
-        + part_value_template(ctx, dry_run)
-    )
+    query = "ALTER TABLE {{ db|bind_identifier }}.{{ tbl|bind_identifier }} DROP DETACHED PART {{ part|bind }}"
     execute_query(
         ctx,
         query,

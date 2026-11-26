@@ -441,13 +441,15 @@ def _cleanup_old_service_tables_and_queries(ctx: Context) -> None:
 
                     # Delete table if it's older than retention period
                     if table_timestamp < retention_threshold:
-                        full_table_name = f"{database}.{table_name}"
-                        logging.info(f"Removing old service table: {full_table_name}")
-
-                        if table_prefix == config["remote_blobs_table_prefix"]:
-                            delete_table(ctx, database, table_name, shard=True)
-                        else:
-                            delete_table(ctx, database, table_name)
+                        logging.info(
+                            f"Removing old service table: {database}.{table_name}"
+                        )
+                        delete_table(
+                            ctx,
+                            database,
+                            table_name,
+                            shard=table_prefix == config["remote_blobs_table_prefix"],
+                        )
         except:
             logging.exception(f"Error cleaning up old {table_prefix} tables:")
             raise

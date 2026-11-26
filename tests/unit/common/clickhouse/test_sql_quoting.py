@@ -24,17 +24,14 @@ from ch_tools.common.clickhouse.client.utils import render_template
 from ch_tools.common.clickhouse.config.clickhouse import ClickhousePort
 
 
-@pytest.mark.parametrize("version", ["23.3", "24.8"])
-def test_move_partition_quotes_destination_and_binds_supported_operands(
-    version: str,
-) -> None:
+def test_move_partition_quotes_destination_and_binds_supported_operands() -> None:
     client = ClickhouseClient(
         host="localhost", ports={ClickhousePort.HTTP: 8123}, timeout=1
     )
     ctx = Mock(
         obj={
             "chcli": client,
-            "config": {"clickhouse": {"version": version, "alter_table_timeout": 30}},
+            "config": {"clickhouse": {"alter_table_timeout": 30}},
         }
     )
     with patch("requests.post") as post, patch("ch_tools.common.logging.debug"):
@@ -44,11 +41,8 @@ def test_move_partition_quotes_destination_and_binds_supported_operands(
     assert query.endswith(" TO TABLE `dst`.`table.with.dot`")
     assert fields["param_ch_tools_0"] == (None, "src")
     assert fields["param_ch_tools_1"] == (None, "source")
-    if version == "23.3":
-        assert "MOVE PARTITION '7'" in query
-    else:
-        assert "MOVE PARTITION {ch_tools_2:String}" in query
-        assert fields["param_ch_tools_2"] == (None, "7")
+    assert "MOVE PARTITION {ch_tools_2:String}" in query
+    assert fields["param_ch_tools_2"] == (None, "7")
 
 
 @pytest.mark.skipif(
@@ -58,9 +52,7 @@ def test_catalog_name_round_trip(tmp_path: Path) -> None:
     database = "db.with.dot"
     name = r"a space,percent%\`'{}"
     table = qualified_name(database, name)
-    ctx = Mock(
-        obj={"config": {"clickhouse": {"version": "24.8", "alter_table_timeout": 30}}}
-    )
+    ctx = Mock(obj={"config": {"clickhouse": {"alter_table_timeout": 30}}})
     with patch("ch_tools.chadmin.internal.partition.execute_query") as execute:
         detach_partition(ctx, database, name, "7")
     params: dict[str, Parameter] = {}
