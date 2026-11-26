@@ -106,12 +106,19 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
                     )
                 # Form fields keep bound values and the query itself in the POST body.
                 payload: Dict[str, Any] = {"data": body}
-                if parameters:
+                url_params = {**self._settings, **per_query_settings}
+                # In multipart requests ClickHouse reserves these suffixes for external tables.
+                if parameters and any(
+                    key.endswith(("_format", "_types", "_structure"))
+                    for key in url_params
+                ):
+                    url_params.update({f"param_{k}": v for k, v in parameters.items()})
+                elif parameters:
                     fields = {f"param_{k}": (None, v) for k, v in parameters.items()}
                     payload = {"files": {"query": (None, body), **fields}}
                 response = requests.post(
                     url,
-                    params={**self._settings, **per_query_settings},
+                    params=url_params,
                     headers=headers,
                     **payload,
                     timeout=timeout,
@@ -230,7 +237,8 @@ class ClickhouseClient:  # pylint: disable=too-many-instance-attributes
         ``parameters`` binds named ClickHouse placeholders independently of the
         Jinja ``query_args``. Pass a string for String, Identifier(name) for
         Identifier, and a list of strings for Array(String). The TCP client
-        receives parameters as arguments. Keep credentials in the private query.
+        receives parameters as arguments. HTTP uses URL parameters when a setting
+        conflicts with multipart field names. Keep credentials in the private query.
 
         Retries transient errors using exponential back-off.
         """

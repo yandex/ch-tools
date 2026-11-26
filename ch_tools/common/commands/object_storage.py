@@ -260,17 +260,13 @@ def get_object_storage_space_usage(
     database = config["database"]
     table = f"{config['space_usage_table_prefix']}{disk_conf.name}"
 
-    # Table is replicated
-    if scope == Scope.SHARD:
-        scope = Scope.HOST
-    elif scope == Scope.CLUSTER:
+    if scope == Scope.CLUSTER:
         check_cluster_for_decommissioned_hosts(ctx, cluster_name)
         assert_equal_table_schema_on_cluster(ctx, database, table, cluster_name)
-
-    full_name = TableRef(database, table).sql
-    space_usage_table = get_table_function_for_scope(
-        ctx, full_name, scope, cluster_name
-    )
+        space_usage_table = f"cluster({quote_string(cluster_name)}, {quote_string(database)}, {quote_string(table)})"
+    else:
+        # One local replica suffices for shard scope.
+        space_usage_table = TableRef(database, table).sql
 
     parts_usage_query = Query(
         f"SELECT toString(replica) replicas, state, size FROM {space_usage_table} ORDER BY replica, state SETTINGS skip_unavailable_shards=0"

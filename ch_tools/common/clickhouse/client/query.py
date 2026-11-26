@@ -1,3 +1,4 @@
+import re
 from typing import Any, Callable, Dict, Optional
 
 
@@ -38,7 +39,15 @@ class Query:
         if not self.sensitive_args:
             return text
         args = self._sensitive_args_mask() if mask_sensitive else self.sensitive_args
-        return text.format(**args)
+
+        # Existing templates double literal braces. Leave native {name:Type} fields intact.
+        def substitute(match: re.Match) -> str:
+            token = match[0]
+            if token in ("{{", "}}"):
+                return token[0]
+            return args.get(token[1:-1], token)
+
+        return re.sub(r"{{|}}|[{][A-Za-z_]\w*[}]", substitute, text)
 
     def _sensitive_args_mask(self) -> Dict[str, str]:
         return {key: self.mask for key in self.sensitive_args}

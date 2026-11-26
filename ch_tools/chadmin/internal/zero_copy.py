@@ -70,6 +70,7 @@ def generate_zero_copy_lock_tasks(
     part_info = list_parts(
         ctx,
         exact_table=True,
+        exact_disk=True,
         database=table["database"],
         table=table["name"],
         disk_name=disk,

@@ -4,6 +4,7 @@ from click import Context
 from tabulate import tabulate
 
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
+from ch_tools.common.clickhouse.client.parameters import Parameter, encode_parameters
 from ch_tools.common.result import Result
 
 
@@ -203,14 +204,20 @@ def count_errors(ch_client: Any, tables: Any, exceptions_limit: int) -> Any:
         """.format(
         limit=limit,
     )
-    return ch_client.query_json_data(
-        query=query,
-        compact=False,
-        parameters={
-            "databases": [t["database"] for t in tables],
-            "tables": [t["table"] for t in tables],
-        },
-    )
+    parameters: dict[str, Parameter] = {
+        "databases": [t["database"] for t in tables],
+        "tables": [t["table"] for t in tables],
+    }
+    # TCP sends each array as one argv entry. Leave room below Linux's 128 KiB limit.
+    if len(tables) > 1 and any(
+        len(value.encode()) > 64 * 1024
+        for value in encode_parameters(parameters).values()
+    ):
+        middle = len(tables) // 2
+        return count_errors(
+            ch_client, tables[:middle], exceptions_limit
+        ) + count_errors(ch_client, tables[middle:], exceptions_limit)
+    return ch_client.query_json_data(query=query, compact=False, parameters=parameters)
 
 
 def is_userfault_exception(exception: str) -> bool:

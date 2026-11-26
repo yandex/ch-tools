@@ -41,8 +41,7 @@ def test_move_partition_quotes_destination_and_binds_supported_operands() -> Non
     assert query.endswith(" TO TABLE `dst`.`table.with.dot`")
     assert fields["param_ch_tools_0"] == (None, "src")
     assert fields["param_ch_tools_1"] == (None, "source")
-    assert "MOVE PARTITION {ch_tools_2:String}" in query
-    assert fields["param_ch_tools_2"] == (None, "7")
+    assert "MOVE PARTITION '7'" in query
 
 
 @pytest.mark.skipif(

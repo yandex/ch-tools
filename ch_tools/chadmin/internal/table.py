@@ -33,6 +33,7 @@ from ch_tools.common.clickhouse.client.sql import (
     quote_string,
 )
 from ch_tools.common.clickhouse.config import get_clickhouse_config
+from ch_tools.common.utils import escape_for_file_name
 
 DISK_LOCAL_KEY = "local"
 DISK_OBJECT_STORAGE_KEY = "object_storage"
@@ -460,8 +461,8 @@ def delete_detached_table(ctx: Context, database_name: str, table_name: str) -> 
 
     check_table_dettached(ctx, database_name, table_name)
 
-    escaped_database_name = database_name.encode("unicode_escape").decode("utf-8")
-    escaped_table_name = table_name.encode("unicode_escape").decode("utf-8")
+    escaped_database_name = escape_for_file_name(database_name)
+    escaped_table_name = escape_for_file_name(table_name)
 
     logging.info("Escaped params: {}.{}", escaped_database_name, escaped_table_name)
 
