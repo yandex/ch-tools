@@ -1,49 +1,10 @@
-from typing import Any
-
 from click import ClickException, Context, IntRange, command, option, pass_context
 
-from ch_tools.chadmin.internal.clickhouse_disks import remove_from_ch_disk
 from ch_tools.chadmin.internal.part import (
     drop_detached_part,
-    get_disks,
     list_detached_parts,
-    part_has_suffix,
 )
-from ch_tools.chadmin.internal.system import get_version
 from ch_tools.common import logging
-
-
-def _delete_part(
-    ctx: Context,
-    part: dict[str, Any],
-    disks: dict[str, dict[str, str]],
-    dry_run: bool,
-) -> None:
-    if not part_has_suffix(part["name"]):
-        # A lost response may hide a successful DROP. Retrying by name could
-        # remove a new part detached under the same name in the meantime.
-        drop_detached_part(
-            ctx,
-            part["database"],
-            part["table"],
-            part["name"],
-            dry_run=dry_run,
-            retry_max_attempts=1,
-        )
-        return
-
-    disk = disks[part["disk_name"]]
-    if not part["path"].startswith(disk["path"]):
-        raise ValueError(f"Detached part path is outside its disk: {part['path']}")
-    path_on_disk = part["path"][len(disk["path"]) :]
-    returncode, stderr = remove_from_ch_disk(
-        disk["name"], path_on_disk, get_version(ctx), dry_run=dry_run
-    )
-    if returncode:
-        raise RuntimeError(
-            f"clickhouse-disks failed with code {returncode}: "
-            f"{stderr.decode(errors='replace')}"
-        )
 
 
 @command("detached-parts-cleanup")
@@ -98,11 +59,19 @@ def detached_parts_cleanup_command(
             continue
         skipped += 1
 
-    disks = get_disks(ctx) if eligible_parts else {}
     processed = failed = 0
     for part in eligible_parts:
         try:
-            _delete_part(ctx, part, disks, dry_run=dry_run)
+            # Use the server's DROP/ATTACH coordination for every part. A lost
+            # response must not trigger another DROP of a replacement part.
+            drop_detached_part(
+                ctx,
+                part["database"],
+                part["table"],
+                part["name"],
+                dry_run=dry_run,
+                retry_max_attempts=1,
+            )
             processed += 1
         except Exception as error:
             logging.error("Failed to delete detached part {}: {!r}", part, error)

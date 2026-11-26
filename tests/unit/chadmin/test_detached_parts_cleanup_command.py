@@ -17,12 +17,7 @@ def operations(monkeypatch: pytest.MonkeyPatch) -> dict:
     prefix = "ch_tools.chadmin.cli.detached_parts_cleanup_command."
     mocks = {
         "list_detached_parts": MagicMock(return_value=[]),
-        "get_disks": MagicMock(
-            return_value={"local": {"name": "local", "path": "/data/"}}
-        ),
-        "get_version": MagicMock(return_value="25.8.1"),
         "drop_detached_part": MagicMock(),
-        "remove_from_ch_disk": MagicMock(return_value=(0, b"")),
         "logging.warning": MagicMock(),
         "logging.error": MagicMock(),
         "logging.info": MagicMock(),
@@ -57,11 +52,13 @@ def make_part(name: str = "1_1_1_0", **kwargs: Any) -> dict:
 
 
 @pytest.mark.parametrize("dry_run", [False, True])
-@pytest.mark.parametrize("suffix", [False, True])
-def test_cleanup_uses_configured_ages_and_existing_deletion_backend(
-    operations: dict, dry_run: bool, suffix: bool
+@pytest.mark.parametrize(
+    "name", ["1_1_1_0", "broken_1_1_1_0_try1", "broken_1_1_1_0_try10"]
+)
+def test_cleanup_uses_sql_drop_for_all_names(
+    operations: dict, dry_run: bool, name: str
 ) -> None:
-    part = make_part("broken_1_1_1_0_try1" if suffix else "1_1_1_0")
+    part = make_part(name)
     operations["list_detached_parts"].return_value = [part]
     result = invoke(dry_run)
     assert result.exit_code == 0, result.exception
@@ -71,28 +68,27 @@ def test_cleanup_uses_configured_ages_and_existing_deletion_backend(
         "empty_reason_min_age": 3600,
         "non_empty_reason_min_age": 7200,
     }
-    if suffix:
-        operations["remove_from_ch_disk"].assert_called_once_with(
-            "local", f"detached/{part['name']}", "25.8.1", dry_run=dry_run
-        )
-        operations["drop_detached_part"].assert_not_called()
-    else:
-        operations["drop_detached_part"].assert_called_once_with(
-            selection.args[0],
-            "db",
-            "test",
-            "1_1_1_0",
-            dry_run=dry_run,
-            retry_max_attempts=1,
-        )
-        operations["remove_from_ch_disk"].assert_not_called()
+    operations["drop_detached_part"].assert_called_once_with(
+        selection.args[0],
+        "db",
+        "test",
+        name,
+        dry_run=dry_run,
+        retry_max_attempts=1,
+    )
 
 
-def test_empty_selection_does_not_read_disks_or_delete(operations: dict) -> None:
+def test_empty_selection_does_not_delete(operations: dict) -> None:
     assert invoke().exit_code == 0
-    operations["get_disks"].assert_not_called()
     operations["drop_detached_part"].assert_not_called()
-    operations["remove_from_ch_disk"].assert_not_called()
+
+
+def test_cleanup_does_not_require_disk_or_path_fields(operations: dict) -> None:
+    operations["list_detached_parts"].return_value = [
+        {"database": "db", "table": "test", "name": "1_1_1_0", "disks_count": 1}
+    ]
+    assert invoke().exit_code == 0
+    operations["drop_detached_part"].assert_called_once()
 
 
 def test_disabled_cleanup_does_not_query_clickhouse(operations: dict) -> None:
@@ -176,9 +172,7 @@ def test_lost_drop_response_does_not_delete_replacement_part(
 def test_service_parts_are_skipped(operations: dict, name: str) -> None:
     operations["list_detached_parts"].return_value = [make_part(name)]
     assert invoke().exit_code == 0
-    operations["get_disks"].assert_not_called()
     operations["drop_detached_part"].assert_not_called()
-    operations["remove_from_ch_disk"].assert_not_called()
     operations["logging.warning"].assert_called_once()
 
 
@@ -189,8 +183,6 @@ def test_fresh_copy_on_another_disk_prevents_deletion(operations: dict) -> None:
     operations["list_detached_parts"].return_value = [old_copy]
     assert invoke().exit_code == 0
     operations["drop_detached_part"].assert_not_called()
-    operations["remove_from_ch_disk"].assert_not_called()
-    operations["get_disks"].assert_not_called()
     operations["logging.warning"].assert_called_once()
     operations["list_detached_parts"].assert_called_once()
 
@@ -208,26 +200,28 @@ def test_ambiguity_is_scoped_to_database_and_table(
     operations["logging.warning"].assert_called_once()
 
 
-def test_disk_failure_is_reported_and_remaining_parts_are_processed(
-    operations: dict,
+def test_unsupported_suffixed_drop_does_not_fall_back_to_disk_removal(
+    operations: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     part = make_part("broken_1_1_1_0_try1")
     operations["list_detached_parts"].return_value = [part, make_part("2_2_2_0")]
-    operations["remove_from_ch_disk"].return_value = (1, b"permission denied")
+    operations["drop_detached_part"].side_effect = [
+        RuntimeError("BAD_DATA_PART_NAME"),
+        None,
+    ]
+    disk_remove = MagicMock(side_effect=AssertionError("Unexpected disk removal"))
+    monkeypatch.setattr(
+        "ch_tools.chadmin.internal.clickhouse_disks.ClickHouseDiskClient.remove",
+        disk_remove,
+    )
     result = invoke()
     assert result.exit_code == 1
-    operations["drop_detached_part"].assert_called_once()
+    assert operations["drop_detached_part"].call_count == 2
+    assert operations["drop_detached_part"].call_args.args[3] == "2_2_2_0"
+    disk_remove.assert_not_called()
     operations["logging.error"].assert_called_once()
     error = operations["logging.error"].call_args.args[2]
-    assert "code 1: permission denied" in str(error)
-
-
-def test_disk_path_outside_its_disk_is_not_removed(operations: dict) -> None:
-    operations["list_detached_parts"].return_value = [
-        make_part("broken_1_1_1_0_try1", path="/other/detached/part")
-    ]
-    assert invoke().exit_code == 1
-    operations["remove_from_ch_disk"].assert_not_called()
+    assert "BAD_DATA_PART_NAME" in str(error)
 
 
 def test_failed_inventory_prevents_all_deletions(operations: dict) -> None:
@@ -235,7 +229,6 @@ def test_failed_inventory_prevents_all_deletions(operations: dict) -> None:
     operations["list_detached_parts"].side_effect = RuntimeError("inventory failed")
     assert invoke().exit_code != 0
     operations["drop_detached_part"].assert_not_called()
-    operations["remove_from_ch_disk"].assert_not_called()
 
 
 @pytest.mark.parametrize("keep_going", [False, True])
