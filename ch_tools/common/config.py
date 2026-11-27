@@ -102,8 +102,8 @@ DEFAULT_CONFIG = {
     # Configuration of chadmin tool commands and options.
     "chadmin": {
         "detached-parts-cleanup": {
-            "automatically_detached_data_parts_retention_time": 2592000,
-            "manually_detached_data_parts_retention_time": 0,
+            "with_reason_retention": 2592000,
+            "without_reason_retention": 0,
         },
         "database": {
             "lock": {

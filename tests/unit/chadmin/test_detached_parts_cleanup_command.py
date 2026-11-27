@@ -3,7 +3,7 @@ import select
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -42,10 +42,62 @@ def invoke(
         + (["--dry-run"] if dry_run else []),
         obj={},
         default_map={
-            "automatically_detached_data_parts_retention_time": automatic,
-            "manually_detached_data_parts_retention_time": manual,
+            "with_reason_retention": automatic,
+            "without_reason_retention": manual,
         },
     )
+
+
+@pytest.mark.parametrize(
+    "with_reason,without_reason", [(7200, 3600), (0, 3600), (7200, 0)]
+)
+def test_retention_options_override_config(
+    operations: dict, with_reason: int, without_reason: int
+) -> None:
+    from ch_tools.common.config import DEFAULT_CONFIG
+
+    result = CliRunner().invoke(
+        detached_parts_cleanup_command,
+        [
+            "--lock-file",
+            str(operations["lock_file"]),
+            "--with-reason-retention",
+            str(with_reason),
+            "--without-reason-retention",
+            str(without_reason),
+        ],
+        obj={},
+        default_map=cast(dict[str, Any], DEFAULT_CONFIG["chadmin"])[
+            "detached-parts-cleanup"
+        ],
+    )
+    assert result.exit_code == 0, result.exception
+    operations["list_detached_parts"].assert_called_once()
+    assert operations["list_detached_parts"].call_args.kwargs == {
+        "non_empty_reason_min_age": with_reason,
+        "empty_reason_min_age": without_reason,
+        "include_size": False,
+    }
+
+
+def test_default_retention_config(operations: dict) -> None:
+    from ch_tools.common.config import DEFAULT_CONFIG
+
+    result = CliRunner().invoke(
+        detached_parts_cleanup_command,
+        ["--lock-file", str(operations["lock_file"])],
+        obj={},
+        default_map=cast(dict[str, Any], DEFAULT_CONFIG["chadmin"])[
+            "detached-parts-cleanup"
+        ],
+    )
+    assert result.exit_code == 0, result.exception
+    operations["list_detached_parts"].assert_called_once()
+    assert operations["list_detached_parts"].call_args.kwargs == {
+        "non_empty_reason_min_age": 2592000,
+        "empty_reason_min_age": 0,
+        "include_size": False,
+    }
 
 
 def make_part(name: str = "1_1_1_0", **kwargs: Any) -> dict:
@@ -60,14 +112,15 @@ def make_part(name: str = "1_1_1_0", **kwargs: Any) -> dict:
     }
 
 
+@pytest.mark.parametrize("disks_count", [1, "1"])
 @pytest.mark.parametrize("dry_run", [False, True])
 @pytest.mark.parametrize(
     "name", ["1_1_1_0", "broken_1_1_1_0_try1", "broken_1_1_1_0_try10"]
 )
 def test_cleanup_uses_sql_drop_for_all_names(
-    operations: dict, dry_run: bool, name: str
+    operations: dict, dry_run: bool, name: str, disks_count: int | str
 ) -> None:
-    part = make_part(name)
+    part = make_part(name, disks_count=disks_count)
     operations["list_detached_parts"].return_value = [part]
     result = invoke(operations, dry_run)
     assert result.exit_code == 0, result.exception
@@ -250,8 +303,8 @@ def test_lost_drop_response_does_not_delete_replacement_part(
             "chcli": client,
         },
         default_map={
-            "automatically_detached_data_parts_retention_time": 7200,
-            "manually_detached_data_parts_retention_time": 3600,
+            "with_reason_retention": 7200,
+            "without_reason_retention": 3600,
         },
     )
     assert result.exit_code == 1
@@ -271,10 +324,15 @@ def test_service_parts_are_skipped(operations: dict, name: str) -> None:
     operations["logging.warning"].assert_called_once()
 
 
-def test_fresh_copy_on_another_disk_prevents_deletion(operations: dict) -> None:
+@pytest.mark.parametrize("disks_count", [2, "2", "10"])
+def test_fresh_copy_on_another_disk_prevents_deletion(
+    operations: dict, disks_count: int | str
+) -> None:
     # The single query only returns the old copy, but disks_count also
     # includes the fresh copy on the other disk.
-    old_copy = make_part(disk_name="cold", path="/cold/detached/1_1_1_0", disks_count=2)
+    old_copy = make_part(
+        disk_name="cold", path="/cold/detached/1_1_1_0", disks_count=disks_count
+    )
     operations["list_detached_parts"].return_value = [old_copy]
     assert invoke(operations).exit_code == 0
     operations["drop_detached_part"].assert_not_called()

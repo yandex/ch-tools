@@ -27,15 +27,15 @@ def _cleanup_lock(lock_file: str) -> Iterator[bool]:
 
 @command("detached-parts-cleanup")
 @option(
-    "--automatically-detached-data-parts-retention-time",
+    "--with-reason-retention",
     type=IntRange(min=0),
-    help="Retention time for automatically detached data parts in seconds. "
+    help="Retention time for detached data parts with a reason in seconds. "
     "Zero disables cleanup of these parts.",
 )
 @option(
-    "--manually-detached-data-parts-retention-time",
+    "--without-reason-retention",
     type=IntRange(min=0),
-    help="Retention time for manually detached data parts in seconds. "
+    help="Retention time for detached data parts without a reason in seconds. "
     "Zero disables cleanup of these parts.",
 )
 @option(
@@ -55,16 +55,13 @@ def _cleanup_lock(lock_file: str) -> Iterator[bool]:
 @pass_context
 def detached_parts_cleanup_command(
     ctx: Context,
-    automatically_detached_data_parts_retention_time: int,
-    manually_detached_data_parts_retention_time: int,
+    with_reason_retention: int,
+    without_reason_retention: int,
     dry_run: bool,
     lock_file: str,
 ) -> None:
     """Clean up expired detached data parts."""
-    if (
-        automatically_detached_data_parts_retention_time == 0
-        and manually_detached_data_parts_retention_time == 0
-    ):
+    if with_reason_retention == 0 and without_reason_retention == 0:
         logging.info("Detached parts cleanup is disabled")
         return
 
@@ -75,8 +72,8 @@ def detached_parts_cleanup_command(
 
         parts = list_detached_parts(
             ctx,
-            empty_reason_min_age=manually_detached_data_parts_retention_time,
-            non_empty_reason_min_age=automatically_detached_data_parts_retention_time,
+            empty_reason_min_age=without_reason_retention,
+            non_empty_reason_min_age=with_reason_retention,
             include_size=False,
         )
         eligible_parts = []
@@ -84,7 +81,7 @@ def detached_parts_cleanup_command(
         for part in parts:
             if part["name"].startswith(("attaching_", "deleting_")):
                 logging.warning("Skip service detached part: {}", part)
-            elif part["disks_count"] > 1:
+            elif int(part["disks_count"]) > 1:
                 logging.warning(
                     "Skip detached part present on multiple disks: {}", part
                 )
