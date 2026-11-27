@@ -7,7 +7,6 @@ Feature: chadmin table change and check-uuid-equal
     And a working clickhouse on clickhouse01
     And a working clickhouse on clickhouse02
 
-  @require_version_24.8
   Scenario: Check table uuid in cluster with 1 host
     When we execute query on clickhouse01
     """
@@ -28,7 +27,6 @@ Feature: chadmin table change and check-uuid-equal
     """
     Then it completes successfully
 
-  @require_version_24.8
   Scenario: Failed check table uuid in cluster
     When we execute query on clickhouse01
     """
@@ -69,7 +67,6 @@ Feature: chadmin table change and check-uuid-equal
     Table foo has different uuid
     """
     
-  @require_version_24.8
   Scenario: Check uuid for ReplicatedMergeTree
     When we execute query on clickhouse01
     """
@@ -110,7 +107,6 @@ Feature: chadmin table change and check-uuid-equal
     Table foo has different uuid
     """
 
-  @require_version_24.8
   Scenario: Check uuid for ReplicatedMergeTree with uuid macros
     When we execute query on clickhouse01
     """
@@ -137,7 +133,6 @@ Feature: chadmin table change and check-uuid-equal
     """
     Then it completes successfully
 
-  @require_version_24.8
   Scenario: Change uuid for MergeTree
     When we execute query on clickhouse01
     """
@@ -201,7 +196,6 @@ Feature: chadmin table change and check-uuid-equal
     (42),(45)
     """
 
-  @require_version_24.8
   Scenario: Change uuid for ReplicatedMergeTree that different from table_shared_id
     When we execute query on clickhouse01
     """
@@ -229,7 +223,6 @@ Feature: chadmin table change and check-uuid-equal
     dst_uuid=123e4567-e89b-12d3-a456-426614174000 is different from table_shared_id
     """
 
-  @require_version_24.8
   Scenario: Сhange uuid for ReplicatedMergeTree on first host
     When we execute query on clickhouse01
     """
@@ -257,7 +250,6 @@ Feature: chadmin table change and check-uuid-equal
     Don't need to update current table uuid
     """
 
-  @require_version_24.8
   Scenario: Change uuid for ReplicatedMergeTree that created with ON CLUSTER
     When we execute query on clickhouse01
     """
@@ -296,7 +288,6 @@ Feature: chadmin table change and check-uuid-equal
     Don't need to update current table uuid
     """
 
-  @require_version_24.8
   Scenario: Change uuid for ReplicatedMergeTree
     When we execute query on clickhouse01
     """
@@ -384,7 +375,6 @@ Feature: chadmin table change and check-uuid-equal
     (42),(45)
     """
 
-  @require_version_24.8
   Scenario: Failed change uuid for ReplicatedMergeTree with uuid macros
     When we execute query on clickhouse01
     """
@@ -414,7 +404,6 @@ Feature: chadmin table change and check-uuid-equal
     """
 
 
-  @require_version_24.8
   Scenario: Change uuid for ReplicatedMergeTree with ALTER
     When we execute query on clickhouse01
     """
@@ -513,7 +502,6 @@ Feature: chadmin table change and check-uuid-equal
     (42,'b_one'),(43,'b_one'),(45,'b_one')
     """
 
-  @require_version_24.8
   Scenario: Change uuid for ReplicatedMergeTree with different table_shared_id
     When we execute query on clickhouse01
     """
@@ -622,7 +610,6 @@ Feature: chadmin table change and check-uuid-equal
     Don't need to update current table uuid
     """
 
-  @require_version_24.8
   Scenario: Check equal table schema
     When we execute query on clickhouse01
     """

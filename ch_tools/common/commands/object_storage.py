@@ -52,6 +52,7 @@ from ch_tools.common.clickhouse.client.clickhouse_client import (
     ClickhouseClient,
     clickhouse_client,
 )
+from ch_tools.common.clickhouse.client.error import ClickhouseError
 from ch_tools.common.clickhouse.client.query import Query
 from ch_tools.common.clickhouse.client.query_output_format import OutputFormat
 from ch_tools.common.clickhouse.config.storage_configuration import S3DiskConfiguration
@@ -412,12 +413,17 @@ def _cleanup_old_service_tables_and_queries(ctx: Context) -> None:
             base_name = f"{table_prefix}{disk_conf.name}"
             table_pattern = f"{base_name}_%"
 
-            kill_process(
-                ctx,
-                query_template=f"INSERT INTO%{table_pattern}",
-                query_kind="Insert",
-                user=clickhouse_client(ctx).user,
-            )
+            try:
+                kill_process(
+                    ctx,
+                    query_template=f"INSERT INTO%{table_pattern}",
+                    query_kind="Insert",
+                    user=clickhouse_client(ctx).user,
+                )
+            except ClickhouseError as exc:
+                # No stale INSERT is the normal case between cleanup runs.
+                if exc.code != 785:  # NOTHING_TO_KILL
+                    raise
 
             tables = list_tables(
                 ctx, database_name=database, table_pattern=table_pattern
@@ -1072,10 +1078,7 @@ def _sanity_check_before_cleanup(
             )
 
     perform_check_paths()
-
-    # Size validation is only available in ClickHouse 23.3+ (when 'size' column exists in system.remote_data_paths)
-    if match_ch_version(ctx, min_version="23.3"):
-        perform_check_size()
+    perform_check_size()
 
 
 def _collect_remote_blobs(
@@ -1295,17 +1298,6 @@ def _get_fill_local_blobs_table_query(
     remote_data_paths_table: str,
     disk_name: str,
 ) -> Query:
-    """
-    Column 'size' in remote_data_paths is supported since 23.3.
-    """
-    settings = "SETTINGS skip_unavailable_shards=0"
-    if match_ch_version(ctx, "24.3"):
-        settings += ", traverse_shadow_remote_data_paths=1"
-
-    size = "size"
-    if not match_ch_version(ctx, "23.3"):
-        size = "0"
-
     user_password = clickhouse_client(ctx).password or ""
 
     query = f"""
@@ -1318,11 +1310,11 @@ def _get_fill_local_blobs_table_query(
                     position(local_path, 'detached/') > 0, '{LocalState.DETACHED}',
                     '{LocalState.ACTIVE}'
                 ) AS status,
-                {size} AS obj_size,
+                size AS obj_size,
                 1 AS ref_count
                 FROM {remote_data_paths_table}
                 WHERE disk_name = '{disk_name}'
-                {settings}
+                SETTINGS skip_unavailable_shards=0, traverse_shadow_remote_data_paths=1
     """
 
     return Query(query, sensitive_args={"user_password": user_password})

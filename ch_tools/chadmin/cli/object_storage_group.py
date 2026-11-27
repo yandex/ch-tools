@@ -28,7 +28,6 @@ from ch_tools.chadmin.internal.object_storage.s3_cleanup_stats import (
 from ch_tools.chadmin.internal.system import (
     get_version,
     is_yandex_cloud_version,
-    match_ch_version,
 )
 from ch_tools.chadmin.internal.zookeeper import (
     check_zk_node,
@@ -328,9 +327,6 @@ def collect_info_command(
             "'from_time' parameter must be greater than 'to_time'",
             param_hint="--from-time",
         )
-
-    if not match_ch_version(ctx, "23.3"):
-        raise RuntimeError("This command requires version 23.3 of ClickHouse")
 
     collect_object_storage_info(
         ctx,

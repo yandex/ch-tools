@@ -11,7 +11,7 @@ from ch_tools.chadmin.cli.partition_group import (
 from ch_tools.common.clickhouse.client.clickhouse_client import ClickhouseClient
 
 
-def render_partitions_query(ch_version: str = "24.8.1.1", **kwargs: Any) -> str:
+def render_partitions_query(**kwargs: Any) -> str:
     """
     Render the query that get_partitions would have executed.
     """
@@ -20,7 +20,6 @@ def render_partitions_query(ch_version: str = "24.8.1.1", **kwargs: Any) -> str:
 
     _, query = execute_query.call_args.args
     client = MagicMock()
-    client.get_clickhouse_version.return_value = ch_version
     return ClickhouseClient.render_query(
         client, query, **execute_query.call_args.kwargs
     )
@@ -250,12 +249,3 @@ def test_detached_partitions_are_filtered_by_size() -> None:
 
     assert "sum(bytes_on_disk) >= 1024" in query
     assert "sum(bytes_on_disk) <= 4096" in query
-
-
-def test_detached_partitions_are_not_filtered_by_size_on_old_clickhouse() -> None:
-    # system.detached_parts has no bytes_on_disk column before 23.1.
-    query = render_partitions_query(
-        ch_version="22.8.1.1", detached=True, min_size=1024, max_size=4096
-    )
-
-    assert "bytes_on_disk" not in query

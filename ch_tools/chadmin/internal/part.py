@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional
 from click import Context
 
 from ch_tools.chadmin.internal.clickhouse_disks import remove_from_ch_disk
-from ch_tools.chadmin.internal.system import get_version
 from ch_tools.chadmin.internal.utils import execute_query, get_remote_table_for_hosts
 from ch_tools.common import logging
 from ch_tools.common.clickhouse.client.clickhouse_client import clickhouse_client
@@ -197,10 +196,8 @@ def list_detached_parts(
             partition_id,
             name,
             disk "disk_name",
-        {% if version_ge('23.1') -%}
             path,
             bytes_on_disk,
-        {% endif -%}
             reason
         FROM system.detached_parts
         {% if database -%}
@@ -375,7 +372,6 @@ def drop_detached_part(
 
 
 def drop_detached_part_from_disk(
-    ctx: Context,
     disk: Dict[str, str],
     path: str,
     dry_run: bool = False,
@@ -387,7 +383,7 @@ def drop_detached_part_from_disk(
     assert path.startswith(disk["path"])
     path_on_disk = path[len(disk["path"]) :]
 
-    remove_from_ch_disk(disk["name"], path_on_disk, get_version(ctx), dry_run=dry_run)
+    remove_from_ch_disk(disk["name"], path_on_disk, dry_run=dry_run)
 
 
 def remove_detached_part_prefix_on_disk(

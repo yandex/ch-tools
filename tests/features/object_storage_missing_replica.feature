@@ -15,7 +15,6 @@ Feature: Object storage with a configured replica that does not exist
         max_attempts: 1
     """
 
-  @require_version_23.3
   Scenario: Collect, report and clean objects with a missing replica
     When we execute queries on clickhouse02
     """
@@ -92,7 +91,6 @@ Feature: Object storage with a configured replica that does not exist
     0
     """
 
-  @require_version_23.3
   Scenario: Space usage reads each shard with its configured cluster user
     When we execute queries on clickhouse01
     """

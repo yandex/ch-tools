@@ -7,7 +7,6 @@ Feature: chadmin performance diagnostics.
     And a working clickhouse on clickhouse01
     And a working clickhouse on clickhouse02
 
-  @require_version_23.8
   Scenario: Sanity checks:
     When we execute command on clickhouse01
     """

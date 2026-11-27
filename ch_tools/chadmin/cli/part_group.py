@@ -22,7 +22,6 @@ from ch_tools.chadmin.internal.part import (
     part_has_suffix,
     remove_detached_part_prefix_on_disk,
 )
-from ch_tools.chadmin.internal.system import match_ch_version
 from ch_tools.chadmin.internal.table import check_table
 from ch_tools.common import logging
 from ch_tools.common.cli.formatting import format_bytes, print_response
@@ -127,8 +126,7 @@ def list_parts_command(
         result["disk"] = part["disk_name"]
         if detached:
             result["reason"] = part["reason"]
-            if match_ch_version(ctx, min_version="23.1"):
-                result["size"] = part["bytes_on_disk"]
+            result["size"] = part["bytes_on_disk"]
         else:
             result["min_time"] = part["min_time"]
             result["max_time"] = part["max_time"]
@@ -452,7 +450,6 @@ def delete_parts_command(
                 # TODO: Remove it after suffixes are allowed in ClickHouse
                 if part_has_suffix(part["name"]):
                     drop_detached_part_from_disk(
-                        ctx,
                         disks[part["disk_name"]],
                         part["path"],
                         dry_run,

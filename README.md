@@ -6,6 +6,8 @@
 
 **clickhouse-tools** is a set of tools for administration and diagnostics of [ClickHouse](https://clickhouse.com/) DBMS.
 
+The minimum supported ClickHouse version is 24.8.
+
 ## Tools
 
 **clickhouse-tools** consist of following components:

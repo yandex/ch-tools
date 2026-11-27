@@ -75,7 +75,6 @@ Feature: chadmin commands.
     """
     Then it completes successfully
 
-  @require_version_24.2
   Scenario Outline: Check set-flag with convert_to_replicated
     Given we have executed queries on clickhouse01
     """
@@ -187,7 +186,6 @@ Feature: chadmin commands.
     """
     Then query was completed successfully
 
-  @require_version_24.3
   Scenario: Check table commands
     Given we have executed queries on clickhouse01
     """

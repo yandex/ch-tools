@@ -214,8 +214,7 @@ def test_client_config_mirrors_all_entries(client_process: Path) -> None:
 @pytest.mark.parametrize(
     "version,expected,empty_home",
     [
-        ("23.3.22.3", "legacy", False),
-        ("23.8.16.40", "yaml", False),
+        ("24.8.14.39", "yaml", False),
         ("26.3.12.3", "xdg", False),
         ("26.3.12.3", "xdg", True),
     ],
@@ -243,11 +242,7 @@ def test_client_config_search_order(
         monkeypatch.setenv("HOME", "")
     with client_config("password") as (args, _env, _fds):
         source = Path(args[1]).resolve()
-        assert source == (
-            legacy / "config.xml"
-            if expected == "legacy"
-            else root / "clickhouse-client.yaml"
-        )
+        assert source == root / "clickhouse-client.yaml"
     (root / "clickhouse-client.yaml").unlink()
     with client_config("password") as (args, _env, _fds):
         assert Path(args[1]).resolve() == (
@@ -255,7 +250,7 @@ def test_client_config_search_order(
         )
 
 
-@pytest.mark.parametrize("version", ["23.3.22.3", "25.8.23.13", "26.3.12.3"])
+@pytest.mark.parametrize("version", ["24.8.14.39", "25.8.23.13", "26.3.12.3"])
 def test_client_config_skips_inaccessible_home(
     client_process: Path, monkeypatch: pytest.MonkeyPatch, version: str
 ) -> None:
